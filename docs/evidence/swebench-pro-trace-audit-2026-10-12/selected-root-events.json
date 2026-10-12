@@ -1,0 +1,93 @@
+[
+  {
+    "task": "b1-05",
+    "official_resolved": true,
+    "public_record": "docs/evidence/swebench-pro-20-2026-10-11/rest-attempts/05",
+    "request": 5,
+    "path": "applications/mail/src/app/components/message/modals/CustomExpirationModal.tsx",
+    "successful_earlier_call_id": "call_01_hbJT4triTApKtvFY8tkg1576",
+    "successful_runtime_line": 99,
+    "rejected_call_id": "call_02_MonhPerjoy7EFHqE7CR97663",
+    "rejected_runtime_line": 100,
+    "model_received_on_request": 6,
+    "rejection": "Error: stale file read for applications/mail/src/app/components/message/modals/CustomExpirationModal.tsx: the file changed after the model read. Re-read with read_file before retrying."
+  },
+  {
+    "task": "b1-13",
+    "official_resolved": true,
+    "public_record": "docs/evidence/swebench-pro-20-2026-10-11/rest-attempts/13",
+    "request": 22,
+    "path": "scripts/monitoring/utils.py",
+    "successful_earlier_call_id": "call_00_Oa3YQNFxa3ekhz3FyBCV1104",
+    "successful_runtime_line": 461,
+    "rejected_call_id": "call_01_Om61BJIqT6ATB2aXtp6M7481",
+    "rejected_runtime_line": 462,
+    "model_received_on_request": 23,
+    "rejection": "Error: stale file read for scripts/monitoring/utils.py: the file changed after the model read. Re-read with read_file before retrying."
+  },
+  {
+    "task": "b1-18",
+    "official_resolved": true,
+    "public_record": "docs/evidence/swebench-pro-20-2026-10-11/rest-attempts/18",
+    "request": 29,
+    "path": "openlibrary/book_providers.py",
+    "successful_earlier_call_id": "call_00_16LqRMUseulyBWMihUzT7271",
+    "successful_runtime_line": 589,
+    "rejected_call_id": "call_01_n22E2zje8mGbiIkBV8HB8667",
+    "rejected_runtime_line": 590,
+    "model_received_on_request": 30,
+    "rejection": "Error: stale file read for openlibrary/book_providers.py: the file changed after the model read. Re-read with read_file before retrying."
+  },
+  {
+    "task": "b1-18",
+    "official_resolved": true,
+    "public_record": "docs/evidence/swebench-pro-20-2026-10-11/rest-attempts/18",
+    "request": 34,
+    "path": "openlibrary/book_providers.py",
+    "successful_earlier_call_id": "call_00_DFMrRqVhv0tnoga6Nq945018",
+    "successful_runtime_line": 711,
+    "rejected_call_id": "call_01_lTjJ5dEJTRK6i2lsMtxb1085",
+    "rejected_runtime_line": 712,
+    "model_received_on_request": 35,
+    "rejection": "Error: stale file read for openlibrary/book_providers.py: the file changed after the model read. Re-read with read_file before retrying."
+  },
+  {
+    "task": "b3-33",
+    "official_resolved": true,
+    "public_record": "docs/evidence/swebench-pro-40-batch3-2026-10-11/supplement-attempts/b3-33",
+    "request": 34,
+    "path": "tests/unit/utils/test_log.py",
+    "successful_earlier_call_id": "call_00_QUNDRUmK1DHn8Njy9FWD0391",
+    "successful_runtime_line": 748,
+    "rejected_call_id": "call_01_CaYupjVoajcdF4xC2B257483",
+    "rejected_runtime_line": 749,
+    "model_received_on_request": 35,
+    "rejection": "Error: stale file read for tests/unit/utils/test_log.py: the file changed after the model read. Re-read with read_file before retrying."
+  },
+  {
+    "task": "b4-09",
+    "official_resolved": false,
+    "public_record": "docs/evidence/swebench-pro-20-batch4-2026-10-12/final-unattempted/b4-09",
+    "request": 36,
+    "path": "packages/metrics/Metrics.ts",
+    "successful_earlier_call_id": "call_00_2EIZeFKys7BxVJPCrtEU2034",
+    "successful_runtime_line": 756,
+    "rejected_call_id": "call_01_FckAKA15905pqyocUa8t1809",
+    "rejected_runtime_line": 757,
+    "model_received_on_request": 37,
+    "rejection": "Error: stale file read for packages/metrics/Metrics.ts: the file changed after the model read. Re-read with read_file before retrying."
+  },
+  {
+    "task": "b4-09",
+    "official_resolved": false,
+    "public_record": "docs/evidence/swebench-pro-20-batch4-2026-10-12/final-unattempted/b4-09",
+    "request": 36,
+    "path": "packages/metrics/Metrics.ts",
+    "successful_earlier_call_id": "call_00_2EIZeFKys7BxVJPCrtEU2034",
+    "successful_runtime_line": 756,
+    "rejected_call_id": "call_02_XyH2N7wup2pju49QSeXK0718",
+    "rejected_runtime_line": 758,
+    "model_received_on_request": 37,
+    "rejection": "Error: stale file read for packages/metrics/Metrics.ts: the file changed after the model read. Re-read with read_file before retrying."
+  }
+]

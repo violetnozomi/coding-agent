@@ -1,0 +1,337 @@
+{
+  "turn_count": 3,
+  "max_turns": 3,
+  "started_at": 1791799752.5130494,
+  "timeout_seconds": 0.0,
+  "last_edit_turn": 2,
+  "edits_this_run": 3,
+  "has_diff": true,
+  "diff_chars": 360,
+  "changed_files": [
+    "index.js"
+  ],
+  "tests_modified": false,
+  "source_only": false,
+  "acceptance_criteria": [],
+  "requested_paths": [
+    "index.js"
+  ],
+  "task_mode": "unknown",
+  "wants_tests": false,
+  "forbids_test_changes": false,
+  "plan_generated": false,
+  "plan_text": "",
+  "replan_count": 0,
+  "open_todo_items": 0,
+  "task_reference_evidence": [],
+  "task_references_bound": true,
+  "task_authority_epoch": 0,
+  "task_authority_message_id": "",
+  "task_reference_omitted_count": 0,
+  "task_contract": {
+    "objective": "Update index.js to use left=2 and right=3, and expose left/right on the exported function. Run node --test literal.test.cjs.",
+    "requirements": [
+      {
+        "id": "R1",
+        "description": "Implement the requested behavior: Update index.js to use left=2 and right=3, and expose left/right on the exported function. Run node --test literal.test.cjs.",
+        "kind": "behavior",
+        "expected_artifacts": [
+          "index.js"
+        ],
+        "satisfaction_mode": "semantic",
+        "depends_on": [],
+        "required_evidence": [],
+        "artifact_operations": [
+          [
+            "index.js",
+            "change"
+          ]
+        ]
+      },
+      {
+        "id": "R2",
+        "description": "Pass the exact acceptance command: node --test literal.test.cjs",
+        "kind": "verification",
+        "expected_artifacts": [],
+        "satisfaction_mode": "semantic",
+        "depends_on": [],
+        "required_evidence": [],
+        "artifact_operations": []
+      }
+    ],
+    "constraints": [],
+    "acceptance_commands": [
+      "node --test literal.test.cjs"
+    ],
+    "contract_version": 2
+  },
+  "requirement_ledger": {
+    "items": [
+      {
+        "requirement": {
+          "id": "R1",
+          "description": "Implement the requested behavior: Update index.js to use left=2 and right=3, and expose left/right on the exported function. Run node --test literal.test.cjs.",
+          "kind": "behavior",
+          "expected_artifacts": [
+            "index.js"
+          ],
+          "satisfaction_mode": "semantic",
+          "depends_on": [],
+          "required_evidence": [],
+          "artifact_operations": [
+            [
+              "index.js",
+              "change"
+            ]
+          ]
+        },
+        "status": "satisfied",
+        "evidence": [
+          {
+            "type": "file_changed",
+            "path": "index.js",
+            "command": null,
+            "generation": 1,
+            "fingerprint": null
+          },
+          {
+            "type": "file_changed",
+            "path": "index.js",
+            "command": null,
+            "generation": 2,
+            "fingerprint": null
+          },
+          {
+            "type": "file_changed",
+            "path": "index.js",
+            "command": null,
+            "generation": 3,
+            "fingerprint": null
+          },
+          {
+            "type": "verification_passed",
+            "path": null,
+            "command": "node --test literal.test.cjs",
+            "generation": 3,
+            "fingerprint": null
+          }
+        ],
+        "mutation_generation": 3
+      },
+      {
+        "requirement": {
+          "id": "R2",
+          "description": "Pass the exact acceptance command: node --test literal.test.cjs",
+          "kind": "verification",
+          "expected_artifacts": [],
+          "satisfaction_mode": "semantic",
+          "depends_on": [],
+          "required_evidence": [],
+          "artifact_operations": []
+        },
+        "status": "satisfied",
+        "evidence": [
+          {
+            "type": "verification_passed",
+            "path": null,
+            "command": "node --test literal.test.cjs",
+            "generation": 3,
+            "fingerprint": null
+          }
+        ],
+        "mutation_generation": 3
+      }
+    ],
+    "latest_generation": 3,
+    "latest_verification_generation": 3
+  },
+  "completion_gate_prompts": 0,
+  "completion_gate_signature": "",
+  "initial_task_text": "Update index.js to use left=2 and right=3, and expose left/right on the exported function. Run node --test literal.test.cjs.",
+  "current_round_instruction_text": "",
+  "initial_plan_complexity": "",
+  "patch_risk": {
+    "risk": "medium",
+    "fingerprint": "0f74df9186080029",
+    "requires_replan": false,
+    "risk_signals": [],
+    "reasons": [
+      "single small source-file change",
+      "public-looking API surface file changed",
+      "no low-noise verification inferred"
+    ],
+    "affected_files": [
+      "index.js"
+    ],
+    "likely_tests": [],
+    "suggested_verification": [],
+    "review_notes": [],
+    "structural_impact": {
+      "changed_symbols": [],
+      "impacted_callers": [],
+      "direct_callers": [],
+      "transitive_callers": [],
+      "dependent_modules": [],
+      "related_tests": [],
+      "public_api_exposure": [],
+      "truncated": false,
+      "budget": {},
+      "related": [],
+      "source": "unavailable"
+    }
+  },
+  "risk_feedback_fingerprint": "",
+  "risk_replan_fingerprint": "",
+  "verification_attempts": 0,
+  "py_compile_ok": true,
+  "changed_files_verified": true,
+  "broad_test_attempts": 0,
+  "exact_test_attempts": 0,
+  "verification_contract": {
+    "command": "node --test literal.test.cjs",
+    "targets": [
+      "literal.test.cjs"
+    ],
+    "attempted_generation": 3,
+    "attempts": 1,
+    "passed": true,
+    "output": "TAP version 13\n# Subtest: value and exported fields\nok 1 - value and exported fields\n  ---\n  duration_ms: 1.18921\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 126.021314",
+    "source": "model",
+    "zone": ""
+  },
+  "verification_failures": 0,
+  "last_verification_failure": "",
+  "completion_review_rejections": 0,
+  "last_completion_review_rejection": "",
+  "completion_review_generation": -1,
+  "needs_broad_exploration": false,
+  "scheduled_verification_generations": {},
+  "primary_recovery_classification": "",
+  "supporting_recovery_classifications": [],
+  "recovery_repair_targets": [],
+  "searched_patterns": [],
+  "read_files": [
+    "index.js"
+  ],
+  "investigation_calls_since_edit": 0,
+  "mutation_generation": 3,
+  "source_mutation_generation": 3,
+  "acceptance_mutation_generation": 3,
+  "diff_generation": -1,
+  "verification_generation": 3,
+  "strict_progress_nudges": 0,
+  "strict_progress_blocks": 0,
+  "budget_zones_emitted": [],
+  "budget_pressure_zone": "green",
+  "work_phase": "closure_repair",
+  "workspace_git_available": false,
+  "package_install_attempts": 0,
+  "emergency_broad_exploration": 0,
+  "provider_calls": 3,
+  "provider_attempts": 3,
+  "provider_calls_by_purpose": {
+    "coding": 3
+  },
+  "provider_calls_by_model": {
+    "offline/offline-model": 3
+  },
+  "provider_usage": {
+    "input": 12,
+    "output": 6,
+    "total": 18,
+    "reasoning": 0,
+    "cache_read": 0,
+    "cache_write": 0
+  },
+  "provider_usage_by_purpose": {
+    "coding": {
+      "input": 12,
+      "output": 6,
+      "total": 18,
+      "reasoning": 0,
+      "cache_read": 0,
+      "cache_write": 0
+    }
+  },
+  "provider_usage_by_model": {
+    "offline/offline-model": {
+      "input": 12,
+      "output": 6,
+      "total": 18,
+      "reasoning": 0,
+      "cache_read": 0,
+      "cache_write": 0
+    }
+  },
+  "provider_duration_ms_by_purpose": {
+    "coding": 2.481
+  },
+  "provider_duration_ms_by_model": {
+    "offline/offline-model": 2.481
+  },
+  "provider_cost_usd": 0.0,
+  "provider_cost_usd_by_purpose": {},
+  "provider_cost_usd_by_model": {},
+  "provider_cost_unknown_calls": 3,
+  "provider_cost_sources": {
+    "unknown": 3
+  },
+  "provider_turn_records": [
+    {
+      "turn": 1,
+      "reason": "initial_investigation",
+      "outcome": "investigation_batch",
+      "tool_names": [
+        "read_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 0,
+      "mutation_delta": 0,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 2,
+      "reason": "investigation",
+      "outcome": "mutation_batch",
+      "tool_names": [
+        "edit_file",
+        "edit_file",
+        "edit_file"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 0,
+      "mutation_generation_after": 3,
+      "mutation_delta": 3,
+      "verification_generation_after": -1
+    },
+    {
+      "turn": 3,
+      "reason": "convergence",
+      "outcome": "verification_batch",
+      "tool_names": [
+        "bash"
+      ],
+      "finish_reason": "tool_calls",
+      "mutation_generation_before": 3,
+      "mutation_generation_after": 3,
+      "mutation_delta": 0,
+      "verification_generation_after": 3
+    }
+  ],
+  "provider_turns_by_reason": {
+    "initial_investigation": 1,
+    "investigation": 1,
+    "convergence": 1
+  },
+  "provider_turns_by_outcome": {
+    "investigation_batch": 1,
+    "mutation_batch": 1,
+    "verification_batch": 1
+  },
+  "transition": "edited_source",
+  "_state_block_emitted": false,
+  "_diff_seen_from_tool": false,
+  "active": true,
+  "saved_at": 1791799753.0664113
+}

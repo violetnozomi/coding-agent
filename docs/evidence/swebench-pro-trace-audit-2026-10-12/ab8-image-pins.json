@@ -1,0 +1,117 @@
+{
+  "model_calls": 0,
+  "images_pulled": 0,
+  "registry_network": [
+    {
+      "purpose": "public-registry-anonymous-token",
+      "mode": "direct",
+      "prior_failures": []
+    }
+  ],
+  "images": [
+    {
+      "instance_id": "instance_flipt-io__flipt-aebaecd026f752b187f11328b0d464761b15d2ab",
+      "status": "pinned-manifest-only",
+      "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_flipt-io__flipt-aebaecd026f752b187f11328b0d464761b15d2ab",
+      "tag_digest": "sha256:9f3e89598944a76fddee24ae2164cfd300ec64a0f0b686175b008910212565e2",
+      "linux_amd64_manifest_digest": "sha256:62f9e469554c2b65e44ebf7f9d6dff1c123a3e6437fd09b46a784baad6e9c84a",
+      "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:62f9e469554c2b65e44ebf7f9d6dff1c123a3e6437fd09b46a784baad6e9c84a",
+      "compressed_layer_bytes": 2060178027,
+      "config_digest": "sha256:9fe53ae5b9b77e0117c0ab8bafc74e68425a77271ff8645fc9e12a4ced5e0e4a",
+      "layers_downloaded": false,
+      "mode": "direct",
+      "prior_failures": []
+    },
+    {
+      "instance_id": "instance_flipt-io__flipt-ea9a2663b176da329b3f574da2ce2a664fc5b4a1",
+      "status": "pinned-manifest-only",
+      "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_flipt-io__flipt-ea9a2663b176da329b3f574da2ce2a664fc5b4a1",
+      "tag_digest": "sha256:2adf803cf4729ca6d4e5793d765f5d50636e82cd06a5c104710202e3f637949e",
+      "linux_amd64_manifest_digest": "sha256:2adf803cf4729ca6d4e5793d765f5d50636e82cd06a5c104710202e3f637949e",
+      "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:2adf803cf4729ca6d4e5793d765f5d50636e82cd06a5c104710202e3f637949e",
+      "compressed_layer_bytes": 2030582938,
+      "config_digest": "sha256:5077458506eacb5da34c654a234327164c3076239d1a488291f23284bc2f422f",
+      "layers_downloaded": false,
+      "mode": "direct",
+      "prior_failures": []
+    },
+    {
+      "instance_id": "instance_future-architect__vuls-1832b4ee3a20177ad313d806983127cb6e53f5cf",
+      "status": "pinned-manifest-only",
+      "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_future-architect__vuls-1832b4ee3a20177ad313d806983127cb6e53f5cf",
+      "tag_digest": "sha256:b8b27bf1ed07ee87e50b78af86821b9c0d1b044d966d74b254877e47d93c4189",
+      "linux_amd64_manifest_digest": "sha256:b4c6836d309d3c42f3ef91aaa558ba456afedb83421cb589af81424e08b82e21",
+      "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:b4c6836d309d3c42f3ef91aaa558ba456afedb83421cb589af81424e08b82e21",
+      "compressed_layer_bytes": 1200024612,
+      "config_digest": "sha256:f48df48470afddaa8a312e9bc8b19012e616535cf3e23b0904386a12fa0da0d4",
+      "layers_downloaded": false,
+      "mode": "direct",
+      "prior_failures": []
+    },
+    {
+      "instance_id": "instance_navidrome__navidrome-6b3b4d83ffcf273b01985709c8bc5df12bbb8286",
+      "status": "pinned-manifest-only",
+      "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_navidrome__navidrome-6b3b4d83ffcf273b01985709c8bc5df12bbb8286",
+      "tag_digest": "sha256:619be6eac43b64b9cbd64709bff5b3467b10cdf001ccc42337cb4b592d9a5d20",
+      "linux_amd64_manifest_digest": "sha256:619be6eac43b64b9cbd64709bff5b3467b10cdf001ccc42337cb4b592d9a5d20",
+      "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:619be6eac43b64b9cbd64709bff5b3467b10cdf001ccc42337cb4b592d9a5d20",
+      "compressed_layer_bytes": 1045794810,
+      "config_digest": "sha256:8a6395ca3ad151de86115d7b78d07ab67dc6d56078b5e9b3166adf83321449d6",
+      "layers_downloaded": false,
+      "mode": "direct",
+      "prior_failures": []
+    },
+    {
+      "instance_id": "instance_navidrome__navidrome-87d4db7638b37eeb754b217440ab7a372f669205",
+      "status": "pinned-manifest-only",
+      "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_navidrome__navidrome-87d4db7638b37eeb754b217440ab7a372f669205",
+      "tag_digest": "sha256:e5ad33b704b52cb430084e054e3f5ecb131ae276c495f13726684495fdf691af",
+      "linux_amd64_manifest_digest": "sha256:b9485cb541d77d5da63f64e2bfa6fc6cc666b87ce4cea2771e63a148b0c3a62b",
+      "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:b9485cb541d77d5da63f64e2bfa6fc6cc666b87ce4cea2771e63a148b0c3a62b",
+      "compressed_layer_bytes": 950023059,
+      "config_digest": "sha256:19a0ecb347469856e1fc082195999276ecacdbd46ec345830c9c85436be11053",
+      "layers_downloaded": false,
+      "mode": "direct",
+      "prior_failures": []
+    },
+    {
+      "instance_id": "instance_protonmail__webclients-2dce79ea4451ad88d6bfe94da22e7f2f988efa60",
+      "status": "pinned-manifest-only",
+      "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-2dce79ea4451ad88d6bfe94da22e7f2f988efa60",
+      "tag_digest": "sha256:3d5735fc9c10388f403f4b56448568a68dc9a20d2ce86785d333e7ffdcd28e96",
+      "linux_amd64_manifest_digest": "sha256:3d5735fc9c10388f403f4b56448568a68dc9a20d2ce86785d333e7ffdcd28e96",
+      "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:3d5735fc9c10388f403f4b56448568a68dc9a20d2ce86785d333e7ffdcd28e96",
+      "compressed_layer_bytes": 5200084908,
+      "config_digest": "sha256:5b1d698496ee0c33e63c5dceaff14a2eab086a4180640062640ab7b4b557c1e5",
+      "layers_downloaded": false,
+      "mode": "direct",
+      "prior_failures": []
+    },
+    {
+      "instance_id": "instance_protonmail__webclients-fc9d535e9beb3ae30a52a7146398cadfd6e30606",
+      "status": "pinned-manifest-only",
+      "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-fc9d535e9beb3ae30a52a7146398cadfd6e30606",
+      "tag_digest": "sha256:08fba134c4ad3eedf361ef08c253c62162405c96cc8448b3a22e01a34dd0fb82",
+      "linux_amd64_manifest_digest": "sha256:08fba134c4ad3eedf361ef08c253c62162405c96cc8448b3a22e01a34dd0fb82",
+      "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:08fba134c4ad3eedf361ef08c253c62162405c96cc8448b3a22e01a34dd0fb82",
+      "compressed_layer_bytes": 5087312492,
+      "config_digest": "sha256:0866baf4ae9103a0d148b89f76caa5e1d06f1ab894eb01ea181e6fb80f837b95",
+      "layers_downloaded": false,
+      "mode": "direct",
+      "prior_failures": []
+    },
+    {
+      "instance_id": "instance_tutao__tutanota-de49d486feef842101506adf040a0f00ded59519-v10a26bfb45a064b93f4fc044a0254925037b88f1",
+      "status": "pinned-manifest-only",
+      "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_tutao__tutanota-de49d486feef842101506adf040a0f00ded59519-v10a26bfb45a064b93f4fc044a0254925037b88f1",
+      "tag_digest": "sha256:f0c1d1561d3fe50a845212497843831b6b1fc9535c88751edc3cb6fda8a425b4",
+      "linux_amd64_manifest_digest": "sha256:f0c1d1561d3fe50a845212497843831b6b1fc9535c88751edc3cb6fda8a425b4",
+      "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:f0c1d1561d3fe50a845212497843831b6b1fc9535c88751edc3cb6fda8a425b4",
+      "compressed_layer_bytes": 1422444776,
+      "config_digest": "sha256:12ef8d462f4493fb0e0be619ca8b853342ac40c17a84a7e6acac99f8601ef429",
+      "layers_downloaded": false,
+      "mode": "direct",
+      "prior_failures": []
+    }
+  ]
+}

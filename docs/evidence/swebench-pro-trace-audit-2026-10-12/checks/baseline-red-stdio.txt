@@ -1,0 +1,55 @@
+FF..                                                                     [100%]
+=================================== FAILURES ===================================
+_____ test_same_batch_exact_edits_commit_and_reach_real_node_verification ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x77e2355cf230>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-211/test_same_batch_exact_edits_co0')
+
+    def test_same_batch_exact_edits_commit_and_reach_real_node_verification(monkeypatch, node_project):
+        project(node_project)
+        result, state, trace, requests, *_ = _run(
+            monkeypatch, node_project, [READ, BATCH, TEST], task=TASK,
+        )
+        edits = [x for x in trace if x['event'] == 'tool_call' and x['name'] == 'edit_file']
+        assert len(edits) == 3 and edits[0]['executed'] and not edits[0]['dispatch_failed']
+>       assert (node_project / 'index.js').read_text() == EXPECTED
+E       AssertionError: assert 'const left =...ft + right;\n' == 'const left =..., right });\n'
+E         
+E         - const left = 2;
+E         ?              ^
+E         + const left = 1;
+E         ?              ^
+E         - const right = 3;
+E         ?               ^...
+E         
+E         ...Full output truncated (4 lines hidden), use '-vv' to show
+
+tests/runtime/test_transaction_owned_edit_runtime.py:41: AssertionError
+________ test_failed_second_edit_rolls_back_then_same_plan_can_recover _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x77e2355cda70>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-211/test_failed_second_edit_rolls_0')
+
+    def test_failed_second_edit_rolls_back_then_same_plan_can_recover(monkeypatch, node_project):
+        project(node_project)
+        bad = _tool('edit_file', path='index.js', old_text='not present', new_text='wrong')
+        result, state, trace, requests, *_ = _run(
+            monkeypatch, node_project, [READ, [BATCH[0], bad], BATCH, TEST], task=TASK,
+        )
+>       assert (node_project / 'index.js').read_text() == EXPECTED
+E       AssertionError: assert 'const left =...ft + right;\n' == 'const left =..., right });\n'
+E         
+E         - const left = 2;
+E         ?              ^
+E         + const left = 1;
+E         ?              ^
+E         - const right = 3;
+E         ?               ^...
+E         
+E         ...Full output truncated (4 lines hidden), use '-vv' to show
+
+tests/runtime/test_transaction_owned_edit_runtime.py:59: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_transaction_owned_edit_runtime.py::test_same_batch_exact_edits_commit_and_reach_real_node_verification
+FAILED tests/runtime/test_transaction_owned_edit_runtime.py::test_failed_second_edit_rolls_back_then_same_plan_can_recover
+2 failed, 2 passed, 6 deselected in 3.67s

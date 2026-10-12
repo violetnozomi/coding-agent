@@ -1,0 +1,19 @@
+{
+  "command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/runtime/test_transaction_owned_edit_runtime.py",
+    "-k",
+    "external_replacement"
+  ],
+  "cwd": "/home/pyh/.codex/artifacts/nz-pro-trace-audit-2026-10-12/baseline",
+  "exit_code": 1,
+  "summary": [
+    "2 failed, 9 deselected in 1.98s"
+  ],
+  "nonlocal_tcp_blocked": true,
+  "provider_secrets_removed": true,
+  "source_commit": "99eee2967ba8ff4dbfb17bf241e382b8fa022f5a"
+}

@@ -1,0 +1,9 @@
+[
+  [
+    "bash",
+    {
+      "command": "node --test literal.test.cjs"
+    },
+    true
+  ]
+]

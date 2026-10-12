@@ -1,0 +1,96 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+__ test_external_replacement_between_edits_stays_stale_and_is_preserved[True] __
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7e90922b36f0>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-220/test_external_replacement_betw0')
+replace_object = True
+
+    @pytest.mark.parametrize('replace_object', [True, False])
+    def test_external_replacement_between_edits_stays_stale_and_is_preserved(monkeypatch, node_project, replace_object):
+        from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    
+        project(node_project)
+        original = WorkspaceFileAccess.write_text
+        external = INITIAL.replace('const left = 1;', 'const left = 2;') + '// external change\n'
+        changed = False
+    
+        def write_then_external(access, path, content, **kwargs):
+            nonlocal changed
+            value = original(access, path, content, **kwargs)
+            if path == 'index.js' and not changed:
+                changed = True
+                if replace_object:
+                    temporary = node_project / 'external.tmp'
+                    temporary.write_text(external)
+                    os.replace(temporary, node_project / 'index.js')
+                else:
+                    (node_project / 'index.js').write_text(external)
+            return value
+    
+        monkeypatch.setattr(WorkspaceFileAccess, 'write_text', write_then_external)
+        result, state, trace, requests, *_ = _run(
+            monkeypatch, node_project, [READ, BATCH, TEST], task=TASK,
+        )
+        assert changed
+>       assert (node_project / 'index.js').read_text() == external
+E       AssertionError: assert 'const left =...ft + right;\n' == 'const left =...rnal change\n'
+E         
+E         - const left = 2;
+E         ?              ^
+E         + const left = 1;
+E         ?              ^
+E           const right = 1;
+E           module.exports = () => left + right;
+E         - // external change
+
+tests/runtime/test_transaction_owned_edit_runtime.py:99: AssertionError
+_ test_external_replacement_between_edits_stays_stale_and_is_preserved[False] __
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7e90922b3820>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-220/test_external_replacement_betw1')
+replace_object = False
+
+    @pytest.mark.parametrize('replace_object', [True, False])
+    def test_external_replacement_between_edits_stays_stale_and_is_preserved(monkeypatch, node_project, replace_object):
+        from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    
+        project(node_project)
+        original = WorkspaceFileAccess.write_text
+        external = INITIAL.replace('const left = 1;', 'const left = 2;') + '// external change\n'
+        changed = False
+    
+        def write_then_external(access, path, content, **kwargs):
+            nonlocal changed
+            value = original(access, path, content, **kwargs)
+            if path == 'index.js' and not changed:
+                changed = True
+                if replace_object:
+                    temporary = node_project / 'external.tmp'
+                    temporary.write_text(external)
+                    os.replace(temporary, node_project / 'index.js')
+                else:
+                    (node_project / 'index.js').write_text(external)
+            return value
+    
+        monkeypatch.setattr(WorkspaceFileAccess, 'write_text', write_then_external)
+        result, state, trace, requests, *_ = _run(
+            monkeypatch, node_project, [READ, BATCH, TEST], task=TASK,
+        )
+        assert changed
+>       assert (node_project / 'index.js').read_text() == external
+E       AssertionError: assert 'const left =...ft + right;\n' == 'const left =...rnal change\n'
+E         
+E         - const left = 2;
+E         ?              ^
+E         + const left = 1;
+E         ?              ^
+E           const right = 1;
+E           module.exports = () => left + right;
+E         - // external change
+
+tests/runtime/test_transaction_owned_edit_runtime.py:99: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_transaction_owned_edit_runtime.py::test_external_replacement_between_edits_stays_stale_and_is_preserved[True]
+FAILED tests/runtime/test_transaction_owned_edit_runtime.py::test_external_replacement_between_edits_stays_stale_and_is_preserved[False]
+2 failed, 9 deselected in 1.98s

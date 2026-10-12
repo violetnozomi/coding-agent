@@ -1,0 +1,2710 @@
+[
+  {
+    "model": "offline-model",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Use the declared test and report truthfully.\n\n## Model-family guidance (InfCode production contract)\n- Family: default\n- - Be concise, direct, and action-oriented; minimize narration outside tool use.\n- Inspect relevant files before editing and prefer the smallest change that solves the task.\n- Use tools for software-engineering work, verify changes, and report only the relevant outcome.\n- Do not invent URLs, repository facts, command output, or verification evidence.\n\n## Available skills\n- **code-review**: Code review checklist and best practices"
+      },
+      {
+        "role": "user",
+        "content": "<context-injection>\nRecalled background memory, runtime state, and working memory for this turn. Treat as context, not as a new user request.\nProjectProfile: languages=javascript; package_managers=none; tests=none; typecheck=none; source_roots=none; test_roots=none\n<system-reminder>\n- Turn 1/3 | task_complexity=L0 | task_mode=unknown | 2 turns remaining\n- User named target files (1): index.js. Prefer editing those exact paths or the closest existing match; do not create same-basename files elsewhere without confirming.\n</system-reminder>\n<repo-routing>\nDeclared target paths already resolve the initial workset: index.js. Inspect only the needed targets with read_file; skip broad repository orientation unless a declared path is missing.\n</repo-routing>\n\n<repo-routing>\nRepository intelligence did not provide bounded evidence (no-high-confidence-candidates). Use repo_context, grep_search, or read_file for precise verification; this is not evidence that the repository has no match.\n</repo-routing>\n</context-injection>\n\nUpdate index.js to use left=2 and right=3, and expose left/right on the exported function. Run node --test literal.test.cjs."
+      }
+    ],
+    "max_tokens": 8000,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "apply_patch",
+          "description": "Apply exact text replacements, file creates, and file deletes atomically. Validates every hunk before writing and returns diffs. Every change must include its relative path.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Compatibility fallback for saved single-file calls; new calls must set path on every change."
+              },
+              "changes": {
+                "type": "array",
+                "description": "List of patch hunks.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        "replace",
+                        "create",
+                        "delete",
+                        "append"
+                      ],
+                      "description": "Patch operation. Default: replace. Use append only to add new content at end-of-file without old_text."
+                    },
+                    "path": {
+                      "type": "string",
+                      "description": "Relative path from workspace root."
+                    },
+                    "old_text": {
+                      "type": "string",
+                      "description": "Exact text to replace, or delete guard text."
+                    },
+                    "new_text": {
+                      "type": "string",
+                      "description": "Replacement or created file content."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "Alias for new_text when op=create."
+                    },
+                    "overwrite": {
+                      "type": "boolean",
+                      "description": "Allow op=create to replace an existing file."
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ]
+                }
+              },
+              "dry_run": {
+                "type": "boolean",
+                "description": "Preview diffs without writing files. Default: false."
+              }
+            },
+            "required": [
+              "changes"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "bash",
+          "description": "Run a shell command in the workspace. Use for running tests, installing packages, git operations, etc.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "The shell command to execute."
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Timeout in seconds, 1-120. Default: 120."
+              },
+              "workdir": {
+                "type": "string",
+                "description": "Workspace-relative directory in which to run the command. Use this instead of cd. Defaults to the workspace root."
+              }
+            },
+            "required": [
+              "command"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "compact",
+          "description": "Manually compress the conversation context to free up space.",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "diff_status",
+          "description": "Show current git diff status: which files changed, diff size, whether tests were modified, and whether to verify/finalize or keep searching.",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "edit_file",
+          "description": "Replace exact text in a file (first occurrence only). old_text must match exactly once.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "old_text": {
+                "type": "string",
+                "description": "The exact text to find and replace. Must be unique in the file."
+              },
+              "new_text": {
+                "type": "string",
+                "description": "The replacement text."
+              }
+            },
+            "required": [
+              "path",
+              "old_text",
+              "new_text"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "emit_handoff",
+          "description": "Transfer this run to a declared Agent role after the current tool batch settles, or emit terminal=true when this terminal role is complete.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "enum": [
+                  "node-evidence"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "terminal": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "glob_search",
+          "description": "Find files matching a glob pattern (e.g. '**/*.py', 'src/**/*.ts'). Results are sorted by modification time, most recent first.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Glob pattern to match files."
+              },
+              "path": {
+                "type": "string",
+                "description": "Directory to search in. Omit to use the workspace root."
+              }
+            },
+            "required": [
+              "pattern"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "grep_search",
+          "description": "Search file contents with regex. Default mode returns matching lines grouped by absolute file path and sorted by file modification time. Use output_mode='files_with_matches' for paths only, or 'count' for counts. NEVER use bash grep/rg — always use this tool for search.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Regex pattern to search for."
+              },
+              "path": {
+                "type": "string",
+                "description": "Directory to search in. Default: workspace root."
+              },
+              "include": {
+                "type": "string",
+                "description": "File glob filter, e.g. '*.py'. Default: all files."
+              },
+              "output_mode": {
+                "type": "string",
+                "enum": [
+                  "files_with_matches",
+                  "content",
+                  "count"
+                ],
+                "description": "Output mode. 'content' (default) shows matching lines. 'files_with_matches' shows paths. 'count' shows per-file matching-line counts."
+              },
+              "head_limit": {
+                "type": "integer",
+                "description": "Max results. Default: 100 (content) or 50 (files/count). Use 0 for unlimited."
+              },
+              "offset": {
+                "type": "integer",
+                "description": "Skip first N results for pagination. Default: 0."
+              },
+              "context": {
+                "type": "integer",
+                "description": "Lines of context around matches (content mode only). Default: 0."
+              },
+              "case_insensitive": {
+                "type": "boolean",
+                "description": "Case insensitive search (-i). Default: false."
+              }
+            },
+            "required": [
+              "pattern"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_directory",
+          "description": "List files and directories in a path. Use depth to control recursion.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path. Default: current directory."
+              },
+              "depth": {
+                "type": "integer",
+                "description": "Max depth to recurse. Default: 1."
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "load_skill",
+          "description": "Load specialized domain knowledge or workflow instructions by skill name. Check the available skills list in the system prompt before calling.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Skill name to load (e.g. 'code-review')."
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "mcp_catalog",
+          "description": "Search MCP servers, tools, prompts, and resources without exposing every schema; then fetch one exact prompt or resource from the active MCP runtime.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "get_prompt",
+                  "read_resource",
+                  "search"
+                ]
+              },
+              "query": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "",
+                  "prompt",
+                  "resource",
+                  "server",
+                  "tool"
+                ]
+              },
+              "server": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              },
+              "arguments": {
+                "type": "object"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50
+              }
+            },
+            "required": [
+              "operation"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "process",
+          "description": "Start and control a persistent long-running process across Agent turns. Use this, not bash, for dev servers, watch mode, REPLs, and live logs. Operations: start, read by byte cursor, write stdin, status/list, resize, kill.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "start",
+                  "read",
+                  "write",
+                  "status",
+                  "list",
+                  "resize",
+                  "kill"
+                ]
+              },
+              "command": {
+                "type": "string",
+                "description": "Command for start."
+              },
+              "process_id": {
+                "type": "string",
+                "description": "Exact stable proc_* ID returned by start. Never invent an alias. Omit for status/list of all Session processes."
+              },
+              "data": {
+                "type": "string",
+                "description": "UTF-8 stdin data for write."
+              },
+              "append_newline": {
+                "type": "boolean",
+                "description": "Append a newline to write data."
+              },
+              "cursor": {
+                "type": "integer",
+                "description": "Read from this byte cursor; use next_cursor on later reads. -1 starts at current end."
+              },
+              "tail_bytes": {
+                "type": "integer",
+                "description": "When cursor is omitted, read only this many tail bytes."
+              },
+              "max_bytes": {
+                "type": "integer",
+                "description": "Maximum bytes returned, up to 65536."
+              },
+              "wait_seconds": {
+                "type": "number",
+                "description": "Wait up to 30 seconds for new output without killing the process."
+              },
+              "workdir": {
+                "type": "string",
+                "description": "Workspace-relative cwd for start."
+              },
+              "tty": {
+                "type": "boolean",
+                "description": "Request a PTY on POSIX; Windows uses persistent pipes."
+              },
+              "rows": {
+                "type": "integer",
+                "description": "PTY rows for start/resize."
+              },
+              "cols": {
+                "type": "integer",
+                "description": "PTY columns for start/resize."
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "question",
+          "description": "Ask the user 1-4 structured questions only when a material decision cannot be resolved from the request, repository, or sensible defaults. Put a recommended choice first and suffix its label with '(Recommended)'. Users may type a custom answer, so do not add an Other option.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "questions": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 4,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "question": {
+                      "type": "string"
+                    },
+                    "header": {
+                      "type": "string"
+                    },
+                    "multiple": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 5,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "label",
+                          "description"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "question",
+                    "header",
+                    "options"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "questions"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_file",
+          "description": "Read file contents with line numbers. Use offset/limit for large text or converted PDF/DOCX files. PDF page ranges use pages=\"5\" or pages=\"1-10\" with at most 20 pages per request.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "offset": {
+                "type": "integer",
+                "description": "Start line number (1-based). Default: 1."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Number of lines to read. Default: 2000."
+              },
+              "pages": {
+                "type": "string",
+                "description": "PDF page range, for example \"5\" or \"1-10\". Maximum 20 pages per request."
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_scratchpad",
+          "description": "Read all entries in your working memory scratchpad. The scratchpad is also shown automatically each turn; only call this explicitly if you need the full untruncated history.",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_tool_result",
+          "description": "Read a bounded chunk of a persisted tool result by its opaque artifact ID. Only artifacts owned by the current Session are accessible.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "max_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65536
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "replace_lines",
+          "description": "Replace a 1-based inclusive line range in a file. Use after read_file shows exact line numbers, especially when exact-text edits are brittle.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "start_line": {
+                "type": "integer",
+                "description": "First line to replace, 1-based."
+              },
+              "end_line": {
+                "type": "integer",
+                "description": "Last line to replace, 1-based inclusive."
+              },
+              "new_text": {
+                "type": "string",
+                "description": "Replacement text for the line range."
+              }
+            },
+            "required": [
+              "path",
+              "start_line",
+              "end_line",
+              "new_text"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "review_run_evidence",
+          "description": "Inspect the current Agent's Runtime-owned evidence and unresolved requirements. Call with no arguments; do not supply files, commands, or verification claims. Read-only advisory review; normal completion and semantic review still apply.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "send_message",
+          "description": "Send a non-blocking coordinator instruction to a live child Agent by session id or display name, or use '*' for a bounded broadcast.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "to": {
+                "type": "string",
+                "description": "Live child session id, display name, or '*'."
+              },
+              "content": {
+                "type": "string",
+                "description": "Actionable instruction that changes the child's plan."
+              },
+              "seen_by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Forwarding chain copied from a received message."
+              }
+            },
+            "required": [
+              "to",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "task",
+          "description": "Spawn or resume a child-agent session with isolated context and its own worktree. Returns either a final summary or a parent handoff request.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "description": "Task description or follow-up reply for the child agent."
+              },
+              "agent_type": {
+                "type": "string",
+                "enum": [
+                  "explore",
+                  "plan",
+                  "general-purpose",
+                  "reflection"
+                ],
+                "description": "explore = cheap read-only repo scan, plan = parent-model read-only implementation design, general-purpose = parent-model full-tool worker in its own worktree, reflection = read-only completion critic. Default: explore."
+              },
+              "session_id": {
+                "type": "string",
+                "description": "Existing child session id to resume after the child asked the parent for help."
+              },
+              "allowed_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional allowlist to narrow the child's tool scope."
+              },
+              "target_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional repo-relative files or directories this child will own. Use for write-capable tasks to prevent overlapping edits with other active child sessions."
+              },
+              "output_schema": {
+                "type": "object",
+                "description": "Optional supported JSON-Schema subset for a validated structured child result."
+              },
+              "model_hint": {
+                "type": "string",
+                "enum": [
+                  "fast",
+                  "balanced",
+                  "deep"
+                ],
+                "description": "Semantic child model tier; unavailable tiers explicitly inherit the parent route."
+              },
+              "evidence_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Bounded file:/diff:/finding:/task_id: evidence references injected into the child briefing."
+              },
+              "verification": {
+                "type": "object",
+                "description": "Machine-checkable child postconditions: enforcement, mutation/read/path/final-text requirements."
+              }
+            },
+            "required": [
+              "prompt"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "tool_search",
+          "description": "Discover tools hidden by progressive schema exposure, including workflow, project creation, memory, advanced repository intelligence, web, MCP/LSP, planning, and orchestration capabilities. Use select:TOOL_NAME for an exact schema or descriptive keywords; matching tools are unlocked for the next model turn in this Session only.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "max_results": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 15
+              }
+            },
+            "required": [
+              "query"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "update_scratchpad",
+          "description": "Record session working notes. Prefer category='plan' for the active plan or confirmed facts, and category='failure' for failed attempts or verification failures.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "type": "string",
+                "enum": [
+                  "plan",
+                  "failure"
+                ],
+                "description": "plan: active plan or important confirmed fact; failure: what failed and why"
+              },
+              "content": {
+                "type": "string",
+                "description": "Your note. Keep it concise (max 500 chars)."
+              }
+            },
+            "required": [
+              "category",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "verify_changed_files",
+          "description": "Run low-noise language-aware checks on changed source files: Python py_compile, JS/TS typecheck when configured, Go package check, and Rust cargo check. Excludes test files by default.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "include_tests": {
+                "type": "boolean",
+                "description": "Include changed test files. Default: false."
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Per-file timeout in seconds. Default: 30, max: 120."
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "verify_project_build",
+          "description": "Run safe low-noise verification commands for a generated project directory without installing dependencies.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "project_dir": {
+                "type": "string",
+                "description": "Project directory relative to the workspace."
+              },
+              "commands": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional explicit verification commands. If omitted, common commands are inferred."
+              }
+            },
+            "required": [
+              "project_dir"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write_file",
+          "description": "Write content to a file. Creates parent directories if needed. Overwrites existing content.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "content": {
+                "type": "string",
+                "description": "The full content to write."
+              }
+            },
+            "required": [
+              "path",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write_files_batch",
+          "description": "Write multiple files atomically. Validates every path before writing, blocks credential-like files, and fails the entire batch if any file conflicts.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "files": {
+                "type": "array",
+                "description": "List of file payloads.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "Relative path from workspace root."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "Full file content."
+                    },
+                    "purpose": {
+                      "type": "string",
+                      "description": "Optional short description for the file."
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "content"
+                  ]
+                }
+              },
+              "overwrite": {
+                "type": "boolean",
+                "description": "Allow overwriting existing files. Default: false."
+              }
+            },
+            "required": [
+              "files"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "model": "offline-model",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Use the declared test and report truthfully.\n\n## Model-family guidance (InfCode production contract)\n- Family: default\n- - Be concise, direct, and action-oriented; minimize narration outside tool use.\n- Inspect relevant files before editing and prefer the smallest change that solves the task.\n- Use tools for software-engineering work, verify changes, and report only the relevant outcome.\n- Do not invent URLs, repository facts, command output, or verification evidence.\n\n## Available skills\n- **code-review**: Code review checklist and best practices"
+      },
+      {
+        "role": "user",
+        "content": "<context-injection>\nRecalled background memory, runtime state, and working memory for this turn. Treat as context, not as a new user request.\nProjectProfile: languages=javascript; package_managers=none; tests=none; typecheck=none; source_roots=none; test_roots=none\n<system-reminder>\n- Turn 2/3 | task_complexity=L0 | task_mode=unknown | 1 turns remaining\n- User named target files (1): index.js. Prefer editing those exact paths or the closest existing match; do not create same-basename files elsewhere without confirming.\n</system-reminder>\n<repo-routing>\nDeclared target paths already resolve the initial workset: index.js. Inspect only the needed targets with read_file; skip broad repository orientation unless a declared path is missing.\n</repo-routing>\n\n<repo-routing>\nRepository intelligence did not provide bounded evidence (no-high-confidence-candidates). Use repo_context, grep_search, or read_file for precise verification; this is not evidence that the repository has no match.\n</repo-routing>\n</context-injection>\n\nUpdate index.js to use left=2 and right=3, and expose left/right on the exported function. Run node --test literal.test.cjs."
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call-1-0",
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "arguments": {
+                "path": "index.js"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call-1-0",
+        "content": "<path>/home/pyh/.codex/artifacts/nz-pro-trace-audit-2026-10-12/replay-A/workspace/index.js</path>\n<type>file</type>\n<content>\n1: const left = 1;\n2: const right = 1;\n3: module.exports = () => left + right;\n\n(End of file - total 3 lines)\n</content>"
+      }
+    ],
+    "max_tokens": 8000,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "apply_patch",
+          "description": "Apply exact text replacements, file creates, and file deletes atomically. Validates every hunk before writing and returns diffs. Every change must include its relative path.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Compatibility fallback for saved single-file calls; new calls must set path on every change."
+              },
+              "changes": {
+                "type": "array",
+                "description": "List of patch hunks.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        "replace",
+                        "create",
+                        "delete",
+                        "append"
+                      ],
+                      "description": "Patch operation. Default: replace. Use append only to add new content at end-of-file without old_text."
+                    },
+                    "path": {
+                      "type": "string",
+                      "description": "Relative path from workspace root."
+                    },
+                    "old_text": {
+                      "type": "string",
+                      "description": "Exact text to replace, or delete guard text."
+                    },
+                    "new_text": {
+                      "type": "string",
+                      "description": "Replacement or created file content."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "Alias for new_text when op=create."
+                    },
+                    "overwrite": {
+                      "type": "boolean",
+                      "description": "Allow op=create to replace an existing file."
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ]
+                }
+              },
+              "dry_run": {
+                "type": "boolean",
+                "description": "Preview diffs without writing files. Default: false."
+              }
+            },
+            "required": [
+              "changes"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "bash",
+          "description": "Run a shell command in the workspace. Use for running tests, installing packages, git operations, etc.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "The shell command to execute."
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Timeout in seconds, 1-120. Default: 120."
+              },
+              "workdir": {
+                "type": "string",
+                "description": "Workspace-relative directory in which to run the command. Use this instead of cd. Defaults to the workspace root."
+              }
+            },
+            "required": [
+              "command"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "compact",
+          "description": "Manually compress the conversation context to free up space.",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "diff_status",
+          "description": "Show current git diff status: which files changed, diff size, whether tests were modified, and whether to verify/finalize or keep searching.",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "edit_file",
+          "description": "Replace exact text in a file (first occurrence only). old_text must match exactly once.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "old_text": {
+                "type": "string",
+                "description": "The exact text to find and replace. Must be unique in the file."
+              },
+              "new_text": {
+                "type": "string",
+                "description": "The replacement text."
+              }
+            },
+            "required": [
+              "path",
+              "old_text",
+              "new_text"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "emit_handoff",
+          "description": "Transfer this run to a declared Agent role after the current tool batch settles, or emit terminal=true when this terminal role is complete.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "enum": [
+                  "node-evidence"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "terminal": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "glob_search",
+          "description": "Find files matching a glob pattern (e.g. '**/*.py', 'src/**/*.ts'). Results are sorted by modification time, most recent first.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Glob pattern to match files."
+              },
+              "path": {
+                "type": "string",
+                "description": "Directory to search in. Omit to use the workspace root."
+              }
+            },
+            "required": [
+              "pattern"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "grep_search",
+          "description": "Search file contents with regex. Default mode returns matching lines grouped by absolute file path and sorted by file modification time. Use output_mode='files_with_matches' for paths only, or 'count' for counts. NEVER use bash grep/rg — always use this tool for search.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Regex pattern to search for."
+              },
+              "path": {
+                "type": "string",
+                "description": "Directory to search in. Default: workspace root."
+              },
+              "include": {
+                "type": "string",
+                "description": "File glob filter, e.g. '*.py'. Default: all files."
+              },
+              "output_mode": {
+                "type": "string",
+                "enum": [
+                  "files_with_matches",
+                  "content",
+                  "count"
+                ],
+                "description": "Output mode. 'content' (default) shows matching lines. 'files_with_matches' shows paths. 'count' shows per-file matching-line counts."
+              },
+              "head_limit": {
+                "type": "integer",
+                "description": "Max results. Default: 100 (content) or 50 (files/count). Use 0 for unlimited."
+              },
+              "offset": {
+                "type": "integer",
+                "description": "Skip first N results for pagination. Default: 0."
+              },
+              "context": {
+                "type": "integer",
+                "description": "Lines of context around matches (content mode only). Default: 0."
+              },
+              "case_insensitive": {
+                "type": "boolean",
+                "description": "Case insensitive search (-i). Default: false."
+              }
+            },
+            "required": [
+              "pattern"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_directory",
+          "description": "List files and directories in a path. Use depth to control recursion.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path. Default: current directory."
+              },
+              "depth": {
+                "type": "integer",
+                "description": "Max depth to recurse. Default: 1."
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "load_skill",
+          "description": "Load specialized domain knowledge or workflow instructions by skill name. Check the available skills list in the system prompt before calling.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Skill name to load (e.g. 'code-review')."
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "mcp_catalog",
+          "description": "Search MCP servers, tools, prompts, and resources without exposing every schema; then fetch one exact prompt or resource from the active MCP runtime.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "get_prompt",
+                  "read_resource",
+                  "search"
+                ]
+              },
+              "query": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "",
+                  "prompt",
+                  "resource",
+                  "server",
+                  "tool"
+                ]
+              },
+              "server": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              },
+              "arguments": {
+                "type": "object"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50
+              }
+            },
+            "required": [
+              "operation"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "process",
+          "description": "Start and control a persistent long-running process across Agent turns. Use this, not bash, for dev servers, watch mode, REPLs, and live logs. Operations: start, read by byte cursor, write stdin, status/list, resize, kill.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "start",
+                  "read",
+                  "write",
+                  "status",
+                  "list",
+                  "resize",
+                  "kill"
+                ]
+              },
+              "command": {
+                "type": "string",
+                "description": "Command for start."
+              },
+              "process_id": {
+                "type": "string",
+                "description": "Exact stable proc_* ID returned by start. Never invent an alias. Omit for status/list of all Session processes."
+              },
+              "data": {
+                "type": "string",
+                "description": "UTF-8 stdin data for write."
+              },
+              "append_newline": {
+                "type": "boolean",
+                "description": "Append a newline to write data."
+              },
+              "cursor": {
+                "type": "integer",
+                "description": "Read from this byte cursor; use next_cursor on later reads. -1 starts at current end."
+              },
+              "tail_bytes": {
+                "type": "integer",
+                "description": "When cursor is omitted, read only this many tail bytes."
+              },
+              "max_bytes": {
+                "type": "integer",
+                "description": "Maximum bytes returned, up to 65536."
+              },
+              "wait_seconds": {
+                "type": "number",
+                "description": "Wait up to 30 seconds for new output without killing the process."
+              },
+              "workdir": {
+                "type": "string",
+                "description": "Workspace-relative cwd for start."
+              },
+              "tty": {
+                "type": "boolean",
+                "description": "Request a PTY on POSIX; Windows uses persistent pipes."
+              },
+              "rows": {
+                "type": "integer",
+                "description": "PTY rows for start/resize."
+              },
+              "cols": {
+                "type": "integer",
+                "description": "PTY columns for start/resize."
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "question",
+          "description": "Ask the user 1-4 structured questions only when a material decision cannot be resolved from the request, repository, or sensible defaults. Put a recommended choice first and suffix its label with '(Recommended)'. Users may type a custom answer, so do not add an Other option.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "questions": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 4,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "question": {
+                      "type": "string"
+                    },
+                    "header": {
+                      "type": "string"
+                    },
+                    "multiple": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 5,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "label",
+                          "description"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "question",
+                    "header",
+                    "options"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "questions"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_file",
+          "description": "Read file contents with line numbers. Use offset/limit for large text or converted PDF/DOCX files. PDF page ranges use pages=\"5\" or pages=\"1-10\" with at most 20 pages per request.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "offset": {
+                "type": "integer",
+                "description": "Start line number (1-based). Default: 1."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Number of lines to read. Default: 2000."
+              },
+              "pages": {
+                "type": "string",
+                "description": "PDF page range, for example \"5\" or \"1-10\". Maximum 20 pages per request."
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_scratchpad",
+          "description": "Read all entries in your working memory scratchpad. The scratchpad is also shown automatically each turn; only call this explicitly if you need the full untruncated history.",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_tool_result",
+          "description": "Read a bounded chunk of a persisted tool result by its opaque artifact ID. Only artifacts owned by the current Session are accessible.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "max_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65536
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "replace_lines",
+          "description": "Replace a 1-based inclusive line range in a file. Use after read_file shows exact line numbers, especially when exact-text edits are brittle.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "start_line": {
+                "type": "integer",
+                "description": "First line to replace, 1-based."
+              },
+              "end_line": {
+                "type": "integer",
+                "description": "Last line to replace, 1-based inclusive."
+              },
+              "new_text": {
+                "type": "string",
+                "description": "Replacement text for the line range."
+              }
+            },
+            "required": [
+              "path",
+              "start_line",
+              "end_line",
+              "new_text"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "review_run_evidence",
+          "description": "Inspect the current Agent's Runtime-owned evidence and unresolved requirements. Call with no arguments; do not supply files, commands, or verification claims. Read-only advisory review; normal completion and semantic review still apply.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "send_message",
+          "description": "Send a non-blocking coordinator instruction to a live child Agent by session id or display name, or use '*' for a bounded broadcast.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "to": {
+                "type": "string",
+                "description": "Live child session id, display name, or '*'."
+              },
+              "content": {
+                "type": "string",
+                "description": "Actionable instruction that changes the child's plan."
+              },
+              "seen_by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Forwarding chain copied from a received message."
+              }
+            },
+            "required": [
+              "to",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "task",
+          "description": "Spawn or resume a child-agent session with isolated context and its own worktree. Returns either a final summary or a parent handoff request.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "description": "Task description or follow-up reply for the child agent."
+              },
+              "agent_type": {
+                "type": "string",
+                "enum": [
+                  "explore",
+                  "plan",
+                  "general-purpose",
+                  "reflection"
+                ],
+                "description": "explore = cheap read-only repo scan, plan = parent-model read-only implementation design, general-purpose = parent-model full-tool worker in its own worktree, reflection = read-only completion critic. Default: explore."
+              },
+              "session_id": {
+                "type": "string",
+                "description": "Existing child session id to resume after the child asked the parent for help."
+              },
+              "allowed_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional allowlist to narrow the child's tool scope."
+              },
+              "target_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional repo-relative files or directories this child will own. Use for write-capable tasks to prevent overlapping edits with other active child sessions."
+              },
+              "output_schema": {
+                "type": "object",
+                "description": "Optional supported JSON-Schema subset for a validated structured child result."
+              },
+              "model_hint": {
+                "type": "string",
+                "enum": [
+                  "fast",
+                  "balanced",
+                  "deep"
+                ],
+                "description": "Semantic child model tier; unavailable tiers explicitly inherit the parent route."
+              },
+              "evidence_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Bounded file:/diff:/finding:/task_id: evidence references injected into the child briefing."
+              },
+              "verification": {
+                "type": "object",
+                "description": "Machine-checkable child postconditions: enforcement, mutation/read/path/final-text requirements."
+              }
+            },
+            "required": [
+              "prompt"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "tool_search",
+          "description": "Discover tools hidden by progressive schema exposure, including workflow, project creation, memory, advanced repository intelligence, web, MCP/LSP, planning, and orchestration capabilities. Use select:TOOL_NAME for an exact schema or descriptive keywords; matching tools are unlocked for the next model turn in this Session only.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "max_results": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 15
+              }
+            },
+            "required": [
+              "query"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "update_scratchpad",
+          "description": "Record session working notes. Prefer category='plan' for the active plan or confirmed facts, and category='failure' for failed attempts or verification failures.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "type": "string",
+                "enum": [
+                  "plan",
+                  "failure"
+                ],
+                "description": "plan: active plan or important confirmed fact; failure: what failed and why"
+              },
+              "content": {
+                "type": "string",
+                "description": "Your note. Keep it concise (max 500 chars)."
+              }
+            },
+            "required": [
+              "category",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "verify_changed_files",
+          "description": "Run low-noise language-aware checks on changed source files: Python py_compile, JS/TS typecheck when configured, Go package check, and Rust cargo check. Excludes test files by default.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "include_tests": {
+                "type": "boolean",
+                "description": "Include changed test files. Default: false."
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Per-file timeout in seconds. Default: 30, max: 120."
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "verify_project_build",
+          "description": "Run safe low-noise verification commands for a generated project directory without installing dependencies.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "project_dir": {
+                "type": "string",
+                "description": "Project directory relative to the workspace."
+              },
+              "commands": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional explicit verification commands. If omitted, common commands are inferred."
+              }
+            },
+            "required": [
+              "project_dir"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write_file",
+          "description": "Write content to a file. Creates parent directories if needed. Overwrites existing content.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "content": {
+                "type": "string",
+                "description": "The full content to write."
+              }
+            },
+            "required": [
+              "path",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write_files_batch",
+          "description": "Write multiple files atomically. Validates every path before writing, blocks credential-like files, and fails the entire batch if any file conflicts.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "files": {
+                "type": "array",
+                "description": "List of file payloads.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "Relative path from workspace root."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "Full file content."
+                    },
+                    "purpose": {
+                      "type": "string",
+                      "description": "Optional short description for the file."
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "content"
+                  ]
+                }
+              },
+              "overwrite": {
+                "type": "boolean",
+                "description": "Allow overwriting existing files. Default: false."
+              }
+            },
+            "required": [
+              "files"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "model": "offline-model",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Use the declared test and report truthfully.\n\n## Model-family guidance (InfCode production contract)\n- Family: default\n- - Be concise, direct, and action-oriented; minimize narration outside tool use.\n- Inspect relevant files before editing and prefer the smallest change that solves the task.\n- Use tools for software-engineering work, verify changes, and report only the relevant outcome.\n- Do not invent URLs, repository facts, command output, or verification evidence.\n\n## Available skills\n- **code-review**: Code review checklist and best practices"
+      },
+      {
+        "role": "user",
+        "content": "<context-injection>\nRecalled background memory, runtime state, and working memory for this turn. Treat as context, not as a new user request.\nProjectProfile: languages=javascript; package_managers=none; tests=none; typecheck=none; source_roots=none; test_roots=none\n<system-reminder>\n- Turn 3/3 | task_complexity=L1 | task_mode=unknown | 0 turns remaining\n- User named target files (1): index.js. Prefer editing those exact paths or the closest existing match; do not create same-basename files elsewhere without confirming.\n</system-reminder>\n<repo-routing>\nRetrieval routing: exact literal -> grep_search; exact symbol -> repo_context symbol_context or LSP; unknown structural location -> repo_context lookup; changed-code reasoning -> changed_scope/impact. Business-language intent with vocabulary mismatch: start broad with repo_context lookup or grep variants.\n</repo-routing>\n\n<repo-routing>\nRepository intelligence did not provide bounded evidence (no-high-confidence-candidates). Use repo_context, grep_search, or read_file for precise verification; this is not evidence that the repository has no match.\n</repo-routing>\n</context-injection>\n\nUpdate index.js to use left=2 and right=3, and expose left/right on the exported function. Run node --test literal.test.cjs."
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call-1-0",
+            "type": "function",
+            "function": {
+              "name": "read_file",
+              "arguments": {
+                "path": "index.js"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call-1-0",
+        "content": "[Earlier read of index.js omitted: file changed in mutation generation 1.]"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call-2-0",
+            "type": "function",
+            "function": {
+              "name": "edit_file",
+              "arguments": {
+                "path": "index.js",
+                "old_text": "const left = 1;",
+                "new_text": "const left = 2;"
+              }
+            }
+          },
+          {
+            "id": "call-2-1",
+            "type": "function",
+            "function": {
+              "name": "edit_file",
+              "arguments": {
+                "path": "index.js",
+                "old_text": "const right = 1;",
+                "new_text": "const right = 3;"
+              }
+            }
+          },
+          {
+            "id": "call-2-2",
+            "type": "function",
+            "function": {
+              "name": "edit_file",
+              "arguments": {
+                "path": "index.js",
+                "old_text": "module.exports = () => left + right;",
+                "new_text": "module.exports = Object.assign(() => left + right, { left, right });"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call-2-0",
+        "content": "Edited index.js (replaced 1 occurrence)\n\nDiff:\n--- a/index.js\n+++ b/index.js\n@@ -1,3 +1,3 @@\n-const left = 1;\n+const left = 2;\n const right = 1;\n module.exports = () => left + right;\n"
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call-2-1",
+        "content": "Error: stale file read for index.js: the file changed after the model read. Re-read with read_file before retrying."
+      },
+      {
+        "role": "tool",
+        "tool_call_id": "call-2-2",
+        "content": "Error: stale file read for index.js: the file changed after the model read. Re-read with read_file before retrying."
+      },
+      {
+        "role": "user",
+        "content": "<stale-read-recovery>\nThe write to `index.js` was refused because the file changed after the version delivered to the model. No mutation was performed.\nReason: file_changed_after_model_read\nRe-read with: read_file(path='index.js', offset=1, limit=2000)\nUse the new contents to submit a precise edit; do not overwrite the whole file from the stale text.\n</stale-read-recovery>\n\n<stale-read-recovery>\nThe write to `index.js` was refused because the file changed after the version delivered to the model. No mutation was performed.\nReason: file_changed_after_model_read\nRe-read with: read_file(path='index.js', offset=1, limit=2000)\nUse the new contents to submit a precise edit; do not overwrite the whole file from the stale text.\n</stale-read-recovery>\n\n<transaction-rollback>\nRolled back changes:\n  Restored: index.js\n</transaction-rollback>"
+      },
+      {
+        "role": "assistant",
+        "content": "CRITICAL - EMERGENCY HARD-CAP CALL\n\nThis is the last call available under the emergency hard cap. The nominal closure reserve has already been consumed.\n\nSTRICT REQUIREMENTS:\n1. Do not start broad exploration, repository-wide search, or a new subagent.\n2. If one already-identified local repair remains, use the narrowest known-file edit and focused verification now.\n3. Otherwise provide a truthful text summary and list unresolved requirements.\n\nDo not claim completion without current evidence."
+      }
+    ],
+    "max_tokens": 8000,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "apply_patch",
+          "description": "Apply exact text replacements, file creates, and file deletes atomically. Validates every hunk before writing and returns diffs. Every change must include its relative path.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Compatibility fallback for saved single-file calls; new calls must set path on every change."
+              },
+              "changes": {
+                "type": "array",
+                "description": "List of patch hunks.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        "replace",
+                        "create",
+                        "delete",
+                        "append"
+                      ],
+                      "description": "Patch operation. Default: replace. Use append only to add new content at end-of-file without old_text."
+                    },
+                    "path": {
+                      "type": "string",
+                      "description": "Relative path from workspace root."
+                    },
+                    "old_text": {
+                      "type": "string",
+                      "description": "Exact text to replace, or delete guard text."
+                    },
+                    "new_text": {
+                      "type": "string",
+                      "description": "Replacement or created file content."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "Alias for new_text when op=create."
+                    },
+                    "overwrite": {
+                      "type": "boolean",
+                      "description": "Allow op=create to replace an existing file."
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ]
+                }
+              },
+              "dry_run": {
+                "type": "boolean",
+                "description": "Preview diffs without writing files. Default: false."
+              }
+            },
+            "required": [
+              "changes"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "bash",
+          "description": "Run a shell command in the workspace. Use for running tests, installing packages, git operations, etc.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "The shell command to execute."
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Timeout in seconds, 1-120. Default: 120."
+              },
+              "workdir": {
+                "type": "string",
+                "description": "Workspace-relative directory in which to run the command. Use this instead of cd. Defaults to the workspace root."
+              }
+            },
+            "required": [
+              "command"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "compact",
+          "description": "Manually compress the conversation context to free up space.",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "diff_status",
+          "description": "Show current git diff status: which files changed, diff size, whether tests were modified, and whether to verify/finalize or keep searching.",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "edit_file",
+          "description": "Replace exact text in a file (first occurrence only). old_text must match exactly once.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "old_text": {
+                "type": "string",
+                "description": "The exact text to find and replace. Must be unique in the file."
+              },
+              "new_text": {
+                "type": "string",
+                "description": "The replacement text."
+              }
+            },
+            "required": [
+              "path",
+              "old_text",
+              "new_text"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "emit_handoff",
+          "description": "Transfer this run to a declared Agent role after the current tool batch settles, or emit terminal=true when this terminal role is complete.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "enum": [
+                  "node-evidence"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "terminal": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "glob_search",
+          "description": "Find files matching a glob pattern (e.g. '**/*.py', 'src/**/*.ts'). Results are sorted by modification time, most recent first.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Glob pattern to match files."
+              },
+              "path": {
+                "type": "string",
+                "description": "Directory to search in. Omit to use the workspace root."
+              }
+            },
+            "required": [
+              "pattern"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "grep_search",
+          "description": "Search file contents with regex. Default mode returns matching lines grouped by absolute file path and sorted by file modification time. Use output_mode='files_with_matches' for paths only, or 'count' for counts. NEVER use bash grep/rg — always use this tool for search.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Regex pattern to search for."
+              },
+              "path": {
+                "type": "string",
+                "description": "Directory to search in. Default: workspace root."
+              },
+              "include": {
+                "type": "string",
+                "description": "File glob filter, e.g. '*.py'. Default: all files."
+              },
+              "output_mode": {
+                "type": "string",
+                "enum": [
+                  "files_with_matches",
+                  "content",
+                  "count"
+                ],
+                "description": "Output mode. 'content' (default) shows matching lines. 'files_with_matches' shows paths. 'count' shows per-file matching-line counts."
+              },
+              "head_limit": {
+                "type": "integer",
+                "description": "Max results. Default: 100 (content) or 50 (files/count). Use 0 for unlimited."
+              },
+              "offset": {
+                "type": "integer",
+                "description": "Skip first N results for pagination. Default: 0."
+              },
+              "context": {
+                "type": "integer",
+                "description": "Lines of context around matches (content mode only). Default: 0."
+              },
+              "case_insensitive": {
+                "type": "boolean",
+                "description": "Case insensitive search (-i). Default: false."
+              }
+            },
+            "required": [
+              "pattern"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_directory",
+          "description": "List files and directories in a path. Use depth to control recursion.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path. Default: current directory."
+              },
+              "depth": {
+                "type": "integer",
+                "description": "Max depth to recurse. Default: 1."
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "load_skill",
+          "description": "Load specialized domain knowledge or workflow instructions by skill name. Check the available skills list in the system prompt before calling.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Skill name to load (e.g. 'code-review')."
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "mcp_catalog",
+          "description": "Search MCP servers, tools, prompts, and resources without exposing every schema; then fetch one exact prompt or resource from the active MCP runtime.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "get_prompt",
+                  "read_resource",
+                  "search"
+                ]
+              },
+              "query": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "",
+                  "prompt",
+                  "resource",
+                  "server",
+                  "tool"
+                ]
+              },
+              "server": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              },
+              "arguments": {
+                "type": "object"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50
+              }
+            },
+            "required": [
+              "operation"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "process",
+          "description": "Start and control a persistent long-running process across Agent turns. Use this, not bash, for dev servers, watch mode, REPLs, and live logs. Operations: start, read by byte cursor, write stdin, status/list, resize, kill.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "start",
+                  "read",
+                  "write",
+                  "status",
+                  "list",
+                  "resize",
+                  "kill"
+                ]
+              },
+              "command": {
+                "type": "string",
+                "description": "Command for start."
+              },
+              "process_id": {
+                "type": "string",
+                "description": "Exact stable proc_* ID returned by start. Never invent an alias. Omit for status/list of all Session processes."
+              },
+              "data": {
+                "type": "string",
+                "description": "UTF-8 stdin data for write."
+              },
+              "append_newline": {
+                "type": "boolean",
+                "description": "Append a newline to write data."
+              },
+              "cursor": {
+                "type": "integer",
+                "description": "Read from this byte cursor; use next_cursor on later reads. -1 starts at current end."
+              },
+              "tail_bytes": {
+                "type": "integer",
+                "description": "When cursor is omitted, read only this many tail bytes."
+              },
+              "max_bytes": {
+                "type": "integer",
+                "description": "Maximum bytes returned, up to 65536."
+              },
+              "wait_seconds": {
+                "type": "number",
+                "description": "Wait up to 30 seconds for new output without killing the process."
+              },
+              "workdir": {
+                "type": "string",
+                "description": "Workspace-relative cwd for start."
+              },
+              "tty": {
+                "type": "boolean",
+                "description": "Request a PTY on POSIX; Windows uses persistent pipes."
+              },
+              "rows": {
+                "type": "integer",
+                "description": "PTY rows for start/resize."
+              },
+              "cols": {
+                "type": "integer",
+                "description": "PTY columns for start/resize."
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "question",
+          "description": "Ask the user 1-4 structured questions only when a material decision cannot be resolved from the request, repository, or sensible defaults. Put a recommended choice first and suffix its label with '(Recommended)'. Users may type a custom answer, so do not add an Other option.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "questions": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 4,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "question": {
+                      "type": "string"
+                    },
+                    "header": {
+                      "type": "string"
+                    },
+                    "multiple": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 5,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "label",
+                          "description"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "question",
+                    "header",
+                    "options"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "questions"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_file",
+          "description": "Read file contents with line numbers. Use offset/limit for large text or converted PDF/DOCX files. PDF page ranges use pages=\"5\" or pages=\"1-10\" with at most 20 pages per request.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "offset": {
+                "type": "integer",
+                "description": "Start line number (1-based). Default: 1."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Number of lines to read. Default: 2000."
+              },
+              "pages": {
+                "type": "string",
+                "description": "PDF page range, for example \"5\" or \"1-10\". Maximum 20 pages per request."
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_scratchpad",
+          "description": "Read all entries in your working memory scratchpad. The scratchpad is also shown automatically each turn; only call this explicitly if you need the full untruncated history.",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_tool_result",
+          "description": "Read a bounded chunk of a persisted tool result by its opaque artifact ID. Only artifacts owned by the current Session are accessible.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "type": "string"
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "max_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65536
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "replace_lines",
+          "description": "Replace a 1-based inclusive line range in a file. Use after read_file shows exact line numbers, especially when exact-text edits are brittle.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "start_line": {
+                "type": "integer",
+                "description": "First line to replace, 1-based."
+              },
+              "end_line": {
+                "type": "integer",
+                "description": "Last line to replace, 1-based inclusive."
+              },
+              "new_text": {
+                "type": "string",
+                "description": "Replacement text for the line range."
+              }
+            },
+            "required": [
+              "path",
+              "start_line",
+              "end_line",
+              "new_text"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "review_run_evidence",
+          "description": "Inspect the current Agent's Runtime-owned evidence and unresolved requirements. Call with no arguments; do not supply files, commands, or verification claims. Read-only advisory review; normal completion and semantic review still apply.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "send_message",
+          "description": "Send a non-blocking coordinator instruction to a live child Agent by session id or display name, or use '*' for a bounded broadcast.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "to": {
+                "type": "string",
+                "description": "Live child session id, display name, or '*'."
+              },
+              "content": {
+                "type": "string",
+                "description": "Actionable instruction that changes the child's plan."
+              },
+              "seen_by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Forwarding chain copied from a received message."
+              }
+            },
+            "required": [
+              "to",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "task",
+          "description": "Spawn or resume a child-agent session with isolated context and its own worktree. Returns either a final summary or a parent handoff request.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "description": "Task description or follow-up reply for the child agent."
+              },
+              "agent_type": {
+                "type": "string",
+                "enum": [
+                  "explore",
+                  "plan",
+                  "general-purpose",
+                  "reflection"
+                ],
+                "description": "explore = cheap read-only repo scan, plan = parent-model read-only implementation design, general-purpose = parent-model full-tool worker in its own worktree, reflection = read-only completion critic. Default: explore."
+              },
+              "session_id": {
+                "type": "string",
+                "description": "Existing child session id to resume after the child asked the parent for help."
+              },
+              "allowed_tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional allowlist to narrow the child's tool scope."
+              },
+              "target_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional repo-relative files or directories this child will own. Use for write-capable tasks to prevent overlapping edits with other active child sessions."
+              },
+              "output_schema": {
+                "type": "object",
+                "description": "Optional supported JSON-Schema subset for a validated structured child result."
+              },
+              "model_hint": {
+                "type": "string",
+                "enum": [
+                  "fast",
+                  "balanced",
+                  "deep"
+                ],
+                "description": "Semantic child model tier; unavailable tiers explicitly inherit the parent route."
+              },
+              "evidence_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Bounded file:/diff:/finding:/task_id: evidence references injected into the child briefing."
+              },
+              "verification": {
+                "type": "object",
+                "description": "Machine-checkable child postconditions: enforcement, mutation/read/path/final-text requirements."
+              }
+            },
+            "required": [
+              "prompt"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "tool_search",
+          "description": "Discover tools hidden by progressive schema exposure, including workflow, project creation, memory, advanced repository intelligence, web, MCP/LSP, planning, and orchestration capabilities. Use select:TOOL_NAME for an exact schema or descriptive keywords; matching tools are unlocked for the next model turn in this Session only.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "max_results": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 15
+              }
+            },
+            "required": [
+              "query"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "update_scratchpad",
+          "description": "Record session working notes. Prefer category='plan' for the active plan or confirmed facts, and category='failure' for failed attempts or verification failures.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "type": "string",
+                "enum": [
+                  "plan",
+                  "failure"
+                ],
+                "description": "plan: active plan or important confirmed fact; failure: what failed and why"
+              },
+              "content": {
+                "type": "string",
+                "description": "Your note. Keep it concise (max 500 chars)."
+              }
+            },
+            "required": [
+              "category",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "verify_changed_files",
+          "description": "Run low-noise language-aware checks on changed source files: Python py_compile, JS/TS typecheck when configured, Go package check, and Rust cargo check. Excludes test files by default.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "include_tests": {
+                "type": "boolean",
+                "description": "Include changed test files. Default: false."
+              },
+              "timeout": {
+                "type": "integer",
+                "description": "Per-file timeout in seconds. Default: 30, max: 120."
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "verify_project_build",
+          "description": "Run safe low-noise verification commands for a generated project directory without installing dependencies.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "project_dir": {
+                "type": "string",
+                "description": "Project directory relative to the workspace."
+              },
+              "commands": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional explicit verification commands. If omitted, common commands are inferred."
+              }
+            },
+            "required": [
+              "project_dir"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write_file",
+          "description": "Write content to a file. Creates parent directories if needed. Overwrites existing content.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path from workspace root."
+              },
+              "content": {
+                "type": "string",
+                "description": "The full content to write."
+              }
+            },
+            "required": [
+              "path",
+              "content"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write_files_batch",
+          "description": "Write multiple files atomically. Validates every path before writing, blocks credential-like files, and fails the entire batch if any file conflicts.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "files": {
+                "type": "array",
+                "description": "List of file payloads.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "Relative path from workspace root."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "Full file content."
+                    },
+                    "purpose": {
+                      "type": "string",
+                      "description": "Optional short description for the file."
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "content"
+                  ]
+                }
+              },
+              "overwrite": {
+                "type": "boolean",
+                "description": "Allow overwriting existing files. Default: false."
+              }
+            },
+            "required": [
+              "files"
+            ]
+          }
+        }
+      }
+    ]
+  }
+]

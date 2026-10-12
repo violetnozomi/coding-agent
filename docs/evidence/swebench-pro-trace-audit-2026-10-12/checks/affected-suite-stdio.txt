@@ -1,0 +1,16 @@
+........................................................................ [ 13%]
+........................................................................ [ 27%]
+........................................................................ [ 41%]
+........................................................................ [ 54%]
+........................s....s.........................................s [ 68%]
+s......s................................................................ [ 82%]
+.s...................................................................... [ 96%]
+....................                                                     [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/security/test_pr2_remaining_regressions.py:140: CREATE_NEW creates target before write on Windows
+SKIPPED [1] tests/security/test_pr2_remaining_regressions.py:250: Windows fdopen follows successful CREATE_NEW
+SKIPPED [1] tests/security/test_project_control_snapshot.py:656: Windows junction semantics
+SKIPPED [1] tests/security/test_project_control_snapshot.py:679: Windows handle semantics
+SKIPPED [1] tests/security/test_protocol_and_lock_limits.py:110: Windows reparse-point contract
+SKIPPED [1] tests/security/test_user_runtime_state.py:40: Windows junction semantics
+518 passed, 6 skipped in 18.50s

@@ -1,0 +1,79 @@
+{
+  "status": "max_turns",
+  "error": "",
+  "main_controlled_requests": 3,
+  "auxiliary_controlled_requests": 0,
+  "paid_requests": 0,
+  "fake_usage_is_not_cost_or_efficiency_evidence": true,
+  "before_sha256": "30df3ed3bb78f7ebca3c5a5faeb3f9e22bae1144bf8ee21a9e98ebd474aab704",
+  "after_sha256": "30df3ed3bb78f7ebca3c5a5faeb3f9e22bae1144bf8ee21a9e98ebd474aab704",
+  "expected_sha256": "1ed1118f2c6e396781befa35841f5b560e7587af05676b1bbe5ccb7c2e679418",
+  "independent_check": {
+    "command": [
+      "/usr/bin/node",
+      "--test",
+      "literal.test.cjs"
+    ],
+    "exit_code": 1,
+    "stdout": "TAP version 13\n# Subtest: value and exported fields\nnot ok 1 - value and exported fields\n  ---\n  duration_ms: 2.353489\n  location: '/home/pyh/.codex/artifacts/nz-pro-trace-audit-2026-10-12/replay-A/workspace/literal.test.cjs:4:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    \n    2 !== 5\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 5\n  actual: 2\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (/home/pyh/.codex/artifacts/nz-pro-trace-audit-2026-10-12/replay-A/workspace/literal.test.cjs:5:9)\n    Test.runInAsyncScope (node:async_hooks:203:9)\n    Test.run (node:internal/test_runner/test:631:25)\n    Test.start (node:internal/test_runner/test:542:17)\n    startSubtest (node:internal/test_runner/harness:214:17)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 128.206093\n",
+    "stderr": ""
+  },
+  "stale_events": [
+    {
+      "ts": 1791799751.0473416,
+      "run_id": "20261012_180910_0b46f7ba",
+      "trace_id": "20261012_180910_0b46f7ba",
+      "session_id": "node-evidence",
+      "agent_id": "agent-9644cbbf",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "stale_read_rejected",
+      "path": "index.js"
+    },
+    {
+      "ts": 1791799751.047412,
+      "run_id": "20261012_180910_0b46f7ba",
+      "trace_id": "20261012_180910_0b46f7ba",
+      "session_id": "node-evidence",
+      "agent_id": "agent-9644cbbf",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "stale_read_rejected",
+      "path": "index.js"
+    }
+  ],
+  "transaction_rollbacks": [
+    {
+      "ts": 1791799751.0495853,
+      "run_id": "20261012_180910_0b46f7ba",
+      "trace_id": "20261012_180910_0b46f7ba",
+      "session_id": "node-evidence",
+      "agent_id": "agent-9644cbbf",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "transaction_rollback",
+      "report": "Rolled back changes:\n  Restored: index.js"
+    }
+  ],
+  "verification_results": [
+    {
+      "ts": 1791799751.3835015,
+      "run_id": "20261012_180910_0b46f7ba",
+      "trace_id": "20261012_180910_0b46f7ba",
+      "session_id": "node-evidence",
+      "agent_id": "agent-9644cbbf",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "verification_result",
+      "command": "node --test literal.test.cjs",
+      "stage": "targeted",
+      "status": "failed",
+      "output": "Tool execution failed."
+    }
+  ],
+  "node_version": "v18.19.1"
+}

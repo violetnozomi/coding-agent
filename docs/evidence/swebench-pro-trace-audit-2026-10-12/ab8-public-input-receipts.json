@@ -1,0 +1,156 @@
+[
+  {
+    "instance_id": "instance_protonmail__webclients-fc9d535e9beb3ae30a52a7146398cadfd6e30606",
+    "name": "instruction.md",
+    "sha256": "0f2097e9210b493e57fb63481f157880f0e558b5e7008665dc12e89bbb35af71",
+    "bytes": 2908,
+    "direct_first": true,
+    "prior_errors": [
+      "TimeoutError"
+    ],
+    "proxy_after_failure": true
+  },
+  {
+    "instance_id": "instance_protonmail__webclients-fc9d535e9beb3ae30a52a7146398cadfd6e30606",
+    "name": "task.toml",
+    "sha256": "5688089f6fdba5dfb78ff636a60ec5c825a783d266634d4a0773b18e2be8330c",
+    "bytes": 793,
+    "direct_first": true,
+    "prior_errors": [
+      "TimeoutError"
+    ],
+    "proxy_after_failure": true
+  },
+  {
+    "instance_id": "instance_navidrome__navidrome-6b3b4d83ffcf273b01985709c8bc5df12bbb8286",
+    "name": "instruction.md",
+    "sha256": "bde4edf5f7f72707bfbcae9b4a6f93e908a9670706a6de7127bf35ecddc9a369",
+    "bytes": 4128,
+    "direct_first": true,
+    "prior_errors": [
+      "TimeoutError"
+    ],
+    "proxy_after_failure": true
+  },
+  {
+    "instance_id": "instance_navidrome__navidrome-6b3b4d83ffcf273b01985709c8bc5df12bbb8286",
+    "name": "task.toml",
+    "sha256": "519695c0f27bdfd26b936a1519260aaab14fda3dbfd1b3a3c0807a496cb4f6da",
+    "bytes": 789,
+    "direct_first": true,
+    "prior_errors": [
+      "TimeoutError"
+    ],
+    "proxy_after_failure": true
+  },
+  {
+    "instance_id": "instance_flipt-io__flipt-aebaecd026f752b187f11328b0d464761b15d2ab",
+    "name": "instruction.md",
+    "sha256": "390382eea1f2775ccfbadb011bd23bafcc24533abe6261f73286501cb2343697",
+    "bytes": 2681,
+    "direct_first": true,
+    "prior_errors": [
+      "TimeoutError"
+    ],
+    "proxy_after_failure": true
+  },
+  {
+    "instance_id": "instance_flipt-io__flipt-aebaecd026f752b187f11328b0d464761b15d2ab",
+    "name": "task.toml",
+    "sha256": "bb1a67c60238f473681087d3c9451914827d3a3ae60b7b9d9ceca91fa93ada08",
+    "bytes": 779,
+    "direct_first": true,
+    "prior_errors": [],
+    "proxy_after_failure": false
+  },
+  {
+    "instance_id": "instance_navidrome__navidrome-87d4db7638b37eeb754b217440ab7a372f669205",
+    "name": "instruction.md",
+    "sha256": "f5aa63ac3f88ff1d7e57d53e8cc429d96d0a49344708618c0f94fedd41eef1f1",
+    "bytes": 2314,
+    "direct_first": true,
+    "prior_errors": [],
+    "proxy_after_failure": false
+  },
+  {
+    "instance_id": "instance_navidrome__navidrome-87d4db7638b37eeb754b217440ab7a372f669205",
+    "name": "task.toml",
+    "sha256": "8879112aa4da7628b31f53dd90be8c758896280676496b5c0d005db3ae98ab74",
+    "bytes": 789,
+    "direct_first": true,
+    "prior_errors": [],
+    "proxy_after_failure": false
+  },
+  {
+    "instance_id": "instance_tutao__tutanota-de49d486feef842101506adf040a0f00ded59519-v10a26bfb45a064b93f4fc044a0254925037b88f1",
+    "name": "instruction.md",
+    "sha256": "0ebf40baf8e9f6e3a0e04da2d0c0c8c799a1f4c89aa3151cb2fe97ff5b009ced",
+    "bytes": 2008,
+    "direct_first": true,
+    "prior_errors": [],
+    "proxy_after_failure": false
+  },
+  {
+    "instance_id": "instance_tutao__tutanota-de49d486feef842101506adf040a0f00ded59519-v10a26bfb45a064b93f4fc044a0254925037b88f1",
+    "name": "task.toml",
+    "sha256": "305b8af561c83edbb8dca8751a6ee5f3619d246d80f473894f8b2579d8a69a32",
+    "bytes": 863,
+    "direct_first": true,
+    "prior_errors": [],
+    "proxy_after_failure": false
+  },
+  {
+    "instance_id": "instance_flipt-io__flipt-ea9a2663b176da329b3f574da2ce2a664fc5b4a1",
+    "name": "instruction.md",
+    "sha256": "1fd4932434f8fa67c174d66a0382c14ee235bcb0efa61e2b0407be81341caec2",
+    "bytes": 5589,
+    "direct_first": true,
+    "prior_errors": [],
+    "proxy_after_failure": false
+  },
+  {
+    "instance_id": "instance_flipt-io__flipt-ea9a2663b176da329b3f574da2ce2a664fc5b4a1",
+    "name": "task.toml",
+    "sha256": "af9f529a90636ee9ffc68d27f397c446c6bca745ebeab243ad2fa9bd0ddb171f",
+    "bytes": 779,
+    "direct_first": true,
+    "prior_errors": [],
+    "proxy_after_failure": false
+  },
+  {
+    "instance_id": "instance_future-architect__vuls-1832b4ee3a20177ad313d806983127cb6e53f5cf",
+    "name": "instruction.md",
+    "sha256": "eb7f034bf673b3ae784ba7bdcaee5fb72c542c2da3faace34a77d7cc0ef1cc9c",
+    "bytes": 9735,
+    "direct_first": true,
+    "prior_errors": [],
+    "proxy_after_failure": false
+  },
+  {
+    "instance_id": "instance_future-architect__vuls-1832b4ee3a20177ad313d806983127cb6e53f5cf",
+    "name": "task.toml",
+    "sha256": "b21973dfaf9616a05bb5cd246d5045b73dedd3c8ba760a36c77ce5807583806e",
+    "bytes": 793,
+    "direct_first": true,
+    "prior_errors": [],
+    "proxy_after_failure": false
+  },
+  {
+    "instance_id": "instance_protonmail__webclients-2dce79ea4451ad88d6bfe94da22e7f2f988efa60",
+    "name": "instruction.md",
+    "sha256": "9fd3d153e1a5676d42080c11fb4d1e7115e9e3e7453043612b2caf1785e79ca8",
+    "bytes": 4720,
+    "direct_first": true,
+    "prior_errors": [],
+    "proxy_after_failure": false
+  },
+  {
+    "instance_id": "instance_protonmail__webclients-2dce79ea4451ad88d6bfe94da22e7f2f988efa60",
+    "name": "task.toml",
+    "sha256": "ae2edb48790a99aa032ab91a0f8df5a7d60ef0dbcd90c1c8a921d2ef5b203b0c",
+    "bytes": 793,
+    "direct_first": true,
+    "prior_errors": [],
+    "proxy_after_failure": false
+  }
+]

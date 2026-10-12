@@ -1,0 +1,15 @@
+E731 Do not assign a `lambda` expression, use a `def`
+   --> tests/evaluation/test_model_relay.py:233:5
+    |
+231 |   @pytest.mark.parametrize("mode", ["missing", "over_input", "above_capacity"])
+232 |   def test_provider_default_never_relaxes_unknown_usage_or_unreserved_cost(tmp_path, mode):
+233 | /     counter = lambda raw, p: InputAccounting(None, "local-reference", contract_id="local-fake-v1",
+234 | |         payload_sha256=hashlib.sha256(raw).hexdigest(), reference_count=100)
+    | |____________________________________________________________________________^
+235 |       with running(tmp_path, mode="normal" if mode == "above_capacity" else mode, output=393216,
+236 |                    counter=counter, authorization=provider_output_grant(), exact_output=False) as (fake, ledger, binding, path):
+    |
+help: Rewrite `counter` as a `def`
+
+Found 1 error.
+No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).

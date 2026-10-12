@@ -1,0 +1,32 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_recorded_b4_09_unmasks_real_anchor_failure_and_rolls_back ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x79b754aaafd0>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-219/test_recorded_b4_09_unmasks_re0')
+
+    def test_recorded_b4_09_unmasks_real_anchor_failure_and_rolls_back(monkeypatch, node_project):
+        import hashlib
+    
+        root = Path(__file__).resolve().parents[2]
+        fixture = json.loads((root / 'tests/fixtures/paid_b4_09_same_batch_edits.json').read_text())
+        before = root / fixture['source_public_record'] / fixture['initial_file']
+        assert hashlib.sha256(before.read_bytes()).hexdigest() == fixture['initial_sha256']
+        target = node_project / 'packages/metrics/Metrics.ts'
+        target.parent.mkdir(parents=True)
+        target.write_bytes(before.read_bytes())
+        edits = [(call['function']['name'], json.loads(call['function']['arguments'])) for call in fixture['calls']]
+        result, state, trace, requests, *_ = _run(monkeypatch, node_project,
+            [[_tool('read_file', path='packages/metrics/Metrics.ts')], edits, 'Applied the local edit fragment.'],
+            task='Update packages/metrics/Metrics.ts: add the mechanism metric import, field and constructor initialization.')
+        assert len(requests) == 3
+        outcomes = [x for x in trace if x['event'] == 'tool_call' and x['name'] == 'edit_file']
+        assert len(outcomes) == 3
+>       assert all(x['executed'] and not x['dispatch_failed'] for x in outcomes[:2])
+E       assert False
+E        +  where False = all(<generator object test_recorded_b4_09_unmasks_real_anchor_failure_and_rolls_back.<locals>.<genexpr> at 0x79b7535776b0>)
+
+tests/runtime/test_transaction_owned_edit_runtime.py:200: AssertionError
+=========================== short test summary info ============================
+FAILED tests/runtime/test_transaction_owned_edit_runtime.py::test_recorded_b4_09_unmasks_real_anchor_failure_and_rolls_back
+1 failed, 10 deselected in 1.14s

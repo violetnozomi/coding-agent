@@ -1,0 +1,421 @@
+{
+  "experiment": "transaction-owned-edit-ablation-8",
+  "track": "paired research ablation; not leaderboard pass@1",
+  "selection_file": "ab8-selection-before-download.json",
+  "official_source_commit": "66f92766bba642462d4bbe5479e83f91f9211862",
+  "sides": {
+    "A": {
+      "commit": "99eee2967ba8ff4dbfb17bf241e382b8fa022f5a",
+      "manifest": "ab8-core-A.json",
+      "manifest_sha256": "40a501f6369fd812f693c2ff2c846d19edf6f507f9c63b305b2bd3d1407a6119"
+    },
+    "B": {
+      "commit": "5e4f5f0cdd9451a612cc337f75d9d7eb4b936cd4",
+      "manifest": "ab8-core-B.json",
+      "manifest_sha256": "e392b312e23ba91ab6fd4ea62a60958617dd8345416a278775dc3c8c2b02b387"
+    }
+  },
+  "changed_production_files": [
+    "nz_coder/foundation/workspace_file_access.py",
+    "nz_coder/runtime/execution/tool_executor.py",
+    "nz_coder/state/transaction.py"
+  ],
+  "tasks": [
+    {
+      "number": 1,
+      "instance_id": "instance_protonmail__webclients-fc9d535e9beb3ae30a52a7146398cadfd6e30606",
+      "public_inputs_sha256": {
+        "instruction.md": "0f2097e9210b493e57fb63481f157880f0e558b5e7008665dc12e89bbb35af71",
+        "task.toml": "5688089f6fdba5dfb78ff636a60ec5c825a783d266634d4a0773b18e2be8330c"
+      },
+      "image": {
+        "instance_id": "instance_protonmail__webclients-fc9d535e9beb3ae30a52a7146398cadfd6e30606",
+        "status": "pinned-manifest-only",
+        "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-fc9d535e9beb3ae30a52a7146398cadfd6e30606",
+        "tag_digest": "sha256:08fba134c4ad3eedf361ef08c253c62162405c96cc8448b3a22e01a34dd0fb82",
+        "linux_amd64_manifest_digest": "sha256:08fba134c4ad3eedf361ef08c253c62162405c96cc8448b3a22e01a34dd0fb82",
+        "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:08fba134c4ad3eedf361ef08c253c62162405c96cc8448b3a22e01a34dd0fb82",
+        "compressed_layer_bytes": 5087312492,
+        "config_digest": "sha256:0866baf4ae9103a0d148b89f76caa5e1d06f1ab894eb01ea181e6fb80f837b95",
+        "layers_downloaded": false,
+        "mode": "direct",
+        "prior_failures": []
+      },
+      "official_environment_metadata": {
+        "network_mode": "public",
+        "build_timeout_sec": 1800.0,
+        "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-fc9d535e9beb3ae30a52a7146398cadfd6e30606",
+        "os": "linux",
+        "cpus": 1,
+        "memory_mb": 4096,
+        "storage_mb": 10240,
+        "mcp_servers": [],
+        "env": {}
+      },
+      "order": [
+        "A",
+        "B"
+      ],
+      "attempts_per_side": 1,
+      "execution_status_A": "not-run-no-paid-authorization",
+      "execution_status_B": "not-run-no-paid-authorization",
+      "official_resolved_A": null,
+      "official_resolved_B": null
+    },
+    {
+      "number": 2,
+      "instance_id": "instance_navidrome__navidrome-6b3b4d83ffcf273b01985709c8bc5df12bbb8286",
+      "public_inputs_sha256": {
+        "instruction.md": "bde4edf5f7f72707bfbcae9b4a6f93e908a9670706a6de7127bf35ecddc9a369",
+        "task.toml": "519695c0f27bdfd26b936a1519260aaab14fda3dbfd1b3a3c0807a496cb4f6da"
+      },
+      "image": {
+        "instance_id": "instance_navidrome__navidrome-6b3b4d83ffcf273b01985709c8bc5df12bbb8286",
+        "status": "pinned-manifest-only",
+        "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_navidrome__navidrome-6b3b4d83ffcf273b01985709c8bc5df12bbb8286",
+        "tag_digest": "sha256:619be6eac43b64b9cbd64709bff5b3467b10cdf001ccc42337cb4b592d9a5d20",
+        "linux_amd64_manifest_digest": "sha256:619be6eac43b64b9cbd64709bff5b3467b10cdf001ccc42337cb4b592d9a5d20",
+        "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:619be6eac43b64b9cbd64709bff5b3467b10cdf001ccc42337cb4b592d9a5d20",
+        "compressed_layer_bytes": 1045794810,
+        "config_digest": "sha256:8a6395ca3ad151de86115d7b78d07ab67dc6d56078b5e9b3166adf83321449d6",
+        "layers_downloaded": false,
+        "mode": "direct",
+        "prior_failures": []
+      },
+      "official_environment_metadata": {
+        "network_mode": "public",
+        "build_timeout_sec": 1800.0,
+        "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_navidrome__navidrome-6b3b4d83ffcf273b01985709c8bc5df12bbb8286",
+        "os": "linux",
+        "cpus": 1,
+        "memory_mb": 4096,
+        "storage_mb": 10240,
+        "mcp_servers": [],
+        "env": {}
+      },
+      "order": [
+        "B",
+        "A"
+      ],
+      "attempts_per_side": 1,
+      "execution_status_A": "not-run-no-paid-authorization",
+      "execution_status_B": "not-run-no-paid-authorization",
+      "official_resolved_A": null,
+      "official_resolved_B": null
+    },
+    {
+      "number": 3,
+      "instance_id": "instance_flipt-io__flipt-aebaecd026f752b187f11328b0d464761b15d2ab",
+      "public_inputs_sha256": {
+        "instruction.md": "390382eea1f2775ccfbadb011bd23bafcc24533abe6261f73286501cb2343697",
+        "task.toml": "bb1a67c60238f473681087d3c9451914827d3a3ae60b7b9d9ceca91fa93ada08"
+      },
+      "image": {
+        "instance_id": "instance_flipt-io__flipt-aebaecd026f752b187f11328b0d464761b15d2ab",
+        "status": "pinned-manifest-only",
+        "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_flipt-io__flipt-aebaecd026f752b187f11328b0d464761b15d2ab",
+        "tag_digest": "sha256:9f3e89598944a76fddee24ae2164cfd300ec64a0f0b686175b008910212565e2",
+        "linux_amd64_manifest_digest": "sha256:62f9e469554c2b65e44ebf7f9d6dff1c123a3e6437fd09b46a784baad6e9c84a",
+        "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:62f9e469554c2b65e44ebf7f9d6dff1c123a3e6437fd09b46a784baad6e9c84a",
+        "compressed_layer_bytes": 2060178027,
+        "config_digest": "sha256:9fe53ae5b9b77e0117c0ab8bafc74e68425a77271ff8645fc9e12a4ced5e0e4a",
+        "layers_downloaded": false,
+        "mode": "direct",
+        "prior_failures": []
+      },
+      "official_environment_metadata": {
+        "network_mode": "public",
+        "build_timeout_sec": 1800.0,
+        "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_flipt-io__flipt-aebaecd026f752b187f11328b0d464761b15d2ab",
+        "os": "linux",
+        "cpus": 1,
+        "memory_mb": 4096,
+        "storage_mb": 10240,
+        "mcp_servers": [],
+        "env": {}
+      },
+      "order": [
+        "A",
+        "B"
+      ],
+      "attempts_per_side": 1,
+      "execution_status_A": "not-run-no-paid-authorization",
+      "execution_status_B": "not-run-no-paid-authorization",
+      "official_resolved_A": null,
+      "official_resolved_B": null
+    },
+    {
+      "number": 4,
+      "instance_id": "instance_navidrome__navidrome-87d4db7638b37eeb754b217440ab7a372f669205",
+      "public_inputs_sha256": {
+        "instruction.md": "f5aa63ac3f88ff1d7e57d53e8cc429d96d0a49344708618c0f94fedd41eef1f1",
+        "task.toml": "8879112aa4da7628b31f53dd90be8c758896280676496b5c0d005db3ae98ab74"
+      },
+      "image": {
+        "instance_id": "instance_navidrome__navidrome-87d4db7638b37eeb754b217440ab7a372f669205",
+        "status": "pinned-manifest-only",
+        "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_navidrome__navidrome-87d4db7638b37eeb754b217440ab7a372f669205",
+        "tag_digest": "sha256:e5ad33b704b52cb430084e054e3f5ecb131ae276c495f13726684495fdf691af",
+        "linux_amd64_manifest_digest": "sha256:b9485cb541d77d5da63f64e2bfa6fc6cc666b87ce4cea2771e63a148b0c3a62b",
+        "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:b9485cb541d77d5da63f64e2bfa6fc6cc666b87ce4cea2771e63a148b0c3a62b",
+        "compressed_layer_bytes": 950023059,
+        "config_digest": "sha256:19a0ecb347469856e1fc082195999276ecacdbd46ec345830c9c85436be11053",
+        "layers_downloaded": false,
+        "mode": "direct",
+        "prior_failures": []
+      },
+      "official_environment_metadata": {
+        "network_mode": "public",
+        "build_timeout_sec": 1800.0,
+        "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_navidrome__navidrome-87d4db7638b37eeb754b217440ab7a372f669205",
+        "os": "linux",
+        "cpus": 1,
+        "memory_mb": 4096,
+        "storage_mb": 10240,
+        "mcp_servers": [],
+        "env": {}
+      },
+      "order": [
+        "B",
+        "A"
+      ],
+      "attempts_per_side": 1,
+      "execution_status_A": "not-run-no-paid-authorization",
+      "execution_status_B": "not-run-no-paid-authorization",
+      "official_resolved_A": null,
+      "official_resolved_B": null
+    },
+    {
+      "number": 5,
+      "instance_id": "instance_tutao__tutanota-de49d486feef842101506adf040a0f00ded59519-v10a26bfb45a064b93f4fc044a0254925037b88f1",
+      "public_inputs_sha256": {
+        "instruction.md": "0ebf40baf8e9f6e3a0e04da2d0c0c8c799a1f4c89aa3151cb2fe97ff5b009ced",
+        "task.toml": "305b8af561c83edbb8dca8751a6ee5f3619d246d80f473894f8b2579d8a69a32"
+      },
+      "image": {
+        "instance_id": "instance_tutao__tutanota-de49d486feef842101506adf040a0f00ded59519-v10a26bfb45a064b93f4fc044a0254925037b88f1",
+        "status": "pinned-manifest-only",
+        "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_tutao__tutanota-de49d486feef842101506adf040a0f00ded59519-v10a26bfb45a064b93f4fc044a0254925037b88f1",
+        "tag_digest": "sha256:f0c1d1561d3fe50a845212497843831b6b1fc9535c88751edc3cb6fda8a425b4",
+        "linux_amd64_manifest_digest": "sha256:f0c1d1561d3fe50a845212497843831b6b1fc9535c88751edc3cb6fda8a425b4",
+        "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:f0c1d1561d3fe50a845212497843831b6b1fc9535c88751edc3cb6fda8a425b4",
+        "compressed_layer_bytes": 1422444776,
+        "config_digest": "sha256:12ef8d462f4493fb0e0be619ca8b853342ac40c17a84a7e6acac99f8601ef429",
+        "layers_downloaded": false,
+        "mode": "direct",
+        "prior_failures": []
+      },
+      "official_environment_metadata": {
+        "network_mode": "public",
+        "build_timeout_sec": 1800.0,
+        "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_tutao__tutanota-de49d486feef842101506adf040a0f00ded59519-v10a26bfb45a064b93f4fc044a0254925037b88f1",
+        "os": "linux",
+        "cpus": 1,
+        "memory_mb": 4096,
+        "storage_mb": 10240,
+        "mcp_servers": [],
+        "env": {}
+      },
+      "order": [
+        "A",
+        "B"
+      ],
+      "attempts_per_side": 1,
+      "execution_status_A": "not-run-no-paid-authorization",
+      "execution_status_B": "not-run-no-paid-authorization",
+      "official_resolved_A": null,
+      "official_resolved_B": null
+    },
+    {
+      "number": 6,
+      "instance_id": "instance_flipt-io__flipt-ea9a2663b176da329b3f574da2ce2a664fc5b4a1",
+      "public_inputs_sha256": {
+        "instruction.md": "1fd4932434f8fa67c174d66a0382c14ee235bcb0efa61e2b0407be81341caec2",
+        "task.toml": "af9f529a90636ee9ffc68d27f397c446c6bca745ebeab243ad2fa9bd0ddb171f"
+      },
+      "image": {
+        "instance_id": "instance_flipt-io__flipt-ea9a2663b176da329b3f574da2ce2a664fc5b4a1",
+        "status": "pinned-manifest-only",
+        "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_flipt-io__flipt-ea9a2663b176da329b3f574da2ce2a664fc5b4a1",
+        "tag_digest": "sha256:2adf803cf4729ca6d4e5793d765f5d50636e82cd06a5c104710202e3f637949e",
+        "linux_amd64_manifest_digest": "sha256:2adf803cf4729ca6d4e5793d765f5d50636e82cd06a5c104710202e3f637949e",
+        "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:2adf803cf4729ca6d4e5793d765f5d50636e82cd06a5c104710202e3f637949e",
+        "compressed_layer_bytes": 2030582938,
+        "config_digest": "sha256:5077458506eacb5da34c654a234327164c3076239d1a488291f23284bc2f422f",
+        "layers_downloaded": false,
+        "mode": "direct",
+        "prior_failures": []
+      },
+      "official_environment_metadata": {
+        "network_mode": "public",
+        "build_timeout_sec": 1800.0,
+        "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_flipt-io__flipt-ea9a2663b176da329b3f574da2ce2a664fc5b4a1",
+        "os": "linux",
+        "cpus": 1,
+        "memory_mb": 4096,
+        "storage_mb": 10240,
+        "mcp_servers": [],
+        "env": {}
+      },
+      "order": [
+        "B",
+        "A"
+      ],
+      "attempts_per_side": 1,
+      "execution_status_A": "not-run-no-paid-authorization",
+      "execution_status_B": "not-run-no-paid-authorization",
+      "official_resolved_A": null,
+      "official_resolved_B": null
+    },
+    {
+      "number": 7,
+      "instance_id": "instance_future-architect__vuls-1832b4ee3a20177ad313d806983127cb6e53f5cf",
+      "public_inputs_sha256": {
+        "instruction.md": "eb7f034bf673b3ae784ba7bdcaee5fb72c542c2da3faace34a77d7cc0ef1cc9c",
+        "task.toml": "b21973dfaf9616a05bb5cd246d5045b73dedd3c8ba760a36c77ce5807583806e"
+      },
+      "image": {
+        "instance_id": "instance_future-architect__vuls-1832b4ee3a20177ad313d806983127cb6e53f5cf",
+        "status": "pinned-manifest-only",
+        "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_future-architect__vuls-1832b4ee3a20177ad313d806983127cb6e53f5cf",
+        "tag_digest": "sha256:b8b27bf1ed07ee87e50b78af86821b9c0d1b044d966d74b254877e47d93c4189",
+        "linux_amd64_manifest_digest": "sha256:b4c6836d309d3c42f3ef91aaa558ba456afedb83421cb589af81424e08b82e21",
+        "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:b4c6836d309d3c42f3ef91aaa558ba456afedb83421cb589af81424e08b82e21",
+        "compressed_layer_bytes": 1200024612,
+        "config_digest": "sha256:f48df48470afddaa8a312e9bc8b19012e616535cf3e23b0904386a12fa0da0d4",
+        "layers_downloaded": false,
+        "mode": "direct",
+        "prior_failures": []
+      },
+      "official_environment_metadata": {
+        "network_mode": "public",
+        "build_timeout_sec": 1800.0,
+        "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_future-architect__vuls-1832b4ee3a20177ad313d806983127cb6e53f5cf",
+        "os": "linux",
+        "cpus": 1,
+        "memory_mb": 4096,
+        "storage_mb": 10240,
+        "mcp_servers": [],
+        "env": {}
+      },
+      "order": [
+        "A",
+        "B"
+      ],
+      "attempts_per_side": 1,
+      "execution_status_A": "not-run-no-paid-authorization",
+      "execution_status_B": "not-run-no-paid-authorization",
+      "official_resolved_A": null,
+      "official_resolved_B": null
+    },
+    {
+      "number": 8,
+      "instance_id": "instance_protonmail__webclients-2dce79ea4451ad88d6bfe94da22e7f2f988efa60",
+      "public_inputs_sha256": {
+        "instruction.md": "9fd3d153e1a5676d42080c11fb4d1e7115e9e3e7453043612b2caf1785e79ca8",
+        "task.toml": "ae2edb48790a99aa032ab91a0f8df5a7d60ef0dbcd90c1c8a921d2ef5b203b0c"
+      },
+      "image": {
+        "instance_id": "instance_protonmail__webclients-2dce79ea4451ad88d6bfe94da22e7f2f988efa60",
+        "status": "pinned-manifest-only",
+        "image_tag": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-2dce79ea4451ad88d6bfe94da22e7f2f988efa60",
+        "tag_digest": "sha256:3d5735fc9c10388f403f4b56448568a68dc9a20d2ce86785d333e7ffdcd28e96",
+        "linux_amd64_manifest_digest": "sha256:3d5735fc9c10388f403f4b56448568a68dc9a20d2ce86785d333e7ffdcd28e96",
+        "pinned_image": "ghcr.io/scaleapi/swe-bench_pro-v2@sha256:3d5735fc9c10388f403f4b56448568a68dc9a20d2ce86785d333e7ffdcd28e96",
+        "compressed_layer_bytes": 5200084908,
+        "config_digest": "sha256:5b1d698496ee0c33e63c5dceaff14a2eab086a4180640062640ab7b4b557c1e5",
+        "layers_downloaded": false,
+        "mode": "direct",
+        "prior_failures": []
+      },
+      "official_environment_metadata": {
+        "network_mode": "public",
+        "build_timeout_sec": 1800.0,
+        "docker_image": "ghcr.io/scaleapi/swe-bench_pro-v2:instance_protonmail__webclients-2dce79ea4451ad88d6bfe94da22e7f2f988efa60",
+        "os": "linux",
+        "cpus": 1,
+        "memory_mb": 4096,
+        "storage_mb": 10240,
+        "mcp_servers": [],
+        "env": {}
+      },
+      "order": [
+        "B",
+        "A"
+      ],
+      "attempts_per_side": 1,
+      "execution_status_A": "not-run-no-paid-authorization",
+      "execution_status_B": "not-run-no-paid-authorization",
+      "official_resolved_A": null,
+      "official_resolved_B": null
+    }
+  ],
+  "shared_configuration": {
+    "model": "deepseek-flash",
+    "stream": false,
+    "thinking": null,
+    "reasoning_effort": null,
+    "wire_max_tokens": null,
+    "output_fee_reservation_tokens": 393216,
+    "provider_defaults_are_not_explicit_reasoning_medium": true,
+    "native_entry": "../swebench-pro-20-batch4-2026-10-12/native-entry.py",
+    "native_entry_sha256": "d940e7005fc64e0edf59e6d8271cfa90d2eea2b41ea1227a9d3be191ad43dd57",
+    "profile": "MAIN_PROFILE",
+    "control_plane": "declared-agent-graph",
+    "repo_retrieval_strategy": "policy (existing default)",
+    "planning_enabled": false,
+    "reflection_enabled": false,
+    "strict_local_tools": false,
+    "permission_callback_ast_sha256": "a9dc2c1f972dc8bf3f33cb5e3e721e0c23b8a8aefcecb7341e116488363ef8ab",
+    "main_physical_requests_per_attempt": 40,
+    "auxiliary_physical_requests_per_attempt": 6,
+    "provider_retries": 0,
+    "attempt_seconds": 3000,
+    "provider_request_seconds": 600,
+    "maximum_active_attempts": 4,
+    "serialized_image_preparation": true,
+    "agent_container": {
+      "cpus": 2,
+      "memory_bytes": 4294967296,
+      "pids_limit": 256,
+      "network": "none",
+      "read_only_root": true,
+      "cap_drop": "ALL",
+      "no_new_privileges": true,
+      "uid_gid": "1001:1001"
+    },
+    "project_toolchain": "unchanged official image; isolated Agent Python where needed",
+    "score": "existing run-pro.py grade with same frozen official evaluator for both sides",
+    "workspace_home_session_memory_cache": "independent for every attempt; identical initial content hashes within each pair",
+    "only_host_model_relay_can_egress": true
+  },
+  "paid_authorization": {
+    "authorized": false,
+    "total_cny": null,
+    "per_attempt_cny": null,
+    "old_balance_carried": false,
+    "calls_this_round": 0,
+    "before_execution": "obtain new authorization and freeze equal per-attempt admission before any request"
+  },
+  "preflight_before_future_execution": [
+    "verify immutable image manifests and derived Agent image identities",
+    "freeze equal dependency/toolchain manifests",
+    "verify paired initial trees and hidden scoring isolation",
+    "new paid grant plus equal attempt budgets",
+    "retain all A/B attempts including failures; never choose best patch",
+    "disk/memory admission; previous /dev/shm grants are not extended to these new tasks"
+  ],
+  "metrics": [
+    "official acceptance",
+    "process launched versus handler entered",
+    "permission/path/dispatch/command failure separately",
+    "first attempted/successful/committed mutation requests",
+    "unproductive repeated requests and transaction rollback",
+    "false STALE_READ target incidence",
+    "main/auxiliary physical requests and local rejections separately",
+    "reported usage and fees (unknown remains null)",
+    "wall time",
+    "interventions"
+  ],
+  "interpretation": "No autonomous benefit has been demonstrated; these eight tasks might not trigger this mechanism."
+}

@@ -1,0 +1,41 @@
+{
+  "status": "completed",
+  "error": "",
+  "main_controlled_requests": 3,
+  "auxiliary_controlled_requests": 0,
+  "paid_requests": 0,
+  "fake_usage_is_not_cost_or_efficiency_evidence": true,
+  "before_sha256": "30df3ed3bb78f7ebca3c5a5faeb3f9e22bae1144bf8ee21a9e98ebd474aab704",
+  "after_sha256": "1ed1118f2c6e396781befa35841f5b560e7587af05676b1bbe5ccb7c2e679418",
+  "expected_sha256": "1ed1118f2c6e396781befa35841f5b560e7587af05676b1bbe5ccb7c2e679418",
+  "independent_check": {
+    "command": [
+      "/usr/bin/node",
+      "--test",
+      "literal.test.cjs"
+    ],
+    "exit_code": 0,
+    "stdout": "TAP version 13\n# Subtest: value and exported fields\nok 1 - value and exported fields\n  ---\n  duration_ms: 1.196418\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 125.586154\n",
+    "stderr": ""
+  },
+  "stale_events": [],
+  "transaction_rollbacks": [],
+  "verification_results": [
+    {
+      "ts": 1791799753.030713,
+      "run_id": "20261012_180912_f6660d0a",
+      "trace_id": "20261012_180912_f6660d0a",
+      "session_id": "node-evidence",
+      "agent_id": "agent-66840aac",
+      "parent_agent_id": null,
+      "parent_trace_id": null,
+      "agent_type": "main",
+      "event": "verification_result",
+      "command": "node --test literal.test.cjs",
+      "stage": "targeted",
+      "status": "passed",
+      "output": "TAP version 13\n# Subtest: value and exported fields\nok 1 - value and exported fields\n  ---\n  duration_ms: 1.18921\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 126.021314"
+    }
+  ],
+  "node_version": "v18.19.1"
+}

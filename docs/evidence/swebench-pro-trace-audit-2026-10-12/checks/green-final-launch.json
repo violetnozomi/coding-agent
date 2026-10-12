@@ -1,0 +1,18 @@
+{
+  "command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-ra",
+    "tests/runtime/test_transaction_owned_edit_runtime.py"
+  ],
+  "cwd": "/home/pyh/nzcoder",
+  "exit_code": 0,
+  "summary": [
+    "11 passed in 7.40s"
+  ],
+  "nonlocal_tcp_blocked": true,
+  "provider_secrets_removed": true,
+  "source_commit": "uncommitted Core diff against 99eee296"
+}

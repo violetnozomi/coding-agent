@@ -1,0 +1,15 @@
+{
+  "historical_files_verified_unchanged": 1094,
+  "new_paid_model_requests": 0,
+  "new_embedding_requests": 0,
+  "broken_authored_document_links": [],
+  "private_credentials_copied": false,
+  "source_diff_matches_committed_B": true,
+  "eight_new_tasks_overlap_with_historical_100": 0,
+  "ab_runs_executed": 0,
+  "all_16_public_inputs_verified": true,
+  "images_pulled": 0,
+  "current_full_lint": "baseline E731 in tests/evaluation/test_model_relay.py:233; scoped lint passed",
+  "windows_and_full_pytest_run": false,
+  "new_eight_public_prompt_hash_overlap_with_original_100": 0
+}

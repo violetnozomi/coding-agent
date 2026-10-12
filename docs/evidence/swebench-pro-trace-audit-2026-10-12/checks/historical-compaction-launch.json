@@ -1,0 +1,28 @@
+[
+  {
+    "variant": "A",
+    "pid": 1794759,
+    "command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_loop_fake.py::test_context_overflow_stops_after_three_compaction_attempts",
+      "tests/test_loop_fake.py::test_pre_send_and_reactive_compactions_share_one_three_attempt_owner"
+    ],
+    "cwd": "/home/pyh/.codex/artifacts/nz-pro-trace-audit-2026-10-12/baseline"
+  },
+  {
+    "variant": "B",
+    "pid": 1794760,
+    "command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_loop_fake.py::test_context_overflow_stops_after_three_compaction_attempts",
+      "tests/test_loop_fake.py::test_pre_send_and_reactive_compactions_share_one_three_attempt_owner"
+    ],
+    "cwd": "/home/pyh/nzcoder"
+  }
+]

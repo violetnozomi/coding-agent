@@ -1,0 +1,25 @@
+{
+  "command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "-ra",
+    "tests/runtime/test_node_verification_runtime.py",
+    "tests/runtime/test_native_runner.py",
+    "tests/runtime/tool_runtime",
+    "tests/runtime/core/test_tool_execution_context.py",
+    "tests/test_runtime_composition.py",
+    "tests/test_read_file_parity.py",
+    "tests/test_permissions.py",
+    "tests/test_skill_governance.py",
+    "tests/security",
+    "--ignore=tests/security/test_transaction_track.py",
+    "--ignore=tests/security/test_transaction_recovery.py"
+  ],
+  "pid": 1790602,
+  "started_epoch": 1791797673.6225698,
+  "provider_secrets_environment_removed": true,
+  "nonlocal_tcp_blocked": true,
+  "only_new_or_unresolved_checks_broadened": true
+}

@@ -1,0 +1,242 @@
+diff --git a/nz_coder/foundation/workspace_file_access.py b/nz_coder/foundation/workspace_file_access.py
+index 107725ad..b2b63068 100644
+--- a/nz_coder/foundation/workspace_file_access.py
++++ b/nz_coder/foundation/workspace_file_access.py
+@@ -325,6 +325,8 @@ class WorkspaceFileAccess:
+                 if current.expected_exists:
+                     os.fchmod(descriptor, stat.S_IMODE(current_mode))
+                 os.fsync(descriptor)
++                if receipt is not None:
++                    candidate.capture(descriptor, content=data)
+             finally:
+                 os.close(descriptor)
+             if overwrite:
+@@ -337,9 +339,12 @@ class WorkspaceFileAccess:
+             if receipt is not None:
+                 receipt.identity = published_identity
+                 receipt.applied = True
++                receipt.published_version = None
+             if not overwrite:
+                 os.unlink(temporary, dir_fd=parent)
+             os.fsync(parent)
++            if receipt is not None:
++                receipt.published_version = candidate.published_version
+         finally:
+             try:
+                 os.unlink(temporary, dir_fd=parent)
+@@ -371,7 +376,10 @@ class WorkspaceFileAccess:
+             if receipt is not None:
+                 receipt.identity = None
+                 receipt.applied = True
++                receipt.published_version = None
+             os.fsync(parent)
++            if receipt is not None:
++                receipt.published_version = WorkspaceFileIdentity.missing()
+         finally:
+             os.close(parent)
+ 
+@@ -868,6 +876,7 @@ class WorkspaceFileAccess:
+                 if receipt is not None:
+                     receipt.applied = True
+                     receipt.identity = None
++                    receipt.published_version = None
+                 try:
+                     if receipt is not None:
+                         receipt.capture(descriptor)
+@@ -877,9 +886,15 @@ class WorkspaceFileAccess:
+                         stream.write(data)
+                         stream.flush()
+                         os.fsync(stream.fileno())
++                        if receipt is not None:
++                            receipt.capture(stream.fileno(), content=data)
++                            candidate_version = receipt.published_version
++                            receipt.published_version = None
+                 finally:
+                     if descriptor >= 0:
+                         os.close(descriptor)
++                if receipt is not None:
++                    receipt.published_version = candidate_version
+                 return
+             descriptor, raw = tempfile.mkstemp(prefix=".nzcoder-", suffix=".tmp", dir=parent_path)
+             temporary = Path(raw)
+@@ -891,6 +906,8 @@ class WorkspaceFileAccess:
+                 stream.write(data)
+                 stream.flush()
+                 os.fsync(stream.fileno())
++                if receipt is not None:
++                    candidate.capture(stream.fileno(), content=data)
+             if current_info is not None:
+                 os.chmod(temporary, stat.S_IMODE(current_info.st_mode))
+             if Path(_windows_final_path(handle)) != parent_path.resolve():
+@@ -899,6 +916,7 @@ class WorkspaceFileAccess:
+             if receipt is not None:
+                 receipt.identity = published_identity
+                 receipt.applied = True
++                receipt.published_version = candidate.published_version
+         finally:
+             if temporary is not None:
+                 temporary.unlink(missing_ok=True)
+@@ -1000,6 +1018,7 @@ class WorkspaceFileAccess:
+             if receipt is not None:
+                 receipt.identity = None
+                 receipt.applied = True
++                receipt.published_version = WorkspaceFileIdentity.missing()
+         finally:
+             if target_handle is not None:
+                 _windows_close(target_handle)
+diff --git a/nz_coder/runtime/execution/tool_executor.py b/nz_coder/runtime/execution/tool_executor.py
+index 3071837c..26e4073d 100644
+--- a/nz_coder/runtime/execution/tool_executor.py
++++ b/nz_coder/runtime/execution/tool_executor.py
+@@ -223,6 +223,10 @@ class _ReadFileStateCache:
+         The mutation handler still performs its own handle-based CAS check. This
+         preflight only protects against edits based on a stale model observation.
+         """
++        from nz_coder.state.transaction import TransactionManager
++        from nz_coder.tools.files import _get_txn
++
++        transaction = _get_txn()
+         paths = _write_paths(tool_input)
+         if not paths:
+             return None
+@@ -251,9 +255,14 @@ class _ReadFileStateCache:
+                 }
+             # A touch changes timestamps but not content; content identity is
+             # authoritative for stale-read detection.
+-            if current.expected_exists != observation.identity.expected_exists:
+-                return self._stale_payload(observation, current)
+-            if current.expected_exists and current.content_hash != observation.identity.content_hash:
++            changed = (
++                current.expected_exists != observation.identity.expected_exists
++                or (current.expected_exists and current.content_hash != observation.identity.content_hash)
++            )
++            if changed and not (
++                isinstance(transaction, TransactionManager)
++                and transaction.owns_applied_version(observation.path, current)
++            ):
+                 return self._stale_payload(observation, current)
+         return None
+ 
+diff --git a/nz_coder/state/transaction.py b/nz_coder/state/transaction.py
+index 2ac46934..7a5bc22a 100644
+--- a/nz_coder/state/transaction.py
++++ b/nz_coder/state/transaction.py
+@@ -9,9 +9,13 @@ import shutil
+ import stat
+ import tempfile
+ import uuid
++from typing import TYPE_CHECKING
+ 
+ from nz_coder.state.workdir import current_workdir
+ 
++if TYPE_CHECKING:
++    from nz_coder.foundation.workspace_file_access import WorkspaceFileIdentity
++
+ 
+ @dataclass(frozen=True)
+ class _PathIdentity:
+@@ -45,8 +49,9 @@ class MutationReceipt:
+ 
+     applied: bool = False
+     identity: tuple[int, int] | None = None
++    published_version: WorkspaceFileIdentity | None = None
+ 
+-    def capture(self, descriptor: int) -> None:
++    def capture(self, descriptor: int, *, content: bytes | None = None) -> None:
+         """Capture the opened object's identity without reopening its path."""
+         if os.name == "nt":
+             import msvcrt
+@@ -56,6 +61,14 @@ class MutationReceipt:
+         else:
+             info = os.fstat(descriptor)
+             self.identity = (int(info.st_dev), int(info.st_ino))
++        if content is not None:
++            from nz_coder.foundation.workspace_file_access import WorkspaceFileIdentity
++
++            info = os.fstat(descriptor)
++            self.published_version = WorkspaceFileIdentity(
++                True, *self.identity, len(content), int(info.st_mtime_ns),
++                hashlib.sha256(content).hexdigest(),
++            )
+ 
+ 
+ @dataclass
+@@ -104,6 +117,22 @@ class TransactionManager:
+     def state(self) -> str:
+         return self._state
+ 
++    def owns_applied_version(self, path: str, identity: WorkspaceFileIdentity) -> bool:
++        """只认可当前事务已完成的自身写入，不把任意新磁盘内容变成已读版本。"""
++        if not self._active or self._state != "active":
++            return False
++        key = os.path.normpath(str(current_workdir().resolve() / path))
++        record = self._backups.get(key)
++        if record is None or not record.mutation.applied:
++            return False
++        published = record.mutation.published_version
++        if published is None or published.expected_exists != identity.expected_exists:
++            return False
++        return not identity.expected_exists or (
++            (published.device, published.inode) == (identity.device, identity.inode)
++            and published.content_hash == identity.content_hash
++        )
++
+     def begin(self) -> None:
+         """Start a transaction; nested callers share the active transaction."""
+         if self._active:
+@@ -694,9 +723,52 @@ class TransactionManager:
+             record.target.relative_to(root)
+         except ValueError as exc:
+             raise ValueError("Transaction recovery target escapes workspace") from exc
+-        if os.name != "nt":
+-            return self._open_recovery_parent_posix(root, record)
+-        return self._open_recovery_parent_windows(record)
++        parent = (
++            self._open_recovery_parent_posix(root, record)
++            if os.name != "nt" else self._open_recovery_parent_windows(record)
++        )
++        try:
++            # 与批内编辑复用同一落地版本：回滚不能覆盖后来出现的外部文件。
++            self._verify_recovery_version(record, parent)
++            return parent
++        except BaseException:
++            parent.close()
++            raise
++
++    @staticmethod
++    def _verify_recovery_version(record: _Backup, parent: _RecoveryParent) -> None:
++        if os.name == "nt":
++            from nz_coder.foundation.project_control import _windows_close, _windows_open, _windows_handle_info
++
++            handle = _windows_open(record.target, directory=False, missing_ok=True,
++                                   parent=parent.windows_parent_handle)
++            if handle is None:
++                current_identity = None
++            else:
++                try:
++                    current_identity = _windows_handle_info(handle)
++                finally:
++                    _windows_close(handle)
++        else:
++            try:
++                info = os.stat(record.target.name, dir_fd=parent.fd, follow_symlinks=False)
++                current_identity = (int(info.st_dev), int(info.st_ino))
++            except FileNotFoundError:
++                current_identity = None
++        if current_identity != record.mutation.identity:
++            raise ValueError("Transaction mutation target identity changed")
++        published = record.mutation.published_version
++        if published is not None and published.expected_exists:
++            from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
++
++            _data, current = WorkspaceFileAccess(current_workdir()).read_bytes_with_identity(
++                record.relative, maximum=published.size,
++            )
++            if (
++                (current.device, current.inode) != record.mutation.identity
++                or current.content_hash != published.content_hash
++            ):
++                raise ValueError("Transaction mutation target content changed")
+ 
+     def _open_recovery_parent_posix(
+         self,

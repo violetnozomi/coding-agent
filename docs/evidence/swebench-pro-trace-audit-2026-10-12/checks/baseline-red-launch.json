@@ -1,0 +1,18 @@
+{
+  "pid": 1792963,
+  "command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/runtime/test_transaction_owned_edit_runtime.py",
+    "-k",
+    "same_batch_exact or failed_second or cancel_after or committed_batches"
+  ],
+  "cwd": "/home/pyh/.codex/artifacts/nz-pro-trace-audit-2026-10-12/baseline",
+  "source_commit": "99eee2967ba8ff4dbfb17bf241e382b8fa022f5a",
+  "current_tests_copied": true,
+  "nonlocal_tcp_blocked": true,
+  "model_calls": 0,
+  "started_epoch": 1791797836.2710264
+}
