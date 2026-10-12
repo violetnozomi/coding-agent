@@ -325,6 +325,8 @@ class WorkspaceFileAccess:
                 if current.expected_exists:
                     os.fchmod(descriptor, stat.S_IMODE(current_mode))
                 os.fsync(descriptor)
+                if receipt is not None:
+                    candidate.capture(descriptor, content=data)
             finally:
                 os.close(descriptor)
             if overwrite:
@@ -337,9 +339,12 @@ class WorkspaceFileAccess:
             if receipt is not None:
                 receipt.identity = published_identity
                 receipt.applied = True
+                receipt.published_version = None
             if not overwrite:
                 os.unlink(temporary, dir_fd=parent)
             os.fsync(parent)
+            if receipt is not None:
+                receipt.published_version = candidate.published_version
         finally:
             try:
                 os.unlink(temporary, dir_fd=parent)
@@ -371,7 +376,10 @@ class WorkspaceFileAccess:
             if receipt is not None:
                 receipt.identity = None
                 receipt.applied = True
+                receipt.published_version = None
             os.fsync(parent)
+            if receipt is not None:
+                receipt.published_version = WorkspaceFileIdentity.missing()
         finally:
             os.close(parent)
 
@@ -868,6 +876,7 @@ class WorkspaceFileAccess:
                 if receipt is not None:
                     receipt.applied = True
                     receipt.identity = None
+                    receipt.published_version = None
                 try:
                     if receipt is not None:
                         receipt.capture(descriptor)
@@ -877,9 +886,15 @@ class WorkspaceFileAccess:
                         stream.write(data)
                         stream.flush()
                         os.fsync(stream.fileno())
+                        if receipt is not None:
+                            receipt.capture(stream.fileno(), content=data)
+                            candidate_version = receipt.published_version
+                            receipt.published_version = None
                 finally:
                     if descriptor >= 0:
                         os.close(descriptor)
+                if receipt is not None:
+                    receipt.published_version = candidate_version
                 return
             descriptor, raw = tempfile.mkstemp(prefix=".nzcoder-", suffix=".tmp", dir=parent_path)
             temporary = Path(raw)
@@ -891,6 +906,8 @@ class WorkspaceFileAccess:
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
+                if receipt is not None:
+                    candidate.capture(stream.fileno(), content=data)
             if current_info is not None:
                 os.chmod(temporary, stat.S_IMODE(current_info.st_mode))
             if Path(_windows_final_path(handle)) != parent_path.resolve():
@@ -899,6 +916,7 @@ class WorkspaceFileAccess:
             if receipt is not None:
                 receipt.identity = published_identity
                 receipt.applied = True
+                receipt.published_version = candidate.published_version
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
@@ -1000,6 +1018,7 @@ class WorkspaceFileAccess:
             if receipt is not None:
                 receipt.identity = None
                 receipt.applied = True
+                receipt.published_version = WorkspaceFileIdentity.missing()
         finally:
             if target_handle is not None:
                 _windows_close(target_handle)

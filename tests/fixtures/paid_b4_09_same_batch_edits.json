@@ -1,0 +1,37 @@
+{
+  "source_commit": "99eee2967ba8ff4dbfb17bf241e382b8fa022f5a",
+  "source_request": 36,
+  "source_public_record": "docs/evidence/swebench-pro-20-batch4-2026-10-12/final-unattempted/b4-09",
+  "initial_file": "initial-changed-files/packages/metrics/Metrics.ts",
+  "initial_sha256": "14bcf1e7c24f83176a1959292b2a902d117b8f1e2594a69cbe78caaecd69ba8d",
+  "calls": [
+    {
+      "index": 0,
+      "id": "call_00_2EIZeFKys7BxVJPCrtEU2034",
+      "type": "function",
+      "function": {
+        "name": "edit_file",
+        "arguments": "{\"path\": \"packages/metrics/Metrics.ts\", \"old_text\": \"import type { HttpsProtonMeWebDrivePerformanceAveragetimeperitemHistogramV1SchemaJson } from './types/web_drive_performance_averagetimeperitem_histogram_v1.schema';\", \"new_text\": \"import type { HttpsProtonMeWebDriveDownloadMechanismSuccessRateTotalV1SchemaJson } from './types/web_drive_download_mechanism_success_rate_total_v1.schema';\\nimport type { HttpsProtonMeWebDrivePerformanceAveragetimeperitemHistogramV1SchemaJson } from './types/web_drive_performance_averagetimeperitem_histogram_v1.schema';\"}"
+      }
+    },
+    {
+      "index": 1,
+      "id": "call_01_FckAKA15905pqyocUa8t1809",
+      "type": "function",
+      "function": {
+        "name": "edit_file",
+        "arguments": "{\"path\": \"packages/metrics/Metrics.ts\", \"old_text\": \"    public drive_performance_averagetimeperitem_histogram: Histogram<HttpsProtonMeWebDrivePerformanceAveragetimeperitemHistogramV1SchemaJson>;\", \"new_text\": \"    public drive_download_mechanism_success_rate_total: Counter<HttpsProtonMeWebDriveDownloadMechanismSuccessRateTotalV1SchemaJson>;\\n\\n    public drive_performance_averagetimeperitem_histogram: Histogram<HttpsProtonMeWebDrivePerformanceAveragetimeperitemHistogramV1SchemaJson>;\"}"
+      }
+    },
+    {
+      "index": 2,
+      "id": "call_02_XyH2N7wup2pju49QSeXK0718",
+      "type": "function",
+      "function": {
+        "name": "edit_file",
+        "arguments": "{\"path\": \"packages/metrics/Metrics.ts\", \"old_text\": \"        this.drive_performance_averagetimeperitem_histogram = new Histogram<HttpsProtonMeWebDrivePerformanceAveragetimeperitemHistogramV1SchemaJson>(\\n            { name: 'drive_performance_averagetimeperitem_histogram', version: 1 },\\n            this.requestService\\n        );\", \"new_text\": \"        this.drive_download_mechanism_success_rate_total =\\n            new Counter<HttpsProtonMeWebDriveDownloadMechanismSuccessRateTotalV1SchemaJson>(\\n                { name: 'web_drive_download_mechanism_success_rate_total', version: 1 },\\n                this.requestService\\n            );\\n\\n        this.drive_performance_averagetimeperitem_histogram = new Histogram<HttpsProtonMeWebDrivePerformanceAveragetimeperitemHistogramV1SchemaJson>(\\n            { name: 'drive_performance_averagetimeperitem_histogram', version: 1 },\\n            this.requestService\\n        );\"}"
+      }
+    }
+  ],
+  "purpose": "Offline recorded edit fragment only; not an autonomous SWE-bench rerun"
+}

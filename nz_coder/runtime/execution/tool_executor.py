@@ -223,6 +223,10 @@ class _ReadFileStateCache:
         The mutation handler still performs its own handle-based CAS check. This
         preflight only protects against edits based on a stale model observation.
         """
+        from nz_coder.state.transaction import TransactionManager
+        from nz_coder.tools.files import _get_txn
+
+        transaction = _get_txn()
         paths = _write_paths(tool_input)
         if not paths:
             return None
@@ -251,9 +255,14 @@ class _ReadFileStateCache:
                 }
             # A touch changes timestamps but not content; content identity is
             # authoritative for stale-read detection.
-            if current.expected_exists != observation.identity.expected_exists:
-                return self._stale_payload(observation, current)
-            if current.expected_exists and current.content_hash != observation.identity.content_hash:
+            changed = (
+                current.expected_exists != observation.identity.expected_exists
+                or (current.expected_exists and current.content_hash != observation.identity.content_hash)
+            )
+            if changed and not (
+                isinstance(transaction, TransactionManager)
+                and transaction.owns_applied_version(observation.path, current)
+            ):
                 return self._stale_payload(observation, current)
         return None
 

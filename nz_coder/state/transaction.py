@@ -9,8 +9,12 @@ import shutil
 import stat
 import tempfile
 import uuid
+from typing import TYPE_CHECKING
 
 from nz_coder.state.workdir import current_workdir
+
+if TYPE_CHECKING:
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileIdentity
 
 
 @dataclass(frozen=True)
@@ -45,8 +49,9 @@ class MutationReceipt:
 
     applied: bool = False
     identity: tuple[int, int] | None = None
+    published_version: WorkspaceFileIdentity | None = None
 
-    def capture(self, descriptor: int) -> None:
+    def capture(self, descriptor: int, *, content: bytes | None = None) -> None:
         """Capture the opened object's identity without reopening its path."""
         if os.name == "nt":
             import msvcrt
@@ -56,6 +61,14 @@ class MutationReceipt:
         else:
             info = os.fstat(descriptor)
             self.identity = (int(info.st_dev), int(info.st_ino))
+        if content is not None:
+            from nz_coder.foundation.workspace_file_access import WorkspaceFileIdentity
+
+            info = os.fstat(descriptor)
+            self.published_version = WorkspaceFileIdentity(
+                True, *self.identity, len(content), int(info.st_mtime_ns),
+                hashlib.sha256(content).hexdigest(),
+            )
 
 
 @dataclass
@@ -103,6 +116,22 @@ class TransactionManager:
     @property
     def state(self) -> str:
         return self._state
+
+    def owns_applied_version(self, path: str, identity: WorkspaceFileIdentity) -> bool:
+        """只认可当前事务已完成的自身写入，不把任意新磁盘内容变成已读版本。"""
+        if not self._active or self._state != "active":
+            return False
+        key = os.path.normpath(str(current_workdir().resolve() / path))
+        record = self._backups.get(key)
+        if record is None or not record.mutation.applied:
+            return False
+        published = record.mutation.published_version
+        if published is None or published.expected_exists != identity.expected_exists:
+            return False
+        return not identity.expected_exists or (
+            (published.device, published.inode) == (identity.device, identity.inode)
+            and published.content_hash == identity.content_hash
+        )
 
     def begin(self) -> None:
         """Start a transaction; nested callers share the active transaction."""
@@ -694,9 +723,52 @@ class TransactionManager:
             record.target.relative_to(root)
         except ValueError as exc:
             raise ValueError("Transaction recovery target escapes workspace") from exc
-        if os.name != "nt":
-            return self._open_recovery_parent_posix(root, record)
-        return self._open_recovery_parent_windows(record)
+        parent = (
+            self._open_recovery_parent_posix(root, record)
+            if os.name != "nt" else self._open_recovery_parent_windows(record)
+        )
+        try:
+            # 与批内编辑复用同一落地版本：回滚不能覆盖后来出现的外部文件。
+            self._verify_recovery_version(record, parent)
+            return parent
+        except BaseException:
+            parent.close()
+            raise
+
+    @staticmethod
+    def _verify_recovery_version(record: _Backup, parent: _RecoveryParent) -> None:
+        if os.name == "nt":
+            from nz_coder.foundation.project_control import _windows_close, _windows_open, _windows_handle_info
+
+            handle = _windows_open(record.target, directory=False, missing_ok=True,
+                                   parent=parent.windows_parent_handle)
+            if handle is None:
+                current_identity = None
+            else:
+                try:
+                    current_identity = _windows_handle_info(handle)
+                finally:
+                    _windows_close(handle)
+        else:
+            try:
+                info = os.stat(record.target.name, dir_fd=parent.fd, follow_symlinks=False)
+                current_identity = (int(info.st_dev), int(info.st_ino))
+            except FileNotFoundError:
+                current_identity = None
+        if current_identity != record.mutation.identity:
+            raise ValueError("Transaction mutation target identity changed")
+        published = record.mutation.published_version
+        if published is not None and published.expected_exists:
+            from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+
+            _data, current = WorkspaceFileAccess(current_workdir()).read_bytes_with_identity(
+                record.relative, maximum=published.size,
+            )
+            if (
+                (current.device, current.inode) != record.mutation.identity
+                or current.content_hash != published.content_hash
+            ):
+                raise ValueError("Transaction mutation target content changed")
 
     def _open_recovery_parent_posix(
         self,
