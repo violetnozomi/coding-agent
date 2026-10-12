@@ -1,0 +1,411 @@
+...FFFFFFF.FF..........F....FFFFF.F.F                                    [100%]
+=================================== FAILURES ===================================
+_ test_querying_test_runner_names_is_not_test_execution[ls node_modules/.bin | grep -i jest] _
+
+command = 'ls node_modules/.bin | grep -i jest'
+
+    @pytest.mark.parametrize("command", [
+        "ls node_modules/.bin | grep -i jest",
+        "grep -n '\"test\"\\|jest' package.json | head -40",
+        "ls node_modules/.bin/ | grep -iE 'jest|tsc'",
+        "find packages/shared -maxdepth 2 -name 'jest*' | head",
+        "printf '%s\\n' 'pytest tests/'",
+        "cat jest.config.js",
+        "rg 'pytest; jest' README.md",
+    ])
+    def test_querying_test_runner_names_is_not_test_execution(command):
+        """搜索参数和文件名不能让只读查询消耗验证准入或验证次数。"""
+        from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+    
+>       assert is_broad_test_command(command) is False
+E       AssertionError: assert True is False
+E        +  where True = <function is_broad_test_command at 0x787014df62a0>('ls node_modules/.bin | grep -i jest')
+
+tests/test_task_policy.py:51: AssertionError
+_ test_querying_test_runner_names_is_not_test_execution[grep -n '"test"\\|jest' package.json | head -40] _
+
+command = 'grep -n \'"test"\\|jest\' package.json | head -40'
+
+    @pytest.mark.parametrize("command", [
+        "ls node_modules/.bin | grep -i jest",
+        "grep -n '\"test\"\\|jest' package.json | head -40",
+        "ls node_modules/.bin/ | grep -iE 'jest|tsc'",
+        "find packages/shared -maxdepth 2 -name 'jest*' | head",
+        "printf '%s\\n' 'pytest tests/'",
+        "cat jest.config.js",
+        "rg 'pytest; jest' README.md",
+    ])
+    def test_querying_test_runner_names_is_not_test_execution(command):
+        """搜索参数和文件名不能让只读查询消耗验证准入或验证次数。"""
+        from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+    
+>       assert is_broad_test_command(command) is False
+E       assert True is False
+E        +  where True = <function is_broad_test_command at 0x787014df62a0>('grep -n \'"test"\\|jest\' package.json | head -40')
+
+tests/test_task_policy.py:51: AssertionError
+_ test_querying_test_runner_names_is_not_test_execution[ls node_modules/.bin/ | grep -iE 'jest|tsc'] _
+
+command = "ls node_modules/.bin/ | grep -iE 'jest|tsc'"
+
+    @pytest.mark.parametrize("command", [
+        "ls node_modules/.bin | grep -i jest",
+        "grep -n '\"test\"\\|jest' package.json | head -40",
+        "ls node_modules/.bin/ | grep -iE 'jest|tsc'",
+        "find packages/shared -maxdepth 2 -name 'jest*' | head",
+        "printf '%s\\n' 'pytest tests/'",
+        "cat jest.config.js",
+        "rg 'pytest; jest' README.md",
+    ])
+    def test_querying_test_runner_names_is_not_test_execution(command):
+        """搜索参数和文件名不能让只读查询消耗验证准入或验证次数。"""
+        from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+    
+>       assert is_broad_test_command(command) is False
+E       assert True is False
+E        +  where True = <function is_broad_test_command at 0x787014df62a0>("ls node_modules/.bin/ | grep -iE 'jest|tsc'")
+
+tests/test_task_policy.py:51: AssertionError
+_ test_querying_test_runner_names_is_not_test_execution[find packages/shared -maxdepth 2 -name 'jest*' | head] _
+
+command = "find packages/shared -maxdepth 2 -name 'jest*' | head"
+
+    @pytest.mark.parametrize("command", [
+        "ls node_modules/.bin | grep -i jest",
+        "grep -n '\"test\"\\|jest' package.json | head -40",
+        "ls node_modules/.bin/ | grep -iE 'jest|tsc'",
+        "find packages/shared -maxdepth 2 -name 'jest*' | head",
+        "printf '%s\\n' 'pytest tests/'",
+        "cat jest.config.js",
+        "rg 'pytest; jest' README.md",
+    ])
+    def test_querying_test_runner_names_is_not_test_execution(command):
+        """搜索参数和文件名不能让只读查询消耗验证准入或验证次数。"""
+        from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+    
+>       assert is_broad_test_command(command) is False
+E       assert True is False
+E        +  where True = <function is_broad_test_command at 0x787014df62a0>("find packages/shared -maxdepth 2 -name 'jest*' | head")
+
+tests/test_task_policy.py:51: AssertionError
+_ test_querying_test_runner_names_is_not_test_execution[printf '%s\\n' 'pytest tests/'] _
+
+command = "printf '%s\\n' 'pytest tests/'"
+
+    @pytest.mark.parametrize("command", [
+        "ls node_modules/.bin | grep -i jest",
+        "grep -n '\"test\"\\|jest' package.json | head -40",
+        "ls node_modules/.bin/ | grep -iE 'jest|tsc'",
+        "find packages/shared -maxdepth 2 -name 'jest*' | head",
+        "printf '%s\\n' 'pytest tests/'",
+        "cat jest.config.js",
+        "rg 'pytest; jest' README.md",
+    ])
+    def test_querying_test_runner_names_is_not_test_execution(command):
+        """搜索参数和文件名不能让只读查询消耗验证准入或验证次数。"""
+        from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+    
+>       assert is_broad_test_command(command) is False
+E       assert True is False
+E        +  where True = <function is_broad_test_command at 0x787014df62a0>("printf '%s\\n' 'pytest tests/'")
+
+tests/test_task_policy.py:51: AssertionError
+__ test_querying_test_runner_names_is_not_test_execution[cat jest.config.js] ___
+
+command = 'cat jest.config.js'
+
+    @pytest.mark.parametrize("command", [
+        "ls node_modules/.bin | grep -i jest",
+        "grep -n '\"test\"\\|jest' package.json | head -40",
+        "ls node_modules/.bin/ | grep -iE 'jest|tsc'",
+        "find packages/shared -maxdepth 2 -name 'jest*' | head",
+        "printf '%s\\n' 'pytest tests/'",
+        "cat jest.config.js",
+        "rg 'pytest; jest' README.md",
+    ])
+    def test_querying_test_runner_names_is_not_test_execution(command):
+        """搜索参数和文件名不能让只读查询消耗验证准入或验证次数。"""
+        from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+    
+        assert is_broad_test_command(command) is False
+>       assert is_exact_test_command(command) is False
+E       AssertionError: assert True is False
+E        +  where True = <function is_exact_test_command at 0x787014df6200>('cat jest.config.js')
+
+tests/test_task_policy.py:52: AssertionError
+_ test_querying_test_runner_names_is_not_test_execution[rg 'pytest; jest' README.md] _
+
+command = "rg 'pytest; jest' README.md"
+
+    @pytest.mark.parametrize("command", [
+        "ls node_modules/.bin | grep -i jest",
+        "grep -n '\"test\"\\|jest' package.json | head -40",
+        "ls node_modules/.bin/ | grep -iE 'jest|tsc'",
+        "find packages/shared -maxdepth 2 -name 'jest*' | head",
+        "printf '%s\\n' 'pytest tests/'",
+        "cat jest.config.js",
+        "rg 'pytest; jest' README.md",
+    ])
+    def test_querying_test_runner_names_is_not_test_execution(command):
+        """搜索参数和文件名不能让只读查询消耗验证准入或验证次数。"""
+        from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+    
+>       assert is_broad_test_command(command) is False
+E       assert True is False
+E        +  where True = <function is_broad_test_command at 0x787014df62a0>("rg 'pytest; jest' README.md")
+
+tests/test_task_policy.py:51: AssertionError
+_ test_observation_segments_cannot_hide_a_real_broad_test[printf '%s\\n' 'pytest tests/fake_test.py'; pytest] _
+
+command = "printf '%s\\n' 'pytest tests/fake_test.py'; pytest"
+
+    @pytest.mark.parametrize("command", [
+        "ls node_modules/.bin | grep jest && pytest",
+        "printf '%s\\n' 'pytest tests/fake_test.py'; pytest",
+        "cat tests/test_app.py && pytest tests/",
+        "env MODE=test pytest tests/",
+        "bash -c 'ls node_modules/.bin | grep jest; pytest'",
+    ])
+    def test_observation_segments_cannot_hide_a_real_broad_test(command):
+        from nz_coder.runtime.agent.task_policy import is_broad_test_command
+    
+>       assert is_broad_test_command(command) is True
+E       assert False is True
+E        +  where False = <function is_broad_test_command at 0x787014df62a0>("printf '%s\\n' 'pytest tests/fake_test.py'; pytest")
+
+tests/test_task_policy.py:65: AssertionError
+_ test_observation_segments_cannot_hide_a_real_broad_test[cat tests/test_app.py && pytest tests/] _
+
+command = 'cat tests/test_app.py && pytest tests/'
+
+    @pytest.mark.parametrize("command", [
+        "ls node_modules/.bin | grep jest && pytest",
+        "printf '%s\\n' 'pytest tests/fake_test.py'; pytest",
+        "cat tests/test_app.py && pytest tests/",
+        "env MODE=test pytest tests/",
+        "bash -c 'ls node_modules/.bin | grep jest; pytest'",
+    ])
+    def test_observation_segments_cannot_hide_a_real_broad_test(command):
+        from nz_coder.runtime.agent.task_policy import is_broad_test_command
+    
+>       assert is_broad_test_command(command) is True
+E       AssertionError: assert False is True
+E        +  where False = <function is_broad_test_command at 0x787014df62a0>('cat tests/test_app.py && pytest tests/')
+
+tests/test_task_policy.py:65: AssertionError
+_ test_real_or_unresolved_execution_keeps_broad_test_protection[pytest tests/test_ok.py && pytest] _
+
+command = 'pytest tests/test_ok.py && pytest'
+
+    @pytest.mark.parametrize("command", [
+        "npx jest", "command pytest", "uv run pytest tests/",
+        "find . -exec pytest {} +", "printf '%s\\n' \"$(pytest)\"",
+        "echo pytest | sh", "printf '%s\\n' pytest | xargs",
+        "custom-runner jest", "pytest tests/test_ok.py && pytest",
+    ])
+    def test_real_or_unresolved_execution_keeps_broad_test_protection(command):
+        from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+    
+>       assert is_broad_test_command(command) is True
+E       AssertionError: assert False is True
+E        +  where False = <function is_broad_test_command at 0x787014df62a0>('pytest tests/test_ok.py && pytest')
+
+tests/test_task_policy.py:77: AssertionError
+_ test_read_only_queries_after_edit_reach_model_and_real_retest[ls node_modules/.bin | grep -i jest] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x787014c163c0>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-226/test_read_only_queries_after_e0')
+command = 'ls node_modules/.bin | grep -i jest'
+
+    @pytest.mark.parametrize("command", QUERIES)
+    def test_read_only_queries_after_edit_reach_model_and_real_retest(monkeypatch, node_project, command):
+        _prepare_query_files(node_project)
+        result, state, trace, requests, auxiliary, permissions = _run(
+            monkeypatch, node_project,
+            [READ, TEST, EDIT, [_tool("diff_status")], [_tool("bash", command=command)], TEST],
+            limit=12, allowed_commands=(command,),
+        )
+        _save_replay(command, result, state, trace, requests, auxiliary, permissions)
+        diff = next(e for e in trace if e.get("event") == "tool_call" and e.get("name") == "diff_status")
+        assert "has_non_empty_diff: true" in diff["output"]
+        query = next(e for e in trace if e.get("event") == "tool_call" and e.get("input", {}).get("command") == command)
+        assert query["executed"] is True
+>       assert query["dispatch_failed"] is False
+E       assert True is False
+
+tests/runtime/test_test_query_admission.py:63: AssertionError
+_ test_read_only_queries_after_edit_reach_model_and_real_retest[ls . | head -40; echo ---; grep -n '"test"\\|jest' package.json | head -40] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x787014c17f50>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-226/test_read_only_queries_after_e1')
+command = 'ls . | head -40; echo ---; grep -n \'"test"\\|jest\' package.json | head -40'
+
+    @pytest.mark.parametrize("command", QUERIES)
+    def test_read_only_queries_after_edit_reach_model_and_real_retest(monkeypatch, node_project, command):
+        _prepare_query_files(node_project)
+        result, state, trace, requests, auxiliary, permissions = _run(
+            monkeypatch, node_project,
+            [READ, TEST, EDIT, [_tool("diff_status")], [_tool("bash", command=command)], TEST],
+            limit=12, allowed_commands=(command,),
+        )
+        _save_replay(command, result, state, trace, requests, auxiliary, permissions)
+        diff = next(e for e in trace if e.get("event") == "tool_call" and e.get("name") == "diff_status")
+        assert "has_non_empty_diff: true" in diff["output"]
+        query = next(e for e in trace if e.get("event") == "tool_call" and e.get("input", {}).get("command") == command)
+        assert query["executed"] is True
+>       assert query["dispatch_failed"] is False
+E       assert True is False
+
+tests/runtime/test_test_query_admission.py:63: AssertionError
+_ test_read_only_queries_after_edit_reach_model_and_real_retest[ls packages/components | head; echo '=== bin ==='; ls node_modules/.bin | grep -i -E '^(jest|tsc|eslint)$'] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7870148ba740>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-226/test_read_only_queries_after_e2')
+command = "ls packages/components | head; echo '=== bin ==='; ls node_modules/.bin | grep -i -E '^(jest|tsc|eslint)$'"
+
+    @pytest.mark.parametrize("command", QUERIES)
+    def test_read_only_queries_after_edit_reach_model_and_real_retest(monkeypatch, node_project, command):
+        _prepare_query_files(node_project)
+        result, state, trace, requests, auxiliary, permissions = _run(
+            monkeypatch, node_project,
+            [READ, TEST, EDIT, [_tool("diff_status")], [_tool("bash", command=command)], TEST],
+            limit=12, allowed_commands=(command,),
+        )
+        _save_replay(command, result, state, trace, requests, auxiliary, permissions)
+        diff = next(e for e in trace if e.get("event") == "tool_call" and e.get("name") == "diff_status")
+        assert "has_non_empty_diff: true" in diff["output"]
+        query = next(e for e in trace if e.get("event") == "tool_call" and e.get("input", {}).get("command") == command)
+        assert query["executed"] is True
+>       assert query["dispatch_failed"] is False
+E       assert True is False
+
+tests/runtime/test_test_query_admission.py:63: AssertionError
+_ test_read_only_queries_after_edit_reach_model_and_real_retest[ls node_modules/.bin/ | grep -iE 'jest|tsc'] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7870148371c0>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-226/test_read_only_queries_after_e3')
+command = "ls node_modules/.bin/ | grep -iE 'jest|tsc'"
+
+    @pytest.mark.parametrize("command", QUERIES)
+    def test_read_only_queries_after_edit_reach_model_and_real_retest(monkeypatch, node_project, command):
+        _prepare_query_files(node_project)
+        result, state, trace, requests, auxiliary, permissions = _run(
+            monkeypatch, node_project,
+            [READ, TEST, EDIT, [_tool("diff_status")], [_tool("bash", command=command)], TEST],
+            limit=12, allowed_commands=(command,),
+        )
+        _save_replay(command, result, state, trace, requests, auxiliary, permissions)
+        diff = next(e for e in trace if e.get("event") == "tool_call" and e.get("name") == "diff_status")
+        assert "has_non_empty_diff: true" in diff["output"]
+        query = next(e for e in trace if e.get("event") == "tool_call" and e.get("input", {}).get("command") == command)
+        assert query["executed"] is True
+>       assert query["dispatch_failed"] is False
+E       assert True is False
+
+tests/runtime/test_test_query_admission.py:63: AssertionError
+_ test_read_only_queries_after_edit_reach_model_and_real_retest[find packages/shared/test -type f | head -40; echo '=== root pkg test ==='; grep -n '"test"\\|jest' package.json | head -20; echo '=== jest configs in shared ==='; ls packages/shared/test 2>/dev/null; find packages/shared -maxdepth 2 -name 'jest*' -o -maxdepth 2 -name '*.config.*' | head] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x787016fa0050>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-226/test_read_only_queries_after_e4')
+command = 'find packages/shared/test -type f | head -40; echo \'=== root pkg test ===\'; grep -n \'"test"\\|jest\' package.json ...s/shared/test 2>/dev/null; find packages/shared -maxdepth 2 -name \'jest*\' -o -maxdepth 2 -name \'*.config.*\' | head'
+
+    @pytest.mark.parametrize("command", QUERIES)
+    def test_read_only_queries_after_edit_reach_model_and_real_retest(monkeypatch, node_project, command):
+        _prepare_query_files(node_project)
+        result, state, trace, requests, auxiliary, permissions = _run(
+            monkeypatch, node_project,
+            [READ, TEST, EDIT, [_tool("diff_status")], [_tool("bash", command=command)], TEST],
+            limit=12, allowed_commands=(command,),
+        )
+        _save_replay(command, result, state, trace, requests, auxiliary, permissions)
+        diff = next(e for e in trace if e.get("event") == "tool_call" and e.get("name") == "diff_status")
+        assert "has_non_empty_diff: true" in diff["output"]
+        query = next(e for e in trace if e.get("event") == "tool_call" and e.get("input", {}).get("command") == command)
+        assert query["executed"] is True
+>       assert query["dispatch_failed"] is False
+E       assert True is False
+
+tests/runtime/test_test_query_admission.py:63: AssertionError
+_ test_query_cannot_hide_real_broad_test_after_edit[cat tests/test_sentinel.py && python -m pytest tests/] _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x787016fa0360>
+node_project = PosixPath('/tmp/pytest-of-pyh/pytest-226/test_query_cannot_hide_real_br1')
+command = 'cat tests/test_sentinel.py && python -m pytest tests/'
+
+    @pytest.mark.parametrize("command", [
+        "ls node_modules/.bin | grep jest && python -m pytest tests/",
+        "cat tests/test_sentinel.py && python -m pytest tests/",
+    ])
+    def test_query_cannot_hide_real_broad_test_after_edit(monkeypatch, node_project, command):
+        _prepare_query_files(node_project)
+        tests = node_project / "tests"
+        tests.mkdir()
+        (tests / "test_sentinel.py").write_text(
+            "from pathlib import Path\n"
+            "Path('broad-tests-ran.txt').write_text('ran')\n"
+            "def test_ok(): assert True\n"
+        )
+        result, state, trace, requests, *_ = _run(
+            monkeypatch, node_project,
+            [READ, EDIT, [_tool("diff_status")], [_tool("bash", command=command)], TEST],
+            limit=12, allowed_commands=(command,),
+        )
+        rejected = next(e for e in trace if e.get("event") == "tool_call" and e.get("input", {}).get("command") == command)
+>       assert rejected["dispatch_failed"] is True
+E       assert False is True
+
+tests/runtime/test_test_query_admission.py:99: AssertionError
+______________ test_sync_tool_runtime_obeys_same_query_admission _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-226/test_sync_tool_runtime_obeys_s0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x787016f6b690>
+
+    def test_sync_tool_runtime_obeys_same_query_admission(tmp_path, monkeypatch):
+        from nz_coder.foundation import config
+        from nz_coder.loop import AgentLoop
+        from nz_coder.runtime.core.execution_context import scoped_broad_test_guard
+        from nz_coder.runtime.process.workdir import scoped_workdir
+    
+        _prepare_query_files(tmp_path)
+        (tmp_path / "module.js").write_text("const value = 1;\n")
+        monkeypatch.setattr(config, "WORKDIR", tmp_path)
+        agent = AgentLoop(
+            "test", permission_mode="auto", client=object(), trace_enabled=False,
+            permission_asker=lambda name, args: name == "bash" and args.get("command") in {QUERIES[0], "pytest"},
+        )
+        messages = []
+    
+        def invoke(call_id, name, **arguments):
+            agent.tool_runtime.execute_batch_sync(agent, [{
+                "id": call_id, "function": {"name": name, "arguments": arguments},
+            }], messages)
+            return next(m["content"] for m in messages if m.get("tool_call_id") == call_id)
+    
+        try:
+            with scoped_workdir(tmp_path), scoped_broad_test_guard(True):
+                invoke("edit", "edit_file", path="module.js", old_text="const value = 1;", new_text="const value = 2;")
+                assert (tmp_path / "module.js").read_text() == "const value = 2;\n"
+>               assert "jest" in invoke("query", "bash", command=QUERIES[0])
+E               AssertionError: assert 'jest' in 'Error: Broad test runner blocked. A source diff already exists. Use verify_changed_files or run an exact/narrow test command if the task points to a specific failure.'
+E                +  where 'Error: Broad test runner blocked. A source diff already exists. Use verify_changed_files or run an exact/narrow test command if the task points to a specific failure.' = <function test_sync_tool_runtime_obeys_same_query_admission.<locals>.invoke at 0x787011796520>('query', 'bash', command='ls node_modules/.bin | grep -i jest')
+
+tests/runtime/test_test_query_admission.py:147: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_task_policy.py::test_querying_test_runner_names_is_not_test_execution[ls node_modules/.bin | grep -i jest]
+FAILED tests/test_task_policy.py::test_querying_test_runner_names_is_not_test_execution[grep -n '"test"\\|jest' package.json | head -40]
+FAILED tests/test_task_policy.py::test_querying_test_runner_names_is_not_test_execution[ls node_modules/.bin/ | grep -iE 'jest|tsc']
+FAILED tests/test_task_policy.py::test_querying_test_runner_names_is_not_test_execution[find packages/shared -maxdepth 2 -name 'jest*' | head]
+FAILED tests/test_task_policy.py::test_querying_test_runner_names_is_not_test_execution[printf '%s\\n' 'pytest tests/']
+FAILED tests/test_task_policy.py::test_querying_test_runner_names_is_not_test_execution[cat jest.config.js]
+FAILED tests/test_task_policy.py::test_querying_test_runner_names_is_not_test_execution[rg 'pytest; jest' README.md]
+FAILED tests/test_task_policy.py::test_observation_segments_cannot_hide_a_real_broad_test[printf '%s\\n' 'pytest tests/fake_test.py'; pytest]
+FAILED tests/test_task_policy.py::test_observation_segments_cannot_hide_a_real_broad_test[cat tests/test_app.py && pytest tests/]
+FAILED tests/test_task_policy.py::test_real_or_unresolved_execution_keeps_broad_test_protection[pytest tests/test_ok.py && pytest]
+FAILED tests/runtime/test_test_query_admission.py::test_read_only_queries_after_edit_reach_model_and_real_retest[ls node_modules/.bin | grep -i jest]
+FAILED tests/runtime/test_test_query_admission.py::test_read_only_queries_after_edit_reach_model_and_real_retest[ls . | head -40; echo ---; grep -n '"test"\\|jest' package.json | head -40]
+FAILED tests/runtime/test_test_query_admission.py::test_read_only_queries_after_edit_reach_model_and_real_retest[ls packages/components | head; echo '=== bin ==='; ls node_modules/.bin | grep -i -E '^(jest|tsc|eslint)$']
+FAILED tests/runtime/test_test_query_admission.py::test_read_only_queries_after_edit_reach_model_and_real_retest[ls node_modules/.bin/ | grep -iE 'jest|tsc']
+FAILED tests/runtime/test_test_query_admission.py::test_read_only_queries_after_edit_reach_model_and_real_retest[find packages/shared/test -type f | head -40; echo '=== root pkg test ==='; grep -n '"test"\\|jest' package.json | head -20; echo '=== jest configs in shared ==='; ls packages/shared/test 2>/dev/null; find packages/shared -maxdepth 2 -name 'jest*' -o -maxdepth 2 -name '*.config.*' | head]
+FAILED tests/runtime/test_test_query_admission.py::test_query_cannot_hide_real_broad_test_after_edit[cat tests/test_sentinel.py && python -m pytest tests/]
+FAILED tests/runtime/test_test_query_admission.py::test_sync_tool_runtime_obeys_same_query_admission
+17 failed, 20 passed in 8.51s

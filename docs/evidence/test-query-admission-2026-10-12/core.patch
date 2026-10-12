@@ -1,0 +1,88 @@
+diff --git a/nz_coder/runtime/agent/task_policy.py b/nz_coder/runtime/agent/task_policy.py
+index 4f91605b..bbcc9bcd 100644
+--- a/nz_coder/runtime/agent/task_policy.py
++++ b/nz_coder/runtime/agent/task_policy.py
+@@ -411,8 +411,42 @@ _TEST_RUNNER_MARKERS = (
+ )
+ 
+ 
+-def is_exact_test_command(command: str) -> bool:
+-    """True 表示命令运行的是聚焦/精确测试。"""
++def _test_command_candidates(command: str) -> list[str]:
++    """只读片段中的测试器名称是查询内容，不是测试执行。"""
++    command = command or ""
++    # 沿用验证链的引号感知分段；局部导入避免 planner 的策略导入形成环。
++    from nz_coder.intelligence.verification_planner import (
++        classify_verification_command,
++        verification_command_segments,
++    )
++    from nz_coder.tool_platform.command_policy import classify_bash, is_known_read_only_command
++
++    if classify_bash(command)["mutating"]:
++        # 求值/写入语法不能按普通查询放行，保留既有保守判断。
++        return [command]
++    segments = verification_command_segments(command)
++    if not segments:
++        return [command]
++    candidates = []
++    for tokens in segments:
++        executable = Path(tokens[0]).name.lower()
++        head = " ".join(tokens[:2]) if executable == "git" else executable
++        observation = is_known_read_only_command(head) or executable == "printf"
++        if executable == "find":
++            # find 的执行动作不属于查询；不改变安全策略的只读白名单。
++            observation = not any(
++                token in {"-exec", "-execdir", "-ok", "-okdir", "-delete"}
++                for token in tokens[1:]
++            )
++        if not observation:
++            if executable not in _TEST_RUNNER_MARKERS and classify_verification_command(shlex.join(tokens)) is None:
++                # 未识别的消费方可能执行管道输入，不能丢掉上游名称证据。
++                return [command]
++            candidates.append(shlex.join(tokens))
++    return candidates
++
++
++def _is_exact_test_segment(command: str) -> bool:
+     try:
+         tokens = shlex.split(command or "")
+     except ValueError:
+@@ -439,19 +473,27 @@ def is_exact_test_command(command: str) -> bool:
+     return False
+ 
+ 
++def is_exact_test_command(command: str) -> bool:
++    """True 表示每个测试执行片段都是聚焦/精确测试。"""
++    candidates = [
++        candidate for candidate in _test_command_candidates(command)
++        if any(marker in candidate.lower() for marker in _TEST_RUNNER_MARKERS)
++    ]
++    return bool(candidates) and all(_is_exact_test_segment(candidate) for candidate in candidates)
++
++
+ def is_broad_test_command(command: str) -> bool:
+     """判断命令是否是 broad test runner。"""
+-    cmd = " ".join((command or "").strip().lower().split())
+-    if not cmd:
+-        return False
+-
+-    if not any(marker in cmd for marker in _TEST_RUNNER_MARKERS):
+-        return False
+-    if is_exact_test_command(cmd):
+-        return False
+-    if "go test" in cmd and " ./..." not in cmd and " -run " in cmd:
+-        return False
+-    return True
++    for candidate in _test_command_candidates(command):
++        cmd = " ".join(candidate.strip().lower().split())
++        if not any(marker in cmd for marker in _TEST_RUNNER_MARKERS):
++            continue
++        if _is_exact_test_segment(candidate):
++            continue
++        if "go test" in cmd and " ./..." not in cmd and " -run " in cmd:
++            continue
++        return True
++    return False
+ 
+ 
+ _SHELL_BOUNDARIES = {"|", "||", "&&", ";"}

@@ -1,0 +1,23 @@
+[
+  [
+    "bash",
+    {
+      "command": "node --test literal.test.cjs"
+    },
+    true
+  ],
+  [
+    "bash",
+    {
+      "command": "ls node_modules/.bin | grep -i jest"
+    },
+    true
+  ],
+  [
+    "bash",
+    {
+      "command": "node --test literal.test.cjs"
+    },
+    true
+  ]
+]

@@ -1,0 +1,21 @@
+[
+  "python",
+  "-m",
+  "pytest",
+  "-q",
+  "-rs",
+  "tests/runtime",
+  "tests/test_task_policy.py",
+  "tests/test_execution_context.py",
+  "tests/test_command_policy.py",
+  "tests/test_verification.py",
+  "tests/test_verification_planner.py",
+  "tests/test_edit_recovery.py",
+  "tests/test_loop_fake.py",
+  "tests/test_skill_governance.py",
+  "tests/test_workflow_runtime.py",
+  "tests/test_workflow_capsules.py",
+  "tests/security",
+  "tests/architecture/test_security_boundaries.py",
+  "tests/architecture/test_security_closure_contracts.py"
+]

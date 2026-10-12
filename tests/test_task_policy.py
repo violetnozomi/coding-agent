@@ -1,6 +1,8 @@
 """Tests for language/task policy helpers."""
 from __future__ import annotations
 
+import pytest
+
 
 def test_is_test_file_handles_common_language_conventions():
     from nz_coder.runtime.agent.task_policy import is_test_file
@@ -31,6 +33,57 @@ def test_exact_test_detection_requires_a_test_runner():
     assert is_exact_test_command("go test ./pkg -run TestParser")
     assert not is_exact_test_command("touch src/generated.py")
     assert not is_exact_test_command("cat src/app.py")
+
+
+@pytest.mark.parametrize("command", [
+    "ls node_modules/.bin | grep -i jest",
+    "grep -n '\"test\"\\|jest' package.json | head -40",
+    "ls node_modules/.bin/ | grep -iE 'jest|tsc'",
+    "find packages/shared -maxdepth 2 -name 'jest*' | head",
+    "printf '%s\\n' 'pytest tests/'",
+    "cat jest.config.js",
+    "rg 'pytest; jest' README.md",
+])
+def test_querying_test_runner_names_is_not_test_execution(command):
+    """搜索参数和文件名不能让只读查询消耗验证准入或验证次数。"""
+    from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+
+    assert is_broad_test_command(command) is False
+    assert is_exact_test_command(command) is False
+
+
+@pytest.mark.parametrize("command", ["", None])
+def test_empty_command_is_not_test_execution(command):
+    from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+
+    assert is_broad_test_command(command) is False
+    assert is_exact_test_command(command) is False
+
+
+@pytest.mark.parametrize("command", [
+    "ls node_modules/.bin | grep jest && pytest",
+    "printf '%s\\n' 'pytest tests/fake_test.py'; pytest",
+    "cat tests/test_app.py && pytest tests/",
+    "env MODE=test pytest tests/",
+    "bash -c 'ls node_modules/.bin | grep jest; pytest'",
+])
+def test_observation_segments_cannot_hide_a_real_broad_test(command):
+    from nz_coder.runtime.agent.task_policy import is_broad_test_command
+
+    assert is_broad_test_command(command) is True
+
+
+@pytest.mark.parametrize("command", [
+    "npx jest", "command pytest", "uv run pytest tests/",
+    "find . -exec pytest {} +", "printf '%s\\n' \"$(pytest)\"",
+    "echo pytest | sh", "printf '%s\\n' pytest | xargs",
+    "custom-runner jest", "pytest tests/test_ok.py && pytest",
+])
+def test_real_or_unresolved_execution_keeps_broad_test_protection(command):
+    from nz_coder.runtime.agent.task_policy import is_broad_test_command, is_exact_test_command
+
+    assert is_broad_test_command(command) is True
+    assert is_exact_test_command(command) is False
 
 
 def test_declared_test_scopes_extract_directory_suite_from_user_request():

@@ -1,0 +1,10 @@
+workspace_mode: non_git
+diff_source: change_tracker
+has_non_empty_diff: true
+diff_chars: 237
+changed_files_count: 1
+
+Changed files:
+  index.js
+
+Recommendation: Git is not required; use the tracked workspace diff and verification evidence.

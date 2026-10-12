@@ -1,0 +1,243 @@
+........................................................................ [  4%]
+........................................................................ [  8%]
+........................................................F............... [ 13%]
+........................................................................ [ 17%]
+........................................................................ [ 22%]
+........................................................................ [ 26%]
+........................................................................ [ 30%]
+........................................................................ [ 35%]
+........................................................................ [ 39%]
+........................................................................ [ 44%]
+........................................................................ [ 48%]
+........................................................................ [ 52%]
+........................................................................ [ 57%]
+........................................................................ [ 61%]
+........................................................................ [ 66%]
+........................................................................ [ 70%]
+........................................................................ [ 74%]
+........................................................................ [ 79%]
+........................................................................ [ 83%]
+........s....s.........................................ss......s........ [ 88%]
+...........................F..................................s.....ss.. [ 92%]
+........ss.s............................................................ [ 96%]
+..............................F.........F.F.........                     [100%]
+=================================== FAILURES ===================================
+_____ test_frozen_verifier_authority_is_complete_but_not_clause_inventory ______
+
+    def test_frozen_verifier_authority_is_complete_but_not_clause_inventory():
+        from nz_coder.runtime.verification.sidecar_verifier import VERIFIER_SYSTEM_PROMPT
+        reviews = json.loads((HISTORY / "semantic-review.json").read_text())
+        spec = (FIXTURE / "workspace/CONFIG_SPEC.md").read_text()
+        for review in reviews:
+            messages = review["visible_input"]
+>           assert messages[0] == {"role": "system", "content": VERIFIER_SYSTEM_PROMPT}
+E           assert {'content': '...le': 'system'} == {'content': '...le': 'system'}
+E             
+E             Omitting 1 identical items, use -vv to show
+E             Differing items:
+E             {'content': 'You are a verification sidecar for an autonomous coding agent. A DIFFERENT agent (the "main agent") has j...ut format\n\nOutput ONLY the `emit_sidecar_verdict` tool call — no narration, no other tool calls, no free-form text.'} != {'content': 'You are a verification sidecar for an autonomous coding agent. A DIFFERENT agent (the "main agent") has j...ut format\n\nOutput ONLY the `emit_sidecar_verdict` tool call — no narration, no other tool calls, no free-form text.'}
+E             Use -v to get more diff
+
+tests/runtime/test_c_closure_audit.py:166: AssertionError
+___ test_headless_target_workspace_does_not_inherit_startup_workspace_config ___
+
+tmp_path = PosixPath('/tmp/pytest-of-pyh/pytest-227/test_headless_target_workspace0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x755728c86200>
+
+    def test_headless_target_workspace_does_not_inherit_startup_workspace_config(
+        tmp_path, monkeypatch,
+    ):
+        from nz_coder.foundation import config
+        from nz_coder.foundation.workspace_trust import (
+            WorkspaceTrustStore,
+            current_config_snapshot,
+            load_config_snapshot,
+        )
+        from nz_coder.interface.headless import run_main
+        from nz_coder.providers.configuration import provider_connection
+        from nz_coder.runtime.core.result import RunResult, RunStatus, TokenUsage
+    
+        startup = tmp_path / "startup"
+        target = tmp_path / "target"
+        startup.mkdir()
+        target.mkdir()
+        target.joinpath(".env").write_text(
+            "API_BASE_URL=https://target.invalid/v1\n", encoding="utf-8",
+        )
+        trust_path = tmp_path / "trust.json"
+        monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(trust_path))
+        monkeypatch.delenv("API_BASE_URL", raising=False)
+        initial = load_config_snapshot(target)
+        WorkspaceTrustStore(trust_path).trust(
+            target, "workspace-config", initial.workspace_fingerprint,
+        )
+        monkeypatch.setattr(config, "API_BASE_URL", "https://startup.invalid/v1")
+        seen = []
+    
+        class Client:
+            async def run(self, request, **_kwargs):
+                snapshot = current_config_snapshot(request.workspace)
+                seen.append(provider_connection(
+                    "openai-compatible", config_snapshot=snapshot,
+                ).base_url)
+                return RunResult(
+                    status=RunStatus.COMPLETED,
+                    final_text="done",
+                    messages=request.messages,
+                    usage=TokenUsage(),
+                    session_id=request.session_id,
+                    active_agent=request.agent.name,
+                )
+    
+        code = run_main(
+            ["--cwd", str(target), "inspect"],
+            stdin=io.StringIO(), stdout=io.StringIO(), stderr=io.StringIO(),
+            client_factory=Client,
+        )
+>       assert code == 0
+E       assert 3 == 0
+
+tests/security/test_run_scoped_config.py:279: AssertionError
+_________________ test_all_direct_config_reads_are_classified __________________
+
+    def test_all_direct_config_reads_are_classified():
+        sites: set[tuple[str, str, str, str]] = set()
+        for path, tree in _trees():
+            relative = path.relative_to(ROOT).as_posix()
+            visitor = _ConfigSiteVisitor(relative)
+            visitor.visit(tree)
+            sites.update(visitor.sites)
+        allowed = {
+            path: keys for path, (_count, keys) in CONFIG_READS.items()
+        }
+        allowed.update(HOST_CONFIG_KEYS)
+        problems: list[str] = []
+        for path, owner, key, kind in sorted(sites):
+            if key not in allowed.get(path, set()):
+                problems.append(
+                    f'{path}:{owner}: config {kind} {key} is not in the reviewed inventory'
+                )
+        payload = '\n'.join('|'.join(site) for site in sorted(sites)).encode()
+        digest = hashlib.sha256(payload).hexdigest()
+        if digest != CONFIG_SITE_INVENTORY_SHA256:
+            problems.append(
+                f'per-site config inventory changed: {digest}; review path/owner/key/kind'
+            )
+>       assert not problems, '\n'.join(problems)
+E       AssertionError: nz_coder/swebench/cli.py:<module>._run_agent_owned: config attribute API_BASE_URL is not in the reviewed inventory
+E         nz_coder/swebench/cli.py:<module>._run_agent_owned: config attribute MAX_CONTEXT_TOKENS is not in the reviewed inventory
+E         nz_coder/swebench/cli.py:<module>._run_agent_owned: config attribute MAX_OUTPUT_TOKENS is not in the reviewed inventory
+E         nz_coder/swebench/cli.py:<module>._run_agent_owned: config attribute PROVIDER_HARD_TIMEOUT_SECONDS is not in the reviewed inventory
+E         nz_coder/swebench/cli.py:<module>._run_agent_owned: config attribute PROVIDER_MAX_RETRIES is not in the reviewed inventory
+E         per-site config inventory changed: 28696f370a8d0548c96c5682b7c938aa5ea58a150f3b78f97071a221b5f461cd; review path/owner/key/kind
+E       assert not ['nz_coder/swebench/cli.py:<module>._run_agent_owned: config attribute API_BASE_URL is not in the reviewed inventory',...onfig inventory changed: 28696f370a8d0548c96c5682b7c938aa5ea58a150f3b78f97071a221b5f461cd; review path/owner/key/kind']
+
+tests/architecture/test_security_boundaries.py:408: AssertionError
+______________ test_all_direct_subprocess_launches_are_classified ______________
+
+    def test_all_direct_subprocess_launches_are_classified():
+        names = {'subprocess.Popen', 'subprocess.run', 'asyncio.create_subprocess_exec', 'multiprocessing.Process'}
+        actual: Counter[tuple[str, str]] = Counter()
+        lines: dict[tuple[str, str], list[int]] = defaultdict(list)
+        for path, tree in _trees():
+            relative = path.relative_to(ROOT).as_posix()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call) and _dotted(node.func) in names:
+                    key = (relative, _dotted(node.func))
+                    actual[key] += 1
+                    lines[key].append(node.lineno)
+        expected = {key: value.count for key, value in PROCESS_SITES.items()}
+        problems = [f'{path}:{lines[(path, call)]}: {call} is unclassified or changed; declare identity/trust/env/cwd/owner' for path, call in sorted(set(actual) | set(expected)) if actual.get((path, call), 0) != expected.get((path, call), 0)]
+>       assert not problems, '\n'.join(problems)
+E       AssertionError: nz_coder/swebench/orchestrator.py:[1395, 1359]: subprocess.run is unclassified or changed; declare identity/trust/env/cwd/owner
+E       assert not ['nz_coder/swebench/orchestrator.py:[1395, 1359]: subprocess.run is unclassified or changed; declare identity/trust/env/cwd/owner']
+
+tests/architecture/test_security_boundaries.py:537: AssertionError
+______________ test_raw_exception_projection_sites_are_classified ______________
+
+    def test_raw_exception_projection_sites_are_classified():
+        actual: Counter[str] = Counter()
+        for path, tree in _trees():
+            relative = path.relative_to(ROOT).as_posix()
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or _dotted(node.func) not in {'str', 'repr'} or not node.args:
+                    continue
+                first = node.args[0]
+                if isinstance(first, ast.Name) and first.id in {'exc', 'error', 'e'}:
+                    actual[relative] += 1
+        expected = {path: count for path, (_kind, count) in PUBLIC_ERROR_MODULE_COUNTS.items()}
+>       assert actual == expected, f'raw exception projection inventory changed: expected {expected}, found {dict(actual)}; use PublicError or classify the reviewed site'
+E       AssertionError: raw exception projection inventory changed: expected {'nz_coder/evaluation/eval_runner.py': 2, 'nz_coder/evaluation/provider_smoke.py': 1, 'nz_coder/foundation/error_classification.py': 1, 'nz_coder/foundation/private_paths.py': 1, 'nz_coder/foundation/workspace_paths.py': 1, 'nz_coder/foundation/workspace_trust.py': 1, 'nz_coder/intelligence/semantic.py': 1, 'nz_coder/intelligence/verification.py': 1, 'nz_coder/interface/commands/handlers/core.py': 8, 'nz_coder/interface/commands/handlers/workflow.py': 3, 'nz_coder/interface/custom_commands.py': 1, 'nz_coder/interface/setup/doctor.py': 2, 'nz_coder/project_creation/verifier.py': 1, 'nz_coder/runtime/agent/agent_manager.py': 1, 'nz_coder/runtime/agent/agent_resilience.py': 1, 'nz_coder/runtime/execution/loop.py': 20, 'nz_coder/runtime/execution/provider_stream.py': 1, 'nz_coder/runtime/execution/run_lifecycle.py': 2, 'nz_coder/runtime/execution/runner.py': 2, 'nz_coder/runtime/execution/services.py': 1, 'nz_coder/runtime/model_gateway/errors.py': 3, 'nz_coder/runtime/model_gateway/gateway.py': 12, 'nz_coder/runtime/model_gateway/models.py': 4, 'nz_coder/runtime/tool_runtime/policy.py': 1, 'nz_coder/runtime/verification/hooks.py': 4, 'nz_coder/runtime/verification/recovery.py': 3, 'nz_coder/runtime/verification/stall_sidecar.py': 1, 'nz_coder/runtime/workflows/workflow_generation.py': 1, 'nz_coder/state/context.py': 1, 'nz_coder/state/trace.py': 2, 'nz_coder/state/workspace.py': 1, 'nz_coder/swebench/orchestrator.py': 5, 'nz_coder/swebench/submission.py': 1, 'nz_coder/tool_platform/results.py': 1, 'nz_coder/tools/bash.py': 1, 'nz_coder/tools/question.py': 1, 'nz_coder/tools/read_support.py': 1, 'nz_coder/tools/webfetch.py': 1}, found {'nz_coder/evaluation/deepseek_counting.py': 1, 'nz_coder/evaluation/eval_runner.py': 2, 'nz_coder/evaluation/model_relay.py': 1, 'nz_coder/evaluation/provider_smoke.py': 1, 'nz_coder/foundation/error_classification.py': 1, 'nz_coder/foundation/private_paths.py': 1, 'nz_coder/foundation/workspace_paths.py': 1, 'nz_coder/foundation/workspace_trust.py': 1, 'nz_coder/intelligence/semantic.py': 1, 'nz_coder/intelligence/verification.py': 1, 'nz_coder/interface/commands/handlers/core.py': 8, 'nz_coder/interface/commands/handlers/workflow.py': 3, 'nz_coder/interface/custom_commands.py': 1, 'nz_coder/interface/setup/doctor.py': 2, 'nz_coder/project_creation/verifier.py': 1, 'nz_coder/runtime/agent/agent_manager.py': 1, 'nz_coder/runtime/agent/agent_resilience.py': 1, 'nz_coder/runtime/execution/loop.py': 20, 'nz_coder/runtime/execution/provider_stream.py': 1, 'nz_coder/runtime/execution/run_lifecycle.py': 2, 'nz_coder/runtime/execution/runner.py': 2, 'nz_coder/runtime/execution/services.py': 1, 'nz_coder/runtime/model_gateway/errors.py': 3, 'nz_coder/runtime/model_gateway/gateway.py': 12, 'nz_coder/runtime/model_gateway/models.py': 4, 'nz_coder/runtime/tool_runtime/policy.py': 1, 'nz_coder/runtime/verification/hooks.py': 4, 'nz_coder/runtime/verification/recovery.py': 3, 'nz_coder/runtime/verification/stall_sidecar.py': 1, 'nz_coder/runtime/workflows/workflow_generation.py': 1, 'nz_coder/state/context.py': 1, 'nz_coder/state/trace.py': 2, 'nz_coder/state/workspace.py': 1, 'nz_coder/swebench/orchestrator.py': 8, 'nz_coder/swebench/submission.py': 1, 'nz_coder/tool_platform/results.py': 1, 'nz_coder/tools/bash.py': 1, 'nz_coder/tools/question.py': 1, 'nz_coder/tools/read_support.py': 1, 'nz_coder/tools/webfetch.py': 1}; use PublicError or classify the reviewed site
+E       assert Counter({'nz_...fetch.py': 1}) == {'nz_coder/ev...s.py': 1, ...}
+E         
+E         Omitting 37 identical items, use -vv to show
+E         Differing items:
+E         {'nz_coder/swebench/orchestrator.py': 8} != {'nz_coder/swebench/orchestrator.py': 5}
+E         Left contains 2 more items:
+E         {'nz_coder/evaluation/deepseek_counting.py': 1,
+E          'nz_coder/evaluation/model_relay.py': 1}
+E         Use -v to get more diff
+
+tests/architecture/test_security_boundaries.py:590: AssertionError
+=========================== short test summary info ============================
+SKIPPED [1] tests/security/test_pr2_remaining_regressions.py:140: CREATE_NEW creates target before write on Windows
+SKIPPED [1] tests/security/test_pr2_remaining_regressions.py:250: Windows fdopen follows successful CREATE_NEW
+SKIPPED [1] tests/security/test_project_control_snapshot.py:656: Windows junction semantics
+SKIPPED [1] tests/security/test_project_control_snapshot.py:679: Windows handle semantics
+SKIPPED [1] tests/security/test_protocol_and_lock_limits.py:110: Windows reparse-point contract
+SKIPPED [1] tests/security/test_transaction_recovery.py:189: Windows junction semantics
+SKIPPED [1] tests/security/test_transaction_recovery.py:373: Windows junction semantics
+SKIPPED [1] tests/security/test_transaction_recovery.py:397: Windows junction semantics
+SKIPPED [1] tests/security/test_transaction_track.py:263: Windows native handle semantics
+SKIPPED [1] tests/security/test_transaction_track.py:294: Windows native handle semantics
+SKIPPED [1] tests/security/test_user_runtime_state.py:40: Windows junction semantics
+5 failed, 1620 passed, 11 skipped in 304.48s (0:05:04)
+Exception in thread nz-repo-watch:
+Traceback (most recent call last):
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 313, in _native_watch_loop
+    for changes in watch(
+                   ~~~~~^
+        self.workspace, stop_event=self._watch_stop,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        debounce=max(1, int(debounce * 1000)),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        step=min(100, max(50, int(interval * 1000))), raise_interrupt=False,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ):
+    ^
+  File "/home/pyh/miniconda3/lib/python3.13/site-packages/watchfiles/main.py", line 126, in watch
+    with RustNotify(
+         ~~~~~~~~~~^
+        [str(p) for p in paths], debug, force_polling, poll_delay_ms, recursive, ignore_permission_denied
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ) as watcher:
+    ^
+PermissionError: Permission denied (os error 13) about ["/home/pyh/nzcoder/.nz-coder/sessions/_artifacts/session-20260901_140452-9f59b0a1/runtime"]
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 1044, in _bootstrap_inner
+    self.run()
+    ~~~~~~~~^^
+  File "/home/pyh/miniconda3/lib/python3.13/threading.py", line 995, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 341, in _native_watch_loop
+    self._poll_watch_loop(
+    ~~~~~~~~~~~~~~~~~~~~~^
+        max(0.25, interval), debounce, max_files, known,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 373, in _poll_watch_loop
+    current = self._fingerprints(max_files)
+  File "/home/pyh/nzcoder/nz_coder/intelligence/service.py", line 351, in _fingerprints
+    files, _omitted = self.index._source_files(self.workspace, max_files)
+                      ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/pyh/nzcoder/nz_coder/intelligence/code_index.py", line 506, in _source_files
+    self._check_cancelled()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/pyh/nzcoder/nz_coder/intelligence/code_index.py", line 369, in _check_cancelled
+    raise CancelledError("repository index stopped")
+concurrent.futures._base.CancelledError: repository index stopped

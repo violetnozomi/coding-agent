@@ -49,7 +49,7 @@ TEST = [_tool("bash", command="node --test literal.test.cjs")]
 EDIT = [_tool("edit_file", path="index.js", old_text="x.replace(/-/g, '\\\\-')", new_text="x")]
 
 
-def _run(monkeypatch, workspace, actions, *, task=None, limit=None, permission=True):
+def _run(monkeypatch, workspace, actions, *, task=None, limit=None, permission=True, allowed_commands=()):
     """Replace only model/network boundaries, retain production state and tools."""
     requests, auxiliary, permissions = [], [], []
     home = workspace.parent / (workspace.name + "-isolated-home")
@@ -105,7 +105,10 @@ def _run(monkeypatch, workspace, actions, *, task=None, limit=None, permission=T
     monkeypatch.setattr("nz_coder.runtime.model_gateway.resolve_model_runtime", lambda *_a, **_k: runtime)
 
     def allow(name, arguments):
-        allowed = permission and name == "bash" and arguments.get("command") == "node --test literal.test.cjs"
+        # 额外命令只调整受控用户授权，实际Bash准入和执行保持真实。
+        allowed = permission and name == "bash" and arguments.get("command") in (
+            "node --test literal.test.cjs", *allowed_commands,
+        )
         permissions.append((name, arguments, allowed))
         return allowed
 
