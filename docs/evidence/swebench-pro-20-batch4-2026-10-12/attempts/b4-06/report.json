@@ -1,0 +1,10 @@
+{
+  "number": 6,
+  "instance_id": "instance_gravitational__teleport-007235446f85b1cbaef92664c3b3867517250f21",
+  "attempt": 0,
+  "agent_status": null,
+  "resolved": null,
+  "status": "blocked",
+  "error": "RuntimeError('insufficient_storage_for_image_and_retained_evidence')",
+  "physical_requests": 0
+}

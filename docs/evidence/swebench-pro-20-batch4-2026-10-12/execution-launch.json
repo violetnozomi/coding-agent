@@ -1,0 +1,12 @@
+{
+  "pid": 1437084,
+  "command": [
+    "/home/pyh/miniconda3/bin/python",
+    "-u",
+    "/home/pyh/nzcoder/docs/evidence/swebench-pro-20-batch4-2026-10-12/run-parallel.py",
+    "execute"
+  ],
+  "epoch": 1791778102.1583757,
+  "cost_limit_cny": 50,
+  "previous_balance_carried": false
+}

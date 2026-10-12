@@ -1,0 +1,20 @@
+{"tool": "bash", "input": {"command": "ls -la /workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && grep -n \"go-kev\" go.mod && ls $(go env GOMODCACHE)/github.com/vulsio/ 2>/dev/null"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go env GOMODCACHE GOFLAGS GOPATH 2>&1"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && ls vendor 2>/dev/null; go env GOMODCACHE"}, "allowed": false}
+{"tool": "bash", "input": {"command": "pwd"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go env GOMODCACHE"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && go doc github.com/vulsio/go-kev/models 2>&1 | head -60"}, "allowed": false}
+{"tool": "bash", "input": {"command": "cd /workspace && go build ./models/... 2>&1 | head -30"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go build ./models/... 2>&1 | head -30", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go doc github.com/vulsio/go-kev/models.KEVuln", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls /workspace/detector /workspace/models"}, "allowed": true}
+{"tool": "bash", "input": {"command": "ls -R /workspace/integration 2>/dev/null | head -40"}, "allowed": true}
+{"tool": "bash", "input": {"command": "cd /workspace && go doc github.com/vulsio/go-kev/models 2>&1 | tail -40", "workdir": "/workspace"}, "allowed": false}
+{"tool": "bash", "input": {"command": "go doc github.com/vulsio/go-kev/db.DB 2>&1 | tail -40", "workdir": "/workspace"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./models -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./models -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"command": "go test ./detector -run '^$'", "_nz_runtime_verification_stage": "static"}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "go test -p 1 ./models/ 2>&1 | tail -20", "timeout": 120}, "allowed": true}
+{"tool": "bash", "input": {"_nz_runtime_verification_stage": "static", "command": "GOFLAGS=-mod=mod go build -p 1 -vet=off ./detector/ 2>&1 | tail -20", "timeout": 120}, "allowed": false}
+{"tool": "bash", "input": {"command": "gofmt -l -e detector/kevuln.go models/vulninfos.go models/scanresults.go 2>&1 | head", "workdir": "/workspace"}, "allowed": false}

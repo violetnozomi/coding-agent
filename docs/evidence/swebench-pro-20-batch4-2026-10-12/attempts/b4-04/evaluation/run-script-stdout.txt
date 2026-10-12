@@ -1,0 +1,330 @@
+Running selected tests: test/stores/BreadcrumbsStore-test.ts test/components/views/rooms/wysiwyg_composer/utils/autocomplete-test.ts test/components/views/elements/ReplyChain-test.ts test/Reply-test.ts test/utils/notifications-test.ts test/components/views/elements/PollCreateDialog-test.ts test/utils/numbers-test.ts test/components/structures/RoomSearchView-test.ts test/voice-broadcast/utils/shouldDisplayAsVoiceBroadcastRecordingTile-test.ts test/components/views/messages/DecryptionFailureBody-test.ts test/components/views/beacon/RoomCallBanner-test.ts test/components/views/elements/QRCode-test.ts test/utils/export-test.ts test/components/views/rooms/wysiwyg_composer/SendWysiwygComposer-test.ts test/TextForEvent-test.ts test/components/views/settings/tabs/user/VoiceUserSettingsTab-test.ts test/components/structures/ThreadView-test.ts test/components/structures/auth/Login-test.ts
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+(node:3290) [DEP0044] DeprecationWarning: The `util.isArray` API is deprecated. Please use `Array.isArray()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+PASS test/components/structures/RoomSearchView-test.tsx (8.277 s)
+  <RoomSearchView/>
+    ✓ should show a spinner before the promise resolves (16 ms)
+    ✓ should render results when the promise resolves (99 ms)
+    ✓ should highlight words correctly (37 ms)
+    ✓ should show spinner above results when backpaginating (32 ms)
+    ✓ should handle resolutions after unmounting sanely (5 ms)
+    ✓ should handle rejections after unmounting sanely (1 ms)
+    ✓ should show modal if error is encountered (20 ms)
+    ✓ should combine search results when the query is present in multiple sucessive messages (25 ms)
+    ✓ should pass appropriate permalink creator for all rooms search (21 ms)
+
+PASS test/TextForEvent-test.ts
+  TextForEvent
+    getSenderName()
+      ✓ Prefers sender.name
+      ✓ Handles missing sender
+      ✓ Handles missing sender and get sender (1 ms)
+    TextForPinnedEvent
+      ✓ mentions message when a single message was pinned, with no previously pinned messages (2 ms)
+      ✓ mentions message when a single message was pinned, with multiple previously pinned messages (1 ms)
+      ✓ mentions message when a single message was unpinned, with a single message previously pinned (1 ms)
+      ✓ mentions message when a single message was unpinned, with multiple previously pinned messages (1 ms)
+      ✓ shows generic text when multiple messages were pinned (1 ms)
+      ✓ shows generic text when multiple messages were unpinned (1 ms)
+      ✓ shows generic text when one message was pinned, and another unpinned
+    textForPowerEvent()
+      ✓ returns falsy when no users have changed power level
+      ✓ returns false when users power levels have been changed by default settings
+      ✓ returns correct message for a single user with changed power level (3 ms)
+      ✓ returns correct message for a single user with power level changed to the default
+      ✓ returns correct message for a single user with power level changed to a custom level (1 ms)
+      ✓ returns correct message for a multiple power level changes
+    textForCanonicalAliasEvent()
+      ✓ returns correct message when room alias didn't change
+      ✓ returns correct message when room alias changed (1 ms)
+      ✓ returns correct message when room alias was added
+      ✓ returns correct message when room alias was removed
+      ✓ returns correct message when added an alt alias
+      ✓ returns correct message when added multiple alt aliases
+      ✓ returns correct message when removed an alt alias
+      ✓ returns correct message when added and removed an alt aliases
+      ✓ returns correct message when changed alias and added alt alias
+    textForPollStartEvent()
+      ✓ returns correct message for redacted poll start
+      ✓ returns correct message for normal poll start (1 ms)
+    textForMessageEvent()
+      ✓ returns correct message for redacted message
+      ✓ returns correct message for normal message
+    textForCallEvent()
+      eventType=org.matrix.msc3401.call
+        ✓ returns correct message for call event when supported (1 ms)
+        ✓ returns correct message for call event when not supported (1 ms)
+    textForMemberEvent()
+      ✓ should handle both displayname and avatar changing in one event (1 ms)
+
+(node:3290) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 accountData listeners added to [EventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+PASS test/components/views/rooms/wysiwyg_composer/SendWysiwygComposer-test.tsx
+  SendWysiwygComposer
+    ✓ Should render WysiwygComposer when isRichTextEnabled is at true (556 ms)
+    ✓ Should render PlainTextComposer when isRichTextEnabled is at false (14 ms)
+    Should focus when receiving an Action.FocusSendMessageComposer action
+      ✓ Should focus when receiving an Action.FocusSendMessageComposer action (216 ms)
+      ✓ Should focus and clear when receiving an Action.ClearAndFocusSendMessageComposer (26 ms)
+      ✓ Should focus when receiving a reply_to_event action (16 ms)
+      ✓ Should not focus when disabled (10 ms)
+      ✓ Should focus when receiving an Action.FocusSendMessageComposer action (10 ms)
+      ✓ Should focus and clear when receiving an Action.ClearAndFocusSendMessageComposer (13 ms)
+      ✓ Should focus when receiving a reply_to_event action (10 ms)
+      ✓ Should not focus when disabled (9 ms)
+    Placeholder when { isRichTextEnabled: true }
+      ✓ Should not has placeholder (14 ms)
+      ✓ Should has placeholder (14 ms)
+      ✓ Should display or not placeholder when editor content change (26 ms)
+    Placeholder when { isRichTextEnabled: false }
+      ✓ Should not has placeholder (9 ms)
+      ✓ Should has placeholder (9 ms)
+      ✓ Should display or not placeholder when editor content change (19 ms)
+    Emoji when { isRichTextEnabled: true }
+      ✓ Should add an emoji in an empty composer (20 ms)
+      ✓ Should add an emoji in the middle of a word (27 ms)
+      ✓ Should add an emoji when a word is selected (27 ms)
+    Emoji when { isRichTextEnabled: false }
+      ✓ Should add an emoji in an empty composer (14 ms)
+      ✓ Should add an emoji in the middle of a word (20 ms)
+      ✓ Should add an emoji when a word is selected (21 ms)
+
+PASS test/components/views/elements/PollCreateDialog-test.tsx
+  PollCreateDialog
+    ✓ renders a blank poll (26 ms)
+    ✓ autofocuses the poll topic on mount (13 ms)
+    ✓ autofocuses the new poll option field after clicking add option button (28 ms)
+    ✓ renders a question and some options (35 ms)
+    ✓ renders info from a previous event (14 ms)
+    ✓ doesn't allow submitting until there are options (13 ms)
+    ✓ does allow submitting when there are options and a question (16 ms)
+    ✓ shows the open poll description at first (11 ms)
+    ✓ shows the closed poll description if we choose it (14 ms)
+    ✓ shows the open poll description if we choose it (13 ms)
+    ✓ shows the closed poll description when editing a closed poll (14 ms)
+    ✓ displays a spinner after submitting (17 ms)
+    ✓ sends a poll create event when submitted (16 ms)
+    ✓ sends a poll edit event when editing (17 ms)
+    ✓ retains poll disclosure type when editing (14 ms)
+
+(node:3290) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 sync listeners added to [EventEmitter]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+PASS test/utils/export-test.tsx
+  export
+    ✓ checks if the export format is valid (3 ms)
+    ✓ checks if the icons' html corresponds to export regex (7 ms)
+    ✓ should export images if attachments are enabled (3 ms)
+    ✓ numberOfMessages exceeds max (4 ms)
+    ✓ maxSize exceeds 8GB (4 ms)
+    ✓ maxSize is less than 1mb (1 ms)
+    ✓ tests the file extension splitter (2 ms)
+    ✓ checks if the reply regex executes correctly (1 ms)
+    ✓ checks if the render to string doesn't throw any error for different types of events (121 ms)
+
+PASS test/components/views/rooms/wysiwyg_composer/utils/autocomplete-test.ts
+  buildQuery
+    ✓ returns an empty string for a falsy argument
+    ✓ returns an empty string when keyChar is falsy
+    ✓ combines the keyChar and text of the suggestion in the query
+  getRoomFromCompletion
+    ✓ calls getRoom with completionId if present in the completion (1 ms)
+    ✓ calls getRoom with completion if present and correct format
+    ✓ calls getRooms if no completionId is present and completion starts with # (1 ms)
+  getMentionDisplayText
+    ✓ returns an empty string if we are not handling a user, room or at-room type
+    ✓ returns the completion if we are handling a user
+    ✓ returns the room name when the room has a valid completionId
+    ✓ falls back to the completion for a room if completion starts with #
+    ✓ returns the completion if we are handling an at-room completion (1 ms)
+  getMentionAttributes
+    ✓ returns an empty object for completion types other than room, user or at-room
+    user mentions
+      ✓ returns an empty object when no member can be found
+      ✓ returns expected attributes when avatar url is not default
+      ✓ returns expected style attributes when avatar url matches default
+    room mentions
+      ✓ returns expected attributes when avatar url for room is truthy (1 ms)
+      ✓ returns expected style attributes when avatar url for room is falsy
+    at-room mentions
+      ✓ returns expected attributes
+
+PASS test/components/structures/auth/Login-test.tsx
+  Login
+    ✓ should show form with change server link (19 ms)
+    ✓ should show form without change server link when custom URLs disabled (9 ms)
+    ✓ should show SSO button if that flow is available (6 ms)
+    ✓ should show both SSO button and username+password if both are available (9 ms)
+    ✓ should show multiple SSO buttons if multiple identity_providers are available (9 ms)
+    ✓ should show single SSO button if identity_providers is null (6 ms)
+    ✓ should handle serverConfig updates correctly (10 ms)
+    ✓ should show single Continue button if OIDC MSC3824 compatibility is given by server (6 ms)
+    ✓ should show branded SSO buttons (9 ms)
+
+PASS test/utils/notifications-test.ts
+  notifications
+    createLocalNotification
+      ✓ creates account data event (1 ms)
+      ✓ does not do anything for guests
+      ✓ unsilenced for existing sessions when notificationsEnabled setting is truthy
+      ✓ unsilenced for existing sessions when notificationBodyEnabled setting is truthy
+      ✓ unsilenced for existing sessions when audioNotificationsEnabled setting is truthy (1 ms)
+      ✓ does not override an existing account event data
+    localNotificationsAreSilenced
+      ✓ defaults to false when no setting exists
+      ✓ checks the persisted value
+    clearRoomNotification
+      ✓ sends a request even if everything has been read (2 ms)
+      ✓ marks the room as read even if the receipt failed (1 ms)
+      when sendReadReceipts setting is disabled
+        ✓ should send a private read receipt (1 ms)
+    clearAllNotifications
+      ✓ does not send any requests if everything has been read (3 ms)
+      ✓ sends unthreaded receipt requests (1 ms)
+      ✓ sends private read receipts (1 ms)
+
+PASS test/stores/BreadcrumbsStore-test.ts
+  BreadcrumbsStore
+    If the feature_breadcrumbs_v2 feature is not enabled
+      ✓ does not meet room requirements if there are not enough rooms (1 ms)
+      ✓ meets room requirements if there are enough rooms (1 ms)
+      And the feature_dynamic_room_predecessors is enabled
+        ✓ passes through the dynamic room precessors flag (1 ms)
+      And the feature_dynamic_room_predecessors is not enabled
+        ✓ passes through the dynamic room precessors flag (4 ms)
+    If the feature_breadcrumbs_v2 feature is enabled
+      ✓ always meets room requirements (1 ms)
+    If the feature_dynamic_room_predecessors is not enabled
+      ✓ Appends a room when you join (1 ms)
+      ✓ Replaces the old room when a newer one joins (2 ms)
+      ✓ Passes through the dynamic predecessor setting (2 ms)
+    If the feature_dynamic_room_predecessors is enabled
+      ✓ Passes through the dynamic predecessor setting (1 ms)
+
+PASS test/components/structures/ThreadView-test.tsx
+  ThreadView
+    ✓ sends a message with the correct fallback (117 ms)
+    ✓ sends a thread message with the correct fallback (77 ms)
+    ✓ sets the correct thread in the room view store (72 ms)
+    ✓ clears highlight message in the room view store (29 ms)
+
+PASS test/Reply-test.ts
+  Reply
+    getParentEventId
+      ✓ returns undefined if given a falsey value (1 ms)
+      ✓ returns undefined if given a redacted event
+      ✓ returns undefined if the given event is not a reply
+      ✓ returns id of the event being replied to
+    stripPlainReply
+      ✓ Removes leading quotes until the first blank line (1 ms)
+    stripHTMLReply
+      ✓ Removes <mx-reply> from the input
+    getNestedReplyText
+      ✓ Returns valid reply fallback text for m.text msgtypes (1 ms)
+      ✓ should create the expected fallback text for m.pin m.room.message/m.location
+      ✓ should create the expected fallback text for m.self m.room.message/m.location
+      ✓ should create the expected fallback text for m.pin org.matrix.msc3672.beacon_info/undefined (1 ms)
+      ✓ should create the expected fallback text for m.self org.matrix.msc3672.beacon_info/undefined
+      ✓ should create the expected fallback text for poll end events
+      ✓ should create the expected fallback text for poll start events
+    shouldDisplayReply
+      ✓ Returns false for redacted events (1 ms)
+      ✓ Returns false for non-reply events
+
+PASS test/utils/numbers-test.ts
+  numbers
+    defaultNumber
+      ✓ should use the default when the input is not a number
+      ✓ should use the number when it is a number
+    clamp
+      ✓ should clamp high numbers
+      ✓ should clamp low numbers
+      ✓ should not clamp numbers in range
+      ✓ should clamp floats (1 ms)
+    sum
+      ✓ should sum
+    percentageWithin
+      ✓ should work within 0-100
+      ✓ should work within 0-100 when pct > 1
+      ✓ should work within 0-100 when pct < 0
+      ✓ should work with ranges other than 0-100
+      ✓ should work with ranges other than 0-100 when pct > 1
+      ✓ should work with ranges other than 0-100 when pct < 0
+      ✓ should work with floats
+    percentageOf
+      ✓ should work within 0-100
+      ✓ should work within 0-100 when val > 100 (1 ms)
+      ✓ should work within 0-100 when val < 0
+      ✓ should work with ranges other than 0-100
+      ✓ should work with ranges other than 0-100 when val > 100
+      ✓ should work with ranges other than 0-100 when val < 0
+      ✓ should work with floats
+      ✓ should return 0 for values that cause a division by zero
+
+PASS test/components/views/beacon/RoomCallBanner-test.tsx
+  <RoomCallBanner />
+    ✓ renders nothing when there is no call (5 ms)
+    call started
+      ✓ renders if there is a call (9 ms)
+      ✓ shows Join button if the user has not joined (3 ms)
+      ✓ doesn't show banner if the call is connected (2 ms)
+      ✓ doesn't show banner if the call is shown (2 ms)
+
+PASS test/components/views/settings/tabs/user/VoiceUserSettingsTab-test.tsx
+  <VoiceUserSettingsTab />
+    ✓ renders audio processing settings (3 ms)
+    ✓ sets and displays audio processing settings (23 ms)
+    devices
+      ✓ renders dropdowns for input devices (8 ms)
+      ✓ updates device (5 ms)
+      ✓ does not render dropdown when no devices exist for type (4 ms)
+
+PASS test/voice-broadcast/utils/shouldDisplayAsVoiceBroadcastRecordingTile-test.ts
+  shouldDisplayAsVoiceBroadcastRecordingTile
+    ✓ should return false, when all params are null
+    ✓ should return false, when all params are undefined
+    when called with user »@user1:example.com«, sender »@user1:example.com«, device »ABC123«, sender device »ABC123« state »started«
+      ✓ should return true (1 ms)
+    when called with user »@user1:example.com«, sender »@user1:example.com«, device »ABC123«, sender device »ABC123« state »paused«
+      ✓ should return true
+    when called with user »@user1:example.com«, sender »@user1:example.com«, device »ABC123«, sender device »ABC123« state »resumed«
+      ✓ should return true (13 ms)
+    when called with user »@user1:example.com«, sender »@user1:example.com«, device »ABC123«, sender device »ABC123« state »stopped«
+      ✓ should return false
+    when called with user »@user2:example.com«, sender »@user1:example.com«, device »ABC123«, sender device »ABC123« state »started«
+      ✓ should return false
+    when called with user »null«, sender »@user1:example.com«, device »ABC123«, sender device »ABC123« state »started«
+      ✓ should return false
+    when called with user »@user1:example.com«, sender »@user1:example.com«, device »ABC123«, sender device »JKL123« state »started«
+      ✓ should return false
+    when called with user »@user1:example.com«, sender »@user1:example.com«, device »ABC123«, sender device »JKL123« state »paused«
+      ✓ should return false
+    when called with user »@user1:example.com«, sender »@user1:example.com«, device »ABC123«, sender device »JKL123« state »resumed«
+      ✓ should return false
+
+PASS test/components/views/elements/ReplyChain-test.tsx
+  ReplyChain
+    getParentEventId
+      ✓ retrieves relation reply from unedited event (1 ms)
+      ✓ retrieves relation reply from original event when edited
+
+PASS test/components/views/messages/DecryptionFailureBody-test.tsx
+  DecryptionFailureBody
+    ✓ Should display "Unable to decrypt message" (2 ms)
+    ✓ Should display "The sender has blocked you from receiving this message" (1 ms)
+
+PASS test/components/views/elements/QRCode-test.tsx
+  <QRCode />
+    ✓ renders a QR with defaults (88 ms)
+    ✓ renders a QR with high error correction level (38 ms)
+
+Test Suites: 18 passed, 18 total
+Tests:       205 passed, 205 total
+Snapshots:   15 passed, 15 total
+Time:        15.669 s
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+npm notice
+npm notice New major version of npm available! 10.9.2 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

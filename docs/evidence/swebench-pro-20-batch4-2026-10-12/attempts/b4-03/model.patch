@@ -1,0 +1,91 @@
+diff --git a/detector/kevuln.go b/detector/kevuln.go
+index 41afdfe..d63b0a5 100644
+--- a/detector/kevuln.go
++++ b/detector/kevuln.go
+@@ -91,6 +91,7 @@ func FillWithKEVuln(r *models.ScanResult, cnf config.KEVulnConf, logOpts logging
+ 			v, ok := r.ScannedCves[res.request.cveID]
+ 			if ok {
+ 				v.AlertDict.CISA = alerts
++				v.KEVs = toKEVs(kevulns)
+ 				nKEV++
+ 			}
+ 			r.ScannedCves[res.request.cveID] = v
+@@ -118,6 +119,7 @@ func FillWithKEVuln(r *models.ScanResult, cnf config.KEVulnConf, logOpts logging
+ 			}
+ 
+ 			vuln.AlertDict.CISA = alerts
++			vuln.KEVs = toKEVs(kevulns)
+ 			nKEV++
+ 			r.ScannedCves[cveID] = vuln
+ 		}
+@@ -132,6 +134,17 @@ type kevulnResponse struct {
+ 	json    string
+ }
+ 
++func toKEVs(kevulns []kevulnmodels.KEVuln) []models.KEV {
++	kevs := make([]models.KEV, 0, len(kevulns))
++	for _, k := range kevulns {
++		kevs = append(kevs, models.KEV{
++			Type:              models.CISAKEVType,
++			VulnerabilityName: k.VulnerabilityName,
++		})
++	}
++	return kevs
++}
++
+ func getKEVulnsViaHTTP(cveIDs []string, urlPrefix string) (
+ 	responses []kevulnResponse, err error) {
+ 	nReq := len(cveIDs)
+diff --git a/models/scanresults.go b/models/scanresults.go
+index 508b992..3ce1579 100644
+--- a/models/scanresults.go
++++ b/models/scanresults.go
+@@ -425,6 +425,12 @@ func (r *ScanResult) SortForJSONOutput() {
+ 		sort.Slice(v.Mitigations, func(i, j int) bool {
+ 			return v.Mitigations[i].URL < v.Mitigations[j].URL
+ 		})
++		sort.Slice(v.KEVs, func(i, j int) bool {
++			if v.KEVs[i].Type != v.KEVs[j].Type {
++				return v.KEVs[i].Type < v.KEVs[j].Type
++			}
++			return v.KEVs[i].VulnerabilityName < v.KEVs[j].VulnerabilityName
++		})
+ 
+ 		v.CveContents.Sort()
+ 
+diff --git a/models/vulninfos.go b/models/vulninfos.go
+index 3e85e81..6a81d68 100644
+--- a/models/vulninfos.go
++++ b/models/vulninfos.go
+@@ -268,6 +268,7 @@ type VulnInfo struct {
+ 	Mitigations          []Mitigation         `json:"mitigations,omitempty"`
+ 	Ctis                 []string             `json:"ctis,omitempty"`
+ 	AlertDict            AlertDict            `json:"alertDict,omitempty"`
++	KEVs                 []KEV                `json:"kevs,omitempty"`
+ 	CpeURIs              []string             `json:"cpeURIs,omitempty"` // CpeURIs related to this CVE defined in config.toml
+ 	GitHubSecurityAlerts GitHubSecurityAlerts `json:"gitHubSecurityAlerts,omitempty"`
+ 	WpPackageFixStats    WpPackageFixStats    `json:"wpPackageFixStats,omitempty"`
+@@ -910,6 +911,23 @@ type Mitigation struct {
+ 	URL            string         `json:"url,omitempty"`
+ }
+ 
++// KEVType is a type of KEV (Known Exploited Vulnerabilities) source
++ type KEVType string
++
++const (
++	// CISAKEVType is a KEV entry originated from CISA's Known Exploited Vulnerabilities Catalog
++	CISAKEVType KEVType = "cisa"
++
++	// VulnCheckKEVType is a KEV entry originated from VulnCheck's Known Exploited Vulnerabilities
++	VulnCheckKEVType KEVType = "vulncheck"
++)
++
++// KEV is a known exploited vulnerability
++ type KEV struct {
++	Type              KEVType `json:"type"`
++	VulnerabilityName string  `json:"vulnerabilityName"`
++}
++
+ // AlertDict has target cve JPCERT, USCERT and CISA alert data
+ type AlertDict struct {
+ 	CISA   []Alert `json:"cisa"`

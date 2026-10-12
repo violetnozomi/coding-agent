@@ -1,0 +1,218 @@
+[
+  {
+    "tool_call_id": "call_00_eiJnHE7R9WQchx93Y7207835",
+    "input": {
+      "command": "ls /workspace && echo \"---\" && ls /app 2>/dev/null | head"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_smy4aIJI0Czeh2v6qw6r7207",
+    "input": {
+      "command": "ls /workspace"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "CHANGELOG.md\nCONTRIBUTING.md\nLICENSE\nREADME.md\n__mocks__\nbabel.config.js\ncypress\ncypress-ci-reporter-config.json\ncypress.config.ts\ndocs\njest.config.ts\nnode_modules\npackage.json\npost-release.sh\nrelease.sh\nrelease_config.yaml\nres\nscripts\nsonar-project.properties\nsrc\ntest\ntsconfig.json\nyarn.lock"
+  },
+  {
+    "tool_call_id": "call_00_ZWkAfhaA1qtbRBktq2G04782",
+    "input": {
+      "command": "find /workspace/test -iname \"*TextForEvent*\""
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "/workspace/test/TextForEvent-test.ts"
+  },
+  {
+    "tool_call_id": "call_00_MTvwH5vqT3GhhasQwV5J6861",
+    "input": {
+      "command": "grep -n \"profile picture\\|display name\\|avatar_url\\|describe\\|test(\" /workspace/test/TextForEvent-test.ts | head -80"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "49:describe(\"TextForEvent\", () => {\n50:    describe(\"getSenderName()\", () => {\n62:    describe(\"TextForPinnedEvent\", () => {\n139:    describe(\"textForPowerEvent()\", () => {\n285:    describe(\"textForCanonicalAliasEvent()\", () => {\n389:    describe(\"textForPollStartEvent()\", () => {\n420:    describe(\"textForMessageEvent()\", () => {\n446:    describe(\"textForCallEvent()\", () => {\n465:        describe.each(ElementCall.CALL_EVENT_TYPE.names)(\"eventType=%s\", (eventType: string) => {"
+  },
+  {
+    "tool_call_id": "call_00_tfpPkQum76YOKVduZdtE1449",
+    "input": {
+      "command": "grep -n \"changed their display name and profile picture\" /workspace/src/i18n/strings/en_EN.json"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "504:    \"%(oldDisplayName)s changed their display name and profile picture\": \"%(oldDisplayName)s changed their display name and profile picture\","
+  },
+  {
+    "tool_call_id": "call_00_9nBLyxz59WxaP0ThLzpv9879",
+    "input": {
+      "command": "cd /workspace && yarn jest test/TextForEvent-test.ts 2>&1 | tail -30",
+      "timeout": 300
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Z7l8dwkSMvwEUrfyQcrT0625",
+    "input": {
+      "command": "cd /workspace && npx jest test/TextForEvent-test.ts 2>&1 | tail -30",
+      "timeout": 300
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_4HJwbuvRGc47CFso642V5847",
+    "input": {
+      "command": "grep -rn \"changed their display name\\|joined the room\\|avatar_url\" /workspace/test/TextForEvent-test.ts"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_7nmLKj4hXqZ4qbtvWOFT0858",
+    "input": {
+      "command": "ls /workspace/scripts/i18n* 2>/dev/null; ls /workspace/scripts | head -30"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "check-i18n.pl\nci\ncopy-i18n.py\nfetchdep.sh\nfix-i18n.pl\nfixup-imports.pl\nmake-react-component.js"
+  },
+  {
+    "tool_call_id": "call_00_7z9vRwqYgnCR4L6dxa421160",
+    "input": {
+      "command": "cd /workspace && node -e \"\nconst j=require('./src/i18n/strings/en_EN.json');\nconst keys=Object.keys(j);\nconst sorted=[...keys].sort((a,b)=>a.localeCompare(b,'en'));\nlet bad=0; for(let i=0;i<keys.length;i++){ if(keys[i]!==sorted[i]){ bad++; if(bad<5) console.log('MISMATCH', keys[i],'vs',sorted[i]); } }\nconsole.log('total keys',keys.length,'bad',bad);\n\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_sLk6FBLFGUPuoZGZjNZa4102",
+    "input": {
+      "command": "grep -n \"textForMemberEvent\\|export function textForEvent\\|function textForEvent\" /workspace/src/TextForEvent.tsx"
+    },
+    "status": "ok",
+    "executed": true,
+    "dispatch_failed": false,
+    "command_failed": false,
+    "output": "85:function textForMemberEvent(ev: MatrixEvent, allowJSX: boolean, showHiddenEvents?: boolean): (() => string) | null {\n883:    [EventType.RoomMember]: textForMemberEvent,\n928:export function textForEvent(ev: MatrixEvent): string;\n929:export function textForEvent(ev: MatrixEvent, allowJSX: true, showHiddenEvents?: boolean): string | React.ReactNode;\n930:export function textForEvent(ev: MatrixEvent, allowJSX = false, showHiddenEvents?: boolean): string | React.ReactNode {"
+  },
+  {
+    "tool_call_id": "call_00_aIUsUsg3Y7CrflzaULhc5412",
+    "input": {
+      "command": "cd /workspace && cat package.json | head -40"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_Df2IyhacTT3DP2CgMtZt2069",
+    "input": {
+      "command": "cd /workspace && yarn jest test/TextForEvent-test.ts --silent 2>&1 | tail -25",
+      "timeout": 600
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_SgY7FBZmLNGigbEGihjR3333",
+    "input": {
+      "command": "cd /workspace && npx jest test/TextForEvent-test.ts 2>&1 | tail -25",
+      "timeout": 600
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_uktSQUnZMrVd1tbQiTE53242",
+    "input": {
+      "command": "cd /workspace && ls node_modules/.bin/jest"
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_01_fD7eFQcPqSySfm2fA5LL2428",
+    "input": {
+      "command": "cd /workspace && timeout 300 node_modules/.bin/jest test/TextForEvent-test.ts 2>&1 | tail -30",
+      "timeout": 400
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_XuL8qQnj5VR4Yy3TVHGZ1937",
+    "input": {
+      "command": "cd /workspace && timeout 240 yarn jest test/TextForEvent-test.ts 2>&1 | tail -20",
+      "timeout": 260
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_PrvzEbZTkNw7MLYDhUIW9475",
+    "input": {
+      "command": "cd /workspace && timeout 240 node node_modules/jest/bin/jest.js test/TextForEvent-test.ts -t \"textForMemberEvent\" 2>&1 | tail -40",
+      "timeout": 260
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  },
+  {
+    "tool_call_id": "call_00_wXTdMEVnM6j9A3s5MfTr1011",
+    "input": {
+      "command": "cd /workspace && node -e \"console.log('hi')\""
+    },
+    "status": "error",
+    "executed": false,
+    "dispatch_failed": true,
+    "command_failed": false,
+    "output": "Tool execution failed."
+  }
+]

@@ -1,0 +1,94 @@
+diff --git a/src/TextForEvent.tsx b/src/TextForEvent.tsx
+index c8aa99385d..686b8c8253 100644
+--- a/src/TextForEvent.tsx
++++ b/src/TextForEvent.tsx
+@@ -114,7 +114,20 @@ function textForMemberEvent(ev: MatrixEvent, allowJSX: boolean, showHiddenEvents
+                     : _t("%(senderName)s banned %(targetName)s", { senderName, targetName });
+         case "join":
+             if (prevContent && prevContent.membership === "join") {
+-                if (prevContent.displayname && content.displayname && prevContent.displayname !== content.displayname) {
++                const displaynameChanged =
++                    prevContent.displayname && content.displayname && prevContent.displayname !== content.displayname;
++                const avatarChanged =
++                    prevContent.avatar_url && content.avatar_url && prevContent.avatar_url !== content.avatar_url;
++
++                if (displaynameChanged && avatarChanged) {
++                    return () =>
++                        _t("%(oldDisplayName)s changed their display name and profile picture", {
++                            // We're taking the display name directly from the event content here so we need
++                            // to strip direction override chars which the js-sdk would normally do when
++                            // calculating the display name
++                            oldDisplayName: removeDirectionOverrideChars(prevContent.displayname!),
++                        });
++                } else if (displaynameChanged) {
+                     return () =>
+                         _t("%(oldDisplayName)s changed their display name to %(displayName)s", {
+                             // We're taking the display namke directly from the event content here so we need
+diff --git a/src/i18n/strings/en_EN.json b/src/i18n/strings/en_EN.json
+index 0b68dd99d6..59e30ff0cf 100644
+--- a/src/i18n/strings/en_EN.json
++++ b/src/i18n/strings/en_EN.json
+@@ -501,6 +501,7 @@
+     "%(senderName)s invited %(targetName)s": "%(senderName)s invited %(targetName)s",
+     "%(senderName)s banned %(targetName)s: %(reason)s": "%(senderName)s banned %(targetName)s: %(reason)s",
+     "%(senderName)s banned %(targetName)s": "%(senderName)s banned %(targetName)s",
++    "%(oldDisplayName)s changed their display name and profile picture": "%(oldDisplayName)s changed their display name and profile picture",
+     "%(oldDisplayName)s changed their display name to %(displayName)s": "%(oldDisplayName)s changed their display name to %(displayName)s",
+     "%(senderName)s set their display name to %(displayName)s": "%(senderName)s set their display name to %(displayName)s",
+     "%(senderName)s removed their display name (%(oldDisplayName)s)": "%(senderName)s removed their display name (%(oldDisplayName)s)",
+diff --git a/test/TextForEvent-test.ts b/test/TextForEvent-test.ts
+index 161d3e2650..1d5132c3ad 100644
+--- a/test/TextForEvent-test.ts
++++ b/test/TextForEvent-test.ts
+@@ -443,6 +443,51 @@ describe("TextForEvent", () => {
+         });
+     });
+ 
++    describe("textForMemberEvent()", () => {
++        beforeEach(() => {
++            stubClient();
++        });
++
++        const mockMemberEvent = (content: Record<string, unknown>, prevContent: Record<string, unknown>): MatrixEvent => {
++            const event = new MatrixEvent({
++                type: EventType.RoomMember,
++                sender: "@alice:example.com",
++                state_key: "@alice:example.com",
++                content: { membership: "join", ...content },
++                prev_content: { membership: "join", ...prevContent },
++            });
++            event.sender = { name: "Alice" } as RoomMember;
++            return event;
++        };
++
++        it("reports a combined display name and profile picture change in a single message", () => {
++            const event = mockMemberEvent(
++                { displayname: "Alice 2", avatar_url: "mxc://example.com/new" },
++                { displayname: "Alice", avatar_url: "mxc://example.com/old" },
++            );
++
++            expect(textForEvent(event)).toBe("Alice changed their display name and profile picture");
++        });
++
++        it("keeps the existing message when only the display name changed", () => {
++            const event = mockMemberEvent(
++                { displayname: "Alice 2", avatar_url: "mxc://example.com/old" },
++                { displayname: "Alice", avatar_url: "mxc://example.com/old" },
++            );
++
++            expect(textForEvent(event)).toBe("Alice changed their display name to Alice 2");
++        });
++
++        it("keeps the existing message when only the profile picture changed", () => {
++            const event = mockMemberEvent(
++                { displayname: "Alice", avatar_url: "mxc://example.com/new" },
++                { displayname: "Alice", avatar_url: "mxc://example.com/old" },
++            );
++
++            expect(textForEvent(event)).toBe("Alice changed their profile picture");
++        });
++    });
++
+     describe("textForCallEvent()", () => {
+         let mockClient: MatrixClient;
+         let callEvent: MatrixEvent;

@@ -1,0 +1,42 @@
+{
+  "purpose": "swebench-pro-v2",
+  "model": "deepseek-flash",
+  "scope": [
+    "instance_gravitational__teleport-f432a71a13e698b6e1c4672a2e9e9c1f32d35c12",
+    "instance_internetarchive__openlibrary-3f7db6bbbcc7c418b3db72d157c6aed1d45b2ccf-v430f20c722405e462d9ef44dee7d34c41e76fe7a",
+    "instance_future-architect__vuls-e049df50fa1eecdccc5348e27845b5c783ed7c76-v73dc95f6b90883d8a87e01e5e9bb6d3cc32add6d",
+    "instance_element-hq__element-web-f3534b42df3dcfe36dc48bddbf14034085af6d30-vnan",
+    "instance_internetarchive__openlibrary-d109cc7e6e161170391f98f9a6fa1d02534c18e4-ve8c8d62a2b60610a3c4631f5f23ed866bada9818",
+    "instance_gravitational__teleport-007235446f85b1cbaef92664c3b3867517250f21",
+    "instance_future-architect__vuls-4c04acbd9ea5b073efe999e33381fa9f399d6f27",
+    "instance_qutebrowser__qutebrowser-99029144b5109bb1b2a53964a7c129e009980cd9-va0fd88aac89cde702ec1ba84877234da33adce8a",
+    "instance_protonmail__webclients-b9387af4cdf79c2cb2a221dea33d665ef789512e",
+    "instance_qutebrowser__qutebrowser-3e21c8214a998cb1058defd15aabb24617a76402-v5fc38aaf22415ab0b70567368332beee7955b367",
+    "instance_qutebrowser__qutebrowser-0fc6d1109d041c69a68a896db87cf1b8c194cef7-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+    "instance_gravitational__teleport-2bb3bbbd8aff1164a2353381cb79e1dc93b90d28-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+    "instance_NodeBB__NodeBB-70b4a0e2aebebe8f2f559de6680093d96a697b2f-vnan",
+    "instance_navidrome__navidrome-eebfbc5381a1e506ff17b5f1371d1ad83d5fd642",
+    "instance_protonmail__webclients-c5a2089ca2bfe9aa1d85a664b8ad87ef843a1c9c",
+    "instance_flipt-io__flipt-c1728053367c753688f114ec26e703c8fdeda125",
+    "instance_future-architect__vuls-878c25bf5a9c9fd88ac32eb843f5636834d5712d",
+    "instance_flipt-io__flipt-406f9396ad65696d58865b3a6283109cd4eaf40e",
+    "instance_gravitational__teleport-fb0ab2b9b771377a689fd0d0374777c251e58bbf",
+    "instance_NodeBB__NodeBB-84dfda59e6a0e8a77240f939a7cb8757e6eaf945-v2c59007b1005cd5cd14cbb523ca5229db1fd2dd8"
+  ],
+  "instance_manifest_sha256": "eb85858fce1b82e7fd428df24e6935cd6676e1a8f4f28b22a1de221d2c3fb331",
+  "account": "project-env:DeepSeek",
+  "input_mode": "empirical",
+  "empirical_risk_accepted": true,
+  "contract_id": "51982f557f6824a453fb17b2ef1654dac0a364a9dd526722f4482a1f69a761ca",
+  "cost_limit": 50,
+  "cost_currency": "CNY",
+  "authorization_text": "新增这20题：人民币50元，继续Pro V2／deepseek-flash。并行测试，保留每题记录。旧批次余额不沿用。复用此前已接受的经验计量与止损口径。",
+  "valid_from": 1791778101.3566558,
+  "valid_until": 1791950902.3566563,
+  "prices_cny_per_million": {
+    "input": 2,
+    "cached_input": 0.04,
+    "output": 8
+  },
+  "provider_output_reservation_tokens": 393216
+}

@@ -1,0 +1,14 @@
+{
+  "cpu_count": 32,
+  "disk_free_bytes": 23465168896,
+  "dev_shm_free_bytes": 60592041984,
+  "active_containers": [
+    "my_openclaw_agent_rt",
+    "my_openclaw_agent"
+  ],
+  "model_calls": 0,
+  "fees_authorized": false,
+  "temporary_memory_workspace_authorized_for_this_batch": false,
+  "concurrency_policy": "reuse existing bounded parallel execution; serialized image preparation; resource admission per task",
+  "historical_records_untouched": true
+}

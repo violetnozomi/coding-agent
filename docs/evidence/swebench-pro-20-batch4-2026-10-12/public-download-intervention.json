@@ -1,0 +1,85 @@
+{
+  "original_endpoint": "raw.githubusercontent.com",
+  "failures": [
+    {
+      "number": 19,
+      "file": "instruction.md",
+      "direct_exit": 28,
+      "proxy_exit": 28
+    }
+  ],
+  "remaining_files": [
+    {
+      "number": 19,
+      "instance_id": "instance_gravitational__teleport-fb0ab2b9b771377a689fd0d0374777c251e58bbf",
+      "file": "instruction.md"
+    },
+    {
+      "number": 19,
+      "instance_id": "instance_gravitational__teleport-fb0ab2b9b771377a689fd0d0374777c251e58bbf",
+      "file": "task.toml"
+    },
+    {
+      "number": 20,
+      "instance_id": "instance_NodeBB__NodeBB-84dfda59e6a0e8a77240f939a7cb8757e6eaf945-v2c59007b1005cd5cd14cbb523ca5229db1fd2dd8",
+      "file": "instruction.md"
+    },
+    {
+      "number": 20,
+      "instance_id": "instance_NodeBB__NodeBB-84dfda59e6a0e8a77240f939a7cb8757e6eaf945-v2c59007b1005cd5cd14cbb523ca5229db1fd2dd8",
+      "file": "task.toml"
+    }
+  ],
+  "next_condition": "official GitHub contents API at same fixed commit; expected SHA256 required",
+  "model_requests": 0,
+  "official_api_results": [
+    {
+      "number": 19,
+      "instance_id": "instance_gravitational__teleport-fb0ab2b9b771377a689fd0d0374777c251e58bbf",
+      "file": "instruction.md",
+      "attempts": [
+        {
+          "proxy_used": false,
+          "exit_code": 0
+        }
+      ],
+      "ready": true
+    },
+    {
+      "number": 19,
+      "instance_id": "instance_gravitational__teleport-fb0ab2b9b771377a689fd0d0374777c251e58bbf",
+      "file": "task.toml",
+      "attempts": [
+        {
+          "proxy_used": false,
+          "exit_code": 0
+        }
+      ],
+      "ready": true
+    },
+    {
+      "number": 20,
+      "instance_id": "instance_NodeBB__NodeBB-84dfda59e6a0e8a77240f939a7cb8757e6eaf945-v2c59007b1005cd5cd14cbb523ca5229db1fd2dd8",
+      "file": "instruction.md",
+      "attempts": [
+        {
+          "proxy_used": false,
+          "exit_code": 0
+        }
+      ],
+      "ready": true
+    },
+    {
+      "number": 20,
+      "instance_id": "instance_NodeBB__NodeBB-84dfda59e6a0e8a77240f939a7cb8757e6eaf945-v2c59007b1005cd5cd14cbb523ca5229db1fd2dd8",
+      "file": "task.toml",
+      "attempts": [
+        {
+          "proxy_used": false,
+          "exit_code": 0
+        }
+      ],
+      "ready": true
+    }
+  ]
+}

@@ -1,0 +1,273 @@
+Running selected tests: TestCveContents_PatchURLs TestCveContents_UniqCweIDs TestNewCveContentType TestFormatMaxCvssScore TestCveContents_SSVC TestToSortedSlice TestCveContents_Except TestVulnInfos_FilterByCvssOver TestRenameKernelSourcePackageName Test_IsRaspbianPackage TestAppendIfMissing TestCveContents_Cpes TestRemoveRaspbianPackFromResult TestSourceLinks TestIsDisplayUpdatableNum TestMergeNewVersion TestVulnInfos_FilterIgnoreCves Test_NewPortStat TestVulnInfos_FilterIgnorePkgs TestScanResult_Sort TestAddBinaryName TestCvss3Scores TestVulnInfo_Cvss40Scores TestVulnInfos_FilterByConfidenceOver TestIsKernelSourcePackage TestVulnInfos_FilterUnfixed TestFindByBinName TestTitles TestCveContents_CweIDs TestCveContents_Sort TestCveContent_Empty TestCveContentTypes_Except TestMaxCvssScores TestCvss2Scores TestSummaries TestSortByConfident TestVulnInfo_AttackVector TestGetCveContentTypes TestMaxCvss3Scores TestVulnInfo_PatchStatus TestMerge TestMaxCvss2Scores TestCveContents_References TestSortPackageStatues TestStorePackageStatuses TestCountGroupBySeverity TestLibraryScanners_Find TestDistroAdvisories_AppendIfMissing TestVulnInfo_MaxCvss40Score TestPackage_FormatVersionFromTo
+=== RUN   TestCveContents_Except
+=== RUN   TestCveContents_Except/happy
+--- PASS: TestCveContents_Except (0.00s)
+    --- PASS: TestCveContents_Except/happy (0.00s)
+=== RUN   TestSourceLinks
+--- PASS: TestSourceLinks (0.00s)
+=== RUN   TestCveContents_PatchURLs
+=== RUN   TestCveContents_PatchURLs/happy
+--- PASS: TestCveContents_PatchURLs (0.00s)
+    --- PASS: TestCveContents_PatchURLs/happy (0.00s)
+=== RUN   TestCveContents_Cpes
+=== RUN   TestCveContents_Cpes/happy
+--- PASS: TestCveContents_Cpes (0.00s)
+    --- PASS: TestCveContents_Cpes/happy (0.00s)
+=== RUN   TestCveContents_References
+=== RUN   TestCveContents_References/happy
+--- PASS: TestCveContents_References (0.00s)
+    --- PASS: TestCveContents_References/happy (0.00s)
+=== RUN   TestCveContents_CweIDs
+=== RUN   TestCveContents_CweIDs/happy
+--- PASS: TestCveContents_CweIDs (0.00s)
+    --- PASS: TestCveContents_CweIDs/happy (0.00s)
+=== RUN   TestCveContents_UniqCweIDs
+=== RUN   TestCveContents_UniqCweIDs/happy
+--- PASS: TestCveContents_UniqCweIDs (0.00s)
+    --- PASS: TestCveContents_UniqCweIDs/happy (0.00s)
+=== RUN   TestCveContents_SSVC
+=== RUN   TestCveContents_SSVC/happy
+--- PASS: TestCveContents_SSVC (0.00s)
+    --- PASS: TestCveContents_SSVC/happy (0.00s)
+=== RUN   TestCveContents_Sort
+=== RUN   TestCveContents_Sort/sorted
+=== RUN   TestCveContents_Sort/sort_JVN_by_cvss3,_cvss2,_sourceLink
+=== RUN   TestCveContents_Sort/sort_JVN_by_cvss3,_cvss2
+=== RUN   TestCveContents_Sort/sort_CVSS_v4.0
+=== RUN   TestCveContents_Sort/sort_CVSS_v4.0_and_CVSS_v3
+--- PASS: TestCveContents_Sort (0.00s)
+    --- PASS: TestCveContents_Sort/sorted (0.00s)
+    --- PASS: TestCveContents_Sort/sort_JVN_by_cvss3,_cvss2,_sourceLink (0.00s)
+    --- PASS: TestCveContents_Sort/sort_JVN_by_cvss3,_cvss2 (0.00s)
+    --- PASS: TestCveContents_Sort/sort_CVSS_v4.0 (0.00s)
+    --- PASS: TestCveContents_Sort/sort_CVSS_v4.0_and_CVSS_v3 (0.00s)
+=== RUN   TestCveContent_Empty
+=== RUN   TestCveContent_Empty/empty
+=== RUN   TestCveContent_Empty/not_empty
+--- PASS: TestCveContent_Empty (0.00s)
+    --- PASS: TestCveContent_Empty/empty (0.00s)
+    --- PASS: TestCveContent_Empty/not_empty (0.00s)
+=== RUN   TestNewCveContentType
+=== RUN   TestNewCveContentType/redhat
+=== RUN   TestNewCveContentType/centos
+=== RUN   TestNewCveContentType/unknown
+--- PASS: TestNewCveContentType (0.00s)
+    --- PASS: TestNewCveContentType/redhat (0.00s)
+    --- PASS: TestNewCveContentType/centos (0.00s)
+    --- PASS: TestNewCveContentType/unknown (0.00s)
+=== RUN   TestGetCveContentTypes
+=== RUN   TestGetCveContentTypes/redhat
+=== RUN   TestGetCveContentTypes/debian
+=== RUN   TestGetCveContentTypes/ubuntu
+=== RUN   TestGetCveContentTypes/freebsd
+--- PASS: TestGetCveContentTypes (0.00s)
+    --- PASS: TestGetCveContentTypes/redhat (0.00s)
+    --- PASS: TestGetCveContentTypes/debian (0.00s)
+    --- PASS: TestGetCveContentTypes/ubuntu (0.00s)
+    --- PASS: TestGetCveContentTypes/freebsd (0.00s)
+=== RUN   TestCveContentTypes_Except
+=== RUN   TestCveContentTypes_Except/happy
+--- PASS: TestCveContentTypes_Except (0.00s)
+    --- PASS: TestCveContentTypes_Except/happy (0.00s)
+=== RUN   TestLibraryScanners_Find
+=== RUN   TestLibraryScanners_Find/single_file
+=== RUN   TestLibraryScanners_Find/multi_file
+=== RUN   TestLibraryScanners_Find/miss
+--- PASS: TestLibraryScanners_Find (0.00s)
+    --- PASS: TestLibraryScanners_Find/single_file (0.00s)
+    --- PASS: TestLibraryScanners_Find/multi_file (0.00s)
+    --- PASS: TestLibraryScanners_Find/miss (0.00s)
+=== RUN   TestMergeNewVersion
+--- PASS: TestMergeNewVersion (0.00s)
+=== RUN   TestMerge
+--- PASS: TestMerge (0.00s)
+=== RUN   TestAddBinaryName
+--- PASS: TestAddBinaryName (0.00s)
+=== RUN   TestFindByBinName
+--- PASS: TestFindByBinName (0.00s)
+=== RUN   TestPackage_FormatVersionFromTo
+=== RUN   TestPackage_FormatVersionFromTo/fixed
+=== RUN   TestPackage_FormatVersionFromTo/nfy
+=== RUN   TestPackage_FormatVersionFromTo/nfy#01
+=== RUN   TestPackage_FormatVersionFromTo/nfy2
+=== RUN   TestPackage_FormatVersionFromTo/nfy3
+--- PASS: TestPackage_FormatVersionFromTo (0.00s)
+    --- PASS: TestPackage_FormatVersionFromTo/fixed (0.00s)
+    --- PASS: TestPackage_FormatVersionFromTo/nfy (0.00s)
+    --- PASS: TestPackage_FormatVersionFromTo/nfy#01 (0.00s)
+    --- PASS: TestPackage_FormatVersionFromTo/nfy2 (0.00s)
+    --- PASS: TestPackage_FormatVersionFromTo/nfy3 (0.00s)
+=== RUN   Test_IsRaspbianPackage
+=== RUN   Test_IsRaspbianPackage/nameRegExp
+=== RUN   Test_IsRaspbianPackage/verRegExp
+=== RUN   Test_IsRaspbianPackage/nameList
+=== RUN   Test_IsRaspbianPackage/debianPackage
+--- PASS: Test_IsRaspbianPackage (0.00s)
+    --- PASS: Test_IsRaspbianPackage/nameRegExp (0.00s)
+    --- PASS: Test_IsRaspbianPackage/verRegExp (0.00s)
+    --- PASS: Test_IsRaspbianPackage/nameList (0.00s)
+    --- PASS: Test_IsRaspbianPackage/debianPackage (0.00s)
+=== RUN   Test_NewPortStat
+=== RUN   Test_NewPortStat/empty
+=== RUN   Test_NewPortStat/normal
+=== RUN   Test_NewPortStat/asterisk
+=== RUN   Test_NewPortStat/ipv6_loopback
+--- PASS: Test_NewPortStat (0.00s)
+    --- PASS: Test_NewPortStat/empty (0.00s)
+    --- PASS: Test_NewPortStat/normal (0.00s)
+    --- PASS: Test_NewPortStat/asterisk (0.00s)
+    --- PASS: Test_NewPortStat/ipv6_loopback (0.00s)
+=== RUN   TestRenameKernelSourcePackageName
+=== RUN   TestRenameKernelSourcePackageName/debian_linux-signed_->_linux
+--- PASS: TestRenameKernelSourcePackageName (0.00s)
+    --- PASS: TestRenameKernelSourcePackageName/debian_linux-signed_->_linux (0.00s)
+=== RUN   TestIsKernelSourcePackage
+=== RUN   TestIsKernelSourcePackage/debian_apt
+=== RUN   TestIsKernelSourcePackage/debian_linux
+=== RUN   TestIsKernelSourcePackage/debian_linux#01
+=== RUN   TestIsKernelSourcePackage/debian_linux-5.10
+=== RUN   TestIsKernelSourcePackage/debian_linux-grsec
+=== RUN   TestIsKernelSourcePackage/debian_linux-base
+=== RUN   TestIsKernelSourcePackage/ubuntu_apt
+=== RUN   TestIsKernelSourcePackage/ubuntu_linux
+=== RUN   TestIsKernelSourcePackage/ubuntu_linux-aws
+=== RUN   TestIsKernelSourcePackage/ubuntu_linux-5.9
+=== RUN   TestIsKernelSourcePackage/ubuntu_linux-base
+=== RUN   TestIsKernelSourcePackage/ubuntu_linux-aws-edge
+=== RUN   TestIsKernelSourcePackage/ubuntu_linux-aws-5.15
+=== RUN   TestIsKernelSourcePackage/ubuntu_linux-lowlatency-hwe-5.15
+--- PASS: TestIsKernelSourcePackage (0.00s)
+    --- PASS: TestIsKernelSourcePackage/debian_apt (0.00s)
+    --- PASS: TestIsKernelSourcePackage/debian_linux (0.00s)
+    --- PASS: TestIsKernelSourcePackage/debian_linux#01 (0.00s)
+    --- PASS: TestIsKernelSourcePackage/debian_linux-5.10 (0.00s)
+    --- PASS: TestIsKernelSourcePackage/debian_linux-grsec (0.00s)
+    --- PASS: TestIsKernelSourcePackage/debian_linux-base (0.00s)
+    --- PASS: TestIsKernelSourcePackage/ubuntu_apt (0.00s)
+    --- PASS: TestIsKernelSourcePackage/ubuntu_linux (0.00s)
+    --- PASS: TestIsKernelSourcePackage/ubuntu_linux-aws (0.00s)
+    --- PASS: TestIsKernelSourcePackage/ubuntu_linux-5.9 (0.00s)
+    --- PASS: TestIsKernelSourcePackage/ubuntu_linux-base (0.00s)
+    --- PASS: TestIsKernelSourcePackage/ubuntu_linux-aws-edge (0.00s)
+    --- PASS: TestIsKernelSourcePackage/ubuntu_linux-aws-5.15 (0.00s)
+    --- PASS: TestIsKernelSourcePackage/ubuntu_linux-lowlatency-hwe-5.15 (0.00s)
+=== RUN   TestIsDisplayUpdatableNum
+--- PASS: TestIsDisplayUpdatableNum (0.00s)
+=== RUN   TestRemoveRaspbianPackFromResult
+--- PASS: TestRemoveRaspbianPackFromResult (0.00s)
+=== RUN   TestScanResult_Sort
+=== RUN   TestScanResult_Sort/already_asc
+=== RUN   TestScanResult_Sort/sort
+=== RUN   TestScanResult_Sort/sort_JVN_by_cvss_v3
+=== RUN   TestScanResult_Sort/sort_JVN_by_cvss3,_cvss2,_sourceLink
+=== RUN   TestScanResult_Sort/sort_JVN_by_cvss3,_cvss2
+=== RUN   TestScanResult_Sort/sort_kev_1
+=== RUN   TestScanResult_Sort/sort_kev_2
+--- PASS: TestScanResult_Sort (0.00s)
+    --- PASS: TestScanResult_Sort/already_asc (0.00s)
+    --- PASS: TestScanResult_Sort/sort (0.00s)
+    --- PASS: TestScanResult_Sort/sort_JVN_by_cvss_v3 (0.00s)
+    --- PASS: TestScanResult_Sort/sort_JVN_by_cvss3,_cvss2,_sourceLink (0.00s)
+    --- PASS: TestScanResult_Sort/sort_JVN_by_cvss3,_cvss2 (0.00s)
+    --- PASS: TestScanResult_Sort/sort_kev_1 (0.00s)
+    --- PASS: TestScanResult_Sort/sort_kev_2 (0.00s)
+=== RUN   TestTitles
+--- PASS: TestTitles (0.00s)
+=== RUN   TestSummaries
+--- PASS: TestSummaries (0.00s)
+=== RUN   TestCountGroupBySeverity
+--- PASS: TestCountGroupBySeverity (0.00s)
+=== RUN   TestToSortedSlice
+--- PASS: TestToSortedSlice (0.00s)
+=== RUN   TestCvss2Scores
+--- PASS: TestCvss2Scores (0.00s)
+=== RUN   TestMaxCvss2Scores
+--- PASS: TestMaxCvss2Scores (0.00s)
+=== RUN   TestCvss3Scores
+--- PASS: TestCvss3Scores (0.00s)
+=== RUN   TestMaxCvss3Scores
+--- PASS: TestMaxCvss3Scores (0.00s)
+=== RUN   TestMaxCvssScores
+--- PASS: TestMaxCvssScores (0.00s)
+=== RUN   TestFormatMaxCvssScore
+--- PASS: TestFormatMaxCvssScore (0.00s)
+=== RUN   TestSortPackageStatues
+--- PASS: TestSortPackageStatues (0.00s)
+=== RUN   TestStorePackageStatuses
+--- PASS: TestStorePackageStatuses (0.00s)
+=== RUN   TestAppendIfMissing
+--- PASS: TestAppendIfMissing (0.00s)
+=== RUN   TestSortByConfident
+--- PASS: TestSortByConfident (0.00s)
+=== RUN   TestDistroAdvisories_AppendIfMissing
+=== RUN   TestDistroAdvisories_AppendIfMissing/duplicate_no_append
+=== RUN   TestDistroAdvisories_AppendIfMissing/append
+--- PASS: TestDistroAdvisories_AppendIfMissing (0.00s)
+    --- PASS: TestDistroAdvisories_AppendIfMissing/duplicate_no_append (0.00s)
+    --- PASS: TestDistroAdvisories_AppendIfMissing/append (0.00s)
+=== RUN   TestVulnInfo_AttackVector
+=== RUN   TestVulnInfo_AttackVector/2.0:N
+=== RUN   TestVulnInfo_AttackVector/2.0:A
+=== RUN   TestVulnInfo_AttackVector/2.0:L
+=== RUN   TestVulnInfo_AttackVector/3.0:N
+=== RUN   TestVulnInfo_AttackVector/3.1:N
+--- PASS: TestVulnInfo_AttackVector (0.00s)
+    --- PASS: TestVulnInfo_AttackVector/2.0:N (0.00s)
+    --- PASS: TestVulnInfo_AttackVector/2.0:A (0.00s)
+    --- PASS: TestVulnInfo_AttackVector/2.0:L (0.00s)
+    --- PASS: TestVulnInfo_AttackVector/3.0:N (0.00s)
+    --- PASS: TestVulnInfo_AttackVector/3.1:N (0.00s)
+=== RUN   TestVulnInfos_FilterByCvssOver
+=== RUN   TestVulnInfos_FilterByCvssOver/over_7.0
+=== RUN   TestVulnInfos_FilterByCvssOver/over_high
+--- PASS: TestVulnInfos_FilterByCvssOver (0.00s)
+    --- PASS: TestVulnInfos_FilterByCvssOver/over_7.0 (0.00s)
+    --- PASS: TestVulnInfos_FilterByCvssOver/over_high (0.00s)
+=== RUN   TestVulnInfos_FilterIgnoreCves
+=== RUN   TestVulnInfos_FilterIgnoreCves/filter_ignored
+--- PASS: TestVulnInfos_FilterIgnoreCves (0.00s)
+    --- PASS: TestVulnInfos_FilterIgnoreCves/filter_ignored (0.00s)
+=== RUN   TestVulnInfos_FilterUnfixed
+=== RUN   TestVulnInfos_FilterUnfixed/filter_ok
+--- PASS: TestVulnInfos_FilterUnfixed (0.00s)
+    --- PASS: TestVulnInfos_FilterUnfixed/filter_ok (0.00s)
+=== RUN   TestVulnInfos_FilterIgnorePkgs
+=== RUN   TestVulnInfos_FilterIgnorePkgs/filter_pkgs_1
+=== RUN   TestVulnInfos_FilterIgnorePkgs/filter_pkgs_2
+=== RUN   TestVulnInfos_FilterIgnorePkgs/filter_pkgs_3
+--- PASS: TestVulnInfos_FilterIgnorePkgs (0.00s)
+    --- PASS: TestVulnInfos_FilterIgnorePkgs/filter_pkgs_1 (0.00s)
+    --- PASS: TestVulnInfos_FilterIgnorePkgs/filter_pkgs_2 (0.00s)
+    --- PASS: TestVulnInfos_FilterIgnorePkgs/filter_pkgs_3 (0.00s)
+=== RUN   TestVulnInfos_FilterByConfidenceOver
+=== RUN   TestVulnInfos_FilterByConfidenceOver/over_0
+=== RUN   TestVulnInfos_FilterByConfidenceOver/over_20
+=== RUN   TestVulnInfos_FilterByConfidenceOver/over_100
+--- PASS: TestVulnInfos_FilterByConfidenceOver (0.00s)
+    --- PASS: TestVulnInfos_FilterByConfidenceOver/over_0 (0.00s)
+    --- PASS: TestVulnInfos_FilterByConfidenceOver/over_20 (0.00s)
+    --- PASS: TestVulnInfos_FilterByConfidenceOver/over_100 (0.00s)
+=== RUN   TestVulnInfo_PatchStatus
+=== RUN   TestVulnInfo_PatchStatus/cpe
+=== RUN   TestVulnInfo_PatchStatus/package_unfixed
+=== RUN   TestVulnInfo_PatchStatus/package_unknown
+=== RUN   TestVulnInfo_PatchStatus/package_fixed
+=== RUN   TestVulnInfo_PatchStatus/windows_unfixed
+=== RUN   TestVulnInfo_PatchStatus/windows_fixed
+--- PASS: TestVulnInfo_PatchStatus (0.00s)
+    --- PASS: TestVulnInfo_PatchStatus/cpe (0.00s)
+    --- PASS: TestVulnInfo_PatchStatus/package_unfixed (0.00s)
+    --- PASS: TestVulnInfo_PatchStatus/package_unknown (0.00s)
+    --- PASS: TestVulnInfo_PatchStatus/package_fixed (0.00s)
+    --- PASS: TestVulnInfo_PatchStatus/windows_unfixed (0.00s)
+    --- PASS: TestVulnInfo_PatchStatus/windows_fixed (0.00s)
+=== RUN   TestVulnInfo_Cvss40Scores
+=== RUN   TestVulnInfo_Cvss40Scores/happy
+--- PASS: TestVulnInfo_Cvss40Scores (0.00s)
+    --- PASS: TestVulnInfo_Cvss40Scores/happy (0.00s)
+=== RUN   TestVulnInfo_MaxCvss40Score
+=== RUN   TestVulnInfo_MaxCvss40Score/happy
+--- PASS: TestVulnInfo_MaxCvss40Score (0.00s)
+    --- PASS: TestVulnInfo_MaxCvss40Score/happy (0.00s)
+PASS
+ok  	github.com/future-architect/vuls/models	0.007s
