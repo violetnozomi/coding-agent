@@ -223,18 +223,10 @@ class AgentRunner:
             raise TypeError("Native AgentRunner requires an execution context factory")
         run_context = await services.session_runtime.open(request)
         run_context.cancellation = options.cancellation
-        event_bus = options.event_bus
-        if event_bus is not None:
-            create_publisher = getattr(event_bus, "for_interaction", None)
-            if callable(create_publisher):
-                run_context.metadata["event_publisher"] = create_publisher(
-                    run_context.interaction_run_id,
-                    agent_invocation_id=request.agent.name,
-                    parent_interaction_run_id=str(
-                        request.parent_interaction_run_id or ""
-                    ),
-                    parent_agent_invocation_id=str(request.parent_agent_id or ""),
-                )
+        # Metadata crosses result/persistence boundaries and must contain data,
+        # not the live publisher (which owns locks, subscribers and file handles).
+        # Product composition already binds the interaction publisher on the host
+        # and scoped event bus; no consumer reads one from RunContext.metadata.
         execution_context = factory(run_context, services)
         if not isinstance(execution_context, RunnerExecutionContext):
             raise TypeError("execution context factory must return RunnerExecutionContext")
