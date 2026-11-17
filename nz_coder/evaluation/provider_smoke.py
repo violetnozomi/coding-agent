@@ -258,14 +258,19 @@ def run_provider_smoke(
             stream=True,
         )
         parts = []
-        for response_chunk in stream:
-            choices = getattr(response_chunk, "choices", None) or []
-            if not choices:
-                continue
-            delta = getattr(choices[0], "delta", None)
-            content = getattr(delta, "content", "") if delta is not None else ""
-            if content:
-                parts.append(str(content))
+        try:
+            for response_chunk in stream:
+                choices = getattr(response_chunk, "choices", None) or []
+                if not choices:
+                    continue
+                delta = getattr(choices[0], "delta", None)
+                content = getattr(delta, "content", "") if delta is not None else ""
+                if content:
+                    parts.append(str(content))
+        finally:
+            close = getattr(stream, "close", None)
+            if close is not None:
+                close()
         content = "".join(parts)
         if not content.strip():
             raise RuntimeError("provider returned no streamed text")

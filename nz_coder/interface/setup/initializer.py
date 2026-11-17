@@ -9,21 +9,17 @@ from nz_coder.foundation.private_paths import harden_private_path
 
 
 _MINIMAL_ENV = """# NZ-Coder workspace configuration
-# Fill the credential for the selected Provider, then run: nz-coder doctor
-API_KEY=
+# Start nz-coder, enter /connect in the terminal UI, then run: nz-coder doctor
 MODEL_PROVIDER=openai-compatible
 MODEL_ID=deepseek-v4-flash
 API_BASE_URL=https://api.deepseek.com
 
 # Native alternatives:
 # MODEL_PROVIDER=anthropic
-# ANTHROPIC_API_KEY=
 # ANTHROPIC_API_BASE_URL=https://api.anthropic.com
 # MODEL_PROVIDER=gemini
-# GEMINI_API_KEY=
 # GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 # MODEL_PROVIDER=openai-responses
-# OPENAI_API_KEY=
 # OPENAI_API_BASE_URL=https://api.openai.com/v1
 
 PERMISSION_MODE=default
@@ -72,7 +68,8 @@ def init_main(argv: list[str] | None = None) -> int:
     )
     print(
         f"Created project configuration template {target} with {protection}. "
-        "Use nz-coder /connect for credentials, then run: nz-coder doctor"
+        "Start nz-coder and enter /connect in its terminal UI for credentials, "
+        "then run: nz-coder doctor"
     )
     return 0
 

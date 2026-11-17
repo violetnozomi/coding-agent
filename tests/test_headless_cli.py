@@ -6,6 +6,8 @@ import io
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from nz_coder.providers.capabilities import ModelCapabilities
 from nz_coder.runtime.model_gateway import ResolvedModelRuntime
 from nz_coder.runtime.core.events import RuntimeEvent, RuntimeEventName
@@ -118,6 +120,7 @@ def test_headless_json_is_one_clean_machine_record(tmp_path):
         },
         "changed_files": ["src/app.py"],
         "error": None,
+        "verification": {},
     }
 
 
@@ -598,10 +601,90 @@ def test_headless_native_path_completes_model_tool_model_without_agentloop(
          "--permission-mode", "auto", "--no-session", "inspect"],
         stdin=io.StringIO(), stdout=stdout, stderr=stderr,
     )
-    assert code == 0
-    assert stdout.getvalue() == "native headless complete\n"
+    assert code == 1
+    assert "native headless complete" in stdout.getvalue()
+    assert "未经独立确认" in stdout.getvalue()
+    assert "未评估" in stdout.getvalue()
     assert stderr.getvalue() == ""
     assert provider.calls == 2
+
+
+@pytest.mark.parametrize("persist_session", [False, True])
+def test_headless_native_write_respects_session_persistence(
+    monkeypatch, tmp_path, persist_session,
+):
+    from nz_coder.interface.headless import run_main
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state import sessions
+
+    with scoped_workdir(tmp_path):
+        sessions.save_session(
+            [{"role": "user", "content": "previous durable session"}],
+            session_id="previous", run_status="completed",
+        )
+        state = sessions.session_dir()
+    aliases = {name: (state / name).read_bytes() for name in ("latest.json", "active.json")}
+
+    class Provider:
+        name = "offline"
+
+        def __init__(self):
+            self.calls = 0
+
+        def create_completion(self, _client, **_kwargs):
+            self.calls += 1
+            tool_calls = [] if self.calls > 1 else [SimpleNamespace(
+                id="call-write", type="function", function=SimpleNamespace(
+                    name="write_file",
+                    arguments='{"path":"headless.txt","content":"HEADLESS_WRITE_OK\\n"}',
+                ),
+            )]
+            return SimpleNamespace(
+                choices=[SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="" if tool_calls else "HEADLESS_WRITE_OK",
+                        tool_calls=tool_calls,
+                    ),
+                    finish_reason="tool_calls" if tool_calls else "stop",
+                )],
+                usage=SimpleNamespace(prompt_tokens=2, completion_tokens=1, total_tokens=3),
+            )
+
+    runtime = ResolvedModelRuntime(
+        provider_id="offline", model_id="offline-model", request_model_id="offline-model",
+        variant=None, provider=Provider(), client=object(), owns_client=False,
+        capabilities=ModelCapabilities(
+            provider="offline", model_id="offline-model", supports_streaming=False,
+        ),
+    )
+    monkeypatch.setattr(
+        "nz_coder.runtime.execution.native_sdk.resolve_model_runtime", lambda _: runtime,
+    )
+    stdout, stderr = io.StringIO(), io.StringIO()
+    argv = ["--cwd", str(tmp_path), "--provider", "offline", "--model", "offline-model",
+            "--permission-mode", "acceptEdits", "--output", "json", "--max-turns", "4"]
+    if not persist_session:
+        argv.append("--no-session")
+    code = run_main(
+        [*argv, "Create headless.txt containing HEADLESS_WRITE_OK followed by a newline."],
+        stdin=io.StringIO(), stdout=stdout, stderr=stderr,
+    )
+    result = json.loads(stdout.getvalue())
+    assert code == 1, stderr.getvalue()
+    assert result["status"] == "completed_unverified"
+    assert (tmp_path / "headless.txt").read_bytes() == b"HEADLESS_WRITE_OK\n"
+    path = state / f'{result["session_id"]}.json'
+    if persist_session:
+        saved = json.loads(path.read_text())
+        assert saved["run_status"] == "completed_unverified"
+        assert [message["role"] for message in saved["messages"]] == [
+            "user", "assistant", "tool", "assistant",
+        ]
+        assert json.loads((state / "latest.json").read_text())["session_id"] == result["session_id"]
+        assert json.loads((state / "active.json").read_text())["session_id"] == result["session_id"]
+    else:
+        assert not path.exists()
+        assert {name: (state / name).read_bytes() for name in aliases} == aliases
 
 
 def test_headless_native_image_reaches_vision_provider(monkeypatch, tmp_path):
@@ -651,7 +734,36 @@ def test_headless_native_image_reaches_vision_provider(monkeypatch, tmp_path):
         stdin=io.StringIO(), stdout=stdout, stderr=stderr,
     )
 
-    assert code == 0
+    assert code == 1
     assert provider.requests
     user = next(item for item in provider.requests[0]["messages"] if item["role"] == "user")
     assert user["_nz_user_attachments"][0]["mime"] == "image/png"
+
+
+@pytest.mark.parametrize('output', ['json', 'jsonl'])
+def test_unverified_headless_preserves_snapshot_and_returns_failure(tmp_path, output):
+    verification = {'verification_needed': True, 'ignored_verifications': [{'command': 'pytest | tail', 'reason': 'masked exit'}]}
+    result = RunResult(status=RunStatus.COMPLETED_UNVERIFIED, final_text='unchecked',
+        messages=[], usage=TokenUsage(), session_id='s-unverified', active_agent='main',
+        metadata={'verification': verification})
+    code, stdout, stderr, _ = _run(['check', '--output', output], tmp_path, client=FakeClient(result=result))
+    record = json.loads(stdout.splitlines()[-1])
+    assert code == 1
+    assert record['status'] == 'completed_unverified'
+    assert record['verification'] == verification
+
+
+def test_headless_resume_reports_corrupt_identity_before_client(tmp_path):
+    from nz_coder.state import sessions
+    from nz_coder.state.workdir import scoped_workdir
+    with scoped_workdir(tmp_path):
+        path = sessions.save_session([{'role': 'user', 'content': 'keep'}], session_id='resume-bad', activate=False, model='test')
+        payload = json.loads(path.read_text())
+        payload['session_id'] = 'other'
+        path.write_text(json.dumps(payload))
+        original = path.read_bytes()
+    code, stdout, stderr, client = _run(['--resume', 'resume-bad', 'continue'], tmp_path)
+    assert code != 0 and stdout == ''
+    assert 'corrupt' in stderr and str(path) not in stderr
+    assert not client.requests
+    assert path.read_bytes() == original

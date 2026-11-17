@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "ts": 1793860923.3353028,
+      "category": "plan",
+      "content": "Current task: implement and actually verify the full StreamBus async TCP broker from an empty workspace, using only Python 3.13.12 and the standard library. Workspace: /home/pyh/.codex/artifacts/serial-memory-long-task-20261105/attempts/run-01/workspace. Implemented files: streambus/{__init__,__main__,errors,models,protocol,config,storage,broker,client,cli}.py; tests/{support,test_protocol,test_storage}.py; smoke.py. Not yet delivered: README, examples, broader broker/client/CLI/concurrency/failure tests, final full test and compile runs, and final unresolved-items report. Existing protocol tests: 23 passed. Storage tests were authored and patched but not yet run. smoke.py passed after the shutdown fix and showed real binary publish/subscribe, ack, fetch, stats, and DONE 0. Do not claim completion until the required full suite and compile checks pass."
+    },
+    {
+      "ts": 1793860923.3353045,
+      "category": "plan",
+      "content": "Confirmed architecture/contract decisions. Wire protocol: big-endian u32 body length, then u8 opcode, u32 request id, payload; frame body length includes opcode+request id. read_frame uses readexactly and correctly handles TCP fragmentation/coalescing; FrameAssembler does incremental parsing and rejects oversize declared lengths before buffering. PUBLISH payload is u16 topic length + topic bytes + raw body. MESSAGE/FETCH batches use a custom binary batch format with cursor u64, timestamp u64, u16 topic length, topic, u32 body length, body. Topic validation allows UTF-8 topics up to 128 bytes and no control characters. JSON is only for control payloads; raw binary bodies are preserved. Constants/opcodes are in streambus/protocol.py."
+    },
+    {
+      "ts": 1793860923.335305,
+      "category": "plan",
+      "content": "Confirmed persistence design. Topic logs live under data_dir/topics as hex-encoded UTF-8 topic names plus .log. Record format: magic SBL1, payload length u32, CRC32(payload) u32, then cursor u64, timestamp_ms u64, body length u32, body. Torn final header/payload is truncated back to the last complete record and reported as action=truncated. Bad magic, impossible length, CRC mismatch, bad body length, non-contiguous cursor, or oversized body quarantines the entire topic file as .corrupt-<ms> and starts that topic empty. ACKs are append-only JSONL keyed by (client_id, topic); duplicate/lower ACKs are idempotent and resolved with max. A torn final ACK line is truncated; complete unparsable lines are skipped and reported. These semantics must be documented explicitly, including the conservative whole-topic quarantine choice."
+    },
+    {
+      "ts": 1793860923.3353052,
+      "category": "plan",
+      "content": "Confirmed broker/client behavior. Broker has bounded per-connection outbound asyncio.Queue plus writer task, bounded per-subscription inbox and unacked queues, watchdog idle-timeout handling, auth, admin stats/clients/kick/shutdown, heartbeat, graceful shutdown, and per-subscription replay state. Slow-consumer policies: disconnect current connection or drop_oldest queued/unacked entries. Default credentials are admin/admin-secret and user/user-secret; PBKDF2 password hashes are supported. CLI supports --port 0 and prints STREAMBUS_LISTENING host=<host> port=<actual> ... once bound, then STREAMBUS_STOPPED on exit. Client has request-id demultiplexing, request timeout that best-effort sends CANCEL, per-subscription bounded queues, and optional heartbeat loop. Keep public names Broker, StreamBusClient, ClientSubscription, ServerConfig, UserConfig, Message, and protocol helpers stable; the broad file scope is required by the user task, not accidental."
+    },
+    {
+      "ts": 1793860923.3353055,
+      "category": "plan",
+      "content": "Test plan/current coverage. tests/support.py provides BrokerFixture (real temporary data dir, port 0, real TCP clients), raw_connect/raw_hello/send_cmd/read_until_error, wait_until, free_port/port_is_free, and cleanup helpers. Existing tests/test_protocol.py has 23 real passing tests covering framing, fragmentation/coalescing, oversize, malformed frames, binary payloads, publish/batch encoding, topic validation, and errors. tests/test_storage.py has 15 authored tests covering durable appends, binary data, torn tail/header recovery, CRC/magic/length/cursor corruption/quarantine, ACK idempotence, torn and invalid ACK lines. Need at least 50 total meaningful test methods and must add: real auth/role/limits, publish/subscribe multi-subscriber, binary over TCP, reconnect/replay/ACK, restart recovery, duplicate ACK, malformed/oversize/pipelined frames, slow consumer both policies, idle timeout, graceful shutdown, admin kick/stats, client timeout/cancel, CLI port 0 subprocess, 32 concurrent clients, no leaked ports/sessions/tasks."
+    },
+    {
+      "ts": 1793860923.3353057,
+      "category": "plan",
+      "content": "Next concrete actions, in order: (1) run `python -m unittest tests.test_storage -v` and fix any storage expectation failures; (2) add broker/client integration tests under tests/ using real sockets, including 32-client concurrent binary test and slow-consumer tests; (3) add CLI subprocess test that parses STREAMBUS_LISTENING and verifies shutdown/port release; (4) add auth/config/security and admin tests; (5) write README with startup/config/protocol/API/failure semantics/capacity/delivery guarantees and examples/; (6) run `python -m unittest discover -s tests -v`, `python -m compileall streambus examples tests`, remove or relocate smoke.py, and verify no lingering connections/tasks after teardown; (7) report actual commands/results and unresolved items. Use real I/O and real persistence; do not substitute mocks for core integration paths."
+    },
+    {
+      "ts": 1793860923.335306,
+      "category": "failure",
+      "content": "Fixed major shutdown/task-cycle bug. Original Connection._close_impl awaited self.reader_task after cancelling it. Since the reader/session task normally waits on the close task, this formed a task cycle and Python 3.13 Task.cancel recursively called itself until RecursionError, leaving pending tasks and event-loop errors. Fix in streambus/broker.py::_close_impl: never await the reader task from the close path; just cancel it and let the reader's own finally block close the session. smoke.py then passed and active task count returned 0. Do not reintroduce awaiting reader_task in that path; guard against writer/reader/close-task cycles in future changes."
+    },
+    {
+      "ts": 1793860923.3353062,
+      "category": "failure",
+      "content": "Test-semantic lesson: for a torn topic payload, RecoveryReport.bytes_truncated is the entire short payload remaining after the header, not merely the number of original bytes removed by the test. The torn-payload test was corrected to expect 53 bytes for the deliberately shortened third record. Keep assertions tied to actual recovery semantics and do not weaken the real corruption/failure paths to make counts pass. Shell tooling also rejects complex dynamic shell constructs such as injected status checks; prefer simple commands or checked-in workspace Python scripts."
+    }
+  ],
+  "reminder": {
+    "revision": 1,
+    "completed_steps": 25,
+    "last_check_step": 25,
+    "pressure_notified": false
+  }
+}

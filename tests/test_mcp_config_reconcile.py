@@ -52,29 +52,31 @@ def test_layered_configs_replace_by_name_and_require_project_command_trust(
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     user, project, trust_path = _configure_paths(monkeypatch, config, tmp_path)
+    for name in ("user-command", "user-only", "project-command", "project-only", "environment-command", "changed-command"):
+        (tmp_path / (name + ".py")).write_text("print('fixture')\n", encoding="utf-8")
     _write_json(user, {
         "servers": {
-            "shared": {"command": ["user-command"]},
-            "user-only": {"command": ["user-only"]},
+            "shared": {"command": [sys.executable, str(tmp_path / "user-command.py")]},
+            "user-only": {"command": [sys.executable, str(tmp_path / "user-only.py")]},
         }
     })
     _write_json(project, {
         "servers": {
-            "shared": {"command": ["project-command"]},
-            "project-only": {"command": ["project-only"]},
+            "shared": {"command": [sys.executable, str(tmp_path / "project-command.py")]},
+            "project-only": {"command": [sys.executable, str(tmp_path / "project-only.py")]},
         }
     })
     _trust_project_control(workspace, monkeypatch)
     monkeypatch.setattr(
         config,
         "MCP_SERVERS_JSON",
-        json.dumps({"servers": {"shared": {"command": ["environment-command"]}}}),
+        json.dumps({"servers": {"shared": {"command": [sys.executable, str(tmp_path / "environment-command.py")]}}}),
     )
 
     configs = load_mcp_server_configs(workspace=workspace, compatibility_mode=True)
     by_name = {server.name: server for server in configs}
 
-    assert by_name["shared"].command == ("environment-command",)
+    assert by_name["shared"].command == (sys.executable, str(tmp_path / "environment-command.py"))
     assert by_name["shared"].source == "environment"
     assert by_name["shared"].trusted is True
     assert by_name["user-only"].source == "user"
@@ -94,7 +96,7 @@ def test_layered_configs_replace_by_name_and_require_project_command_trust(
 
     _write_json(project, {
         "servers": {
-            "project-only": {"command": ["changed-command"]},
+            "project-only": {"command": [sys.executable, str(tmp_path / "changed-command.py")]},
         }
     })
     _trust_project_control(workspace, monkeypatch)

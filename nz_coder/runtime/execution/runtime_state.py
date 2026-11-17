@@ -11,26 +11,26 @@
 
 from __future__ import annotations
 
+from nz_coder.runtime.conversation.runtime_checkpoint import build_runtime_checkpoint, write_runtime_snapshot
+
 import json
 import math
-import os
 import re
 import threading
-import tempfile
 import time
-from dataclasses import asdict, dataclass, field, fields as dataclass_fields
+from dataclasses import dataclass, field, fields as dataclass_fields
 from pathlib import Path
 
 from nz_coder.runtime.verification.reference_evidence import (
     capture_references, extend_references, observe_reference_read, sanitize_references,
 )
 from nz_coder.runtime.agent.task_policy import (
-    detect_task_mode,
     is_broad_test_command,
     is_documentation_file,
     is_exact_test_command,
     is_test_file,
     explicit_instruction_paths,
+    explicit_read_only_paths,
     extract_explicit_mutation_operations,
     successful_mutation_operations,
     task_forbids_test_changes,
@@ -314,10 +314,7 @@ def _is_exact_test(command: str) -> bool:
 
 @dataclass
 class RuntimeState:
-    """Agent 运行时客观状态，由系统在每轮工具调用后自动更新。
-
-    所有字段都是客观事实（工具调用记录），不包含 agent 的主观判断。
-    """
+    """持有执行事实与模型判断；task_assessment_state不具授权或验证权威。"""
 
     # ── Turn / Time ──────────────────────────────────────────────────────────
     turn_count: int = 0
@@ -339,14 +336,16 @@ class RuntimeState:
     # ── L1 acceptance criteria ───────────────────────────────────────────────
     acceptance_criteria: list[str] = field(default_factory=list)
     requested_paths: list[str] = field(default_factory=list)
-    task_mode: str = "unknown"
+    task_assessment_state: dict = field(default_factory=dict)
     wants_tests: bool = False
     forbids_test_changes: bool = False
 
     # ── Planning tracking ───────────────────────────────────────────────────
     plan_generated: bool = False
     plan_text: str = ""
-    replan_count: int = 0
+    plan_revision: int = 0
+    plan_last_commit: dict = field(default_factory=dict)
+    execution_handoff: dict = field(default_factory=dict)
     open_todo_items: int = 0
     task_reference_evidence: list[dict] = field(default_factory=list)
     task_references_bound: bool = False
@@ -354,25 +353,20 @@ class RuntimeState:
     task_authority_message_id: str = ""
     task_reference_omitted_count: int = 0
     task_contract: dict = field(default_factory=dict)
-    requirement_ledger: dict = field(default_factory=dict)
+    workspace_observation: dict = field(default_factory=dict)
     completion_gate_prompts: int = 0
     completion_gate_signature: str = ""
     initial_task_text: str = ""
     current_round_instruction_text: str = ""
-    initial_plan_complexity: str = ""
     patch_risk: dict = field(default_factory=dict)
     risk_feedback_fingerprint: str = ""
-    risk_replan_fingerprint: str = ""
 
     # ── Verification tracking ────────────────────────────────────────────────
     verification_attempts: int = 0    # 总验证尝试次数
-    py_compile_ok: bool = False      # 兼容旧字段：最近一次 verify_changed_files 是否可接受
-    changed_files_verified: bool = False
     broad_test_attempts: int = 0     # 跑了多少次 broad test runner
     exact_test_attempts: int = 0     # 跑了多少次精确测试
-    verification_contract: dict = field(default_factory=dict)
+    verification_definition: dict = field(default_factory=dict)
     verification_failures: int = 0
-    last_verification_failure: str = ""
     completion_review_rejections: int = 0
     last_completion_review_rejection: str = ""
     completion_review_generation: int = -1
@@ -387,10 +381,10 @@ class RuntimeState:
     read_files: list[str] = field(default_factory=list)
     investigation_calls_since_edit: int = 0
     mutation_generation: int = 0
+    last_mutation_paths: tuple[str, ...] = ()
     source_mutation_generation: int = 0
     acceptance_mutation_generation: int | None = None
     diff_generation: int = -1
-    verification_generation: int = -1
     strict_progress_nudges: int = 0
     strict_progress_blocks: int = 0
     budget_zones_emitted: list[str] = field(default_factory=list)
@@ -434,10 +428,15 @@ class RuntimeState:
         # Sidecar judges settle on helper threads.  This lock is deliberately
         # runtime-local and dynamic so dataclass serialization never sees it.
         self._provider_accounting_lock = threading.RLock()
+        self._persistence_lock = threading.RLock()
         self._ephemeral_scratch_paths: set[str] = set()
+        self._verification_context = None
+        self._restored_verification_domain = None
 
     def reset(self, max_turns: int = 80, timeout_seconds: int = 0):
         """在每次 run() 开始时调用。"""
+        self._restored_verification_domain = None
+        self.workspace_observation = {}
         self.turn_count = 0
         self.max_turns = max_turns
         self.started_at = time.time()
@@ -453,13 +452,15 @@ class RuntimeState:
         self.source_only = False
         self.acceptance_criteria = []
         self.requested_paths = []
-        self.task_mode = "unknown"
+        self.task_assessment_state = {}
         self.wants_tests = False
         self.forbids_test_changes = False
 
         self.plan_generated = False
         self.plan_text = ""
-        self.replan_count = 0
+        self.plan_revision = 0
+        self.plan_last_commit = {}
+        self.execution_handoff = {}
         self.open_todo_items = 0
         self.task_reference_evidence = []
         self.task_references_bound = False
@@ -467,24 +468,18 @@ class RuntimeState:
         self.task_authority_message_id = ""
         self.task_reference_omitted_count = 0
         self.task_contract = {}
-        self.requirement_ledger = {}
         self.completion_gate_prompts = 0
         self.completion_gate_signature = ""
         self.initial_task_text = ""
         self.current_round_instruction_text = ""
-        self.initial_plan_complexity = ""
         self.patch_risk = {}
         self.risk_feedback_fingerprint = ""
-        self.risk_replan_fingerprint = ""
 
         self.verification_attempts = 0
-        self.py_compile_ok = False
-        self.changed_files_verified = False
         self.broad_test_attempts = 0
         self.exact_test_attempts = 0
-        self.verification_contract = {}
+        self.verification_definition = {}
         self.verification_failures = 0
-        self.last_verification_failure = ""
         self.completion_review_rejections = 0
         self.last_completion_review_rejection = ""
         self.completion_review_generation = -1
@@ -498,10 +493,10 @@ class RuntimeState:
         self.read_files = []
         self.investigation_calls_since_edit = 0
         self.mutation_generation = 0
+        self.last_mutation_paths = ()
         self.source_mutation_generation = 0
         self.acceptance_mutation_generation = 0
         self.diff_generation = -1
-        self.verification_generation = -1
         self.strict_progress_nudges = 0
         self.strict_progress_blocks = 0
         self.budget_zones_emitted = []
@@ -533,15 +528,18 @@ class RuntimeState:
         self._diff_seen_from_tool = False
         self._ephemeral_scratch_paths = set()
 
-    def set_acceptance_criteria_from_text(self, text: str, limit: int = 5) -> None:
+    def set_acceptance_criteria_from_text(self, text: str, limit: int = 5, *, workspace=None) -> None:
         """从用户任务文本中提取轻量 L1 验收标准。"""
         self.acceptance_criteria = extract_acceptance_criteria(text, limit=limit)
         self.requested_paths = extract_explicit_mutation_paths(text, limit=20)
-        self.task_mode = detect_task_mode(text)
         self.wants_tests = task_wants_tests(text)
         self.forbids_test_changes = task_forbids_test_changes(text)
         contract = extract_verification_contract(text)
-        self.verification_contract = contract.to_dict() if contract else {}
+        self.verification_definition = {"command": contract.command, "targets": list(contract.targets)} if contract else {}
+        from nz_coder.runtime.agent.task_contract import derive_task_contract
+        from nz_coder.runtime.verification.verification_contract import extract_verification_contracts
+        self.set_task_contract(derive_task_contract(text, workspace=workspace,
+            acceptance_commands=tuple(item.command for item in extract_verification_contracts(text))))
 
     def apply_current_round_instruction(
         self,
@@ -576,37 +574,45 @@ class RuntimeState:
             limit=20,
         )
 
+        self.apply_current_round_test_preferences(text)
         forbids_test_changes = task_forbids_test_changes(text)
         wants_tests = task_wants_tests(text)
-        if forbids_test_changes:
-            self.forbids_test_changes = True
-            self.wants_tests = False
-        elif wants_tests:
-            self.forbids_test_changes = False
-            self.wants_tests = True
+        allow_test_changes = False if self.forbids_test_changes else True if wants_tests else None
 
-        contract = extract_verification_contract(text)
-        if contract is not None:
-            self.verification_contract = contract.to_dict()
+        from nz_coder.runtime.verification.verification_contract import extract_verification_contracts
+        contracts = extract_verification_contracts(text)
+        if contracts:
+            contract = contracts[0]
+            self.verification_definition = {"command": contract.command, "targets": list(contract.targets)}
             self._merge_current_round_contract(
                 text,
-                contract.command,
+                tuple(item.command for item in contracts),
                 workspace=workspace,
                 explicit_paths=tuple(current_paths),
-                allow_test_changes=(
-                    False
-                    if forbids_test_changes
-                    else True if wants_tests else None
-                ),
+                allow_test_changes=allow_test_changes,
             )
         else:
             mutation_paths = extract_explicit_mutation_paths(text, limit=20)
-            if mutation_paths:
+            if mutation_paths or self.task_contract or forbids_test_changes or explicit_read_only_paths(text):
                 self._merge_current_round_artifacts(
                     text,
                     workspace=workspace,
                     explicit_paths=tuple(mutation_paths),
+                    allow_test_changes=allow_test_changes,
                 )
+        readonly = {path for clause in self.task_contract.get("constraints", ())
+                    for path in explicit_read_only_paths(clause)}
+        self.requested_paths = [path for path in self.requested_paths
+                                if path not in readonly and not (self.forbids_test_changes and is_test_file(path))]
+
+    def apply_current_round_test_preferences(self, text: str) -> None:
+        """独立更新测试编辑偏好，避免新任务重新合并撤销前言的路径。"""
+        if task_forbids_test_changes(text):
+            self.forbids_test_changes = True
+            self.wants_tests = False
+        elif task_wants_tests(text):
+            self.forbids_test_changes = False
+            self.wants_tests = True
 
     def _merge_current_round_artifacts(
         self,
@@ -614,29 +620,22 @@ class RuntimeState:
         *,
         workspace: str | Path | None,
         explicit_paths: tuple[str, ...],
+        allow_test_changes: bool | None = None,
     ) -> None:
         """Add hard write facts without inventing semantic behavior criteria."""
-        from nz_coder.runtime.agent.task_contract import (
-            RequirementLedger,
-            TaskContract,
-            derive_round_artifact_contract,
-            merge_round_task_contract,
-        )
+        from nz_coder.runtime.agent.task_contract import derive_round_artifact_contract, merge_round_task_contract, parse_task_contract
+        from nz_coder.runtime.verification.domain.requirements import TaskContract
 
         try:
             if self.task_contract:
-                if not self.requirement_ledger:
-                    return
-                current = TaskContract.from_dict(
+                current = parse_task_contract(
                     self.task_contract,
                     workspace=workspace,
                 )
-                ledger = self.requirement_ledger_snapshot()
             else:
                 current = TaskContract(
                     objective=str(self.initial_task_text or text).strip()[:2000]
                 )
-                ledger = RequirementLedger()
             round_contract = derive_round_artifact_contract(
                 text,
                 artifact_paths=explicit_paths,
@@ -644,54 +643,44 @@ class RuntimeState:
             )
         except (TypeError, ValueError):
             return
-        merged_contract, merged_ledger = merge_round_task_contract(
-            current,
-            ledger,
-            round_contract,
-        )
-        self.task_contract = merged_contract.to_dict()
-        self.requirement_ledger = merged_ledger.to_dict()
+        merged_contract = merge_round_task_contract(current, round_contract,
+            allow_test_changes=allow_test_changes, allow_write_paths=explicit_paths)
+        self.set_task_contract(merged_contract)
 
     def _merge_current_round_contract(
         self,
         text: str,
-        command: str,
+        commands: tuple[str, ...],
         *,
         workspace: str | Path | None,
         explicit_paths: tuple[str, ...],
         allow_test_changes: bool | None,
     ) -> None:
         """Extend an existing deterministic ledger with explicit round work."""
-        if not self.task_contract or not self.requirement_ledger:
-            return
-        from nz_coder.runtime.agent.task_contract import (
-            TaskContract,
-            derive_task_contract,
-            merge_round_task_contract,
-        )
+        from nz_coder.runtime.agent.task_contract import derive_task_contract, merge_round_task_contract, parse_task_contract
+        from nz_coder.runtime.verification.domain.requirements import TaskContract
 
         try:
-            current = TaskContract.from_dict(
+            current = parse_task_contract(
                 self.task_contract,
                 workspace=workspace,
-            )
+            ) if self.task_contract else TaskContract(objective=str(self.initial_task_text or text).strip()[:2000])
             round_contract = derive_task_contract(
                 text,
-                acceptance_command=command,
+                acceptance_commands=commands,
                 workspace=workspace,
                 artifact_allowlist=explicit_paths,
                 explicit_path_allowlist=explicit_paths,
             )
         except (TypeError, ValueError):
             return
-        merged_contract, merged_ledger = merge_round_task_contract(
+        merged_contract = merge_round_task_contract(
             current,
-            self.requirement_ledger_snapshot(),
             round_contract,
             allow_test_changes=allow_test_changes,
+            allow_write_paths=explicit_paths,
         )
-        self.task_contract = merged_contract.to_dict()
-        self.requirement_ledger = merged_ledger.to_dict()
+        self.set_task_contract(merged_contract)
 
     def record_recovery_diagnostic(self, diagnostic: str) -> None:
         """Persist structured failure facts for later closure decisions."""
@@ -775,15 +764,24 @@ class RuntimeState:
         )]
 
     def set_task_contract(self, contract) -> None:
-        """Bind a validated planner contract and initialize its evidence ledger."""
-        from nz_coder.runtime.agent.task_contract import RequirementLedger, TaskContract
+        """宿主提交完整当前定义；模型规划没有此入口的调用权。"""
+        from contextlib import nullcontext
+        from nz_coder.runtime.verification.domain.requirements import TaskContract
+        from nz_coder.runtime.verification.domain.models import TaskDefinition
 
-        if not isinstance(contract, TaskContract) or not contract.requirements:
-            self.task_contract = {}
-            self.requirement_ledger = {}
-            return
-        self.task_contract = contract.to_dict()
-        self.requirement_ledger = RequirementLedger.from_contract(contract).to_dict()
+        context = self._verification_context
+        with context._state_lock if context is not None else nullcontext():
+            domain = self.verification_domain
+            if not isinstance(contract, TaskContract):
+                raise TypeError("host task contract must be a TaskContract")
+            if domain is not None:
+                domain.declare_task(TaskDefinition(domain.scope.task, self.task_authority_epoch,
+                                                   self.task_authority_message_id, contract))
+                contract = domain.task_definition.contract
+            self.task_contract = contract.to_dict()
+            from nz_coder.runtime.agent.task_policy import test_command_targets
+            first = contract.acceptance_commands[0] if contract.acceptance_commands else ""
+            self.verification_definition = {"command": first, "targets": list(test_command_targets(first))} if first else {}
 
     def contract_owns_progress(self) -> bool:
         """Return whether the Runtime ledger is the sole plan-state owner."""
@@ -795,49 +793,13 @@ class RuntimeState:
         ) is None
 
     def requirement_ledger_snapshot(self):
-        """Return a typed copy of the persisted requirement ledger."""
-        from nz_coder.runtime.agent.task_contract import RequirementLedger
-
-        return RequirementLedger.from_dict(self.requirement_ledger)
-
-    def observe_requirement_verification(
-        self,
-        command: str,
-        *,
-        passed: bool,
-        acceptance: bool,
-    ) -> None:
-        """Record current-generation verification against requirement candidates."""
-        if not self.requirement_ledger:
-            return
-        ledger = self.requirement_ledger_snapshot()
-        ledger.observe_verification(
-            (
-                effective_acceptance_generation(self)
-                if acceptance else self.mutation_generation
-            ),
-            command=command,
-            passed=passed,
-            acceptance=acceptance,
-        )
-        self.requirement_ledger = ledger.to_dict()
-
-    def observe_requirement_semantic_review(
-        self,
-        *,
-        accepted: bool,
-        fingerprint: str = "",
-    ) -> None:
-        """Record one independent semantic verdict for this mutation."""
-        if not self.requirement_ledger:
-            return
-        ledger = self.requirement_ledger_snapshot()
-        ledger.observe_semantic_review(
-            effective_acceptance_generation(self),
-            accepted=accepted,
-            fingerprint=fingerprint,
-        )
-        self.requirement_ledger = ledger.to_dict()
+        """需求状态只从域读取；没有执行事实时只能得到待办投影。"""
+        from nz_coder.runtime.verification.domain.requirements import RequirementLedgerView
+        from nz_coder.runtime.agent.task_contract import parse_task_contract
+        domain = self.verification_domain
+        if domain is not None:
+            return RequirementLedgerView.from_snapshot(domain.snapshot())
+        return RequirementLedgerView.from_contract(parse_task_contract(self.task_contract))
 
     def observe_completion_review_rejection(self, reason: str) -> None:
         """Record objective review feedback that authorizes bounded repair work.
@@ -854,7 +816,10 @@ class RuntimeState:
         """Return whether semantic review is the sole missing contract fact."""
         return bool(
             self.requirement_ledger
-            and self.requirement_ledger_snapshot().semantic_review_pending_only()
+            and self.requirement_ledger_snapshot().semantic_review_pending_only(
+                acceptance_required=bool(self.verification_contract),
+                generation=effective_acceptance_generation(self),
+            )
         )
 
     def observe_provider_call(
@@ -983,18 +948,16 @@ class RuntimeState:
             int(self.provider_turns_by_outcome.get(outcome) or 0) + 1
         )
 
-    def _observe_requirement_mutation(self, paths: list[str], operations: dict[str, str] | None = None) -> None:
-        if not self.requirement_ledger:
-            return
-        ledger = self.requirement_ledger_snapshot()
-        ledger.observe_mutation(self.mutation_generation, paths, operations=operations)
-        self.requirement_ledger = ledger.to_dict()
-
     def _record_workspace_mutation(self, paths: list[str], operations: dict[str, str] | None = None) -> None:
         """Advance mutation-scoped state for one settled workspace write."""
         self.last_edit_turn = self.turn_count
         self.edits_this_run += 1
         self.mutation_generation += 1
+        self.last_mutation_paths = tuple(paths)
+        self.has_diff = True
+        for path in paths:
+            if path not in self.changed_files:
+                self.changed_files.append(path)
         if self.acceptance_mutation_generation is None:
             self.acceptance_mutation_generation = max(
                 0, self.mutation_generation - 1
@@ -1007,25 +970,74 @@ class RuntimeState:
         self.strict_progress_nudges = 0
         self.strict_progress_blocks = 0
         self.transition = "edited_source"
-        self._observe_requirement_mutation(paths, operations)
 
-    def task_complexity(self) -> str:
-        """按当前 diff/edit 规模给任务分级：L0/L1/L2/L3。"""
-        changed_count = len(self.changed_files)
-        if self.edits_this_run == 0 and self.diff_chars == 0:
-            return "L0"
-        if self.edits_this_run <= 1 and self.diff_chars <= 1200 and changed_count <= 1:
-            return "L1"
-        if self.edits_this_run <= 3 and self.diff_chars <= 6000 and changed_count <= 4:
-            return "L2"
-        return "L3"
+    def bind_run_context(self, context) -> None:
+        previous = self._verification_context
+        if previous is not None and previous is not context and not previous.finalized:
+            raise RuntimeError("Previous run settlement is still active")
+        self._verification_context = context
+
+    @property
+    def verification_domain(self):
+        context = self._verification_context
+        return context.verification if context is not None else None
+
+    @property
+    def verification_contract(self) -> dict:
+        definition = self.verification_definition
+        command = str(definition.get("command") or "")
+        if not command:
+            return {}
+        targets = tuple(definition.get("targets") or ())
+        domain = self.verification_domain
+        if domain is not None:
+            return domain.contract_projection(command, targets)
+        return VerificationContract(command, targets).to_dict()
+
+    @property
+    def requirement_ledger(self) -> dict:
+        return self.requirement_ledger_snapshot().to_dict() if self.task_contract else {}
+
+    @property
+    def changed_files_verified(self) -> bool:
+        domain = self.verification_domain
+        return bool(domain and domain.snapshot().execution_ready and any(
+            item.status == "passed" for item in domain.snapshot().checks))
+
+    @property
+    def py_compile_ok(self) -> bool:
+        return self.changed_files_verified
+
+    @property
+    def verification_generation(self) -> int:
+        domain = self.verification_domain
+        snapshot = domain.snapshot() if domain is not None else None
+        return snapshot.version.generation if snapshot and snapshot.version.scope_complete and any(
+            item.status == "passed" for item in snapshot.checks) else -1
+
+    @property
+    def last_verification_failure(self) -> str:
+        domain = self.verification_domain
+        if domain is None:
+            return ""
+        failed = [item for item in domain.snapshot().checks if item.status == "failed"]
+        return failed[-1].reason if failed else ""
 
     def to_dict(self, active: bool = True) -> dict:
-        """序列化 RuntimeState，用于中断恢复。"""
-        data = asdict(self)
-        data["active"] = active
-        data["saved_at"] = time.time()
-        return data
+        """对外投影；恢复只接受 build_runtime_checkpoint 的域快照。"""
+        from contextlib import nullcontext
+        context = self._verification_context
+        with context._state_lock if context is not None else nullcontext():
+            data = build_runtime_checkpoint(self, active=active)
+            data.pop("verification_domain", None)
+            data.update(verification=self.verification_domain.snapshot().to_dict() if self.verification_domain is not None else {},
+                        verification_contract=self.verification_contract,
+                        requirement_ledger=self.requirement_ledger,
+                        changed_files_verified=self.changed_files_verified,
+                        py_compile_ok=self.py_compile_ok,
+                        verification_generation=self.verification_generation,
+                        last_verification_failure=self.last_verification_failure)
+            return data
 
     def restore(self, data: dict, *, allow_inactive: bool = False) -> bool:
         """Restore persisted fields, optionally for a resumable activation."""
@@ -1035,8 +1047,13 @@ class RuntimeState:
             return False
         # Old snapshots have no original reference evidence. Never recapture
         # today's potentially agent-modified file as an original on resume.
+        # 显式空值也是已有但损坏的材料，不能与未保存检查点混淆。
+        self._restored_verification_domain = (data["verification_domain"] if data["verification_domain"] is not None else {}) if "verification_domain" in data else None
         self.task_reference_evidence = []
+        self.execution_handoff = {}
         self.task_authority_epoch = 0
+        self.plan_revision = 0
+        self.plan_last_commit = {}
         self.task_authority_message_id = ""
         self.task_reference_omitted_count = 0
         self.task_references_bound = True
@@ -1066,19 +1083,21 @@ class RuntimeState:
         self.task_authority_message_id = identity if isinstance(identity, str) and re.fullmatch(r"msg-[A-Za-z0-9_-]{1,128}", identity) else ""
         self.task_references_bound = True
         self._sanitize_restored_control_state()
+        from nz_coder.runtime.agent.planning_runtime import sanitize_working_plan_receipt
+        sanitize_working_plan_receipt(self)
         self._sanitize_restored_provider_accounting()
         return True
 
     def _sanitize_restored_control_state(self) -> None:
         """Normalize all non-Provider fields loaded from an untrusted snapshot."""
         nonnegative_defaults = {
+            "plan_revision": 0,
             "turn_count": 0,
             "max_turns": 80,
             "timeout_seconds": 0,
             "last_edit_turn": 0,
             "edits_this_run": 0,
             "diff_chars": 0,
-            "replan_count": 0,
             "open_todo_items": 0,
             "completion_gate_prompts": 0,
             "verification_attempts": 0,
@@ -1103,7 +1122,6 @@ class RuntimeState:
         for name in (
             "completion_review_generation",
             "diff_generation",
-            "verification_generation",
         ):
             setattr(self, name, _signed_int(getattr(self, name)))
 
@@ -1129,36 +1147,25 @@ class RuntimeState:
 
         for name in (
             "task_contract",
-            "requirement_ledger",
             "patch_risk",
-            "verification_contract",
+            "verification_definition",
         ):
             value = getattr(self, name)
             setattr(self, name, value if isinstance(value, dict) else {})
 
-        from nz_coder.runtime.agent.task_contract import RequirementLedger, TaskContract
+        from nz_coder.runtime.agent.task_contract import parse_task_contract
 
         if self.task_contract:
             try:
-                self.task_contract = TaskContract.from_dict(
+                self.task_contract = parse_task_contract(
                     self.task_contract
                 ).to_dict()
             except (TypeError, ValueError):
                 self.task_contract = {}
-        if self.requirement_ledger:
-            try:
-                self.requirement_ledger = RequirementLedger.from_dict(
-                    self.requirement_ledger
-                ).to_dict()
-            except (TypeError, ValueError):
-                self.requirement_ledger = {}
-        if self.verification_contract:
-            try:
-                self.verification_contract = VerificationContract.from_dict(
-                    self.verification_contract
-                ).to_dict()
-            except (TypeError, ValueError):
-                self.verification_contract = {}
+        if self.verification_definition:
+            command = self.verification_definition.get("command")
+            targets = self.verification_definition.get("targets")
+            self.verification_definition = {"command": command, "targets": _string_list(targets, limit=500)} if isinstance(command, str) else {}
         if self.patch_risk:
             risk_signals = self.patch_risk.get("risk_signals")
             affected_files = self.patch_risk.get("affected_files")
@@ -1193,8 +1200,6 @@ class RuntimeState:
             "wants_tests",
             "forbids_test_changes",
             "plan_generated",
-            "py_compile_ok",
-            "changed_files_verified",
             "needs_broad_exploration",
             "_state_block_emitted",
             "_diff_seen_from_tool",
@@ -1205,15 +1210,11 @@ class RuntimeState:
             self.workspace_git_available = None
 
         for name in (
-            "task_mode",
             "plan_text",
             "completion_gate_signature",
             "initial_task_text",
             "current_round_instruction_text",
-            "initial_plan_complexity",
             "risk_feedback_fingerprint",
-            "risk_replan_fingerprint",
-            "last_verification_failure",
             "last_completion_review_rejection",
             "primary_recovery_classification",
             "budget_pressure_zone",
@@ -1301,6 +1302,9 @@ class RuntimeState:
         self.started_at = time.time()
         self.timeout_seconds = timeout_seconds
         self.last_edit_turn = 0
+        # 用户开启新一轮执行后重新获得指导，旧任务事实和累计用量继续保留。
+        self.completion_gate_prompts = 0
+        self.completion_gate_signature = ""
         self.budget_zones_emitted = []
         self.budget_pressure_zone = "green"
         self.work_phase = "normal"
@@ -1308,40 +1312,53 @@ class RuntimeState:
 
     def save(self, path: Path, active: bool = True) -> None:
         """Atomically persist a resumable RuntimeState checkpoint."""
-        rendered = json.dumps(
-            self.to_dict(active=active),
-            ensure_ascii=False,
-            indent=2,
-            allow_nan=False,
-        )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, temp_name = tempfile.mkstemp(
-            dir=path.parent,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-        )
-        temp_path = Path(temp_name)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                handle.write(rendered)
-                handle.write("\n")
-                handle.flush()
-                os.fsync(handle.fileno())
-            temp_path.replace(path)
-        except Exception:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-            temp_path.unlink(missing_ok=True)
-            raise
+        with self._persistence_lock:
+            self._write_snapshot(path, build_runtime_checkpoint(self, active=active))
+
+    def commit_execution_handoff(self, value: dict, path: Path | None = None) -> None:
+        """写盘在运行锁外；新指令到达后，旧候选不能发布或留在磁盘。"""
+        import copy
+        from contextlib import nullcontext
+
+        context = self._verification_context
+        lock = context._state_lock if context is not None else nullcontext()
+        with self._persistence_lock:
+            with lock:
+                authority = (self._verification_context, self.task_authority_epoch, self.task_authority_message_id)
+                candidate = copy.deepcopy(value)
+                if "epoch" in candidate and candidate["epoch"] != self.task_authority_epoch:
+                    raise ValueError("handoff authority changed before save")
+                snapshot = build_runtime_checkpoint(self, active=True)
+                snapshot["execution_handoff"] = candidate
+            if path is not None:
+                self._write_snapshot(path, snapshot)
+            with lock:
+                changed = authority != (self._verification_context, self.task_authority_epoch, self.task_authority_message_id)
+                if changed:
+                    current = build_runtime_checkpoint(self, active=True)
+                else:
+                    self.execution_handoff = candidate
+            if changed:
+                if path is not None:
+                    self._write_snapshot(path, current)
+                raise ValueError("handoff authority changed during save")
+
+    @staticmethod
+    def _write_snapshot(path: Path, snapshot: dict) -> None:
+        write_runtime_snapshot(path, snapshot)
 
     def load(self, path: Path, *, allow_inactive: bool = False) -> bool:
         """Load active state or an explicitly authorized resumable snapshot."""
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except FileNotFoundError:
             return False
+        except (OSError, UnicodeError, json.JSONDecodeError, RecursionError) as error:
+            from nz_coder.runtime.verification.domain.checkpoint import CheckpointRestoreError
+            raise CheckpointRestoreError() from error
+        if not isinstance(data, dict) or type(data.get("active")) is not bool:
+            from nz_coder.runtime.verification.domain.checkpoint import CheckpointRestoreError
+            raise CheckpointRestoreError()
         return self.restore(data, allow_inactive=allow_inactive)
 
     # ── Observation ───────────────────────────────────────────────────────────
@@ -1354,6 +1371,9 @@ class RuntimeState:
         *,
         succeeded: bool | None = None,
         metadata: dict | None = None,
+        workspace_changes: dict[str, str] | None = None,
+        workspace_scope_incomplete: bool = False,
+        verification_version_valid: bool = True,
     ) -> dict | None:
         """根据工具调用更新状态。
 
@@ -1432,9 +1452,20 @@ class RuntimeState:
                 if ephemeral:
                     self.transition = "edited_scratch"
                 else:
-                    self._record_workspace_mutation(
-                        paths, successful_mutation_operations(name, tool_input, output)
-                    )
+                    if workspace_scope_incomplete:
+                        # 保留文件工具可确认的产物事实，但不把这些路径冒充完整范围。
+                        self._record_workspace_mutation(
+                            paths, successful_mutation_operations(name, tool_input, output)
+                        )
+                    elif workspace_changes is None:
+                        self._record_workspace_mutation(
+                            paths, successful_mutation_operations(name, tool_input, output)
+                        )
+                    elif workspace_changes:
+                        self._record_workspace_mutation(list(workspace_changes), workspace_changes)
+            elif workspace_changes:
+                # 执行失败也可能留下部分写入；完整事实优先于成功提示文本。
+                self._record_workspace_mutation(list(workspace_changes), workspace_changes)
 
         # ── diff_status ──────────────────────────────────────────────────────
         elif name == "diff_status":
@@ -1442,7 +1473,7 @@ class RuntimeState:
             # 解析 diff_status 输出中的关键字段
             if "has_non_empty_diff: true" in output:
                 self.has_diff = True
-            elif "has_non_empty_diff: false" in output:
+            elif "has_non_empty_diff: false" in output and not self.changed_files:
                 self.has_diff = False
 
             # 提取 diff_chars
@@ -1450,30 +1481,13 @@ class RuntimeState:
             if m:
                 self.diff_chars = int(m.group(1))
 
-            # 提取 changed_files
-            in_files = False
-            self.changed_files = []
-            for line in output.splitlines():
-                stripped = line.strip()
-                if stripped == "Changed files:":
-                    in_files = True
-                    continue
-                if in_files:
-                    if stripped.startswith("- ") or stripped.startswith("  - "):
-                        continue  # still in changed files section
-                    if stripped == "(none)":
-                        in_files = False
-                    elif stripped and not stripped.startswith("R"):
-                        in_files = False
-                # Actually read the changed files from the "  path" format
-            self.changed_files = self._parse_changed_files(output)
-            if self.changed_files:
-                self._observe_requirement_mutation(self.changed_files)
+            # diff 工具的视图可能只覆盖文件工具；不能覆盖已观察到的 shell 变更。
+            self.changed_files = list(dict.fromkeys([
+                *self.changed_files, *self._parse_changed_files(output),
+            ]))
 
             if "tests_modified: true" in output:
                 self.tests_modified = True
-            elif "tests_modified: false" in output:
-                self.tests_modified = False
             if "source_only: true" in output:
                 self.source_only = True
             elif "source_only: false" in output:
@@ -1486,24 +1500,9 @@ class RuntimeState:
 
             self.transition = "checked_diff"
 
-        # ── verify_changed_files ──────────────────────────────────────────────
+        # 验证进度只是调度计数，结论由执行事实进入域后统一计算。
         elif name in ("verify_changed_files", "verify_project_build"):
             self.verification_attempts += 1
-            if output.startswith(("OK:", "WARN:")):
-                self.py_compile_ok = True
-                self.changed_files_verified = True
-                if output.startswith("OK:"):
-                    self.verification_generation = self.mutation_generation
-                    self.observe_requirement_verification(
-                        name,
-                        passed=True,
-                        acceptance=False,
-                    )
-            elif output.startswith("FAIL:"):
-                self.py_compile_ok = False
-                self.changed_files_verified = False
-                self.verification_generation = -1
-                self._record_verification_failure(output)
             self.transition = "verified"
 
         # ── bash ──────────────────────────────────────────────────────────────
@@ -1512,7 +1511,10 @@ class RuntimeState:
             from nz_coder.tool_platform.command_policy import classify_bash
 
             shell_classification = classify_bash(str(command or ""))
-            if shell_classification.get("mutating"):
+            if workspace_changes is not None:
+                if workspace_changes:
+                    self._record_workspace_mutation(list(workspace_changes), workspace_changes)
+            elif not workspace_scope_incomplete and shell_classification.get("mutating"):
                 self._record_workspace_mutation([])
             if shell_classification.get("reason") in {
                 "package install", "package manager write",
@@ -1527,66 +1529,7 @@ class RuntimeState:
                 self.exact_test_attempts += 1
                 self.transition = "ran_exact_test"
 
-            contract_data = self.verification_contract
-            if (
-                contract_data
-                and not (
-                    tool_input.get("_nz_runtime_contract")
-                    and self._declared_runtime_verification(tool_input)
-                )
-                and self.has_diff
-                and self.mutation_generation > 0
-            ):
-                contract = VerificationContract.from_dict(contract_data)
-                acceptance_generation = effective_acceptance_generation(self)
-                if (
-                    contract.attempted_generation < acceptance_generation
-                    and contract.matches_command(str(command or ""))
-                ):
-                    passed = (
-                        bool(succeeded)
-                        if succeeded is not None
-                        else not output.startswith(
-                            ("Error:", "Denied", "Command exited with code")
-                        )
-                    )
-                    contract.record_attempt(
-                        acceptance_generation,
-                        passed=passed,
-                        output=output,
-                        source="model",
-                    )
-                    self.verification_contract = contract.to_dict()
-                    if passed:
-                        self.py_compile_ok = True
-                        self.changed_files_verified = True
-                        self.verification_generation = self.mutation_generation
-                    else:
-                        self.py_compile_ok = False
-                        self.changed_files_verified = False
-                        self.verification_generation = -1
-                        self._record_verification_failure(output)
-                    acceptance_observation = {
-                        "command": str(command or ""),
-                        "output": output,
-                        "passed": passed,
-                    }
-                    self.observe_requirement_verification(
-                        str(command or ""),
-                        passed=passed,
-                        acceptance=True,
-                    )
-
         return acceptance_observation
-
-    def _record_verification_failure(self, output: str) -> None:
-        self.verification_failures += 1
-        self.last_verification_failure = str(output or "")[-4000:]
-        lowered = self.last_verification_failure.casefold()
-        self.needs_broad_exploration = any(marker in lowered for marker in (
-            "error collecting", "errors during collection", "no module named",
-            "environment", "dependency missing",
-        ))
 
     def _parse_changed_files(self, output: str) -> list[str]:
         """从 diff_status 输出中解析 changed files 列表。
@@ -1870,11 +1813,12 @@ class RuntimeState:
             return True
         return len(tokens) > 1 and tokens[0] == "git" and tokens[1] == "grep"
 
-    def build_prompt_block(self, strict: bool = False) -> str:
-        """返回 <system-reminder> 状态块，注入到 system prompt 末尾。
+    def build_prompt_block(self, strict: bool = False, *, include_current_facts: bool = True) -> str:
+        """生成运行观察与预算提示，由请求组装器放入当前动态上下文。
 
-        仅在状态有意义时才返回非空字符串（有 diff、接近限制、在空转等）。
-        空字符串表示当前不需要注入状态提醒。
+        include_current_facts=False 时，验收事实由独立 renderer 呈现，避免重复展示。
+        仅在需要提示时返回非空块；调查提醒的观察计数仍沿用原逻辑。
+        本方法不维护模型工作记忆，也不另建任务状态。
         """
         reminders: list[str] = []
 
@@ -1882,56 +1826,33 @@ class RuntimeState:
         elapsed = int(t_now - self.started_at) if self.started_at else 0
         turns_remaining = max(0, self.max_turns - self.turn_count)
         time_remaining = max(0, self.timeout_seconds - elapsed) if self.timeout_seconds else 0
-        complexity = self.task_complexity()
-        acceptance_passed_current_generation = False
-        acceptance_is_terminal_evidence = False
-        if self.verification_contract and self.mutation_generation > 0:
-            try:
-                contract = VerificationContract.from_dict(
-                    self.verification_contract
-                )
-                acceptance_passed_current_generation = bool(
-                    contract.passed is True
-                    and contract.attempted_generation
-                    == effective_acceptance_generation(self)
-                )
-                acceptance_is_terminal_evidence = bool(
-                    contract.source == "model"
-                    or contract.zone == "completion"
-                )
-            except (TypeError, ValueError):
-                acceptance_passed_current_generation = False
-                acceptance_is_terminal_evidence = False
+        from nz_coder.runtime.verification.verification_contract import declared_acceptance
+        checks = declared_acceptance(self)
+        acceptance_passed_current_generation = bool(checks) and all(item["status"] == "passed" for item in checks)
+        acceptance_is_terminal_evidence = bool(checks) and all(
+            item.get("origin") == "model" or item.get("zone") in {"completion", "scheduled"} for item in checks)
 
-        if (
-            self.investigation_calls_since_edit >= STRICT_INVESTIGATION_SOFT_LIMIT
-            and self.strict_progress_nudges == 0
-        ):
-            if strict:
+        if self.investigation_calls_since_edit >= STRICT_INVESTIGATION_SOFT_LIMIT:
+            # 次数是观察，不足以推断调查失败；保持原提醒窗口，不强制编辑或交接。
+            reminders.append(
+                "INVESTIGATION OBSERVATION: "
+                f"{self.investigation_calls_since_edit} investigation calls have completed "
+                "since the last source edit."
+            )
+            if self.strict_progress_nudges == 0:
                 reminders.append(
-                    "STRICT CONVERGENCE: "
-                    f"{self.investigation_calls_since_edit} investigation calls have completed "
-                    "since the last source edit. Synthesize the evidence now. Make the smallest "
-                    "plausible source edit, call diff_status, or finish with a concrete blocker; "
-                    "do not broaden the search."
+                    "Synthesize the current evidence and choose the useful next step: "
+                    "continued investigation, an edit, verification, or explaining a concrete blocker. "
+                    "Update the working plan only if the route changes. The call count alone "
+                    "does not establish stagnation or require an edit or execution handoff."
                 )
-            else:
-                reminders.append(
-                    "CONVERGENCE NUDGE: "
-                    f"{self.investigation_calls_since_edit} investigation calls have completed "
-                    "since the last source edit. Summarize the evidence, state the current "
-                    "hypothesis, and identify the next precise read or smallest safe change. "
-                    "Continue legitimate investigation when evidence is incomplete; do not "
-                    "make speculative edits or broaden the search."
-                )
-            self.strict_progress_nudges += 1
+                self.strict_progress_nudges += 1
 
         # ── 1. Turn / Time budget ────────────────────────────────────────────
-        if complexity != "L0" or turns_remaining <= 10 or (time_remaining and time_remaining <= 120):
+        if self.has_diff or turns_remaining <= 10 or (time_remaining and time_remaining <= 120):
             budget_lines = [
                 f"Turn {self.turn_count}/{self.max_turns}",
-                f"task_complexity={complexity}",
-                f"task_mode={self.task_mode}",
+                f"edits={self.edits_this_run}, files={len(self.changed_files)}, diff_chars={self.diff_chars}",
             ]
             if self.timeout_seconds:
                 budget_lines.append(f"Time {elapsed}s/{self.timeout_seconds}s")
@@ -1939,11 +1860,11 @@ class RuntimeState:
                                (f", {time_remaining}s" if self.timeout_seconds else ""))
             reminders.append(" | ".join(budget_lines))
 
-        # ── 2. Acceptance criteria（L1 定义层）───────────────────────────────
-        if self.acceptance_criteria and (self.has_diff or self.verification_attempts == 0):
+        # ── 2. Acceptance criteria───────────────────────────────
+        if include_current_facts and self.acceptance_criteria and (self.has_diff or self.verification_attempts == 0):
             criteria = "; ".join(self.acceptance_criteria[:5])
             reminders.append(f"Acceptance criteria ({len(self.acceptance_criteria)}): {criteria}")
-        if self.requested_paths and (self.has_diff or self.verification_attempts == 0):
+        if include_current_facts and self.requested_paths and (self.has_diff or self.verification_attempts == 0):
             targets = ", ".join(self.requested_paths[:5])
             reminders.append(
                 f"User named target files ({len(self.requested_paths)}): {targets}. Prefer editing those exact paths or the closest existing match; do not create same-basename files elsewhere without confirming."
@@ -1956,63 +1877,27 @@ class RuntimeState:
                 if isinstance(item, dict)
             ) or "unspecified"
             reminders.append(
-                "PATCH RISK REVIEW REQUIRED: " + categories + ". Re-read the affected declarations, "
-                "preserve public APIs and user-named scope unless explicitly requested, and revise the approach before finalizing."
+                "PATCH RISK OBSERVATION: " + categories + ". Compare the affected declarations with "
+                "the current user requirements and evidence; decide whether the approach needs adjustment. "
+                "The static signal alone does not establish a defect or require rewriting the plan."
             )
-
-        if self.task_mode == "project_creation":
-            reminders.append(
-                "PROJECT CREATION MODE: start with analyze_project_requirements -> create_project_blueprint -> "
-                "scaffold_project. If the scaffold still misses requested business logic, use write_files_batch. "
-                "Then run inspect_generated_project -> check_project_completeness -> plan_project_acceptance -> "
-                "verify_project_build. Do not start with grep_search unless you are intentionally reusing local code."
-            )
-            if not self.has_diff and self.turn_count >= 3 and self.edits_this_run == 0:
-                reminders.append(
-                    "No project files created yet. Move from planning to scaffold_project or write_files_batch now."
-                )
 
         # ── 3. Diff status（如果有 diff，这是最重要的信息）───────────────────
-        if self.has_diff:
+        if self.has_diff and include_current_facts:
             nc = self.diff_chars
             nf = len(self.changed_files)
-            if self.tests_modified and (self.wants_tests or self.task_mode in {"test", "project_creation"}):
+            if self.tests_modified and self.wants_tests:
                 test_note = " Includes test updates requested by the task; ensure they cover the change."
             elif self.tests_modified:
                 test_note = " Includes test files; confirm this matches the user request."
             else:
                 test_note = " Task explicitly asks for tests, but no test files have been changed yet." if self.wants_tests else ""
-            verify_hint = (
-                "Run plan_project_acceptance or verify_project_build before finalizing."
-                if self.task_mode == "project_creation"
-                else "Run verify_changed_files or the narrowest relevant project check before finalizing."
-            )
+            verify_hint = "Run the narrowest relevant project check before finalizing."
             reminders.append(
                 f"DIFF EXISTS: {nc} chars across {nf} file(s).{test_note} {verify_hint}"
             )
 
-        # ── 4. Diminishing returns: 连续多轮没有编辑 ─────────────────────────
-        no_edit_turns = (self.turn_count - self.last_edit_turn) if self.last_edit_turn else self.turn_count
-        if self.task_mode != "discuss":
-            if self.task_mode == "project_creation":
-                edit_hint = "Move from requirements and blueprint work to concrete scaffold creation or batch file writing."
-            elif self.task_mode in {"feature", "refactor", "test"}:
-                edit_hint = "Move from exploration to the next concrete implementation or test update."
-            else:
-                edit_hint = "Stop broad exploration and make the smallest relevant code change."
-            if self.turn_count >= 10 and no_edit_turns >= 8:
-                reminders.append(
-                    f"WARNING: No source edit in the last {no_edit_turns} turns. {edit_hint}"
-                )
-            elif self.turn_count >= 5 and no_edit_turns >= 5:
-                reminders.append(f"No source edit in {no_edit_turns} turns. {edit_hint}")
-
-        # ── 5. Verification budget ────────────────────────────────────────────
-        if self.broad_test_attempts >= 3:
-            reminders.append(
-                f"STOP: {self.broad_test_attempts} broad test runs attempted. "
-                "Do NOT run broad test runners again. Use verify_changed_files or a narrow targeted check."
-            )
+        # 测试尝试次数用于观察和恢复，不独立于真实任务预算禁止复测。
         # ── 6. Low budget warning ─────────────────────────────────────────────
         if turns_remaining <= 5 and self.has_diff:
             reminders.append(
@@ -2031,16 +1916,16 @@ class RuntimeState:
 
         # ── 7. Verification passed but still going ────────────────────────────
         if (
-            acceptance_passed_current_generation
+            include_current_facts and acceptance_passed_current_generation
             and self.has_diff
             and self.open_todo_items == 0
             and acceptance_is_terminal_evidence
         ):
             reminders.append(
                 "DECLARED ACCEPTANCE PASSED for the current mutation generation. "
-                "Do not call more tools; give the final summary now."
+                "Reconcile remaining requirements and provide a final candidate when ready."
             )
-        elif acceptance_passed_current_generation and self.has_diff:
+        elif include_current_facts and acceptance_passed_current_generation and self.has_diff:
             if self.open_todo_items:
                 detail = (
                     f"but {self.open_todo_items} Todo item(s) remain open. "
@@ -2055,10 +1940,11 @@ class RuntimeState:
                 "INTERMEDIATE ACCEPTANCE PASSED for the current mutation generation. "
                 f"{detail}; any later edit will re-arm the declared acceptance command."
             )
-        elif self.py_compile_ok and self.has_diff and self.verification_attempts >= 1:
-            if no_edit_turns <= 2:
+        elif include_current_facts and self.py_compile_ok and self.has_diff and self.verification_attempts >= 1:
+            if self.turn_count - self.last_edit_turn <= 2:
                 reminders.append(
-                    "verify_changed_files passed. Diff exists. You should FINALIZE now."
+                    "verify_changed_files passed. Check what this evidence covers against "
+                    "the remaining requirements; static checks alone do not confirm behavior."
                 )
 
         if not reminders:

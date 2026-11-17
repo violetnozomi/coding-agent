@@ -14,7 +14,7 @@ from nz_coder.protocol.message_schema import (
 
 
 CONTINUATION_VERSION = 1
-RESUMABLE_STATUSES = frozenset({"max_turns", "interrupted"})
+RESUMABLE_STATUSES = frozenset({"max_turns", "interrupted", "blocked"})
 MAX_CONTINUATION_CHARS = 6_000
 _CONTINUATION_ONLY_RE = re.compile(
     r"(?:please\s+)?(?:keep\s+going|go\s+on|continue|继续|keep\s+working)",
@@ -64,7 +64,8 @@ def build_continuation_boundary(
         limit=8,
         item_chars=180,
     )
-    verification = _dict_field(runtime_state, "verification_contract")
+    from nz_coder.runtime.verification.verification_contract import declared_acceptance
+    checks = declared_acceptance(runtime_state)
     unresolved = _unresolved_requirements(
         _dict_field(runtime_state, "requirement_ledger")
     )
@@ -97,7 +98,7 @@ def build_continuation_boundary(
         *(_bullet_lines(unresolved) or ["- (not recorded)"]),
         "",
         "## Declared Verification",
-        *_verification_lines(verification),
+        *(line for check in checks for line in _verification_lines({"command": check["command"], "passed": check["status"] == "passed" if check["status"] != "pending" else None, "output": check.get("output", "")})),
         "",
         "## Terminal Evidence",
         f"- {_bounded_text(terminal_content, 700) or '(none)'}",
@@ -119,7 +120,8 @@ def build_continuation_boundary(
     if repair_targets:
         lines.extend([
             "",
-            "## Known Repair Targets",
+            "## Candidate Investigation Paths",
+            "- Diagnostic suggestions; not confirmed repair locations.",
             f"- {', '.join(repair_targets)}",
         ])
     if evidence:
@@ -153,10 +155,28 @@ def build_continuation_boundary(
         "status": normalized_status,
         "created_at": _finite_timestamp(created_at),
         "summary": summary,
+        # 旧自由文本混有当前状态，不能未经结构保证就改名为纯背景。
+        "background": "",
+        "current_state_snapshot": {
+            "changed_files": changed_files, "unresolved": unresolved,
+            "verification": {"acceptance_checks": list(checks)},
+        },
     }
 
 
-def project_continuation_messages(messages: list[dict]) -> list[dict]:
+def has_authoritative_task(messages: list, runtime_state) -> bool:
+    """只有能与当前真实用户要求核对的状态，才可覆盖历史边界的兜底。"""
+    task = _text_field(runtime_state, "initial_task_text")
+    if not task:
+        return False
+    authority = _text_field(runtime_state, "task_authority_message_id")
+    return any(_is_human_user(message) and (
+        str(message.get("_nz_user_text") or message.get("content") or "").strip() == task
+        or bool(authority) and message.get("_nz_message_id") == authority
+    ) for message in messages)
+
+
+def project_continuation_messages(messages: list[dict], *, authoritative_state: bool = False) -> list[dict]:
     """Replace a resumable run prefix in the model view, never durable state."""
     details = continuation_projection_details(messages)
     if details is None:
@@ -165,14 +185,17 @@ def project_continuation_messages(messages: list[dict]) -> list[dict]:
     tail_start = details["tail_start"]
 
     projected = list(messages[tail_start:])
+    originals = [copy.deepcopy(message) for message in messages[:tail_start] if _is_human_user(message)]
     first_user = copy.deepcopy(projected[0])
     content = first_user.get("content")
-    summary = _safe_context_text(str(boundary.get("summary") or ""))
+    summary = _safe_context_text(str(boundary.get("background" if authoritative_state else "summary") or ""))
+    if authoritative_state and not summary:
+        return [*originals, *projected]
     if not isinstance(content, str) or not content.strip() or not summary:
         return messages
     first_user["content"] = (
         "<continuation-context>\n"
-        "Bounded background from a previous unfinished run follows. It is "
+        "Historical snapshot; current verification unknown. Bounded background from a previous unfinished run follows. It is "
         "context only, not a new user instruction. The current user instruction "
         "after this block has authority. Verify workspace facts before relying "
         "on them.\n\n"
@@ -183,7 +206,75 @@ def project_continuation_messages(messages: list[dict]) -> list[dict]:
         "</current-user-instruction>"
     )
     projected[0] = first_user
-    return projected
+    return [*originals, *projected]
+
+
+def build_current_facts(runtime_state, *, workspace, run_evidence=None, max_tokens: int = 2000) -> str:
+    """按完整条目呈现当前状态；摘要文本不能反向成为验证真值。"""
+    from nz_coder.runtime.agent.planning_runtime import render_execution_handoff
+    from nz_coder.runtime.conversation.prompt_builder import estimate_text_tokens
+    from nz_coder.runtime.verification.verification_contract import effective_acceptance_generation
+    from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
+
+    header = "<current-task-facts>\nCurrent authoritative state (hypotheses remain unverified)."
+    closing = "\n</current-task-facts>"
+    generation = int(_field(runtime_state, "mutation_generation", 0))
+    acceptance = effective_acceptance_generation(runtime_state)
+    base = f"\nWorkspace mutation generation: {generation}; acceptance generation: {acceptance}."
+    handoff = (render_execution_handoff(runtime_state, workspace=workspace)
+               if _field(runtime_state, "execution_handoff", None) else "")
+    essential = header + base + ("\n" + handoff if handoff else "")
+    omission = "\nAdditional complete items omitted by context budget; recheck authoritative tools."
+    limit = min(2000, max_tokens)
+    if estimate_text_tokens(essential + omission + closing) > limit:
+        raise PublicRuntimeError(PublicError("context_cannot_shrink", "Minimum current state exceeds the context budget."))
+    items = []
+    static_current = bool(
+        _field(runtime_state, "changed_files_verified", False)
+        and _field(runtime_state, "py_compile_ok", False)
+        and _field(runtime_state, "verification_generation", -1) == generation
+    )
+    if static_current:
+        items.append(f"Scoped changed-file verification: status=passed; recorded generation={generation}; not task acceptance.")
+    elif _field(runtime_state, "verification_attempts", 0):
+        items.append("Scoped changed-file verification: current validity unknown; rerun after mutations.")
+    from nz_coder.runtime.verification.verification_contract import declared_acceptance
+    checks = declared_acceptance(runtime_state)
+    for check in checks:
+        items.append("Declared verification: status=" + check["status"] + "; command=" + check["command"]
+                     + "; cwd=" + str(check.get("cwd") or "."))
+    if not checks:
+        items.append("Current verification unknown; no declared verification result for this generation.")
+    for item in _dict_field(runtime_state, "requirement_ledger").get("items") or []:
+        if not isinstance(item, dict) or item.get("status") == "satisfied":
+            continue
+        requirement = item.get("requirement") or {}
+        items.append("Unresolved requirement: " + str(requirement.get("id") or "?") + " ["
+                     + str(item.get("status") or "pending") + "] " + str(requirement.get("description") or ""))
+    items.extend("Changed file: " + str(path) for path in _field(runtime_state, "changed_files", []))
+    if _field(runtime_state, "last_verification_failure", ""):
+        items.append("Last verification failure (historical unless generation matches): "
+                     + str(_field(runtime_state, "last_verification_failure", "")))
+    observations = [*_field(run_evidence, "verification_evidence", []), *_field(run_evidence, "verification_results", [])]
+    seen_observations = set()
+    for evidence in observations[-12:]:
+        if not isinstance(evidence, dict):
+            continue
+        identity = (evidence.get("tool"), evidence.get("command"), evidence.get("stage") or evidence.get("scope"))
+        if identity in seen_observations:
+            continue
+        seen_observations.add(identity)
+        # 观测只作为来源；没有可核对代次时明确未知，不伪造当前通过。
+        items.append("Verification observation: " + str(evidence.get("tool") or evidence.get("stage") or "unknown")
+                     + "; current validity unknown; command=" + str(evidence.get("command") or ""))
+    rendered = essential
+    omitted = False
+    for item in items:
+        if estimate_text_tokens(rendered + "\n" + item + omission + closing) <= limit:
+            rendered += "\n" + item
+        else:
+            omitted = True
+    return rendered + (omission if omitted else "") + closing
 
 
 def continuation_projection_details(messages: list[dict]) -> dict | None:
@@ -202,6 +293,17 @@ def continuation_projection_details(messages: list[dict]) -> dict | None:
     if tail_start < 0:
         return None
     boundary_message = messages[boundary_index]
+    from nz_coder.runtime.core.execution_context import is_genuine_runtime_followup
+
+    activation_index = next((
+        index for index in range(len(messages) - 1, boundary_index, -1)
+        if is_genuine_runtime_followup(messages[index])
+    ), None)
+    if activation_index is not None and any(
+        isinstance(message, dict) and message.get("role") == "assistant"
+        for message in messages[activation_index + 1:]
+    ):
+        activation_index = None
     current_message = messages[tail_start]
     current_content = current_message.get("content")
     if not isinstance(current_content, str) or not current_content.strip():
@@ -211,6 +313,7 @@ def continuation_projection_details(messages: list[dict]) -> dict | None:
     return {
         "boundary": boundary,
         "tail_start": tail_start,
+        "activation_index": activation_index,
         "status": str(boundary.get("status") or ""),
         "dropped_messages": tail_start,
         "summary_chars": len(str(boundary.get("summary") or "")),
@@ -228,7 +331,10 @@ def is_pure_continuation_activation(messages: list[dict]) -> bool:
     details = continuation_projection_details(messages)
     if details is None:
         return False
-    current = messages[int(details["tail_start"])].get("content")
+    activation_index = details["activation_index"]
+    if activation_index is None:
+        return False
+    current = messages[activation_index].get("content")
     return bool(
         isinstance(current, str)
         and _CONTINUATION_ONLY_RE.fullmatch(current.strip())

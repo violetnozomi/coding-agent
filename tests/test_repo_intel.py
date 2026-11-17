@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import subprocess
 
+import pytest
+
 
 def _init_repo(path):
     subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True, text=True)
@@ -116,7 +118,7 @@ def test_verify_changed_files_checks_untracked_python_file(tmp_path):
 
         result = verify_changed_files()
 
-        assert result.startswith("OK: py_compile changed files")
+        assert result.startswith("OK: Python syntax parsed in-process")
         assert "OK  app.py" in result
     finally:
         config.WORKDIR = old_workdir
@@ -129,6 +131,7 @@ def test_verify_changed_files_checks_tracked_python_file_without_git(tmp_path):
     from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.state.sessions import scoped_session, session_change_dir
     from nz_coder.tools.repo_intel import verify_changed_files
+    from nz_coder.tools.files import bind_tool_state
 
     old_workdir = config.WORKDIR
     config.WORKDIR = tmp_path
@@ -144,9 +147,10 @@ def test_verify_changed_files_checks_tracked_python_file_without_git(tmp_path):
             target.write_text("VALUE = 2\n", encoding="utf-8")
             tracker.record_after("app.py", True, "VALUE = 2\n")
 
-            result = verify_changed_files()
+            with bind_tool_state(change_tracker=tracker):
+                result = verify_changed_files()
 
-        assert result.startswith("OK: py_compile changed files")
+        assert result.startswith("OK: Python syntax parsed in-process")
         assert "OK  app.py" in result
     finally:
         config.WORKDIR = old_workdir
@@ -357,7 +361,7 @@ def test_collect_symbols_respects_max_depth():
     assert "outer.inner.too_deep" not in symbols
 
 
-def test_verify_changed_files_go_compile_does_not_run_tests(tmp_path, monkeypatch):
+def test_verify_changed_files_suggests_go_compile_without_running_it(tmp_path, monkeypatch):
     import os
     import shlex
 
@@ -387,8 +391,11 @@ def test_verify_changed_files_go_compile_does_not_run_tests(tmp_path, monkeypatc
 
         result = verify_changed_files()
 
-        assert result.startswith("OK: changed files verification")
-        assert args_path.read_text(encoding="utf-8").splitlines() == ["test", "./pkg", "-run", "^$"]
+        assert result.startswith("WARN: changed files verification incomplete")
+        assert "NOT EXECUTED go compile ./pkg: go test ./pkg -run" in result
+        assert "bash/process" in result
+        assert not args_path.exists()
+        assert result.execution_facts == ()
     finally:
         config.WORKDIR = old_workdir
 
@@ -404,12 +411,6 @@ def test_verify_changed_files_warns_for_go_without_module_metadata(tmp_path, mon
         target = tmp_path / "pkg" / "server.go"
         target.parent.mkdir(parents=True)
         target.write_text("package pkg\n", encoding="utf-8")
-        monkeypatch.setattr(
-            repo_intel,
-            "_run_verifier",
-            lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not run")),
-        )
-
         result = repo_intel.verify_changed_files()
 
         assert result.startswith("WARN: changed files verification incomplete")
@@ -496,3 +497,132 @@ def test_smart_search_no_files_message_is_include_aware(tmp_path):
         assert "No files matching '*.ts' found under '.'" in result
     finally:
         config.WORKDIR = old_workdir
+
+
+def test_verify_changed_files_denied_bash_never_runs_project_checks(tmp_path, monkeypatch):
+    import json
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.runtime.process.command_channel import scoped_command_client
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tool_platform.permissioning.checker import PermissionChecker
+    from nz_coder.tool_platform.permissioning.rules import parse_rules
+    from nz_coder.tools import repo_intel
+
+    class Permissions:
+        def __init__(self):
+            self.checker = PermissionChecker("default", workspace_trusted=False)
+            self.denies = parse_rules(["Bash"], "deny")
+
+        def check(self, name, arguments):
+            return self.checker.check(name, arguments, [], self.denies, [])
+
+        def ask_user(self, *args):
+            raise AssertionError("read-only verification should not ask")
+
+    class DenyingParent:
+        def call(self, *args, **kwargs):
+            raise AssertionError("verification must only suggest external commands")
+
+    changed = ["app.py", "app.ts", "pkg/app.go", "src/main.rs"]
+    for name, source in zip(changed, ["VALUE = 1", "export const x = 1", "package pkg", "fn main() {}"]):
+        path = tmp_path / name
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(source)
+    (tmp_path / "package.json").write_text(json.dumps({"scripts": {"typecheck": "node sentinel.js"}}))
+    (tmp_path / "go.mod").write_text("module example.invalid/demo")
+    (tmp_path / "Cargo.toml").write_text('[package]\nname="demo"\nversion="0.1.0"')
+    sentinel = tmp_path / "PROJECT_CHECK_RAN"
+    calls = []
+
+    def safe_run(argv, **kwargs):
+        calls.append(list(argv))
+        if argv[0] != "git":
+            sentinel.write_text("unexpected project check")
+        output = "true\n" if argv[:2] == ["git", "rev-parse"] else "\n".join(changed) if argv[:2] == ["git", "diff"] else ""
+        return subprocess.CompletedProcess(argv, 0, output, "")
+
+    permissions = Permissions()
+    monkeypatch.setattr(repo_intel.subprocess, "run", safe_run)
+    with scoped_workdir(tmp_path), scoped_command_client(DenyingParent()):
+        assert permissions.check("bash", {"command": "npm run -s typecheck"})["behavior"] == "deny"
+        result = ToolExecutor(permissions).execute_one({"id": "verify-boundary", "function": {
+            "name": "verify_changed_files", "arguments": {}}}, 0)
+    assert result.executed and not result.dispatch_failed
+    assert not sentinel.exists(), calls
+    assert all(argv[0] == "git" for argv in calls)
+    assert result.execution_facts == ()
+    assert "not executed" in result.output.lower()
+    assert "bash/process" in result.output
+
+
+def test_verify_changed_files_python_parses_in_process_without_command_receipt(tmp_path, monkeypatch):
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.changes import ChangeTracker
+    from nz_coder.tools.files import bind_tool_state
+    from nz_coder.tools import repo_intel
+
+    source = 'raise RuntimeError("source must not run")\n'
+    (tmp_path / "app.py").write_text(source)
+    tracker = ChangeTracker(change_dir=tmp_path / "owner")
+    tracker.record_before("app.py", False)
+    tracker.record_after("app.py", True, source)
+    monkeypatch.setattr(repo_intel, "_run_git", lambda _args: subprocess.CompletedProcess([], 1, "", ""))
+
+    def reject_process(*args, **kwargs):
+        raise AssertionError("language verification must stay in this process")
+
+    monkeypatch.setattr(repo_intel.subprocess, "run", reject_process)
+    with scoped_workdir(tmp_path), bind_tool_state(change_tracker=tracker):
+        result = repo_intel.verify_changed_files()
+        assert str(result).startswith("OK: Python syntax"), result
+        assert result.execution_facts == ()
+        assert not (tmp_path / "__pycache__").exists()
+        (tmp_path / "app.py").write_text("def broken(:\n")
+        result = repo_intel.verify_changed_files()
+        assert str(result).startswith("FAIL:"), result
+        assert "app.py" in result
+        assert result.execution_facts == ()
+
+
+@pytest.mark.parametrize(
+    ("encoding", "source"),
+    [
+        ("utf-8-sig", "label = 'café'\n"),
+        ("latin-1", "# coding: latin-1\nlabel = 'café'\n"),
+    ],
+    ids=["utf8-bom", "coding-latin1"],
+)
+def test_verify_changed_files_accepts_python_source_encoding(
+    tmp_path, monkeypatch, encoding, source,
+):
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools import repo_intel
+
+    sentinel = tmp_path / "SOURCE_EXECUTED"
+    source += f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n"
+    (tmp_path / "encoded.py").write_bytes(source.encode(encoding))
+    (tmp_path / "plain.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (tmp_path / "broken.py").write_text("def broken(:\n", encoding="utf-8")
+
+    def git_query(args):
+        if args == ["rev-parse", "--is-inside-work-tree"]:
+            output = "true\n"
+        elif args == ["diff", "--name-only", "--", ".", ":!.nz-coder", ":!.nz-coder-runs"]:
+            output = "encoded.py\nplain.py\nbroken.py\n"
+        elif args == ["ls-files", "--others", "--exclude-standard"]:
+            output = ""
+        else:
+            raise AssertionError(f"unexpected Git query: {args!r}")
+        return subprocess.CompletedProcess(["git", *args], 0, output, "")
+
+    monkeypatch.setattr(repo_intel, "_run_git", git_query)
+    with scoped_workdir(tmp_path):
+        result = repo_intel.verify_changed_files()
+
+    assert "OK  encoded.py" in result, result
+    assert "OK  plain.py" in result, result
+    assert str(result).startswith("FAIL:"), result
+    assert "FAIL broken.py" in result, result
+    assert result.execution_facts == ()
+    assert not sentinel.exists()
+    assert not (tmp_path / "__pycache__").exists()

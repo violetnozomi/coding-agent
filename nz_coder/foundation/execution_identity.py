@@ -6,11 +6,13 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import sys
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from nz_coder.foundation.secret_values import secret_str
+from nz_coder.runtime.process.platform_runtime import executable_argv
 
 
 class UnsafeExecutionIdentity(ValueError):
@@ -57,6 +59,7 @@ class ExecutionIdentity:
     """Content-bound identity for an interpreter, payload, cwd and argv."""
 
     command: tuple[str, ...] = field(repr=False)
+    launch_command: tuple[str, ...] = field(repr=False)
     executable_path: Path
     executable_hash: str
     entrypoint_kind: str
@@ -71,15 +74,21 @@ class ExecutionIdentity:
     workspace: Path
     workspace_controlled: bool
     fingerprint: str
+    environment: tuple[tuple[str, str], ...] | None = field(default=None, repr=False)
+    origin_workspaces: tuple[tuple[str, int, int], ...] = ()
+    prepared_environment: bool = False
 
     def __post_init__(self) -> None:
         """Keep argv executable while redacting generic diagnostic projections."""
         object.__setattr__(self, "command", tuple(secret_str(value) for value in self.command))
+        object.__setattr__(self, "launch_command", tuple(secret_str(value) for value in self.launch_command))
         object.__setattr__(
             self,
             "argv_semantics",
             tuple(secret_str(value) for value in self.argv_semantics),
         )
+        if self.environment is not None:
+            object.__setattr__(self, "environment", tuple((k, secret_str(v)) for k, v in self.environment))
 
     def __repr__(self) -> str:
         return (
@@ -112,14 +121,40 @@ def resolve_execution_identity(
     workspace: Path,
     config_source: str,
     environment_profile: str,
+    environment: Mapping[str, str] | None = None,
+    origin_workspaces: Iterable[tuple[str, int, int]] = (),
+    prepared_environment: bool = False,
 ) -> ExecutionIdentity:
     """Resolve a supported command into a content-bound execution identity."""
-    argv = tuple(str(part) for part in command)
+    source_command = tuple(str(part) for part in command)
+    argv = source_command
     if not argv or not argv[0]:
         raise UnsafeExecutionIdentity("execution command is empty")
     root = Path(workspace).expanduser().resolve()
     run_cwd = Path(cwd).expanduser().resolve()
-    executable = _resolve_path(argv[0], run_cwd, use_path=True)
+    origins = tuple(origin_workspaces)
+    for path, device, inode in origins:
+        origin = Path(path)
+        try:
+            info = origin.stat()
+            valid = origin.is_dir() and str(origin.resolve()) == path and (info.st_dev, info.st_ino) == (device, inode)
+        except OSError:
+            valid = False
+        if not valid:
+            raise UnsafeExecutionIdentity("execution origin workspace changed")
+    if environment is not None:
+        environment = {str(k): str(v) for k, v in environment.items()}
+        # 相对 PATH 按服务 cwd 解释；后续复核不能借用线程的当前目录。
+        environment["PATH"] = os.pathsep.join(
+            str((Path(part) if Path(part).is_absolute() else run_cwd / part).absolute())
+            for part in environment.get("PATH", os.defpath).split(os.pathsep)
+        )
+        if os.name == "nt":
+            environment["PATHEXT"] = environment.get("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+    frozen_environment = tuple(sorted(environment.items())) if environment is not None else None
+    if environment is not None:
+        argv = _resolve_shebang(argv, run_cwd, environment)
+    executable = _resolve_path(argv[0], run_cwd, use_path=True, environment=environment)
     executable_hash = _hash_path(executable, allow_symlink=True)
     name = executable.name.lower()
     stem = name.removesuffix(".exe")
@@ -129,7 +164,9 @@ def resolve_execution_identity(
     semantics: tuple[str, ...] = ("direct", *argv[1:])
 
     if stem.startswith(("python", "pypy")):
-        kind, entrypoint, module, semantics = _python_entrypoint(argv, run_cwd)
+        kind, entrypoint, module, semantics = _python_entrypoint(
+            argv, run_cwd, prepared_environment=prepared_environment,
+        )
     elif stem in {"node", "nodejs"}:
         kind, entrypoint, semantics = _script_entrypoint(
             argv, run_cwd, kind="node-script", inline_flags={"-e", "--eval"},
@@ -158,14 +195,24 @@ def resolve_execution_identity(
         for path in payloads
     )
     entrypoint_hash = hashlib.sha256(_canonical(payload_hashes)).hexdigest()
+    launch_command = executable_argv(
+        argv, which=lambda value: _which_in_environment(value, run_cwd, environment),
+    )
+    launch_executable = _resolve_path(
+        launch_command[0], run_cwd, use_path=True, environment=environment,
+    )
+    launch_executable_hash = _hash_path(launch_executable, allow_symlink=True)
     cwd_identity = _directory_identity(run_cwd)
     workspace_controlled = any(
-        _inside(candidate, root)
-        for candidate in (executable, entrypoint, *payloads)
+        any(_inside(candidate, origin) for origin in (root, *(Path(value[0]) for value in origins)))
+        for candidate in (executable, entrypoint, launch_executable, *payloads)
         if candidate is not None
     )
     payload = {
-        "command": list(argv),
+        "command": list(source_command),
+        "launch_command": list(launch_command),
+        "launch_executable_path": str(launch_executable),
+        "launch_executable_hash": launch_executable_hash,
         "executable_path": str(executable),
         "executable_hash": executable_hash,
         "entrypoint_kind": kind,
@@ -181,9 +228,13 @@ def resolve_execution_identity(
         "workspace": str(root),
         "workspace_controlled": workspace_controlled,
     }
+    if frozen_environment is not None:
+        payload.update(environment=frozen_environment, origin_workspaces=origins,
+                       prepared_environment=prepared_environment)
     fingerprint = hashlib.sha256(_canonical(payload)).hexdigest()
     return ExecutionIdentity(
-        command=argv,
+        command=source_command,
+        launch_command=launch_command,
         executable_path=executable,
         executable_hash=executable_hash,
         entrypoint_kind=kind,
@@ -198,6 +249,9 @@ def resolve_execution_identity(
         workspace=root,
         workspace_controlled=workspace_controlled,
         fingerprint=fingerprint,
+        environment=frozen_environment,
+        origin_workspaces=origins,
+        prepared_environment=prepared_environment,
     )
 
 
@@ -217,6 +271,9 @@ def verify_execution_identity(
         workspace=workspace or expected.workspace,
         config_source=expected.config_source,
         environment_profile=expected.environment_profile,
+        environment=dict(expected.environment) if expected.environment is not None else None,
+        origin_workspaces=expected.origin_workspaces,
+        prepared_environment=expected.prepared_environment,
     )
     if actual.fingerprint != expected.fingerprint:
         raise UnsafeExecutionIdentity("execution payload changed after trust decision")
@@ -224,7 +281,7 @@ def verify_execution_identity(
 
 
 def _python_entrypoint(
-    argv: tuple[str, ...], cwd: Path,
+    argv: tuple[str, ...], cwd: Path, *, prepared_environment: bool = False,
 ) -> tuple[str, Path | None, str, tuple[str, ...]]:
     args = argv[1:]
     if not args:
@@ -235,6 +292,8 @@ def _python_entrypoint(
         if value == "-c":
             raise UnsafeExecutionIdentity("inline Python commands require explicit advanced trust")
         if value == "-m":
+            if prepared_environment:
+                raise UnsafeExecutionIdentity("prepared environment Python module commands are unsupported; use an installed entrypoint or explicit script")
             if index + 1 >= len(args) or not args[index + 1].strip():
                 raise UnsafeExecutionIdentity("Python module command has no module")
             module = args[index + 1]
@@ -448,7 +507,81 @@ def _resolve_python_module(module: str, cwd: Path) -> Path | None:
     return None
 
 
-def _resolve_path(value: str, cwd: Path, *, use_path: bool = False) -> Path:
+def _resolve_shebang(argv: tuple[str, ...], cwd: Path, environment: Mapping[str, str]) -> tuple[str, ...]:
+    """把简单 shebang 固定为实际解释器与脚本，避免 env 在启动时另选解释器。"""
+    executable = _resolve_path(argv[0], cwd, use_path=True, environment=environment)
+    try:
+        with executable.open("rb") as stream:
+            line = stream.readline(4097)
+    except OSError as exc:
+        raise UnsafeExecutionIdentity("execution executable cannot be read") from exc
+    if not line.startswith(b"#!"):
+        return argv
+    try:
+        if len(line) > 4096:
+            raise ValueError("oversized shebang")
+        parts = shlex.split(line[2:].decode("utf-8").strip())
+        if not parts:
+            raise ValueError("missing interpreter")
+        if Path(parts[0]).name == "env":
+            if len(parts) != 2 or parts[1].startswith("-"):
+                raise ValueError("unsupported env shebang")
+            interpreter = _resolve_path(parts[1], cwd, use_path=True, environment=environment)
+            interpreter_argv = (str(interpreter),)
+        else:
+            if len(parts) > 2 or not Path(parts[0]).is_absolute():
+                raise ValueError("unsupported shebang arguments")
+            interpreter = _resolve_path(parts[0], cwd)
+            interpreter_argv = (str(interpreter), *parts[1:])
+        stem = interpreter.name.lower().removesuffix(".exe")
+        if not stem.startswith(("python", "pypy")) and stem not in {"node", "nodejs", "bash", "sh", "dash", "zsh", "ksh"}:
+            raise ValueError("unsupported interpreter")
+    except (UnicodeError, ValueError) as exc:
+        raise UnsafeExecutionIdentity("unsupported execution shebang") from exc
+    # 解释器入口保留 venv 的词法路径；内容身份仍按实际目标校验。
+    lexical_interpreter = parts[1] if Path(parts[0]).name == "env" else parts[0]
+    if not Path(lexical_interpreter).is_absolute():
+        lexical_interpreter = _which_in_environment(lexical_interpreter, cwd, environment) or ""
+    if not lexical_interpreter:
+        raise UnsafeExecutionIdentity("execution shebang interpreter cannot be located")
+    return (str(lexical_interpreter), *interpreter_argv[1:], str(executable), *argv[1:])
+
+
+def _windows_which(value: str, cwd: Path, environment: Mapping[str, str]) -> str | None:
+    """Windows 扩展名只取冻结 PATHEXT，不借用 shutil.which 的进程环境。"""
+    candidate = Path(value).expanduser()
+    directories = [Path(part) if Path(part).is_absolute() else cwd / part
+                   for part in environment.get("PATH", os.defpath).split(os.pathsep)]
+    if candidate.is_absolute() or candidate.parent != Path(".") or value.startswith("."):
+        bases = [candidate if candidate.is_absolute() else cwd / candidate]
+    else:
+        bases = [directory / candidate for directory in directories]
+    extensions = [
+        part for part in environment.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";") if part
+    ]
+    for base in bases:
+        candidates = [base] if base.suffix else [
+            base, *(Path(str(base) + extension) for extension in extensions)
+        ]
+        for item in candidates:
+            if item.is_file() and os.access(item, os.F_OK | os.X_OK):
+                return str(item)
+    return None
+
+
+def _which_in_environment(value: str, cwd: Path, environment: Mapping[str, str] | None) -> str | None:
+    if environment is None:
+        return shutil.which(value)
+    if os.name == "nt":
+        return _windows_which(value, cwd, environment)
+    candidate = Path(value).expanduser()
+    if candidate.is_absolute() or candidate.parent != Path(".") or value.startswith("."):
+        lexical = candidate if candidate.is_absolute() else cwd / candidate
+        return shutil.which(str(lexical), path=environment.get("PATH", os.defpath))
+    return shutil.which(value, path=environment.get("PATH", os.defpath))
+
+
+def _resolve_path(value: str, cwd: Path, *, use_path: bool = False, environment: Mapping[str, str] | None = None) -> Path:
     candidate = Path(value).expanduser()
     if (
         candidate.is_absolute()
@@ -459,7 +592,7 @@ def _resolve_path(value: str, cwd: Path, *, use_path: bool = False) -> Path:
     ):
         return (candidate if candidate.is_absolute() else cwd / candidate).resolve()
     if use_path:
-        found = shutil.which(value)
+        found = _which_in_environment(value, cwd, environment)
         if found:
             return Path(found).resolve()
         return candidate

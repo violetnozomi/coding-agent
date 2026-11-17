@@ -4,30 +4,12 @@ from __future__ import annotations
 import re
 from pathlib import Path, PurePosixPath
 
-from nz_coder.runtime.agent.task_contract import TaskContract
+from nz_coder.runtime.verification.domain.requirements import TaskContract
 
 
-def should_build_implementation_bundle(
-    contract: TaskContract,
-    *,
-    text_complexity: str,
-    task_mode: str,
-) -> bool:
-    """Activate only for non-trivial coding contracts with multiple artifacts."""
-    if task_mode not in {"bugfix", "feature", "refactor", "test", "project_creation"}:
-        return False
-    artifacts = {
-        path
-        for requirement in contract.requirements
-        for path in requirement.expected_artifacts
-    }
-    return bool(
-        len(contract.requirements) >= 3
-        or (
-            text_complexity in {"moderate", "complex"}
-            and len(artifacts) >= 2
-        )
-    )
+def should_build_implementation_bundle(contract: TaskContract) -> bool:
+    """Provide a workset when the user contract contains concrete material."""
+    return bool(contract.requirements)
 
 
 def build_implementation_bundle(
@@ -38,6 +20,7 @@ def build_implementation_bundle(
     workspace: str | Path,
     candidate_files: tuple[str, ...] | list[str] = (),
     token_budget: int = 2400,
+    include_requirements: bool = True,
 ) -> str:
     """Render contract, launch facts, recommended files, and bounded snippets."""
     root = Path(workspace).resolve()
@@ -45,7 +28,7 @@ def build_implementation_bundle(
     lines = ["<implementation-bundle>", "Implementation Workset"]
     if contract.objective:
         lines.append(f"Objective: {contract.objective}")
-    if contract.requirements:
+    if contract.requirements and include_requirements:
         lines.append("Requirements:")
         lines.extend(
             f"- {item.id} [{item.kind}] {item.description}"
@@ -77,7 +60,7 @@ def build_implementation_bundle(
         lines.extend(f"- {path}" for path in recommended)
 
     terms = _search_terms(
-        " ".join([query, *(item.description for item in contract.requirements)])
+        " ".join([contract.objective, *(item.description for item in contract.requirements), query])
     )
     snippets: list[str] = []
     for relative in recommended:
@@ -88,7 +71,7 @@ def build_implementation_bundle(
         if snippet:
             snippets.append(f"--- {relative}\n{snippet}")
     if snippets:
-        lines.append("High-confidence snippets:")
+        lines.append("Task-relevant snippets (verify against the full implementation):")
         lines.extend(snippets)
 
     body = "\n".join(lines)
@@ -147,10 +130,15 @@ def _safe_paths(values, *, root: Path, limit: int) -> list[str]:
 
 
 def _search_terms(text: str) -> tuple[str, ...]:
+    # 先保留显式符号，避免长运行模板把函数名挤出词数预算。
+    tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", text)
+    symbols = re.findall(r"`([A-Za-z_][A-Za-z0-9_]*)`", text)
+    symbols.extend(token for token in tokens if "_" in token or re.search(r"[a-z][A-Z]", token))
     terms = []
-    for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", text):
+    for token in [*symbols, *tokens]:
         lowered = token.casefold()
-        if lowered in {"add", "update", "support", "test", "tests", "with", "from"}:
+        if lowered in {"add", "update", "support", "test", "tests", "with", "from",
+                       "the", "and", "for", "this", "that", "file", "files"}:
             continue
         if lowered not in terms:
             terms.append(lowered)
@@ -167,14 +155,18 @@ def _read_relevant_snippet(path: Path, *, terms: tuple[str, ...], max_chars: int
     if len(text) <= max_chars:
         return text.rstrip()
     lines = text.splitlines()
-    match_index = next(
-        (
-            index for index, line in enumerate(lines)
-            if any(term in line.casefold() for term in terms)
-        ),
-        0,
-    )
-    start = max(0, match_index - 8)
+    def relevance(line: str) -> int:
+        words = set(re.findall(r"[a-z_][a-z0-9_]*", line.casefold()))
+        score = sum(len(terms) - index for index, term in enumerate(terms) if term in words)
+        if score and re.search(r"\b(?:def|class|function|func)\s+", line):
+            score += len(terms)
+        return score
+
+    match_index = max(range(len(lines)), key=lambda index: relevance(lines[index]))
+    start = match_index
+    # 优先保证命中行及其实现，不让前面的长注释耗尽片段预算。
+    while start > max(0, match_index - 2) and sum(len(line) + 1 for line in lines[start - 1:match_index + 1]) < max_chars // 3:
+        start -= 1
     selected: list[str] = []
     size = 0
     for line in lines[start:]:

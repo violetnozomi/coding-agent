@@ -17,7 +17,8 @@ from nz_coder.protocol.message_schema import (
     is_synthetic_user_message,
     rebind_fork_history as rebind_fork_history,
 )
-from nz_coder.state.sessions import active_session_id, list_sessions, load_session
+from nz_coder.state.sessions import active_session_id, list_sessions, load_session, SessionReadError
+from nz_coder.tool_platform.permissioning.modes import MODES
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ class SessionOption:
     message_count: int
     model: str
     mode: str
+    unavailable: str = ""
 
 
 def conversation_turns(messages: list[dict]) -> list[ConversationTurn]:
@@ -369,7 +371,9 @@ def _tool_block(
 ) -> TranscriptBlock:
     """Build compact and expanded Markdown for one durable ToolPart."""
     status = str(state.get("status") or "completed")
-    compact = f"**▸ ⚙ {name}** · {status}\n\n---\n"
+    interrupted = status == "error" and state.get("interrupted") is True
+    display_status = "interrupted" if interrupted else status
+    compact = f"**▸ ⚙ {name}** · {display_status}\n\n---\n"
     lines = [f"**Tool: {name}**", ""]
     if tool_details:
         if isinstance(arguments, str):
@@ -381,6 +385,8 @@ def _tool_block(
         lines.extend(("**Input:**", _fenced(rendered, "json"), ""))
         if status == "completed":
             output = state.get("output")
+        elif interrupted:
+            output = "Tool execution interrupted."
         else:
             from nz_coder.protocol.public_error import public_error_message
 
@@ -400,25 +406,40 @@ def _tool_block(
 
 def session_options(*, limit: int = 20) -> list[SessionOption]:
     """Return bounded Session metadata without constructing Agent owners."""
-    active = active_session_id()
+    try:
+        active = active_session_id()
+    except SessionReadError:
+        active = None
     paths = list_sessions(limit=max(1, min(int(limit), 100)))
-    payloads = [(path.stem, load_session(path.stem)) for path in paths]
-    if active and active not in {session_id for session_id, _payload in payloads}:
-        payload = load_session("active")
-        if payload:
-            payloads.insert(0, (active, payload))
-    return [
-        SessionOption(
-            session_id=session_id,
-            title=str(payload.get("title") or ""),
-            active=session_id == active,
-            timestamp=str(payload.get("timestamp") or "—"),
-            message_count=len(payload.get("messages", [])),
-            model=str(payload.get("model") or "—"),
-            mode=str(payload.get("mode") or "—"),
-        )
-        for session_id, payload in payloads
-    ]
+    result = []
+
+    def option(session_id, payload, is_active):
+        messages = payload.get("messages")
+        if not isinstance(messages, list):
+            raise SessionReadError("corrupt", session_id)
+        raw_title = payload.get("title")
+        title = raw_title[:160] if isinstance(raw_title, str) else ""
+        raw_model = payload.get("model")
+        model = raw_model[:160] if isinstance(raw_model, str) and raw_model else "—"
+        raw_time = payload.get("timestamp")
+        timestamp = raw_time if isinstance(raw_time, str) and len(raw_time) == 19 and re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", raw_time) else "—"
+        raw_mode = payload.get("mode")
+        mode = raw_mode if isinstance(raw_mode, str) and raw_mode in MODES else "—"
+        return SessionOption(session_id, title, is_active, timestamp, len(messages), model, mode)
+
+    for path in paths:
+        try:
+            result.append(option(path.stem, load_session(path.stem), path.stem == active))
+        except SessionReadError as exc:
+            result.append(SessionOption(path.stem, f"Unavailable: {exc.kind}", False, "—", 0, "—", "—", exc.kind))
+    if active and active not in {item.session_id for item in result}:
+        try:
+            payload = load_session("active")
+            if payload:
+                result.insert(0, option(active, payload, True))
+        except SessionReadError as exc:
+            result.insert(0, SessionOption(active, f"Unavailable: {exc.kind}", False, "—", 0, "—", "—", exc.kind))
+    return result
 
 
 def latest_assistant_text(messages: list[dict]) -> str:

@@ -47,3 +47,14 @@ def test_windows_tree_cleanup_falls_back_to_process_kill_when_taskkill_fails():
     terminate_process_tree(process, os_name="nt", runner=run, force=True)
 
     assert process.killed is True
+
+
+def test_absent_posix_group_still_stops_owned_leader(monkeypatch):
+    import os
+
+    def absent(*args):
+        raise ProcessLookupError('owned leader has no group with its PID')
+    monkeypatch.setattr(os, 'killpg', absent, raising=False)
+    process = _Process()
+    assert terminate_process_tree(process, os_name='posix', force=True)
+    assert process.killed

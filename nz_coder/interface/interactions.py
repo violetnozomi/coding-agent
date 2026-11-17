@@ -2,10 +2,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from concurrent.futures import CancelledError as FutureCancelledError
+from concurrent.futures import TimeoutError as FutureTimeoutError
 import threading
 
-from nz_coder.tool_platform.permissioning.interaction import format_tool_summary
+from nz_coder.tool_platform.permissioning.interaction import (
+    PermissionInteractionError, format_tool_summary, normalize_permission_reply,
+)
+from nz_coder.tool_platform.policies.command_policy import classify_bash
+from nz_coder.tools import current_tool_cancel_event
 
 
 class TerminalInteractionBridge:
@@ -21,7 +27,7 @@ class TerminalInteractionBridge:
         """Return once/always/reject without blocking the event-loop thread."""
         return self._submit(
             self._ask_permission(tool_name, tool_input),
-            default="reject",
+            default="reject", permission=True,
         )
 
     def ask_question(self, questions: list[dict]) -> list[list[str]] | None:
@@ -50,12 +56,13 @@ class TerminalInteractionBridge:
             else ""
         )
         try:
-            result = await self._select(
+            result = await self._select_permission(
                 title="Auto mode permission required",
+                detail=_permission_detail(tool_input),
                 text=(
                     f"{summary}\nReason: {reason}\n"
                     f"{degraded_notice}"
-                    "Choose a decision for this exact action. Esc rejects."
+                    "PgUp/PgDn scroll arguments. Choose a decision for this exact action. Esc rejects."
                 ),
                 values=[
                     ("once", "Allow once"),
@@ -67,28 +74,63 @@ class TerminalInteractionBridge:
                 ],
             )
         except Exception:
-            return "reject"
-        return str(result) if result in {"once", "always", "reject"} else "reject"
+            raise PermissionInteractionError("unavailable") from None
+        return "reject" if result is None else normalize_permission_reply(result)
 
-    def _submit(self, coroutine, *, default):  # noqa: ANN001
+    def _submit(self, coroutine, *, default, permission=False):  # noqa: ANN001
         if threading.get_ident() == self.owner_thread or self.loop.is_closed():
             coroutine.close()
+            if permission:
+                raise PermissionInteractionError("unavailable")
             return default
-        future = asyncio.run_coroutine_threadsafe(coroutine, self.loop)
+        cancel_event = current_tool_cancel_event()
+        interaction_task = None
+
+        async def run_interaction():
+            nonlocal interaction_task
+            interaction_task = asyncio.current_task()
+            if cancel_event is not None and cancel_event.is_set():
+                coroutine.close()
+                if permission:
+                    raise PermissionInteractionError("cancelled")
+                return default
+            return await coroutine
+
+        def cancel_interaction():
+            if interaction_task is not None:
+                interaction_task.cancel()
+
+        future = asyncio.run_coroutine_threadsafe(run_interaction(), self.loop)
+        cancel_requested = False
         try:
-            return future.result()
+            while True:
+                try:
+                    return future.result(timeout=0.05)
+                except FutureTimeoutError:
+                    if future.done():
+                        return future.result()
+                    if cancel_event is not None and cancel_event.is_set() and not cancel_requested:
+                        cancel_requested = True
+                        # 取消循环内的 Task，保留同一个 future 等待 finally 真正退出。
+                        self.loop.call_soon_threadsafe(cancel_interaction)
+        except PermissionInteractionError:
+            raise
         except (FutureCancelledError, RuntimeError):
             future.cancel()
+            if permission:
+                reason = "cancelled" if cancel_event is not None and cancel_event.is_set() else "unavailable"
+                raise PermissionInteractionError(reason) from None
             return default
 
     async def _ask_permission(self, tool_name: str, tool_input: dict) -> str:
         summary = format_tool_summary(tool_name, tool_input)
         reason = _permission_reason(tool_name, tool_input)
-        result = await self._select(
+        result = await self._select_permission(
             title="Permission required",
+            detail=_permission_detail(tool_input),
             text=(
                 f"{summary}\nReason: {reason}\n"
-                "Choose a scoped decision. Esc rejects."
+                "PgUp/PgDn scroll arguments. Choose a scoped decision. Esc rejects."
             ),
             values=[
                 ("once", "Allow once"),
@@ -96,7 +138,15 @@ class TerminalInteractionBridge:
                 ("reject", "Reject"),
             ],
         )
-        return str(result) if result in {"once", "always", "reject"} else "reject"
+        return "reject" if result is None else normalize_permission_reply(result)
+
+    async def _select_permission(self, **kwargs):
+        try:
+            return await self._select(**kwargs, require_interaction=True)
+        except PermissionInteractionError:
+            raise
+        except Exception:
+            raise PermissionInteractionError("unavailable") from None
 
     async def _ask_questions(self, questions: list[dict]) -> list[list[str]] | None:
         answers: list[list[str]] = []
@@ -193,11 +243,16 @@ def _question_option_label(option: dict) -> str:
 def _permission_reason(tool_name: str, tool_input: dict) -> str:
     """Explain user-visible risk without exposing internal policy records."""
     name = str(tool_name or "").lower()
-    command = str(tool_input.get("command") or "").lower()
-    if name == "bash" and any(token in command for token in ("install", "add ", "remove ")):
+    command = str(tool_input.get("command") or "")
+    if name == "bash" and classify_bash(command)["reason"] in {"package install", "package manager write"}:
         return "Package installation may modify project dependencies or the environment."
     if name in {"write_file", "edit_file", "replace_lines", "apply_patch"}:
         return "This operation changes files in the current workspace."
     if name in {"bash", "process"}:
         return "This command starts a process with your workspace permissions."
     return "This operation has side effects and requires your approval."
+
+
+def _permission_detail(tool_input: dict) -> str:
+    """完整参数进入已有的滚动详情区，短摘要只用于快速识别操作。"""
+    return "```json\n" + json.dumps(tool_input, ensure_ascii=False, indent=2) + "\n```"

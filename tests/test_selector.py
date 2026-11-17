@@ -2,11 +2,57 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
+import pytest
 from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.mouse_events import MouseEventType
 from prompt_toolkit.output import DummyOutput
 
 from nz_coder.interface.selector import FuzzySelector, _fuzzy_score
+
+
+def test_selector_mouse_multiple_toggles_and_combines_with_keyboard():
+    async def exercise():
+        selector = FuzzySelector(
+            title="Scope", values=[("file", "Current file"), ("repo", "Repository")],
+            multiple=True, mouse_support=True,
+        )
+        with create_pipe_input() as pipe:
+            app = selector.application(input=pipe, output=DummyOutput())
+            click = SimpleNamespace(event_type=MouseEventType.MOUSE_UP)
+
+            def select():
+                selector._mouse_handler(0)(click)
+                assert not app.is_done, "多选点击只能切换，必须由 Enter 确认"
+                selector._mouse_handler(0)(click)
+                selector._mouse_handler(1)(click)
+                pipe.send_text(" \r")
+
+            return await asyncio.wait_for(app.run_async(pre_run=select), timeout=2)
+
+    assert asyncio.run(exercise()) == ("repo", "file")
+
+
+@pytest.mark.parametrize("multiple, expected", [(False, "repo"), (True, ("repo",))])
+def test_selector_mouse_selects_option_and_enter_confirms_multiple(multiple, expected):
+    async def exercise():
+        selector = FuzzySelector(
+            title="Scope", values=[("file", "Current file"), ("repo", "Repository")],
+            multiple=multiple, mouse_support=True,
+        )
+        with create_pipe_input() as pipe:
+            app = selector.application(input=pipe, output=DummyOutput())
+
+            def select():
+                selector._mouse_handler(1)(SimpleNamespace(event_type=MouseEventType.MOUSE_UP))
+                if multiple:
+                    assert not app.is_done
+                    pipe.send_text("\r")
+
+            return await asyncio.wait_for(app.run_async(pre_run=select), timeout=2)
+
+    assert asyncio.run(exercise()) == expected
 
 
 def test_fuzzy_score_prefers_exact_prefix_substring_and_subsequence():

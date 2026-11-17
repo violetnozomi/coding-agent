@@ -131,13 +131,13 @@ def validate_against_schema(
                         properties[key],
                         _join_path(path, str(key)),
                     ))
-            if schema.get("additionalProperties") is False:
-                for key in value:
-                    if key not in properties:
-                        errors.append(
-                            f"{_join_path(path, str(key))}: unexpected property "
-                            "(additionalProperties is false)"
-                        )
+        if schema.get("additionalProperties") is False:
+            for key in value:
+                if key not in (properties or {}):
+                    errors.append(
+                        f"{_join_path(path, str(key))}: unexpected property "
+                        "(additionalProperties is false)"
+                    )
 
     items = schema.get("items")
     if isinstance(value, list) and isinstance(items, dict):

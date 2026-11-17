@@ -14,6 +14,24 @@ from nz_coder.tools import dispatch
 from nz_coder.tools.question import scoped_question_asker
 
 
+@pytest.mark.parametrize("command", [
+    'python -m tasknest add "买菜"', "python -m tasknest remove 3",
+    'python app.py --title "install notes"',
+])
+def test_permission_reason_does_not_call_application_actions_package_install(command):
+    from nz_coder.interface.interactions import _permission_reason
+    assert "Package installation" not in _permission_reason("bash", {"command": command})
+
+
+@pytest.mark.parametrize("command", [
+    "pip install pytest", "python -m pip install pytest", "npm install",
+    "pnpm add vitest", "yarn add eslint",
+])
+def test_permission_reason_uses_package_classifier_for_actual_installs(command):
+    from nz_coder.interface.interactions import _permission_reason
+    assert "Package installation" in _permission_reason("bash", {"command": command})
+
+
 class FakeRenderer:
     def __init__(self) -> None:
         self.paused = 0
@@ -143,10 +161,8 @@ def test_auto_permission_bridge_selector_error_rejects():
         )
         return result, renderer
 
-    result, renderer = asyncio.run(scenario())
-
-    assert result == "reject"
-    assert renderer.paused == renderer.resumed == 1
+    with pytest.raises(RuntimeError, match="not available"):
+        asyncio.run(scenario())
 
 
 def test_auto_permission_bridge_cancellation_resumes_renderer():
@@ -235,10 +251,8 @@ def test_bridge_conservatively_rejects_on_event_loop_thread():
         bridge = TerminalInteractionBridge(terminal, renderer, asyncio.get_running_loop())
         return bridge.ask_permission("write_file", {"path": "x.py"}), terminal
 
-    result, terminal = asyncio.run(scenario())
-
-    assert result == "reject"
-    assert terminal.requests == []
+    with pytest.raises(RuntimeError, match="not available"):
+        asyncio.run(scenario())
 
 
 def test_bind_terminal_interactions_updates_both_agent_askers():

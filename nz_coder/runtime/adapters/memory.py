@@ -7,11 +7,13 @@ from nz_coder.runtime.core.memory_context import MemoryExecutionContext, MemoryR
 def memory_context_from_legacy_host(host) -> MemoryExecutionContext:
     """Snapshot only the capabilities required by ProductionMemoryService."""
     state = MemoryRecallState(
+        cache_key=getattr(host, "_last_memory_cache_key", None),
         last_query=str(getattr(host, "_last_memory_query", "") or ""),
         last_block=str(getattr(host, "_last_memory_block", "") or ""),
     )
 
     def commit(recall: MemoryRecallState) -> None:
+        host._last_memory_cache_key = recall.cache_key
         host._last_memory_query = recall.last_query
         host._last_memory_block = recall.last_block
 
@@ -19,6 +21,7 @@ def memory_context_from_legacy_host(host) -> MemoryExecutionContext:
         manager=host._mm,
         session_id=str(host.session_id),
         client=getattr(host, "client", None),
+        model_runtime=getattr(host, "model_runtime", None),
         model_id=str(host._active_model_id()),
         tracer=getattr(host, "tracer", None),
         lineage=getattr(host, "lineage", None),
@@ -26,5 +29,5 @@ def memory_context_from_legacy_host(host) -> MemoryExecutionContext:
         commit_recall=commit,
         provider=getattr(host, "provider", None),
         capabilities=getattr(host, "model_capabilities", None),
-        observer=getattr(host, "_model_gateway_observer", None),
+        observer=host._model_gateway_observer_for_run(),
     )

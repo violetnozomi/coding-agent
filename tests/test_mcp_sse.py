@@ -4,10 +4,29 @@ from __future__ import annotations
 import json
 import queue
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import pytest
+
 from nz_coder.mcp import MCPLegacySSEClient, MCPRuntime, load_mcp_server_configs
+from nz_coder.mcp.client import MCPTimeoutError
 from nz_coder.tools import dispatch, scoped_dynamic_tool_provider
+
+
+def test_legacy_request_deadline_covers_waiting_for_endpoint():
+    client = MCPLegacySSEClient(
+        name="delayed-endpoint", url="http://127.0.0.1:1/sse",
+        startup_timeout_seconds=0.4, tool_timeout_seconds=0.03,
+    )
+    started = time.monotonic()
+    try:
+        with pytest.raises(MCPTimeoutError):
+            client.request("tools/list", timeout=0.03)
+        assert time.monotonic() - started < 0.25
+        assert not client._pending
+    finally:
+        client.close()
 
 
 class _LegacyServer(ThreadingHTTPServer):

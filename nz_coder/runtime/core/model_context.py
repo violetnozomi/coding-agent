@@ -2,10 +2,29 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import copy
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Callable
 
 
 ModelCallback = Callable[..., object]
+_request_tools: ContextVar[list | None] = ContextVar("frozen_request_tools", default=None)
+
+
+@contextmanager
+def scoped_request_tools(tools: list):
+    """Keep one outbound schema snapshot across nested host/runtime wrappers."""
+    token = _request_tools.set(copy.deepcopy(tools))
+    try:
+        yield
+    finally:
+        _request_tools.reset(token)
+
+
+def current_request_tools() -> list | None:
+    tools = _request_tools.get()
+    return copy.deepcopy(tools) if tools is not None else None
 
 
 @dataclass(frozen=True)
@@ -25,6 +44,8 @@ class ModelExecutionContext:
     retire_message_part: ModelCallback
     provider_instance_id: ModelCallback | None = None
     complete_override: ModelCallback | None = None
+    working_memory_allowed: ModelCallback = lambda: True
+    run_context: object | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -39,6 +60,7 @@ class ModelExecutionContext:
             "record_success",
             "trace",
             "retire_message_part",
+            "working_memory_allowed",
         ):
             if not callable(getattr(self, name)):
                 raise TypeError(f"ModelExecutionContext {name} must be callable")

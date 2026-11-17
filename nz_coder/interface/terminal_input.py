@@ -161,7 +161,8 @@ class TerminalCompleter(Completer):
                     )
             return
 
-        command, argument = stripped.split(maxsplit=1)
+        command, _, argument = stripped.partition(" ")
+        argument = argument.lstrip()
         normalized = command.lower().lstrip("/")
         if normalized == "resume":
             yield from self._value_completions(argument, self._session_provider(), "saved session")
@@ -396,10 +397,15 @@ class TerminalInput:
         allow_custom: bool = False,
         actions: Iterable[tuple[str, str, str]] = (),
         on_move: Callable[[object | None], None] | None = None,
+        require_interaction: bool = False,
     ) -> object | None:
         """Show a keyboard-operated choice dialog without nesting event loops."""
+        from nz_coder.tool_platform.permissioning.interaction import PermissionInteractionError
+
         choices = list(values)
         if not self.interactive or not choices:
+            if require_interaction:
+                raise PermissionInteractionError("unavailable")
             return None
         selector = FuzzySelector(
             title=title,
@@ -423,9 +429,16 @@ class TerminalInput:
                     allow_custom=allow_custom,
                     actions=actions,
                     on_move=on_move,
+                    require_interaction=require_interaction,
                 )
             return await selector.run_async()
-        except (EOFError, KeyboardInterrupt):
+        except EOFError:
+            if require_interaction:
+                raise PermissionInteractionError("unavailable") from None
+            return None
+        except KeyboardInterrupt:
+            if require_interaction:
+                raise
             return None
 
     def refresh_files(self) -> None:

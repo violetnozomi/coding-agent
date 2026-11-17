@@ -250,7 +250,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-async def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
+    return asyncio.run(_main_async(argv))
+
+
+async def _main_async(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "check":
@@ -311,4 +315,4 @@ def _tool_status(output: str) -> str:
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    raise SystemExit(main())

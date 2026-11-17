@@ -28,7 +28,7 @@ class TerminalBackend(Protocol):
 class RemoteControlBackend(TerminalBackend, Protocol):
     """Additional daemon-owned controls used by an attached terminal."""
 
-    def sessions(self) -> list[dict[str, Any]]: ...
+    def sessions(self) -> dict[str, Any]: ...
     def messages(self) -> list[dict[str, Any]]: ...
     def diff(self) -> list[dict[str, Any]]: ...
     def rename(self, title: str) -> dict[str, Any]: ...
@@ -53,11 +53,19 @@ class RemoteControlBackend(TerminalBackend, Protocol):
     def start_workflow(
         self, name: str, arguments: dict, *, approval_digest: str,
     ) -> dict[str, Any]: ...
+    def lsp_status(self) -> dict: ...
+    def lsp_control(self, entry_id: str, action: str) -> dict: ...
+
     def memory(self) -> dict[str, Any]: ...
-    def memory_proposal(self, fingerprint: str) -> dict[str, Any]: ...
-    def review_memory(
-        self, fingerprint: str, action: str, *, reason: str = "",
-    ) -> dict[str, Any]: ...
+    def list_memories(self, **options) -> dict[str, Any]: ...
+    def search_memories(self, query: str, **options) -> dict: ...
+    def read_memory(self, memory_id: str, **options) -> dict: ...
+    def memory_history(self, memory_id: str) -> list: ...
+    def mutate_memory(self, command: dict, *, operation_id: str) -> dict: ...
+    def memory_proposal(self, proposal_id: str) -> dict[str, Any]: ...
+    def review_memory(self, proposal_id: str, action: str, *, expected_proposal_revision: int,
+                      operation_id: str, reason: str = "", expected_revision=None,
+                      related_records=None) -> dict[str, Any]: ...
     def select_session(self, session_id: str) -> dict[str, Any]: ...
 
 
@@ -105,7 +113,7 @@ class RemoteTerminalBackend:
     def abort(self) -> bool:
         return bool(self.client.abort(self.session_id).get("aborted"))
 
-    def sessions(self) -> list[dict[str, Any]]:
+    def sessions(self) -> dict[str, Any]:
         return self.client.list_sessions()
 
     def messages(self) -> list[dict[str, Any]]:
@@ -183,18 +191,39 @@ class RemoteTerminalBackend:
             approval_digest=approval_digest,
         )
 
+    def lsp_status(self) -> dict:
+        return self.client.lsp_status(self.session_id)
+
+    def lsp_control(self, entry_id: str, action: str) -> dict:
+        return self.client.lsp_control(self.session_id,entry_id,action)
+
     def memory(self) -> dict[str, Any]:
         return self.client.memory_status(self.session_id)
 
-    def memory_proposal(self, fingerprint: str) -> dict[str, Any]:
-        return self.client.get_memory_proposal(self.session_id, fingerprint)
+    def list_memories(self, **options) -> dict:
+        return self.client.list_memories(self.session_id, **options)
 
-    def review_memory(
-        self, fingerprint: str, action: str, *, reason: str = "",
-    ) -> dict[str, Any]:
-        return self.client.review_memory(
-            self.session_id, fingerprint, action, reason=reason
-        )
+    def search_memories(self, query: str, **options) -> dict:
+        return self.client.search_memories(self.session_id, query, **options)
+
+    def read_memory(self, memory_id: str, **options) -> dict:
+        return self.client.read_memory(self.session_id, memory_id, **options)
+
+    def memory_history(self, memory_id: str) -> list:
+        return self.client.memory_history(self.session_id, memory_id)
+
+    def mutate_memory(self, command: dict, *, operation_id: str) -> dict:
+        return self.client.mutate_memory(self.session_id, command, operation_id=operation_id)
+
+    def memory_proposal(self, proposal_id: str) -> dict[str, Any]:
+        return self.client.get_memory_proposal(self.session_id, proposal_id)
+
+    def review_memory(self, proposal_id: str, action: str, *, expected_proposal_revision: int,
+                      operation_id: str, reason: str = "", expected_revision=None,
+                      related_records=None) -> dict[str, Any]:
+        return self.client.review_memory(self.session_id, proposal_id, action,
+            expected_proposal_revision=expected_proposal_revision, operation_id=operation_id,
+            reason=reason, expected_revision=expected_revision, related_records=related_records)
 
     def select_session(self, session_id: str) -> dict[str, Any]:
         info = self.client.get_session(session_id)
@@ -207,7 +236,7 @@ class RemoteTerminalBackend:
             self.session_id,
             replay=0,
             last_event_id=last_event_id,
-            reconnect_attempts=2,
+            reconnect_attempts=0,
         )
 
     def reply_permission(self, request_id: str, reply: str, *, message: str = "") -> bool:

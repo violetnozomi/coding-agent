@@ -25,7 +25,15 @@ def context_from_legacy_host(host) -> ContextExecutionContext:
         compact_overflow=lambda messages: host._compact_messages(messages, overflow=True),
         stamp_auto_compaction=host._stamp_auto_compaction,
         trace=tracer.log,
+        freeze_request=host._freeze_api_request,
         report_pressure=report_pressure,
         projected_replay_tokens=getattr(host, "_projected_replay_tokens", None),
         cancel_compaction=getattr(host, "_cancel_compaction", None),
     )
+
+
+def new_runtime_state():
+    """兼容宿主的运行状态构造只在这一适配边界发生。"""
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    return RuntimeState()

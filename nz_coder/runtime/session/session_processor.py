@@ -33,7 +33,7 @@ from nz_coder.protocol.message_schema import (
     remove_message_part,
     upsert_message_part,
 )
-from nz_coder.protocol.public_error import TrustedPublicMessage, to_public_error
+from nz_coder.protocol.public_error import PublicError, TrustedPublicMessage, to_public_error
 
 
 OUTPUT_LENGTH_WARNING = (
@@ -80,6 +80,7 @@ class SessionProcessor:
         self.on_message_updated = on_message_updated
         self._lock = threading.RLock()
         self._blocked = False
+        self.blocked_reason = ""
         now = time.time()
         self._step_started_at = now
         parts = assistant_message.get(PARTS_KEY)
@@ -547,6 +548,7 @@ class SessionProcessor:
         error: object,
         *,
         interrupted: bool = False,
+        metadata: dict | None = None,
     ) -> None:
         """Settle a tool as error, discarding partial interrupted output."""
         part = self._tool_part(call_id)
@@ -558,7 +560,8 @@ class SessionProcessor:
             "state": {
                 "status": "error",
                 "input": dict(part.get("state", {}).get("input") or {}),
-                "error": to_public_error(error).message,
+                "error": to_public_error(error).to_dict(),
+                "metadata": dict(metadata or {}),
                 "interrupted": bool(interrupted),
                 "time": {"start": start, "end": time.time()},
             },
@@ -575,10 +578,16 @@ class SessionProcessor:
         metadata: dict | None = None,
         attachments: list[dict] | None = None,
         continue_on_deny: bool = False,
+        public_error: PublicError | None = None,
     ) -> None:
         """Consume one tool-result/error event and update processor control state."""
         if failed:
-            self.fail_tool(call_id, output, interrupted=False)
+            from nz_coder.protocol.public_error import TrustedPublicMessage
+            error = public_error if public_error is not None else (
+                TrustedPublicMessage("permission_stopped", output)
+                if denied and (metadata or {}).get("permission_source") else output
+            )
+            self.fail_tool(call_id, error, interrupted=False, metadata=metadata)
         else:
             self.complete_tool(
                 call_id,
@@ -588,7 +597,10 @@ class SessionProcessor:
                 attachments=attachments,
             )
         if denied and not continue_on_deny:
+            from nz_coder.tool_platform.permissioning.interaction import approval_stop_message
             self._blocked = True
+            if not self.blocked_reason and (metadata or {}).get("permission_source") != "batch_cancelled":
+                self.blocked_reason = approval_stop_message(metadata or {})
 
     def process_result(self, *, needs_compaction: bool = False, fatal: bool = False) -> str:
         """Return InfCode-style compact/stop/continue after stream cleanup."""

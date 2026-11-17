@@ -139,3 +139,13 @@ def test_named_projection_policies_keep_the_most_useful_evidence() -> None:
     assert read.metadata["policy"] == "head"
     assert "FINAL-FAILURE" in test.text
     assert test.metadata["policy"] == "tail"
+
+
+def test_tiny_batch_budget_accepts_empty_outputs_and_preserves_pairing():
+    projector = ToolResultProjector(budget=ToolResultBudget(max_tokens=64),
+        artifact_writer=lambda call_id, _output: f"artifacts/{call_id}.txt")
+    results = projector.project_batch([
+        ("empty-read", "read_file", ""), ("empty-command", "bash", "")], max_tokens=1)
+    assert [result.metadata["tool_call_id"] for result in results] == ["empty-read", "empty-command"]
+    assert sum(result.metadata["projected_tokens"] for result in results) <= 1
+    assert all(result.text == "" for result in results)

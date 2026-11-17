@@ -11,7 +11,7 @@ def verification_context_from_legacy_host(host) -> VerificationExecutionContext:
         override = None
 
     async def review(messages: list, content: str) -> str:
-        return await host.hooks.handle_no_tool_response_async(
+        return await host.hooks.handle_completion_review_async(
             host,
             messages,
             message=content,

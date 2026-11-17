@@ -9,7 +9,8 @@ import re
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import copy_context
+from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -344,6 +345,8 @@ def lint_workflow_plan(
             read_only = task.get("read_only", False)
             if not isinstance(read_only, bool):
                 findings.append(WorkflowFinding("invalid-read-only", f"phase {name or index} task {task_index} read_only must be boolean"))
+            if task.get("environment_mode", "reuse") not in {"reuse", "private"}:
+                findings.append(WorkflowFinding("invalid-environment-mode", "environment_mode must be reuse or private"))
             isolation = str(task.get("isolation") or "thread")
             if isolation not in {"thread", "process"}:
                 findings.append(WorkflowFinding(
@@ -570,6 +573,7 @@ class WorkflowRuntime:
         self.token_budget = int(token_budget) if token_budget is not None else None
         self.spent_tokens = 0
         self.cancel_event = cancel_event or threading.Event()
+        self._stop_requested = threading.Event()
         self.max_concurrency = (
             max(1, int(max_concurrency)) if max_concurrency is not None else None
         )
@@ -595,6 +599,8 @@ class WorkflowRuntime:
         self._worktree_sweep: dict = {"removed": [], "warnings": []}
 
     def _check_control(self) -> None:
+        if self._stop_requested.is_set():
+            raise WorkflowAbortError("workflow stopped after structural failure")
         if self.cancel_event.is_set():
             raise WorkflowAbortError("workflow aborted by caller")
         if self.manager.workflow_run_stopped(self.run_id):
@@ -607,8 +613,13 @@ class WorkflowRuntime:
     def _before_spawn(self) -> None:
         self._ensure_managed_run("workflow")
         self._check_control()
-        if not self.manager.wait_workflow_spawn_gate(self.run_id, self.cancel_event):
+        class _GateCancellation:
+            def is_set(inner_self):
+                return self.cancel_event.is_set() or self._stop_requested.is_set()
+
+        if not self.manager.wait_workflow_spawn_gate(self.run_id, _GateCancellation()):
             raise WorkflowAbortError("workflow stopped before next Agent spawn")
+        self._check_control()
 
     def _ensure_managed_run(self, name: str) -> None:
         with self._managed_lock:
@@ -771,13 +782,31 @@ class WorkflowRuntime:
         if cap < 1:
             raise WorkflowLimitError("parallel concurrency must be positive")
         results: list[Any | None] = [None] * len(thunks)
+        failure_lock = threading.Lock()
+        def invoke(thunk):
+            try:
+                self._check_control()
+                return thunk()
+            except WorkflowControlError as exc:
+                with failure_lock:
+                    if self._stop_requested.is_set():
+                        if getattr(exc, '_workflow_origin', False):
+                            raise
+                        return None
+                    exc._workflow_origin = True
+                    self._stop_requested.set()
+                raise
         with ThreadPoolExecutor(max_workers=cap, thread_name_prefix="nz-workflow") as pool:
-            pending = {pool.submit(thunk): index for index, thunk in enumerate(thunks)}
+            pending = {pool.submit(copy_context().run, invoke, thunk): index for index, thunk in enumerate(thunks)}
             for future in as_completed(pending):
                 index = pending[future]
                 try:
                     results[index] = future.result()
                 except WorkflowControlError:
+                    self._stop_requested.set()
+                    self.stop_active("workflow failed")
+                    for other in pending:
+                        other.cancel()
                     raise
                 except Exception:
                     results[index] = None
@@ -807,6 +836,21 @@ class WorkflowRuntime:
             self._occurrences[digest] = occurrence + 1
         return f"{digest}#{occurrence}"
 
+    def _wait_for_child_result(self, task_id: str, *, abort_reason: str) -> dict | None:
+        """Share cancellation and tracking across every workflow result consumer."""
+        self._track(task_id, True)
+        try:
+            if self._stop_requested.is_set():
+                self.manager.stop([task_id], reason="workflow failed", timeout_ms=2000)
+            result = self.manager.wait_for_result(task_id, self.cancel_event)
+        except CancelledError:
+            self.manager.stop([task_id], reason=abort_reason, timeout_ms=2000)
+            raise WorkflowAbortError(abort_reason) from None
+        finally:
+            self._track(task_id, False)
+        self._check_control()
+        return result.to_dict() if result is not None else None
+
     def run_agent(self, task: dict) -> dict | None:
         self._check_control()
         key = self._cache_key(task)
@@ -828,24 +872,9 @@ class WorkflowRuntime:
                 raise WorkflowLimitError(str(started))
             raise RuntimeError(str(started))
         task_id = started.metadata["task_ids"][0]
-        self._track(task_id, True)
-        try:
-            settled = self.manager.wait_until_settled(task_id, self.cancel_event)
-            if not settled:
-                self.manager.stop(
-                    [task_id],
-                    reason="workflow aborted by caller",
-                    timeout_ms=2000,
-                )
-                raise WorkflowAbortError("workflow aborted by caller")
-            waited = self.manager.wait([task_id], timeout_ms=0)
-        finally:
-            self._track(task_id, False)
-        self._check_control()
-        results = waited.metadata.get("child_results") or []
-        if not results:
+        result = self._wait_for_child_result(task_id, abort_reason="workflow aborted by caller")
+        if result is None:
             return None
-        result = ChildAgentResult.from_dict(results[0]).to_dict()
         self._accrue(result)
         if result["status"] not in _SUCCESS:
             return None
@@ -881,24 +910,9 @@ class WorkflowRuntime:
         if str(started).startswith("Error:"):
             raise WorkflowLimitError(str(started))
         task_id = started.metadata["task_ids"][0]
-        self._track(task_id, True)
-        try:
-            settled = self.manager.wait_until_settled(task_id, self.cancel_event)
-            if not settled:
-                self.manager.stop(
-                    [task_id],
-                    reason="workflow aborted during synthesis",
-                    timeout_ms=2000,
-                )
-                raise WorkflowAbortError("workflow aborted during synthesis")
-            waited = self.manager.wait([task_id], timeout_ms=0)
-        finally:
-            self._track(task_id, False)
-        self._check_control()
-        results = waited.metadata.get("child_results") or []
-        if not results:
+        result = self._wait_for_child_result(task_id, abort_reason="workflow aborted during synthesis")
+        if result is None:
             raise RuntimeError("workflow synthesis did not settle")
-        result = ChildAgentResult.from_dict(results[0]).to_dict()
         self._accrue(result)
         if result["status"] not in _SUCCESS:
             raise RuntimeError(f"workflow synthesis failed: {result['status']}")
@@ -955,25 +969,14 @@ class WorkflowRuntime:
         if str(started).startswith("Error:"):
             raise WorkflowLimitError(str(started))
         task_id = started.metadata["task_ids"][0]
-        self._track(task_id, True)
-        try:
-            settled = self.manager.wait_until_settled(task_id, self.cancel_event)
-            if not settled:
-                self.manager.stop([task_id], reason="workflow verifier aborted", timeout_ms=2000)
-                raise WorkflowAbortError("workflow verifier aborted")
-            waited = self.manager.wait([task_id], timeout_ms=0)
-        finally:
-            self._track(task_id, False)
-        self._check_control()
-        results = waited.metadata.get("child_results") or []
+        result = self._wait_for_child_result(task_id, abort_reason="workflow verifier aborted")
         # Sidecar is fail-open on provider/schema failures, matching InfCodeX.
         verdict = {
             "verdict": "accept",
             "reason": "sidecar unavailable; fail-open",
             "trace": "sidecar_failure",
         }
-        if results:
-            result = ChildAgentResult.from_dict(results[0]).to_dict()
+        if result is not None:
             self._accrue(result)
             structured = result.get("structured")
             if (

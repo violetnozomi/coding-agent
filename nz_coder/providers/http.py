@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 import json
 import math
 from typing import Any, Callable, Iterable, Iterator
+from threading import Event
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -13,6 +14,62 @@ from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 
 _MAX_PROVIDER_RESPONSE_BYTES = 64 * 1024 * 1024
 _MAX_PROVIDER_ERROR_BYTES = 64 * 1024
+
+
+class ProviderHTTPError(RuntimeError):
+    """Retain transport evidence for shared classification and recovery."""
+
+    def __init__(self, status_code: int, headers, body: str):
+        super().__init__(f"Provider HTTP {status_code}: {body}")
+        self.status_code = status_code
+        self.headers = headers
+        self.body = body
+
+
+class OwnedStream(Iterator):
+    """Retain both adapter and underlying resource until each is closed."""
+
+    def __init__(self, iterator: Iterator, *, close_owner: Callable[[], None]):
+        self._iterator = iterator
+        self._close_owner = close_owner
+        self._adapter_closed = False
+        self._owner_closed = False
+        self._cancelled = Event()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._cancelled.is_set() or self._adapter_closed:
+            raise StopIteration
+        item = next(self._iterator)
+        if self._cancelled.is_set():
+            raise StopIteration
+        return item
+
+    def request_cancel(self):
+        self._cancelled.set()
+
+    def close(self):
+        errors = []
+        if not self._adapter_closed:
+            try:
+                close = getattr(self._iterator, "close", None)
+                if close is not None:
+                    close()
+                self._adapter_closed = True
+            except BaseException as exc:
+                errors.append(exc)
+        if not self._owner_closed:
+            try:
+                self._close_owner()
+                self._owner_closed = True
+            except BaseException as exc:
+                errors.append(exc)
+        if len(errors) > 1:
+            raise errors[0] from errors[1]
+        if errors:
+            raise errors[0]
 
 
 class _CompletionsProxy:
@@ -94,8 +151,25 @@ class UrllibTransport:
         headers: dict[str, str],
         payload: dict,
     ) -> Iterable[dict]:
-        response = self._open(url, headers, payload)
-        return self._iter_sse(response)
+        response = None
+        opening = False
+
+        def iterate():
+            nonlocal response, opening
+            opening = True
+            try:
+                response = self._open(url, headers, payload)
+            finally:
+                opening = False
+            yield from self._iter_sse_data(response)
+
+        def close_response():
+            if opening:
+                raise RuntimeError("Provider response is still opening")
+            if response is not None:
+                response.close()
+
+        return OwnedStream(iterate(), close_owner=close_response)
 
     def _open(self, url: str, headers: dict[str, str], payload: dict):
         try:
@@ -121,28 +195,32 @@ class UrllibTransport:
             )
             if len(body) > _MAX_PROVIDER_ERROR_BYTES:
                 body = body[:_MAX_PROVIDER_ERROR_BYTES] + "[truncated]"
-            raise RuntimeError(f"Provider HTTP {exc.code}: {body}") from exc
+            raise ProviderHTTPError(exc.code, exc.headers, body) from exc
         except URLError as exc:
             raise RuntimeError(f"Provider connection error: {exc.reason}") from exc
 
     @staticmethod
     def _iter_sse(response) -> Iterator[dict]:
-        data_lines: list[str] = []
-        total_bytes = 0
         try:
-            for raw_line in response:
-                total_bytes += len(raw_line)
-                if total_bytes > _MAX_PROVIDER_RESPONSE_BYTES:
-                    raise RuntimeError("Provider SSE response exceeds 64 MiB")
-                line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
-                if not line:
-                    yield from UrllibTransport._decode_sse_data(data_lines)
-                    data_lines = []
-                elif line.startswith("data:"):
-                    data_lines.append(line[5:].lstrip())
-            yield from UrllibTransport._decode_sse_data(data_lines)
+            yield from UrllibTransport._iter_sse_data(response)
         finally:
             response.close()
+
+    @staticmethod
+    def _iter_sse_data(response) -> Iterator[dict]:
+        data_lines: list[str] = []
+        total_bytes = 0
+        for raw_line in response:
+            total_bytes += len(raw_line)
+            if total_bytes > _MAX_PROVIDER_RESPONSE_BYTES:
+                raise RuntimeError("Provider SSE response exceeds 64 MiB")
+            line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+            if not line:
+                yield from UrllibTransport._decode_sse_data(data_lines)
+                data_lines = []
+            elif line.startswith("data:"):
+                data_lines.append(line[5:].lstrip())
+        yield from UrllibTransport._decode_sse_data(data_lines)
 
     @staticmethod
     def _decode_sse_data(data_lines: list[str]) -> Iterator[dict]:

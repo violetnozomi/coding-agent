@@ -4,6 +4,7 @@ from __future__ import annotations
 import time
 
 from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.runtime.core.model_context import current_request_tools
 from nz_coder.protocol.message_schema import assistant_error_from_exception
 from nz_coder.runtime.model_gateway import ModelCall, ModelCallPurpose, ModelCallStatus
 from nz_coder.runtime.conversation.model_result import LLMResult
@@ -73,11 +74,17 @@ def project_streaming_turn(
             mutation_chars = attempt.flush_reasoning()
         elif event.kind == "tool_delta":
             index = int(event.data.get("index") or 0)
+            previous = attempt.tools.get(index, {}).get("function", {})
+            previous_chars = len(str(previous.get("arguments") or ""))
             if not attempt.update_tool(index, _streamed_tool(event.data)):
                 return None
-            mutation_chars = len(str(event.data.get("arguments") or ""))
+            # Gateway 传入的是累计快照；只计算新增字符，避免超过阈值后逐片段落盘。
+            mutation_chars = max(
+                0, len(str(event.data.get("arguments") or "")) - previous_chars,
+            )
         elif (
             event.kind == "finish"
+            and str(event.data.get("reason") or "") not in {"length", "error"}
             and stream_tool_handler is not None
             and attempt.tools
             and not tools_executed
@@ -221,6 +228,9 @@ def _streamed_tool(data: dict) -> dict:
 
 
 def _active_tools(host) -> list:
+    frozen = current_request_tools()
+    if frozen is not None:
+        return frozen
     capabilities = getattr(host, "model_capabilities", None)
     return (
         expose_specs(host._active_tool_specs())
@@ -272,7 +282,8 @@ def _settle_stream_tools(
             result.post_tool_stream_error = str(tool_error)
             result.assistant_error = assistant_error_from_exception(tool_error)
         return result
-    if handler is None or not result.tool_calls:
+    # 异常终态的未执行调用交给 runner 收尾；已执行分支必须先保留真实结果。
+    if handler is None or not result.tool_calls or result.finish_reason in {"length", "error"}:
         return result
     started = time.perf_counter()
     try:

@@ -6,12 +6,13 @@ from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as Futur
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
-from threading import Event, RLock, Thread
-import atexit
+from threading import Event, Lock, RLock, Thread, _register_atexit
+import copy
 import os
 import time
 import weakref
 
+from nz_coder.foundation.workspace_paths import WorkspacePathError
 from nz_coder.intelligence.code_index import (
     PersistentCodeIndex,
     is_excluded_directory,
@@ -45,6 +46,7 @@ class RepoIntelligenceService:
 
     def __init__(self, workspace: Path, *, query_cache_size: int = 256) -> None:
         self.workspace = Path(workspace).resolve()
+        self._registry_cleanup_lock = Lock()
         if not self.workspace.is_dir():
             raise ValueError("Repo intelligence workspace must be a directory")
         self._watch_stop = Event()
@@ -371,7 +373,7 @@ class RepoIntelligenceService:
         while not self._watch_stop.wait(current_interval):
             try:
                 current = self._fingerprints(max_files)
-            except OSError:
+            except (OSError, WorkspacePathError):
                 with self._lock:
                     self._state = replace(self._state, watcher_backend="none")
                 self._emit(
@@ -460,7 +462,7 @@ class RepoIntelligenceService:
                     "repo_intelligence_query", operation=operation,
                     generation=generation, cache_hit=True, query_ms=0.0,
                 )
-                return {**cached, "cache_hit": True}
+                return {**copy.deepcopy(cached), "cache_hit": True}
             self._cache_misses += 1
         result = compute()
         elapsed = (time.perf_counter() - started) * 1000
@@ -468,7 +470,7 @@ class RepoIntelligenceService:
         with self._lock:
             self._query_count += 1
             self._query_ms += elapsed
-            self._cache[key] = result
+            self._cache[key] = copy.deepcopy(result)
             self._cache.move_to_end(key)
             while len(self._cache) > self._cache_size:
                 self._cache.popitem(last=False)
@@ -917,11 +919,13 @@ _REGISTRY: dict[Path, tuple[RepoIntelligenceService, int]] = {}
 def _close_all_repo_intelligence_services() -> None:
     """Stop every process-owned worker before native modules are finalized."""
     with _REGISTRY_LOCK:
-        services = tuple({id(item[0]): item[0] for item in _REGISTRY.values()}.values())
-        _REGISTRY.clear()
-    for service in services:
+        services = tuple((key, item[0]) for key, item in _REGISTRY.items())
+        for key, service in services:
+            service._closed = True
+            _REGISTRY[key] = (service, 0)
+    for key, service in services:
         try:
-            service.close()
+            _close_registered_owner(key, service)
         except Exception:
             # Interpreter teardown is best-effort, but each close() signals the
             # native watcher before any operation that may itself fail.
@@ -959,7 +963,8 @@ def _start_watcher_after_prewarm(
 if hasattr(os, "register_at_fork"):
     os.register_at_fork(after_in_child=_reset_registry_after_fork)
 
-atexit.register(_close_all_repo_intelligence_services)
+# 与线程池使用同一退出阶段，先发出协作停止信号，再允许线程池等待任务退出。
+_register_atexit(_close_all_repo_intelligence_services)
 
 
 def workspace_repo_intelligence(
@@ -972,6 +977,8 @@ def workspace_repo_intelligence(
         existing = _REGISTRY.get(key)
         if existing is not None:
             service = existing[0]
+            if service._closed:
+                raise RuntimeError("Repo intelligence cleanup is pending")
             if start_watcher:
                 service._deferred_watch = (interval, max(0.05, interval * 2), max_files)
                 if service.state.status == "ready":
@@ -1007,6 +1014,10 @@ def acquire_repo_intelligence(
         existing = _REGISTRY.get(key)
         if existing is not None:
             service, count = existing
+            if service._closed:
+                raise RuntimeError("Repo intelligence cleanup is pending")
+            from nz_coder.lsp.manager import activate_workspace_clients
+            activate_workspace_clients(key)
             _REGISTRY[key] = (service, count + 1)
             service._deferred_watch = (
                 interval,
@@ -1022,6 +1033,12 @@ def acquire_repo_intelligence(
                 max(0.05, interval * 2),
                 max_files,
             )
+            from nz_coder.lsp.manager import activate_workspace_clients
+            try:
+                activate_workspace_clients(key)
+            except Exception:
+                service.close()
+                raise
             _REGISTRY[key] = (service, 1)
             start_watcher = False
             created = True
@@ -1055,15 +1072,32 @@ def release_repo_intelligence(workspace: Path) -> None:
             _REGISTRY[key] = (candidate, count - 1)
             return
         service = candidate
-        del _REGISTRY[key]
-    try:
-        service.close()
-    finally:
-        # LSP clients share the workspace lifetime and must not outlive the
-        # final SDK/agent lease for that workspace.
-        from nz_coder.lsp.manager import close_workspace_clients
+        service._closed = True
+        _REGISTRY[key] = (service, 0)
+    _close_registered_owner(key, service)
 
-        close_workspace_clients(key)
+
+def _close_registered_owner(key: Path, service: RepoIntelligenceService) -> None:
+    with service._registry_cleanup_lock:
+        with _REGISTRY_LOCK:
+            existing = _REGISTRY.get(key)
+            if existing is None or existing[0] is not service:
+                return
+        from nz_coder.lsp.manager import close_workspace_clients, retire_workspace_clients
+        retire_workspace_clients(key)
+        failures = []
+        for cleanup in (service.close,lambda:close_workspace_clients(key)):
+            try:
+                cleanup()
+            except Exception as exc:
+                failures.append(exc)
+        if failures:
+            from nz_coder.protocol.public_error import PublicRuntimeError, PublicError
+            raise PublicRuntimeError(PublicError(code='cleanup_pending',message='Workspace resource cleanup pending')) from failures[0]
+        with _REGISTRY_LOCK:
+            existing = _REGISTRY.get(key)
+            if existing is not None and existing[0] is service:
+                del _REGISTRY[key]
 
 
 @contextmanager

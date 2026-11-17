@@ -133,8 +133,12 @@ def test_lsp_enabled_and_timeouts_use_target_workspace_snapshot(tmp_path, monkey
             self.process = SimpleNamespace(poll=lambda: None)
             self.closed = False
 
-        def close(self):
+        def start(self, operation):
+            self._closed = False
+
+        def close(self, **kwargs):
             self.closed = True
+            self._closed = True
 
     monkeypatch.setattr(manager, "resolve_server", lambda *_args, **_kwargs: ResolvedServer(
         server_id="fake",
@@ -165,7 +169,7 @@ def test_lsp_enabled_and_timeouts_use_target_workspace_snapshot(tmp_path, monkey
         assert manager.get_client_for_file(
             source, workspace, config_snapshot=rotated,
         ) is not first_client
-        assert first_client.closed is True
+        assert first_client.closed is False
     finally:
         manager.close_all_clients()
 

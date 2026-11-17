@@ -1,10 +1,12 @@
-"""Non-interactive memory review controls for automation and operators."""
+"""ID、版本和操作收据一致的记忆管理命令。"""
 from __future__ import annotations
 
 import argparse
 import json
-import sys
+from pathlib import Path
+import sqlite3
 
+from nz_coder.protocol.public_error import to_public_error
 from nz_coder.state.memory import current_memory_manager
 from nz_coder.state.memory_control import MemoryControlPlane
 
@@ -12,137 +14,117 @@ from nz_coder.state.memory_control import MemoryControlPlane
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nz-coder memory")
     commands = parser.add_subparsers(dest="command", required=True)
-    pending = commands.add_parser("pending", help="List proposals waiting for review")
-    pending.add_argument("--json", action="store_true")
-    inspect = commands.add_parser("inspect", help="Inspect one proposal")
-    inspect.add_argument("fingerprint")
-    inspect.add_argument("--json", action="store_true")
-    approve = commands.add_parser("approve", help="Approve one proposal")
-    approve.add_argument("fingerprint")
-    approve.add_argument("--reviewer", default="cli-user")
-    reject = commands.add_parser("reject", help="Reject one proposal")
-    reject.add_argument("fingerprint")
-    reject.add_argument("--reason", default="rejected by CLI user")
-    reject.add_argument("--reviewer", default="cli-user")
-    ledger = commands.add_parser("ledger", help="Show the append-only review ledger")
-    ledger.add_argument("--json", action="store_true")
-    edit = commands.add_parser("edit", help="Curate an existing persisted memory")
-    edit.add_argument("name")
-    edit.add_argument("--description")
-    edit.add_argument("--type", dest="memory_type")
-    edit.add_argument("--content")
-    delete = commands.add_parser("delete", help="Delete one persisted memory")
-    delete.add_argument("name")
-    delete.add_argument("--confirm", action="store_true")
+    for name in ("migrate", "list", "pending", "ledger"):
+        sub = commands.add_parser(name)
+        sub.add_argument("--json", action="store_true")
+        if name in {"list", "pending", "ledger"}:
+            sub.add_argument("--limit", type=int, default=50)
+        if name == "list":
+            sub.add_argument("--type", choices=("user", "project", "feedback", "reference"))
+            sub.add_argument("--status", choices=("active", "archived", "all"), default="active")
+            sub.add_argument("--cursor")
+    search = commands.add_parser("search")
+    search.add_argument("query")
+    search.add_argument("--limit", type=int, default=5)
+    for name in ("read", "history", "inspect"):
+        sub = commands.add_parser(name)
+        sub.add_argument("id")
+        sub.add_argument("--json", action="store_true")
+        if name == "read":
+            sub.add_argument("--revision", type=int)
+    reindex = commands.add_parser("reindex")
+    reindex.add_argument("--model", type=Path)
+    reindex.add_argument("--limit", type=int, default=50)
+    export = commands.add_parser("export")
+    export.add_argument("target", type=Path)
+    for name in ("create", "update", "archive", "restore", "delete", "assess", "approve", "reject"):
+        sub = commands.add_parser(name)
+        sub.add_argument("--operation-id", required=True)
+        if name != "create":
+            sub.add_argument("id")
+        if name in {"approve", "reject"}:
+            sub.add_argument("--expected-proposal-revision", required=True, type=int)
+            sub.add_argument("--reviewer", default="cli-user")
+            if name == "approve":
+                sub.add_argument("--expected-revision", type=int)
+                sub.add_argument("--related-records", type=json.loads)
+        elif name != "create":
+            sub.add_argument("--expected-revision", required=True, type=int)
+        if name in {"create", "update"}:
+            for field in ("name", "description", "content", "applicability"):
+                sub.add_argument(f"--{field}", required=name == "create" and field in {"name", "content"})
+            sub.add_argument("--type", choices=("user", "project", "feedback", "reference"))
+            sub.add_argument("--source-refs", type=json.loads)
+        if name in {"archive", "restore", "delete", "reject"}:
+            sub.add_argument("--reason", default="explicit user action")
+        if name == "assess":
+            for field in ("judgment", "related-records", "resolves-event-ids", "evidence-refs"):
+                sub.add_argument(f"--{field}", type=json.loads)
+            sub.add_argument("--resolution-reason")
     return parser
+
+
+def execute_memory(args, memory, *, trusted_context=None) -> dict | list:
+    context = dict(trusted_context or {
+        "capability": "manage", "scope_id": memory.scope_id, "session_id": "cli-user",
+        "actor_id": "cli-user", "operation_namespace": f"{memory.scope_id}:user:cli-user",
+    })
+    control = MemoryControlPlane(memory, trusted_context=context)
+    operation = args.command
+    if operation == "migrate":
+        from nz_coder.state.memory_migration import migrate_legacy
+        return migrate_legacy(memory.memory_dir, memory.scope_id)
+    if operation == "reindex":
+        from nz_coder.state.memory import configured_embedding_provider, local_embedding_provider
+        from nz_coder.state.memory_retrieval import reindex_memory
+        provider = local_embedding_provider(args.model) if args.model is not None else configured_embedding_provider()
+        return reindex_memory(memory.store, provider, limit=args.limit)
+    if operation == "export":
+        from nz_coder.state.memory_migration import export_memories
+        return export_memories(memory.store, args.target)
+    if operation == "list":
+        return memory.list_records(type=args.type, status=None if args.status == "all" else args.status,
+                                   limit=args.limit, cursor=args.cursor)
+    if operation == "search":
+        return memory.search_result(args.query, limit=args.limit)
+    if operation in {"read", "history", "inspect"}:
+        value = (memory.read(args.id, revision=args.revision) if operation == "read" else
+                 memory.history(args.id) if operation == "history" else control.get(args.id))
+        return value if value is not None else {"status": "not_found", "id": args.id}
+    if operation == "pending":
+        return control.pending(limit=args.limit)
+    if operation == "ledger":
+        return control.ledger(limit=args.limit)
+    if operation in {"approve", "reject"}:
+        kwargs = {"expected_proposal_revision": args.expected_proposal_revision,
+                  "operation_id": args.operation_id, "reviewer": args.reviewer}
+        if operation == "approve":
+            return control.approve(args.id, expected_revision=args.expected_revision,
+                                   related_records=args.related_records, **kwargs)
+        return control.reject(args.id, reason=args.reason, **kwargs)
+    context["operation_id"] = args.operation_id
+    return memory.mutate(mutation_command(args), trusted_context=context)
+
+
+def mutation_command(args) -> dict:
+    command = {"action": args.command}
+    if args.command != "create":
+        command.update(memory_id=args.id, expected_revision=args.expected_revision)
+    fields = ("name", "description", "type", "content", "applicability", "source_refs", "reason",
+              "judgment", "related_records", "resolves_event_ids", "evidence_refs", "resolution_reason")
+    command.update({field: getattr(args, field) for field in fields if getattr(args, field, None) is not None})
+    return command
 
 
 def memory_main(argv: list[str] | None = None, *, manager=None) -> int:
     args = build_parser().parse_args(argv)
-    memory = manager or current_memory_manager()
-    control = MemoryControlPlane(memory.memory_dir, memory)
-    if args.command in {"edit", "delete"}:
-        if not memory.memories:
-            memory.load_all()
-        existing = memory.memories.get(args.name)
-        if existing is None:
-            print(f"Error: memory not found: {args.name}")
-            return 1
-        if args.command == "delete":
-            if not args.confirm:
-                print("Error: --confirm is required to delete a memory", file=sys.stderr)
-                return 2
-            result = memory.delete(args.name)
-        else:
-            result = memory.save(
-                args.name,
-                args.description if args.description is not None else str(existing.get("description") or ""),
-                args.memory_type if args.memory_type is not None else str(existing.get("type") or "project"),
-                args.content if args.content is not None else str(existing.get("content") or ""),
-            )
-        print(result)
-        return 1 if str(result).startswith("Error: ") else 0
-    if args.command == "pending":
-        proposals = control.pending()
-        if args.json:
-            print(json.dumps([_proposal_dict(item) for item in proposals], ensure_ascii=False, indent=2))
-        elif not proposals:
-            print("No memory proposals are pending review.")
-        else:
-            for item in proposals:
-                print(
-                    f"{item.fingerprint}  {item.risk}  {item.confidence:.2f}  "
-                    f"{item.source_session or '-'}  {item.name}"
-                )
-        return 0
-    if args.command == "ledger":
-        events = control.ledger()
-        if args.json:
-            print(json.dumps(events, ensure_ascii=False, indent=2))
-        else:
-            for item in events[-100:]:
-                print(
-                    f"{item.get('action', 'unknown'):16} "
-                    f"{str(item.get('fingerprint') or '')[:16]} "
-                    f"{item.get('status', '')}"
-                )
-        return 0
-    if args.command == "inspect":
-        proposal = control.get(args.fingerprint)
-        if proposal is None:
-            print(f"Error: Unknown memory proposal '{args.fingerprint}'")
-            return 1
-        if args.json:
-            print(json.dumps(_proposal_dict(proposal), ensure_ascii=False, indent=2))
-        else:
-            print(_format_proposal(proposal))
-        return 0
     try:
-        if args.command == "approve":
-            proposal = control.approve(args.fingerprint, reviewer=args.reviewer)
-        else:
-            proposal = control.reject(
-                args.fingerprint,
-                reviewer=args.reviewer,
-                reason=args.reason,
-            )
-    except (KeyError, ValueError) as exc:
-        print(f"Error: {exc}")
-        return 1
-    print(f"Memory proposal {proposal.fingerprint} is {proposal.status}.")
-    return 0 if proposal.status in {"applied", "rejected"} else 1
+        result = execute_memory(args, manager or current_memory_manager())
+    except (RuntimeError, OSError, sqlite3.Error, ValueError, TypeError) as exc:
+        result = {"status": "error", "error": to_public_error(exc).message}
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if not isinstance(result, dict) or result.get("status", "saved") in {
+        "saved", "pending_review", "migrated", "already_imported", "exported", "active", "archived", "pending", "applied", "rejected", "ready"} else 1
 
 
-def _proposal_dict(proposal) -> dict:
-    return {
-        "source_session": proposal.source_session,
-        "source_message_ids": list(proposal.source_message_ids),
-        "name": proposal.name,
-        "description": proposal.description,
-        "type": proposal.type,
-        "content": proposal.content,
-        "confidence": proposal.confidence,
-        "reason": proposal.reason,
-        "created_at": proposal.created_at,
-        "fingerprint": proposal.fingerprint,
-        "risk": proposal.risk,
-        "status": proposal.status,
-    }
-
-
-def _format_proposal(proposal) -> str:
-    return (
-        f"Name: {proposal.name}\n"
-        f"Description: {proposal.description}\n"
-        f"Type: {proposal.type}\n"
-        f"Risk: {proposal.risk}\n"
-        f"Confidence: {proposal.confidence:.2f}\n"
-        f"Status: {proposal.status}\n"
-        f"Source session: {proposal.source_session or '-'}\n"
-        f"Reason: {proposal.reason}\n\n"
-        f"{proposal.content}\n\n"
-        f"Fingerprint: {proposal.fingerprint}"
-    )
-
-
-__all__ = ["build_parser", "memory_main"]
+__all__ = ["build_parser", "execute_memory", "mutation_command", "memory_main"]

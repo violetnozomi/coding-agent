@@ -81,11 +81,10 @@ class ProductionToolResultProjector:
                 state["terminal"] = True
             if result.is_write:
                 state["write_total"] += 1
-                if result.dispatch_failed and result.output.startswith("Denied"):
+                # 只有明确审批回复才能代表用户拒绝；策略和交互故障保留各自原因。
+                if result.permission_denied and result.metadata.get("permission_source") == "approval_reply":
                     state["write_denied"] += 1
-            # Denial is recoverable model-visible feedback. Terminal blockers
-            # are settled explicitly by lifecycle policy, not inferred from a
-            # single rejected tool invocation.
+            # 策略拒绝允许调整方案；明确审批拒绝或交互故障结束本轮。
             terminal_guard = _terminal_denial(result)
             if terminal_guard:
                 state["blocked"] = True
@@ -106,7 +105,9 @@ class ProductionToolResultProjector:
                 processor.settle_tool(
                     str(tool_call["id"]),
                     output if not result.dispatch_failed else result.output,
-                    failed=result.dispatch_failed,
+                    failed=result.dispatch_failed or result.command_failed or any(
+                        (result.metadata or {}).get(key) for key in ("timed_out", "cancelled", "output_limit_exceeded")
+                    ),
                     denied=result.permission_denied,
                     title=(
                         result.title
@@ -115,6 +116,7 @@ class ProductionToolResultProjector:
                     metadata=result.metadata,
                     attachments=result.attachments,
                     continue_on_deny=not terminal_guard,
+                    public_error=result.public_error,
                 )
             context.trace_result(
                 result,
@@ -122,9 +124,6 @@ class ProductionToolResultProjector:
                 tool_call_id=tool_call["id"],
                 index=index,
             )
-            stall = context.stall_orchestrator
-            if stall is not None and not bool((result.metadata or {}).get("stall_nudge")):
-                stall.record_tool_result(str(tool_call["id"]), output)
             if on_tool:
                 on_tool(result.name, output)
             tool_message = {
@@ -132,7 +131,7 @@ class ProductionToolResultProjector:
                 "tool_call_id": tool_call["id"],
                 "content": output,
             }
-            tool_message.update(_semantic_evidence_metadata(context, result))
+            tool_message.update(result.evidence_metadata)
             if result.attachments and not result.dispatch_failed and processor is None:
                 tool_message["_nz_attachments"] = list(result.attachments)
             messages.append(tool_message)
@@ -150,14 +149,13 @@ def _terminal_denial(result) -> bool:
     return bool(
         result.permission_denied
         and (
-            metadata.get("stall_kind") == "consecutive"
+            metadata.get("stall_kind") == "consecutive" or result.approval_stopped
         )
     )
 
 
-def _semantic_evidence_metadata(context: ToolProjectionContext, result) -> dict:
+def _semantic_evidence_metadata(runtime_state, result) -> dict:
     """Describe model-context freshness without changing visible tool output."""
-    runtime_state = context.runtime_state
     if runtime_state is None:
         return {}
     generation = max(
@@ -182,6 +180,8 @@ def _semantic_evidence_metadata(context: ToolProjectionContext, result) -> dict:
             "_nz_mutated_resources": paths,
             "_nz_mutation_generation": generation,
         }
+    if not result.executed or result.dispatch_failed or result.permission_denied:
+        return {}
     stage = ""
     if name == "bash":
         stage = str(tool_input.get("_nz_runtime_verification_stage") or "")
@@ -200,19 +200,21 @@ def _semantic_evidence_metadata(context: ToolProjectionContext, result) -> dict:
         stage = "targeted"
     if not stage:
         return {}
-    from nz_coder.intelligence.verification_planner import verification_output_failed
-
-    passed = bool(
-        result.executed
-        and not result.dispatch_failed
-        and not result.command_failed
-        and not verification_output_failed(str(result.output or ""))
-    )
+    domain = runtime_state.verification_domain
+    if domain is None:
+        return {}
+    snapshot = domain.snapshot()
+    execution_id = result.execution_id
+    decisions = [item for item in snapshot.checks
+                 if item.execution_id == execution_id or item.execution_id.startswith(execution_id + ":")]
+    if not execution_id or not decisions:
+        return {}
     return {
         "_nz_evidence_kind": "verification",
         "_nz_resource": stage,
         "_nz_mutation_generation": generation,
-        "_nz_verification_passed": passed,
+        "_nz_verification_passed": all(item.status == "passed" for item in decisions),
+        "_nz_verification_revision": snapshot.revision,
     }
 
 

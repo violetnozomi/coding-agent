@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import json
+import sqlite3
 from pathlib import Path
 import tempfile
 import time
@@ -15,11 +16,10 @@ from rich.table import Table
 
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.state.changes import (
-    redo_latest,
     render_latest_diff,
-    undo_latest,
 )
-from nz_coder.state.memory import memory_mgr
+from nz_coder.state.memory import current_memory_manager
+from nz_coder.protocol.public_error import to_public_error
 from nz_coder.providers.models import (
     active_model_selection,
     cached_models,
@@ -50,7 +50,6 @@ from nz_coder.interface.selector import SelectorActionResult
 from nz_coder.foundation.async_utils import to_thread_settled
 from nz_coder.runtime.session.lifecycle import delete_session
 from nz_coder.state.sessions import (
-    activate_session,
     create_session_id,
     load_session,
     rename_session,
@@ -82,6 +81,8 @@ from .permission import format_mode_usage, set_permission_mode
 def register_core_commands(registry: CommandRegistry) -> None:
     registry.register(Command("help", "Show available commands", "/help", handle_help,
                               category="General", suggested=True))
+    registry.register(Command('lsp','Inspect or manage this host language services',
+        '/lsp [status | trust|untrust|restart ENTRY_ID]',handle_lsp,category='Extensions'))
     registry.register(Command("keys", "Show terminal editing shortcuts", "/keys", handle_keys,
                               category="General"))
     registry.register(
@@ -329,7 +330,7 @@ def register_core_commands(registry: CommandRegistry) -> None:
             category="Session",
         )
     )
-    registry.register(Command("clear", "Clear conversation history", "/clear", handle_clear,
+    registry.register(Command("clear", "Start a fresh session; keep the previous one", "/clear", handle_clear,
                               category="Session"))
     registry.register(Command(
         "model-cycle", "Cycle recent or favorite models",
@@ -511,7 +512,9 @@ def handle_model(ctx: CommandContext) -> None:
             lines.append(f"{marker} {value}")
         ctx.console.print(Panel("\n".join(lines), title="Workspace models", border_style="cyan"))
         return
+    ctx.ensure_environment_replaceable()
     previous = active_model_selection()
+    previous_agent = ctx.agent
     selection_changed = False
     try:
         if parts == ["reset"]:
@@ -533,9 +536,11 @@ def handle_model(ctx: CommandContext) -> None:
             ctx.renderer,
             ctx.session_id,
             ctx.agent.permissions.mode,
+            activate_session_on_build=False,
         )
+        ctx.replace_agent(ctx.session_id, new_agent)
     except Exception as exc:
-        if selection_changed:
+        if selection_changed and ctx.agent is previous_agent:
             try:
                 if previous.source == "workspace":
                     save_model_selection(
@@ -550,7 +555,6 @@ def handle_model(ctx: CommandContext) -> None:
         ctx.console.print(f"[error]Error: {exc}[/error]")
         return
 
-    ctx.replace_agent(ctx.session_id, new_agent)
     record_recent_model(f"{selection.provider}/{selection.model_id}")
     _reload_terminal_preferences(ctx)
     try:
@@ -696,6 +700,7 @@ def handle_model_favorite(ctx: CommandContext) -> None:
 
 async def handle_connect(ctx: CommandContext) -> None:
     """Run a masked credential flow and offer models discovered from the provider."""
+    ctx.ensure_environment_replaceable()
     if not _picker_available(ctx):
         return
     specs = provider_connect_specs()
@@ -717,6 +722,7 @@ async def handle_connect(ctx: CommandContext) -> None:
     )
     if endpoint is None:
         return
+    ctx.ensure_environment_replaceable()
     try:
         save_provider_connection(spec.provider, api_key, endpoint)
     except (OSError, ValueError) as exc:
@@ -1031,6 +1037,8 @@ def handle_mcps(ctx: CommandContext) -> None:
 
 
 async def handle_variants(ctx: CommandContext) -> None:
+    if ctx.args.strip():
+        ctx.ensure_environment_replaceable()
     selection = active_model_selection()
     variants = tuple(getattr(ctx.agent.model_capabilities, "available_variants", ()) or ())
     requested = ctx.args.strip()
@@ -1130,14 +1138,9 @@ def _write_text_atomic(path: Path, content: str) -> None:
         raise
 
 
-def handle_compact(ctx: CommandContext) -> None:
+async def handle_compact(ctx: CommandContext) -> None:
     if ctx.history:
-        ctx.console.print("[info]Compacting conversation...[/info]")
-        ctx.history[:] = (
-            ctx.controller.compact(ctx.history, ctx.args or None)
-            if ctx.controller is not None
-            else ctx.agent._compact_messages(ctx.history, focus=ctx.args or None)
-        )
+        ctx.history[:] = await ctx.controller.compact(ctx.history, ctx.args or None)
         ctx.console.print("[success]Context compacted.[/success]")
         return
     ctx.console.print("[info]Nothing to compact.[/info]")
@@ -1147,201 +1150,101 @@ def handle_todo(ctx: CommandContext) -> None:
     ctx.console.print(render_todo())
 
 
-def handle_memory(ctx: CommandContext) -> None:
-    control = (
-        ctx.controller.memory_control()
-        if ctx.controller is not None and callable(getattr(ctx.controller, "memory_control", None))
-        else _memory_control_from_manager(memory_mgr)
-    )
-    if control is None:
-        ctx.console.print("[info]Memory review is unavailable for this Session.[/info]")
-        return
-    parts = ctx.args.strip().split(maxsplit=2)
-    operation = parts[0].lower() if parts else "list"
-    if operation in {"list", "saved"}:
-        ctx.console.print(
-            ctx.controller.memory_report()
-            if ctx.controller is not None
-            else memory_mgr.list_memories()
-        )
-        return
-    if operation == "pending":
-        _render_pending_memories(ctx, control.pending())
-        return
-    if operation == "ledger":
-        events = control.ledger()
-        if not events:
-            ctx.console.print("[info]Memory review ledger is empty.[/info]")
+async def handle_lsp(ctx: CommandContext) -> None:
+    parts = ctx.args.split()
+    try:
+        action = parts[0] if parts else 'status'
+        if ctx.controller is None:
+            ctx.console.print('[error]LSP controls require the active Session controller.[/error]')
             return
-        lines = []
-        for event in events[-50:]:
-            lines.append(
-                f"{event.get('action', 'unknown'):16} "
-                f"{str(event.get('fingerprint', ''))[:16]} "
-                f"{event.get('status', '')}"
-            )
-        ctx.console.print(Panel("\n".join(lines), title="Memory review ledger", border_style="cyan"))
-        return
-    if operation in {"edit", "delete"}:
-        manager_getter = getattr(ctx.controller, "memory_manager", None)
-        manager = manager_getter() if callable(manager_getter) else memory_mgr
+        if action == 'status' and len(parts) <= 1:
+            result = ctx.controller.lsp_status()
+        elif action in {'trust','untrust','restart'} and len(parts)==2:
+            result = await to_thread_settled(ctx.controller.lsp_control,parts[1],action)
+        else:
+            raise ValueError('Usage: /lsp [status | trust|untrust|restart ENTRY_ID]')
+        ctx.console.print(escape(json.dumps(result,ensure_ascii=False,indent=2)))
+    except (RuntimeError,OSError,ValueError) as exc:
+        ctx.console.print('[error]'+escape(to_public_error(exc).message)+'[/error]')
+
+
+def handle_memory(ctx: CommandContext) -> None:
+    from contextlib import redirect_stderr, redirect_stdout
+    from io import StringIO
+    import shlex
+    from nz_coder.state.memory_cli import build_parser, execute_memory
+
+    diagnostics = StringIO()
+    try:
+        getter = getattr(ctx.controller, "memory_manager", None)
+        manager = getter() if callable(getter) else current_memory_manager()
         if manager is None:
             ctx.console.print("[error]Memory manager is unavailable.[/error]")
             return
-        if len(parts) < 2:
-            ctx.console.print(f"[error]Usage: /memory {operation} NAME[/error]")
-            return
-        name = parts[1]
-        if not manager.memories:
-            manager.load_all()
-        existing = manager.memories.get(name)
-        if existing is None:
-            ctx.console.print(f"[error]Memory not found: {escape(name)}[/error]")
-            return
-        if operation == "delete":
-            if len(parts) < 3 or parts[2].strip().lower() != "confirm":
-                ctx.console.print(
-                    "[error]Usage: /memory delete NAME confirm[/error]"
-                )
-                return
-            result = manager.delete(name)
-        else:
-            if len(parts) < 3:
-                ctx.console.print(
-                    '[error]Usage: /memory edit NAME {"description":"...",'
-                    '"type":"project","content":"..."}[/error]'
-                )
-                return
-            try:
-                changes = json.loads(parts[2])
-            except json.JSONDecodeError as exc:
-                ctx.console.print(f"[error]Memory edit JSON is invalid: {escape(str(exc))}[/error]")
-                return
-            if not isinstance(changes, dict) or set(changes) - {"description", "type", "content"}:
-                ctx.console.print(
-                    "[error]Memory edit accepts only description, type, and content.[/error]"
-                )
-                return
-            result = manager.save(
-                name,
-                str(changes.get("description", existing.get("description") or "")),
-                str(changes.get("type", existing.get("type") or "project")),
-                str(changes.get("content", existing.get("content") or "")),
-            )
-        style = "error" if str(result).startswith("Error: ") else "success"
-        ctx.console.print(f"[{style}]{escape(str(result))}[/{style}]")
-        return
-    if operation in {"inspect", "show"}:
-        if len(parts) < 2:
-            ctx.console.print("[error]Usage: /memory inspect FINGERPRINT[/error]")
-            return
-        proposal = _memory_proposal(control, parts[1])
-        if proposal is None:
-            ctx.console.print("[error]Memory proposal not found.[/error]")
-            return
-        _render_memory_proposal(ctx, proposal)
-        return
-    if operation in {"approve", "reject"}:
-        if len(parts) < 2:
-            ctx.console.print(f"[error]Usage: /memory {operation} FINGERPRINT[/error]")
-            return
-        fingerprint = parts[1]
-        try:
-            if operation == "approve":
-                proposal = control.approve(fingerprint, reviewer="terminal-user")
-            else:
-                reason = parts[2].strip() if len(parts) == 3 else "rejected by terminal user"
-                proposal = control.reject(
-                    fingerprint,
-                    reviewer="terminal-user",
-                    reason=reason,
-                )
-        except (KeyError, ValueError) as exc:
-            ctx.console.print(f"[error]Memory review failed: {escape(str(exc))}[/error]")
-            return
-        ctx.console.print(
-            f"[success]Memory proposal {proposal.fingerprint[:16]} is {proposal.status}.[/success]"
-        )
-        return
-    ctx.console.print(
-        "[error]Usage: /memory [pending|inspect FINGERPRINT|approve FINGERPRINT|"
-        "reject FINGERPRINT [REASON]|ledger][/error]"
-    )
+        with redirect_stdout(diagnostics), redirect_stderr(diagnostics):
+            args = build_parser().parse_args(shlex.split(ctx.args) if ctx.args.strip() else ["list"])
+        session_id = str(ctx.session_state.get("id") or "terminal-user")
+        context = {"capability": "manage", "scope_id": manager.scope_id,
+                   "session_id": session_id, "actor_id": "terminal-user",
+                   "operation_namespace": f"{manager.scope_id}:user:{session_id}"}
+        result = execute_memory(args, manager, trusted_context=context)
+        ctx.console.print(escape(json.dumps(result, ensure_ascii=False, indent=2)))
+    except SystemExit:
+        ctx.console.print(escape(diagnostics.getvalue()))
+    except (RuntimeError, OSError, ValueError, TypeError, sqlite3.Error) as exc:
+        ctx.console.print(f"[error]Memory action failed: {escape(to_public_error(exc).message)}[/error]")
 
 
 async def handle_memory_review(ctx: CommandContext) -> None:
-    """Review pending proposals through the existing fuzzy selector."""
-    if not _picker_available(ctx):
-        ctx.console.print(
-            "[info]Memory review selector requires an interactive terminal; "
-            "use `nz-coder memory` for automation.[/info]"
-        )
-        return
-    control = (
-        ctx.controller.memory_control()
-        if ctx.controller is not None and callable(getattr(ctx.controller, "memory_control", None))
-        else _memory_control_from_manager(memory_mgr)
-    )
-    while True:
-        pending = control.pending() if control is not None else []
-        if not pending:
-            ctx.console.print("[info]No memory proposals are pending review.[/info]")
+    """审阅展示快照；并发修改只能返回冲突，不能偷偷替换为最新版本。"""
+    try:
+        import uuid
+        if not _picker_available(ctx):
+            ctx.console.print("[info]Memory review requires an interactive terminal; use nz-coder memory.[/info]")
             return
-        selected = await ctx.terminal_input.select_async(
-            title="Memory review inbox",
-            values=[
-                (
-                    item.fingerprint,
-                    f"{item.risk.upper()} · {item.confidence:.2f} · "
-                    f"{item.name} · {item.source_session or '-'}",
-                )
-                for item in pending
-            ],
-            text="Enter inspects · Ctrl+A approves · Ctrl+R rejects · Esc closes",
-            actions=(
-                ("c-a", "approve", "approve"),
-                ("c-r", "reject", "reject"),
-            ),
-        )
-        if selected is None:
-            return
-        action = "inspect"
-        fingerprint = str(selected)
-        if isinstance(selected, SelectorActionResult):
-            action = selected.action
-            fingerprint = str(selected.value or "")
-        proposal = control.get(fingerprint)
-        if proposal is None:
-            ctx.console.print("[error]Memory proposal is no longer available.[/error]")
-            continue
-        _render_memory_proposal(ctx, proposal)
-        if action == "inspect":
-            decision = await ctx.terminal_input.select_async(
-                title="Memory proposal decision",
-                values=[
-                    ("approve", "Approve and apply"),
-                    ("reject", "Reject proposal"),
-                    ("back", "Back to inbox"),
-                ],
+        control = (ctx.controller.memory_control() if ctx.controller is not None
+                   else _memory_control_from_manager(current_memory_manager()))
+        while True:
+            pending = control.pending() if control is not None else []
+            if not pending:
+                ctx.console.print("[info]No memory proposals are pending review.[/info]")
+                return
+            displayed = {item["id"]: item for item in pending}
+            selected = await ctx.terminal_input.select_async(
+                title="Memory review inbox",
+                values=[(item["id"], _memory_proposal_label(item)) for item in pending],
+                text="Enter inspects · Ctrl+A approves · Ctrl+R rejects · Esc closes",
+                actions=(("c-a", "approve", "approve"), ("c-r", "reject", "reject")),
             )
-            action = str(decision or "back")
-        if action == "approve":
-            try:
-                result = control.approve(fingerprint, reviewer="terminal-user")
-                ctx.console.print(f"[success]Proposal is {result.status}.[/success]")
-            except (KeyError, ValueError) as exc:
-                ctx.console.print(f"[error]Memory review failed: {escape(str(exc))}[/error]")
-        elif action == "reject":
-            reason = await ctx.terminal_input.prompt_text_async("Rejection reason: ")
-            try:
-                result = control.reject(
-                    fingerprint,
-                    reviewer="terminal-user",
-                    reason=str(reason or "rejected by terminal user"),
+            if selected is None:
+                return
+            action = selected.action if isinstance(selected, SelectorActionResult) else "inspect"
+            proposal_id = str(selected.value if isinstance(selected, SelectorActionResult) else selected)
+            proposal = displayed.get(proposal_id)
+            if proposal is None:
+                ctx.console.print("[error]Memory proposal was not in the displayed snapshot.[/error]")
+                continue
+            _render_memory_proposal(ctx, proposal)
+            if action == "inspect":
+                decision = await ctx.terminal_input.select_async(
+                    title=f"Memory proposal rev {proposal['revision']}",
+                    values=[("approve", "Approve displayed versions"), ("reject", "Reject proposal"), ("back", "Back")],
                 )
-                ctx.console.print(f"[success]Proposal is {result.status}.[/success]")
-            except (KeyError, ValueError) as exc:
-                ctx.console.print(f"[error]Memory review failed: {escape(str(exc))}[/error]")
+                action = str(decision or "back")
+            arguments = {"expected_proposal_revision": proposal["revision"],
+                         "operation_id": uuid.uuid4().hex, "reviewer": "terminal-user"}
+            if action == "approve":
+                command = proposal.get("command", {})
+                result = control.approve(proposal_id, expected_revision=command.get("expected_revision"),
+                                         related_records=command.get("related_records"), **arguments)
+            elif action == "reject":
+                reason = await ctx.terminal_input.prompt_text_async("Rejection reason: ")
+                result = control.reject(proposal_id, reason=str(reason or "rejected by terminal user"), **arguments)
+            else:
+                continue
+            ctx.console.print(escape(json.dumps(result, ensure_ascii=False)))
+    except (RuntimeError, OSError, ValueError, TypeError, sqlite3.Error) as exc:
+        ctx.console.print(f"[error]Memory review failed: {escape(to_public_error(exc).message)}[/error]")
 
 
 def handle_extensions(ctx: CommandContext) -> None:
@@ -1405,50 +1308,29 @@ def handle_extensions(ctx: CommandContext) -> None:
 
 def _memory_control_from_manager(manager):
     from nz_coder.state.memory_control import MemoryControlPlane
+    return MemoryControlPlane(manager) if manager is not None else None
 
-    return MemoryControlPlane(manager.memory_dir, manager) if manager is not None else None
 
-
-def _memory_proposal(control, fingerprint):
-    proposal = control.get(str(fingerprint))
-    return proposal if proposal is not None else None
+def _memory_proposal_label(proposal):
+    command = proposal.get("command", {})
+    target = proposal.get("memory_id")
+    target_label = f"{target}@{command.get('expected_revision')}" if target else "new memory"
+    source = proposal.get("context", {}).get("session_id", "-")
+    return (f"{proposal['id']} · rev {proposal['revision']} · {proposal['action']} · "
+            f"{target_label} · {command.get('name', '')} · {source}")
 
 
 def _render_pending_memories(ctx: CommandContext, proposals) -> None:
     table = Table(title="Memory review inbox")
-    table.add_column("Fingerprint", style="cyan")
-    table.add_column("Name")
-    table.add_column("Risk")
-    table.add_column("Confidence")
-    table.add_column("Source")
+    table.add_column("Proposal and displayed target versions")
     for proposal in proposals:
-        table.add_row(
-            proposal.fingerprint[:16],
-            proposal.name,
-            proposal.risk,
-            f"{proposal.confidence:.2f}",
-            proposal.source_session or "-",
-        )
-    if not proposals:
-        ctx.console.print("[info]No memory proposals are pending review.[/info]")
-    else:
-        ctx.console.print(table)
+        table.add_row(_memory_proposal_label(proposal))
+    ctx.console.print(table if proposals else "[info]No memory proposals are pending review.[/info]")
 
 
 def _render_memory_proposal(ctx: CommandContext, proposal) -> None:
-    body = (
-        f"Name: {proposal.name}\n"
-        f"Description: {proposal.description}\n"
-        f"Type: {proposal.type}\n"
-        f"Risk: {proposal.risk}\n"
-        f"Confidence: {proposal.confidence:.2f}\n"
-        f"Status: {proposal.status}\n"
-        f"Source session: {proposal.source_session or '-'}\n"
-        f"Reason: {proposal.reason}\n\n"
-        f"{proposal.content}\n\n"
-        f"Fingerprint: {proposal.fingerprint}"
-    )
-    ctx.console.print(Panel(body, title="Memory proposal", border_style="cyan"))
+    ctx.console.print(Panel(escape(json.dumps(proposal, ensure_ascii=False, indent=2)),
+                            title="Memory proposal", border_style="cyan"))
 
 
 def handle_profile(ctx: CommandContext) -> None:
@@ -1535,86 +1417,43 @@ def handle_diff(ctx: CommandContext) -> None:
 
 
 def handle_undo(ctx: CommandContext) -> None:
-    reverter = getattr(ctx.agent, "session_reverter", None)
-    if reverter is not None:
-        from nz_coder.runtime.process.workspace_snapshot import SnapshotError
-        try:
-            result = (
-                ctx.controller.undo(ctx.history)
-                if ctx.controller is not None
-                else ctx.agent.revert_message(ctx.history)
-            )
-        except SnapshotError as exc:
-            if "no revertible message" not in str(exc) and "incomplete step snapshots" not in str(exc):
-                ctx.console.print(f"Refused to undo: {exc}")
-                return
-        else:
-            _save_transition_session(ctx)
-            files = ", ".join(result.files) if result.files else "no file changes"
-            ctx.console.print(
-                f"Undid message {result.message_id}: {files} "
-                f"({result.removed_messages} message(s) removed)"
-            )
-            return
-    tracker = ctx.agent.change_tracker
-    result = (
-        tracker.undo(ctx.history)
-        if tracker is not None
-        else undo_latest(history=ctx.history)
-    )
-    if result.startswith("Undid agent changes:"):
-        _save_transition_session(ctx)
-    ctx.console.print(result)
+    from nz_coder.runtime.process.workspace_snapshot import SnapshotError
+    try:
+        result = ctx.controller.undo(ctx.history)
+    except SnapshotError as exc:
+        ctx.console.print(f"Refused to undo: {exc}")
+        return
+    files = ", ".join(result.files) if result.files else "no file changes"
+    ctx.console.print(f"Undid message {result.message_id}: {files} ({result.removed_messages} message(s) removed)")
 
 
 def handle_redo(ctx: CommandContext) -> None:
-    reverter = getattr(ctx.agent, "session_reverter", None)
-    state_path = getattr(reverter, "state_path", None)
-    if reverter is not None and state_path is not None and state_path.exists():
-        from nz_coder.runtime.process.workspace_snapshot import SnapshotError
-        try:
-            result = (
-                ctx.controller.redo(ctx.history)
-                if ctx.controller is not None
-                else ctx.agent.unrevert_message(ctx.history)
-            )
-        except SnapshotError as exc:
-            ctx.console.print(f"Refused to redo: {exc}")
-            return
-        _save_transition_session(ctx)
-        files = ", ".join(result.files) if result.files else "no file changes"
-        ctx.console.print(
-            f"Redid message {result.message_id}: {files} "
-            f"({result.removed_messages} message(s) restored)"
-        )
+    from nz_coder.runtime.process.workspace_snapshot import SnapshotError
+    try:
+        result = ctx.controller.redo(ctx.history)
+    except SnapshotError as exc:
+        ctx.console.print(f"Refused to redo: {exc}")
         return
-    tracker = ctx.agent.change_tracker
-    result = (
-        tracker.redo(ctx.history)
-        if tracker is not None
-        else redo_latest(history=ctx.history)
-    )
-    if result.startswith("Redid agent changes:"):
-        _save_transition_session(ctx)
-    ctx.console.print(result)
-
-
-def _save_transition_session(ctx: CommandContext) -> None:
-    save_session(
-        ctx.history,
-        mode=ctx.agent.permissions.mode,
-        session_id=ctx.session_id,
-    )
+    files = ", ".join(result.files) if result.files else "no file changes"
+    ctx.console.print(f"Redid message {result.message_id}: {files} ({result.removed_messages} message(s) restored)")
 
 
 def handle_save_session(ctx: CommandContext) -> None:
+    from contextlib import ExitStack
+    from nz_coder.runtime.session.model import SessionIdentity
+    ctx.ensure_environment_replaceable()
     target_session_id = ctx.args or ctx.agent.session_id
-    path = save_session(
-        ctx.history,
-        mode=ctx.agent.permissions.mode,
-        session_id=target_session_id,
-        activate=(target_session_id == ctx.agent.session_id),
-    )
+    store = ctx.agent.runtime_services.session_runtime.store
+    with ExitStack() as ownership:
+        for session_id in dict.fromkeys((ctx.agent.session_id, target_session_id)):
+            lease = store.acquire(SessionIdentity(session_id), ctx.agent.workdir)
+            ownership.callback(lease.close_hold)
+        path = save_session(
+            ctx.history,
+            mode=ctx.agent.permissions.mode,
+            session_id=target_session_id,
+            activate=(target_session_id == ctx.agent.session_id),
+        )
     ctx.console.print(f"[success]Session saved: {path}[/success]")
 
 
@@ -1981,6 +1820,7 @@ async def handle_subagent_route(ctx: CommandContext) -> None:
 
 
 def handle_fork(ctx: CommandContext) -> None:
+    ctx.ensure_environment_replaceable()
     turns = conversation_turns(ctx.history)
     if not turns:
         ctx.console.print("[error]No user turns are available to fork.[/error]")
@@ -1992,61 +1832,66 @@ def handle_fork(ctx: CommandContext) -> None:
         ctx.console.print(f"[error]Error: {exc}[/error]")
         return
 
+    from nz_coder.runtime.agent.subagent import clone_referenced_subagents, discard_cloned_subagents
+    from nz_coder.runtime.session.model import Session, SessionIdentity
+    from nz_coder.runtime.session.store import LegacyJsonSessionStore, SessionHistoryUnconfirmed
+    from nz_coder.state.sessions import session_artifact_dir
+    import shutil
+
     old_session_id = ctx.session_id
+    store = LegacyJsonSessionStore()
+    lease = store.acquire(SessionIdentity(old_session_id), current_workdir())
     new_agent = None
+    clones = None
+    new_session_id = None
+    def discard_preparation():
+        if clones is not None:
+            discard_cloned_subagents(clones)
+        if new_session_id is not None:
+            artifact = session_artifact_dir(new_session_id)
+            if artifact.exists():
+                shutil.rmtree(artifact)
     try:
-        save_session(
-            ctx.history,
-            mode=ctx.agent.permissions.mode,
-            session_id=old_session_id,
-        )
+        save_session(ctx.history, mode=ctx.agent.permissions.mode, session_id=old_session_id,
+                     activate=False, require_aliases=False)
         original = load_session(old_session_id)
-        original_title = str(original.get("title") or "New Session")
-        fork_title = forked_session_title(original_title)
+        fork_title = forked_session_title(str(original.get("title") or "New Session"))
         new_session_id = create_session_id("fork")
         forked = rebind_fork_history(forked, new_session_id)
-        new_agent = ctx.build_agent(
-            ctx.system_prompt,
-            ctx.renderer,
-            new_session_id,
-            permission_mode=ctx.agent.permissions.mode,
-        )
-        from nz_coder.runtime.agent.subagent import clone_referenced_subagents
-
-        clone_referenced_subagents(
-            old_session_id,
-            new_session_id,
-            forked,
-            parent_agent_id=str(getattr(new_agent, "agent_id", "") or ""),
-            workspace_root=current_workdir(),
-        )
+        from nz_coder.runtime.session.session_revert import copy_fork_snapshots
+        copy_fork_snapshots(current_workdir(), old_session_id, new_session_id, forked)
+        new_agent = ctx.build_agent(ctx.system_prompt, ctx.renderer, new_session_id,
+                                    permission_mode=ctx.agent.permissions.mode, activate_session_on_build=False)
+        clones = clone_referenced_subagents(old_session_id, new_session_id, forked,
+                    parent_agent_id=new_agent.agent_id, workspace_root=current_workdir())
+        candidate = Session.create(new_session_id, forked, workspace=current_workdir(),
+                                   parent_session_id=old_session_id,
+                                   metadata={"title": fork_title, "permission_mode": new_agent.permissions.mode})
+        write = store.prepare_history_transition(candidate)
+        write.commit(candidate)
+    except SessionHistoryUnconfirmed:
+        # 未知提交保留新父及子凭据，不能把可能已提交的目标清掉。
+        write.rollback = discard_preparation
+        if new_agent is not None:
+            new_agent.close()
+        raise
     except Exception as exc:
         if new_agent is not None:
-            close = getattr(new_agent, "close", None)
-            if callable(close):
-                close()
-        try:
-            activate_session(old_session_id)
-        except (OSError, ValueError):
-            pass
+            new_agent.close()
+        discard_preparation()
         ctx.console.print(f"[error]Error: could not fork session: {exc}[/error]")
         return
+    finally:
+        lease.close_hold()
 
-    ctx.history[:] = forked
-    ctx.replace_agent(new_session_id, new_agent)
+    try:
+        ctx.replace_agent(new_session_id, new_agent)
+    except Exception as exc:
+        ctx.console.print(f"[error]Fork saved as {new_session_id}, but activation failed: {exc}. Resume this ID to retry.[/error]")
+        return
+    ctx.history[:] = candidate.transcript
     if "session_title" in ctx.session_state:
         ctx.session_state["session_title"] = fork_title
-    try:
-        save_session(
-            ctx.history,
-            mode=new_agent.permissions.mode,
-            session_id=new_session_id,
-            title=fork_title,
-            parent_session_id=old_session_id,
-            model=str(getattr(new_agent, "model_id", "") or "") or None,
-        )
-    except OSError as exc:
-        ctx.console.print(f"[error]Warning: fork is active, but session save failed: {exc}[/error]")
     ctx.console.print(
         f"[success]Forked turn {turn_number} into {new_session_id} "
         f"({len(ctx.history)} messages). Workspace files were not changed.[/success]"
@@ -2073,12 +1918,11 @@ async def handle_fork_picker(ctx: CommandContext) -> None:
 
 
 def handle_new_session(ctx: CommandContext) -> None:
-    new_session_id = activate_session(create_session_id())
+    ctx.ensure_environment_replaceable()
+    new_session_id = create_session_id()
     new_agent = ctx.build_agent(
-        ctx.system_prompt,
-        ctx.renderer,
-        new_session_id,
-        permission_mode=ctx.agent.permissions.mode,
+        ctx.system_prompt, ctx.renderer, new_session_id,
+        permission_mode=ctx.agent.permissions.mode, activate_session_on_build=False,
     )
     ctx.replace_agent(new_session_id, new_agent)
     ctx.history.clear()
@@ -2094,7 +1938,11 @@ async def handle_session_picker(ctx: CommandContext) -> None:
         return
     pending_delete = ""
     while True:
-        options = session_options(limit=100)
+        all_options = session_options(limit=100)
+        for option in all_options:
+            if option.unavailable:
+                ctx.console.print(f"[error]Session {escape(option.session_id)} unavailable: {escape(option.unavailable)}[/error]")
+        options = [option for option in all_options if not option.unavailable]
         if not options:
             ctx.console.print("[info]No saved sessions are available.[/info]")
             return
@@ -2159,6 +2007,7 @@ def _delete_session_and_transition(ctx: CommandContext, session_id: str) -> bool
     """Delete one Session, moving the active CLI to a fresh owner first."""
     deleting_current = session_id == ctx.session_id
     if deleting_current:
+        ctx.ensure_environment_replaceable()
         new_session_id = create_session_id()
         try:
             new_agent = ctx.build_agent(
@@ -2166,8 +2015,8 @@ def _delete_session_and_transition(ctx: CommandContext, session_id: str) -> bool
                 ctx.renderer,
                 new_session_id,
                 permission_mode=ctx.agent.permissions.mode,
+                activate_session_on_build=False,
             )
-            activate_session(new_session_id)
             ctx.replace_agent(new_session_id, new_agent)
             ctx.history.clear()
         except Exception as exc:
@@ -2189,6 +2038,7 @@ def _delete_session_and_transition(ctx: CommandContext, session_id: str) -> bool
 
 
 def _resume_session(ctx: CommandContext, selector: str) -> None:
+    ctx.ensure_environment_replaceable()
     payload = load_session(selector)
     if not payload:
         ctx.console.print("[error]No saved session found.[/error]")
@@ -2196,7 +2046,7 @@ def _resume_session(ctx: CommandContext, selector: str) -> None:
     if payload.get("workspace") and payload["workspace"] != str(current_workdir()):
         ctx.console.print(f"[error]Session workspace differs: {payload['workspace']}[/error]")
         return
-    resumed_session_id = activate_session(payload.get("session_id") or create_session_id())
+    resumed_session_id = payload.get("session_id") or create_session_id()
     mode = payload.get("mode")
     if mode not in format_mode_usage(valid_only=True):
         mode = ctx.agent.permissions.mode
@@ -2205,9 +2055,10 @@ def _resume_session(ctx: CommandContext, selector: str) -> None:
         ctx.renderer,
         resumed_session_id,
         permission_mode=mode,
+        activate_session_on_build=False,
     )
-    ctx.history[:] = payload.get("messages", [])
     ctx.replace_agent(resumed_session_id, new_agent)
+    ctx.history[:] = payload.get("messages", [])
     if "session_title" in ctx.session_state:
         ctx.session_state["session_title"] = str(payload.get("title") or "")
     ctx.console.print(
@@ -2242,9 +2093,8 @@ def _choice_preview(value: str, limit: int = 72) -> str:
 
 
 def handle_clear(ctx: CommandContext) -> None:
-    ctx.history.clear()
-    if ctx.controller is not None:
-        ctx.controller.clear_scratchpad()
-    else:
-        ctx.agent.clear_scratchpad()
-    ctx.console.print("[success]Conversation cleared.[/success]")
+    # 历史与任务状态按会话恢复；只清本地列表会在下一轮回灌旧内容。
+    # 切换身份复用新会话流程，旧历史和工作记忆仍可显式恢复。
+    previous_session_id = ctx.session_id
+    handle_new_session(ctx)
+    ctx.console.print(f"[dim]Previous session ID: {previous_session_id}[/dim]")

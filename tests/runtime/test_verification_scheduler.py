@@ -8,8 +8,10 @@ def _status(
     targeted="pending",
     regression="optional",
     targeted_provenance="failure_evidence",
+    targeted_eligible=True,
 ):
     return {
+        "strict": True,
         "verification_pipeline": {
             "stages": [
                 {
@@ -20,6 +22,8 @@ def _status(
                         "command": "python -m py_compile src/app.py",
                         "required": True,
                         "status": static,
+                        "retry_eligible": True,
+                        "cwd": "/workspace",
                     }],
                     "observed": [],
                 },
@@ -32,6 +36,8 @@ def _status(
                         "required": True,
                         "status": targeted,
                         "automation_provenance": targeted_provenance,
+                        "retry_eligible": targeted_eligible,
+                        "cwd": "/workspace",
                     }],
                     "observed": [],
                 },
@@ -89,6 +95,7 @@ def test_scheduler_does_not_execute_inferred_targeted_command():
         verification_status=_status(
             static="passed",
             targeted_provenance="",
+            targeted_eligible=False,
         ),
         unresolved_requirements=("R1",),
         has_exact_contract=True,

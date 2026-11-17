@@ -474,6 +474,7 @@ def test_tool_started_event_classifies_serial_readonly_extension_as_read(
 def test_tool_completed_event_classifies_serial_readonly_extension_as_read():
     """Completed and started event projections must use the same semantics."""
     from nz_coder.runtime.execution.loop import AgentLoop
+    from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
     from nz_coder.tools import (
         TOOL_EXECUTION_MODES,
         TOOL_HANDLERS,
@@ -499,8 +500,9 @@ def test_tool_completed_event_classifies_serial_readonly_extension_as_read():
         agent._emit_session_event = lambda event, properties: events.append(
             (event, properties)
         )
-        result = SimpleNamespace(
+        result = ToolExecutionResult(
             name=name,
+            output="ok",
             executed=True,
             dispatch_failed=False,
             command_failed=False,
@@ -709,6 +711,7 @@ def test_agent_loop_publishes_native_session_lifecycle(tmp_path, monkeypatch):
         "session.message.completed",
         "message.part.updated",
         "message.updated",
+        "message.part.updated",
         "message.updated",
         "session.run.completed",
     ]
@@ -721,6 +724,14 @@ def test_agent_loop_publishes_native_session_lifecycle(tmp_path, monkeypatch):
     assert part["id"] == events[4].properties["part_id"]
     assert part["message_id"] == events[4].properties["message_id"]
     assert messages[-1]["_nz_message_id"] == part["message_id"]
+    final_text = (
+        "done\n\n**运行时验证记录**（来源：VerificationDomain）\n"
+        "- 未评估：本次没有已采信的验证执行。"
+    )
+    assert events[-3].properties["part"]["id"] != part["id"]
+    assert events[-3].properties["part"]["message_id"] == part["message_id"]
+    assert events[-3].properties["part"]["generation"] > part["generation"]
+    assert events[-3].properties["part"]["text"] == messages[-1]["content"] == final_text
     assert events[-2].properties["info"]["finish"] == "stop"
     assert events[-2].properties["message_id"] == part["message_id"]
     assert [item["type"] for item in messages[-1]["_nz_parts"]] == [
@@ -801,6 +812,7 @@ def test_agent_stream_publishes_incremental_text_part_lifecycle(tmp_path, monkey
         "session.message.completed",
         "message.part.updated",
         "message.updated",
+        "message.part.updated",
         "message.updated",
         "session.run.completed",
     ]
@@ -812,6 +824,14 @@ def test_agent_stream_publishes_incremental_text_part_lifecycle(tmp_path, monkey
     assert first_delta.properties["delta"] == "hello"
     assert second_delta.properties["delta"] == " world"
     assert completed.properties["part"]["text"] == "hello world"
+    final_text = (
+        "hello world\n\n**运行时验证记录**（来源：VerificationDomain）\n"
+        "- 未评估：本次没有已采信的验证执行。"
+    )
+    assert events[-3].properties["part"]["id"] != completed.properties["part"]["id"]
+    assert events[-3].properties["part"]["message_id"] == completed.properties["part"]["message_id"]
+    assert events[-3].properties["part"]["generation"] > completed.properties["part"]["generation"]
+    assert events[-3].properties["part"]["text"] == final_text
     assert snapshot_update.properties["part"]["type"] == "step-start"
     assert snapshot_update.properties["part"]["snapshot"].startswith("snap-")
     assert events[-2].properties["info"]["finish"] == "stop"
@@ -1184,6 +1204,17 @@ def test_bash_running_metadata_reaches_durable_session_events(tmp_path):
             session_id="bash-progress-session",
             event_bus=bus,
         )
+        from nz_coder.runtime.core.run_context import RunContext
+        from nz_coder.runtime.core.request import RunRequest, AgentDefinition
+        from nz_coder.runtime.core import MAIN_PROFILE
+        from nz_coder.runtime.session.model import Session
+        from nz_coder.runtime.adapters.verification_runtime import VerificationRuntime
+        request = RunRequest(agent=AgentDefinition(name="test", instructions="test"), profile=MAIN_PROFILE,
+            workspace=tmp_path, session_id="bash-progress-session", messages=())
+        context = RunContext(request, Session.create(request.session_id, [], workspace=tmp_path), "test")
+        agent.runtime_state.bind_run_context(context)
+        agent.verification_runtime = VerificationRuntime(agent, context)
+        agent.verification_runtime.initialize(restored=False)
         agent.permissions.add_allow("bash")
         agent._execute_tools(
             assistant["tool_calls"],
@@ -1255,8 +1286,8 @@ def test_stream_retry_removes_partial_part_before_new_attempt(tmp_path, monkeypa
     )
     monkeypatch.setattr(
         agent,
-        "_model_gateway_observer",
-        lambda _name, _payload: (_ for _ in ()).throw(
+        "_model_gateway_observer_for_run",
+        lambda: lambda _name, _payload: (_ for _ in ()).throw(
             RuntimeError("trace sink failed")
         ),
     )
@@ -1337,7 +1368,10 @@ def test_stream_retry_settles_incomplete_tool_part(tmp_path, monkeypatch):
     assert all(part["type"] != "tool" for part in assistant["_nz_parts"])
     assert "call-incomplete" not in repr(messages)
     assert retry["attempt"] == 1
-    assert assistant["content"] == "recovered"
+    assert assistant["content"] == (
+        "recovered\n\n**运行时验证记录**（来源：VerificationDomain）\n"
+        "- 未评估：本次没有已采信的验证执行。"
+    )
 
     agent.close()
 

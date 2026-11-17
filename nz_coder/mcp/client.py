@@ -7,6 +7,7 @@ import os
 import queue
 import subprocess
 import threading
+import time
 from collections import deque
 from pathlib import Path
 from typing import Any, Callable
@@ -15,10 +16,11 @@ from nz_coder.foundation.execution_identity import (
     ExecutionIdentity,
     UnsafeExecutionIdentity,
     verify_execution_identity,
+    resolve_execution_identity,
 )
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
-from nz_coder.runtime.process.platform_runtime import executable_argv, terminate_process_tree
+from nz_coder.runtime.process.platform_runtime import terminate_process_tree
 
 _NOTIFICATION_CLOSED = object()
 _MAX_FRAME_BYTES = 16 * 1024 * 1024
@@ -85,7 +87,9 @@ class MCPClient:
         self._pending: dict[int, queue.Queue] = {}
         self._state_lock = threading.Lock()
         self._write_lock = threading.Lock()
+        self._close_lock = threading.Lock()
         self._closed = False
+        self._close_complete = False
         self._transport_error: MCPError | None = None
         self._stderr_tail: deque[str] = deque(maxlen=50)
         self._reader: threading.Thread | None = None
@@ -101,10 +105,6 @@ class MCPClient:
 
     def start(self) -> dict[str, Any]:
         """Spawn, initialize, and send the MCP initialized notification."""
-        env = build_sanitized_subprocess_env(
-            overrides=self.environment,
-            profile="strict-service",
-        )
         with self._state_lock:
             if self.process is not None:
                 return {
@@ -114,12 +114,22 @@ class MCPClient:
             if self._closed:
                 raise MCPError(f"MCP server '{self.name}' is closed")
             try:
-                if self.execution_identity is not None:
-                    verify_execution_identity(self.execution_identity)
+                if self.execution_identity is None:
+                    # 直接构造入口在首次启动冻结环境；配置入口直接复用已批准身份。
+                    env = build_sanitized_subprocess_env(
+                        overrides=self.environment, profile="strict-service",
+                    )
+                    self.execution_identity = resolve_execution_identity(
+                        self.command, cwd=self.cwd, workspace=self.cwd, config_source="direct",
+                        environment_profile="strict-service", environment=env,
+                    )
+                if self.execution_identity.environment is None:
+                    raise UnsafeExecutionIdentity("MCP identity has no frozen environment")
+                identity = verify_execution_identity(self.execution_identity)
                 self.process = subprocess.Popen(
-                    executable_argv(self.command),
-                    cwd=self.cwd,
-                    env=env,
+                    identity.launch_command,
+                    cwd=identity.cwd,
+                    env=dict(identity.environment),
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -278,6 +288,7 @@ class MCPClient:
         timeout: float,
     ) -> Any:
         """Send one JSON-RPC request and await its correlated response."""
+        deadline = time.monotonic() + _validated_timeout(timeout)
         with self._state_lock:
             if self._closed:
                 raise MCPError(f"MCP server '{self.name}' is closed")
@@ -294,10 +305,11 @@ class MCPClient:
                     "id": request_id,
                     "method": method,
                     "params": params or {},
-                }
+                },
+                deadline=deadline,
             )
             try:
-                response = response_queue.get(timeout=max(0.001, float(timeout)))
+                response = response_queue.get(timeout=max(0.0, deadline - time.monotonic()))
             except queue.Empty as exc:
                 raise MCPTimeoutError(
                     f"MCP server '{self.name}' request '{method}' timed out after {timeout:g}s"
@@ -329,62 +341,56 @@ class MCPClient:
 
     def close(self) -> None:
         """Close pipes and terminate the exact subprocess group created here."""
-        with self._state_lock:
-            if self._closed:
+        with self._close_lock:
+            if self._close_complete:
                 return
-            self._closed = True
-        process = self.process
-        if process is None:
+            with self._state_lock:
+                self._closed = True
             self._fail_pending(MCPError(f"MCP server '{self.name}' closed"))
-            return
-        try:
-            if process.stdin:
-                process.stdin.close()
-        except Exception:
-            pass
-        if os.name != "nt":
-            self._terminate_process(process, force=False)
-            if process.poll() is None:
-                try:
-                    process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    pass
-            # The server leader may already have exited while descendants remain
-            # in the independent process group. Always make a final best-effort
-            # group kill instead of keying cleanup only to leader.poll().
-            self._terminate_process(process, force=True)
-            if process.poll() is None:
-                try:
-                    process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    pass
-        else:
-            if process.poll() is None:
+            process = self.process
+            if process is None:
+                self._close_complete = True
+                return
+            # 先终止服务以解除管道反压，避免 close(stdin) 等待阻塞写入的流锁。
+            if os.name != "nt" or process.poll() is None:
                 self._terminate_process(process, force=False)
+                if process.poll() is None:
+                    try:
+                        process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        pass
+            # 组长退出不代表后代已退出，最终终止必须覆盖整个归属组。
+            self._terminate_process(process, force=True)
+            if process.poll() is None:
                 try:
                     process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    pass
-            # Sweep descendants even when the stdio leader exited first.
-            self._terminate_process(process, force=True)
-        self._fail_pending(MCPError(f"MCP server '{self.name}' closed"))
-        try:
-            self._notification_queue.put_nowait(_NOTIFICATION_CLOSED)
-        except queue.Full:
-            pass
-        current = threading.current_thread()
-        for thread in (self._reader, self._stderr_reader, self._notification_reader):
-            if thread is not None and thread is not current:
-                thread.join(timeout=0.5)
+                except subprocess.TimeoutExpired as exc:
+                    raise MCPError(f"MCP server '{self.name}' did not terminate during cleanup") from exc
+            try:
+                if process.stdin:
+                    process.stdin.close()
+            except Exception:
+                pass
+            try:
+                self._notification_queue.put_nowait(_NOTIFICATION_CLOSED)
+            except queue.Full:
+                pass
+            current = threading.current_thread()
+            for thread in (self._reader, self._stderr_reader, self._notification_reader):
+                if thread is not None and thread is not current:
+                    thread.join(timeout=0.5)
+            self._close_complete = True
 
     @property
     def stderr_tail(self) -> str:
         return "\n".join(self._stderr_tail)
 
-    def _send(self, message: dict[str, Any]) -> None:
+    def _send(self, message: dict[str, Any], *, deadline: float | None = None) -> None:
         process = self.process
         if self._closed or process is None or process.stdin is None:
             raise MCPError(f"MCP server '{self.name}' is not running")
+        if deadline is None:
+            deadline = time.monotonic() + self.tool_timeout_seconds
         try:
             payload = json.dumps(
                 message,
@@ -394,12 +400,53 @@ class MCPClient:
             )
         except (TypeError, ValueError) as exc:
             raise MCPError("MCP request must contain valid JSON values") from exc
-        with self._write_lock:
+        if not self._write_lock.acquire(timeout=max(0.0, deadline - time.monotonic())):
+            raise MCPTimeoutError(f"MCP server '{self.name}' timed out waiting to send")
+        expired = threading.Event()
+        completed = threading.Event()
+        completion_lock = threading.Lock()
+        error = MCPTimeoutError(f"MCP server '{self.name}' timed out sending a request")
+
+        def expire_write() -> None:
+            with completion_lock:
+                if completed.is_set():
+                    return
+                expired.set()
+            with self._state_lock:
+                self._transport_error = error
+            self._fail_pending(error)
+            # 消息可能只发送了一部分，必须退役整个传输，不能再复用该 JSON 流。
+            self._terminate_process(process, force=True)
+            try:
+                process.wait(timeout=0.5)
+            except subprocess.TimeoutExpired:
+                pass
+
+        watchdog = threading.Timer(max(0.0, deadline - time.monotonic()), expire_write)
+        watchdog.name = f"mcp-{self.name}-write-timeout"
+        watchdog.daemon = True
+        try:
+            if self._closed:
+                raise MCPError(f"MCP server '{self.name}' is closed")
+            if self._transport_error is not None:
+                raise self._transport_error
+            watchdog.start()
             try:
                 process.stdin.write(payload + "\n")
                 process.stdin.flush()
             except Exception as exc:
+                if expired.is_set():
+                    raise error from exc
                 raise MCPError(f"Failed writing to MCP server '{self.name}': {exc}") from exc
+        finally:
+            with completion_lock:
+                completed.set()
+            watchdog.cancel()
+            if watchdog.ident is not None:
+                watchdog.join(timeout=0.5)
+            self._write_lock.release()
+        if expired.is_set():
+            raise error
 
     def _read_stdout(self) -> None:
         process = self.process

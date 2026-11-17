@@ -36,7 +36,7 @@ def _context(*, allowlist=None) -> ToolPolicyContext:
         runtime_state=_RuntimeState(),
         recovery=RecoveryState(),
         permissions=_Permissions(),
-        stall_orchestrator=None,
+
         parse_input=lambda value: value if isinstance(value, dict) else {},
         trace=lambda _event, **_payload: None,
     )
@@ -325,19 +325,9 @@ def test_focused_policy_batch_identity_and_observability_are_run_scoped() -> Non
 
 def test_runtime_owned_verification_is_excluded_from_model_stall_detection() -> None:
     """Runtime verification is not an assistant tool choice and cannot be a loop."""
-    recorded = []
     traces = []
 
-    class _Sidecar:
-        def consume_pending_nudge(self):
-            raise AssertionError("runtime-owned work must not consume model nudges")
-
-        def record_tool_use(self, call):
-            recorded.append(call)
-            return True
-
     context = _context()
-    context.stall_orchestrator = _Sidecar()
     context.trace = lambda event, **payload: traces.append((event, payload))
     calls = [{
         "id": "verification-contract-3-1",
@@ -353,7 +343,6 @@ def test_runtime_owned_verification_is_excluded_from_model_stall_detection() -> 
     blocked = ProductionToolPolicy().find_repeated_tool_calls(context, calls)
 
     assert blocked == {}
-    assert recorded == []
     assert context.recovery.repeated_tool_calls == 0
     assert context.recovery._last_tool_signature is None
     assert traces == [(
@@ -364,18 +353,8 @@ def test_runtime_owned_verification_is_excluded_from_model_stall_detection() -> 
 
 def test_model_verification_marker_does_not_bypass_stall_detection() -> None:
     """Projected/model-visible metadata is not proof of Runtime ownership."""
-    recorded = []
-
-    class _Sidecar:
-        def consume_pending_nudge(self):
-            return None
-
-        def record_tool_use(self, call):
-            recorded.append(call)
-            return False
 
     context = _context()
-    context.stall_orchestrator = _Sidecar()
     calls = [{
         "id": "call-model-probe",
         "function": {
@@ -390,33 +369,15 @@ def test_model_verification_marker_does_not_bypass_stall_detection() -> None:
     blocked = ProductionToolPolicy().find_repeated_tool_calls(context, calls)
 
     assert blocked == {}
-    assert recorded == [{
-        "id": "call-model-probe",
-        "name": "bash",
-        "input": {
-            "command": "python -c 'print(1)'",
-            "_nz_runtime_verification_stage": "runtime",
-        },
-    }]
     assert context.recovery.repeated_tool_calls == 1
 
 
 @pytest.mark.parametrize("tool_name", ["diff_status", "review_run_evidence"])
-def test_deterministic_closure_tools_skip_l2_but_keep_local_doom_guard(tool_name) -> None:
+def test_closure_tools_keep_local_repeat_approval(tool_name) -> None:
     """Repeated evidence summaries need no paid judge, but must remain bounded."""
-    recorded = []
     traces = []
 
-    class _Sidecar:
-        def consume_pending_nudge(self):
-            return None
-
-        def record_tool_use(self, call):
-            recorded.append(call)
-            return True
-
     context = _context()
-    context.stall_orchestrator = _Sidecar()
     context.trace = lambda event, **payload: traces.append((event, payload))
     policy = ProductionToolPolicy()
     verify_call = {
@@ -433,12 +394,9 @@ def test_deterministic_closure_tools_skip_l2_but_keep_local_doom_guard(tool_name
     assert policy.find_repeated_tool_calls(context, [call]) == {}
     blocked = policy.find_repeated_tool_calls(context, [call])
 
-    assert recorded == []
     assert blocked[0].permission_denied is True
     assert blocked[0].metadata["stall_kind"] == "consecutive"
-    assert [event for event, _payload in traces].count(
-        "stall_sidecar_observation_skipped"
-    ) == 4
+
 
 
 def test_product_phase_policy_allows_new_read_after_localization() -> None:

@@ -75,7 +75,7 @@ def test_agent_builds_first_turn_implementation_bundle_from_planner_contract(
 ):
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "parser.py").write_text(
@@ -95,7 +95,7 @@ def test_agent_builds_first_turn_implementation_bundle_from_planner_contract(
         client=_NoRequestClient(),
         trace_enabled=False,
     )
-    contract = TaskContract.from_dict({
+    contract = parse_task_contract({
         "objective": "Add named parser values",
         "requirements": [
             {"id": "R1", "description": "Change parser", "kind": "behavior", "expected_artifacts": ["src/parser.py"]},
@@ -104,8 +104,6 @@ def test_agent_builds_first_turn_implementation_bundle_from_planner_contract(
         ],
     }, workspace=tmp_path)
     agent.runtime_state.set_task_contract(contract)
-    agent.runtime_state.initial_plan_complexity = "moderate"
-    agent.runtime_state.task_mode = "feature"
     agent.runtime_state.turn_count = 1
 
     block = agent._implementation_bundle_block("Add named parser values")
@@ -140,7 +138,7 @@ def test_task_contract_owns_progress_tool_unless_user_requests_todo(
     """A runtime ledger must not expose a second model-owned plan state."""
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
     agent = AgentLoop(
@@ -149,7 +147,7 @@ def test_task_contract_owns_progress_tool_unless_user_requests_todo(
         client=_NoRequestClient(),
         trace_enabled=False,
     )
-    contract = TaskContract.from_dict({
+    contract = parse_task_contract({
         "objective": "Change parser and tests",
         "requirements": [
             {
@@ -218,44 +216,44 @@ def test_repo_evidence_refreshes_after_ready_and_generation_change(tmp_path, mon
         service._apply_incremental(("src/pricing.py",), 100)
 
         agent.runtime_state.turn_count = 1
-        first = agent._repo_retrieval_block("review the current changes")
+        first = agent._repo_retrieval_block("Inspect `calculate_total`")
         assert "src/pricing.py" in first
-        assert "related_tests=test_checkout.py" in first
+        assert "callers=checkout" in first
         first_request = agent._build_api_messages([
-            {"role": "user", "content": "review the current changes"},
+            {"role": "user", "content": "Inspect `calculate_total`"},
         ])
         assert any(
-            "related_tests=test_checkout.py" in str(message.get("content", ""))
+            "callers=checkout" in str(message.get("content", ""))
             for message in first_request
         )
         query_count = service.metrics()["query_count"]
 
         agent.runtime_state.turn_count = 2
-        second = agent._repo_retrieval_block("review the current changes")
+        second = agent._repo_retrieval_block("Inspect `calculate_total`")
         assert "src/pricing.py" in second
         assert second == first
         second_request = agent._build_api_messages([
-            {"role": "user", "content": "review the current changes"},
+            {"role": "user", "content": "Inspect `calculate_total`"},
         ])
         assert any(
-            "related_tests=test_checkout.py" in str(message.get("content", ""))
+            "callers=checkout" in str(message.get("content", ""))
             for message in second_request
         )
         assert service.metrics()["query_count"] == query_count
 
-        updated = after.replace("calculate_total", "calculate_discount")
+        updated = after.replace("calculate_total(value)", "calculate_total(value, discount=0)")
         agent.change_tracker.record_before("src/pricing.py", True, before)
         source.write_text(updated, encoding="utf-8")
         agent.change_tracker.record_after("src/pricing.py", True, updated)
         service._apply_incremental(("src/pricing.py",), 100)
-        third = agent._repo_retrieval_block("review the current changes")
-        assert "calculate_discount" in third
+        third = agent._repo_retrieval_block("Inspect `calculate_total`")
+        assert "discount=0" in third
         assert third != second
         third_request = agent._build_api_messages([
-            {"role": "user", "content": "review the current changes"},
+            {"role": "user", "content": "Inspect `calculate_total`"},
         ])
         assert any(
-            "calculate_discount" in str(message.get("content", ""))
+            "discount=0" in str(message.get("content", ""))
             for message in third_request
         )
     finally:
@@ -295,6 +293,9 @@ def test_repo_retrieval_explicit_modes_keep_their_contracts(tmp_path, monkeypatc
         assert "High-confidence bounded" not in guidance
 
         agent.repo_retrieval_strategy = "auto-context"
+        generic = agent._repo_retrieval_block("review the current changes")
+        assert "High-confidence bounded" not in generic
+        assert "no-high-confidence-candidates" in generic
         no_match = agent._repo_retrieval_block("module does_not_exist")
         assert "no-high-confidence-candidates" in no_match
         assert "not evidence that the repository has no match" in no_match
@@ -323,14 +324,14 @@ def test_repo_evidence_warming_falls_back_then_ready_is_consumed(tmp_path, monke
         agent.change_tracker.record_after("app.py", True, source.read_text(encoding="utf-8"))
         agent.runtime_state.turn_count = 1
 
-        warming = agent._repo_retrieval_block("review the current changes")
+        warming = agent._repo_retrieval_block("Inspect `run`")
         assert "High-confidence bounded" not in warming
         assert "ready" not in warming
 
         assert service.prewarm(max_files=20).result(timeout=5).status == "ready"
         agent.runtime_state.turn_count = 2
-        ready = agent._repo_retrieval_block("review the current changes")
-        assert "High-confidence bounded changed_scope candidates" in ready
+        ready = agent._repo_retrieval_block("Inspect `run`")
+        assert "High-confidence bounded symbol_context candidates" in ready
         assert "freshness=indexed" in ready
     finally:
         agent.close()
@@ -359,7 +360,7 @@ def test_structural_repo_evidence_reaches_production_prompt_request(tmp_path, mo
         assert agent.repo_intelligence.wait_ready(timeout=5).status == "ready"
         agent.runtime_state.turn_count = 2
         request = agent._build_api_messages([
-            {"role": "user", "content": "module billing"},
+            {"role": "user", "content": "Inspect `charge`"},
         ])
         visible = "\n".join(str(message.get("content", "")) for message in request)
         assert "module:billing" in visible

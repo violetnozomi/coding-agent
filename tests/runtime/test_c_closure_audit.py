@@ -10,7 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from nz_coder.runtime.agent.task_contract import RequirementLedger, TaskContract
+from nz_coder.runtime.agent.task_contract import parse_task_contract
+from tests.verification_scenarios import VerificationScenario
 from nz_coder.runtime.verification.completion_gate import CompletionGate
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,7 +29,7 @@ def record(name, value):
 
 
 def contract(kind="behavior", mode="semantic", artifacts=()):
-    return TaskContract.from_dict({"requirements": [{
+    return parse_task_contract({"requirements": [{
         "id": "R1", "description": "Implement all required behavior.",
         "kind": kind, "satisfaction_mode": mode,
         "expected_artifacts": list(artifacts),
@@ -46,10 +47,10 @@ def contract(kind="behavior", mode="semantic", artifacts=()):
     ("verification", "semantic", (), "satisfied"),
 ])
 def test_observed_satisfaction_mode_matrix(kind, mode, artifacts, expected):
-    ledger = RequirementLedger.from_contract(contract(kind, mode, artifacts))
-    ledger.observe_mutation(1, list(artifacts) or ["api.py"])
+    ledger = VerificationScenario(contract(kind, mode, artifacts))
+    ledger.mutate(1, list(artifacts) or ["api.py"])
     before = ledger.to_dict()
-    ledger.observe_verification(1, command=COMMAND, passed=True, acceptance=True)
+    ledger.execute(1, command=COMMAND, passed=True, acceptance=True)
     assert ledger.status("R1") == expected
     record(f"ledger/matrix-{kind}-{mode}.json", {"before": before, "after": ledger.to_dict()})
 
@@ -59,29 +60,31 @@ def test_semantic_behavior_project_test_closure_is_current_policy():
     data = contract().to_dict()
     data["requirements"].append({"id": "R2", "kind": "verification",
                                  "description": "Pass pytest", "satisfaction_mode": "semantic"})
-    ledger = RequirementLedger.from_contract(TaskContract.from_dict(data))
-    ledger.observe_mutation(1, ["api.py"])
-    ledger.observe_verification(1, command=COMMAND, passed=True, acceptance=False)
-    assert [item.status for item in ledger.items.values()] == ["pending", "pending"]
+    ledger = VerificationScenario(parse_task_contract(data))
+    ledger.mutate(1, ["api.py"])
+    ledger.execute(1, command=COMMAND, passed=True, acceptance=False)
+    # 精确匹配模型合同的真实执行也能提供命令证据；标志参数不再写入另一份结论。
+    assert [item.status for item in ledger.items.values()] == ["satisfied", "satisfied"]
+    assert all(e.type != "verification_passed" for item in ledger.items.values() for e in item.evidence)
     before = ledger.to_dict()
-    ledger.observe_verification(1, command=COMMAND, passed=True, acceptance=True)
+    ledger.execute(1, command=COMMAND, passed=True, acceptance=True)
     assert [item.status for item in ledger.items.values()] == ["satisfied", "satisfied"]
     assert CompletionGate().evaluate(ledger, mutation_generation=1).ready
     record("ledger/verification-promotion.json", {"generic": before, "exact": ledger.to_dict()})
 
 
 def test_narrative_only_review_can_close_compatibility_at_same_generation():
-    ledger = RequirementLedger.from_contract(contract("compatibility"))
-    ledger.observe_mutation(1, ["api.py"])
-    ledger.observe_verification(1, command=COMMAND, passed=True, acceptance=True)
-    ledger.observe_semantic_review(1, accepted=False, fingerprint="first-report")
+    ledger = VerificationScenario(contract("compatibility"))
+    ledger.mutate(1, ["api.py"])
+    ledger.execute(1, command=COMMAND, passed=True, acceptance=True)
+    ledger.review(1, accepted=False, fingerprint="first-report")
     rejected = ledger.to_dict()
     assert ledger.status("R1") == "candidate"
     assert not CompletionGate().evaluate(ledger, mutation_generation=1).ready
-    ledger.observe_semantic_review(1, accepted=True, fingerprint="revised-report")
+    ledger.review(1, accepted=True, fingerprint="revised-report")
     assert ledger.status("R1") == "satisfied"
     assert CompletionGate().evaluate(ledger, mutation_generation=1).ready
-    assert ledger.latest_generation == ledger.latest_verification_generation == 1
+    assert ledger.latest_generation == ledger.ledger.latest_verification_generation == 1
     record("ledger/narrative-only-review.json", {"rejected": rejected, "accepted": ledger.to_dict(),
            "scope": "controlled verdict transition; no claim a model must accept or detect the defect"})
 

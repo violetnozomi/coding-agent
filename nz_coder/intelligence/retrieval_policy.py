@@ -7,8 +7,6 @@ from pathlib import PurePosixPath
 import re
 import time
 
-from nz_coder.runtime.agent.task_policy import detect_task_mode, estimate_text_complexity
-
 
 RETRIEVAL_STRATEGIES = frozenset({
     "tool-only", "guidance", "auto-context", "policy",
@@ -70,7 +68,7 @@ class RepoRetrievalPolicy:
     def decide(
         self, query: str, *, service, strategy: str = "guidance",
         changed_paths: tuple[str, ...] = (), semantic_available: bool = False,
-        known_paths: tuple[str, ...] = (),
+        known_paths: tuple[str, ...] = (), task_context: tuple = (),
     ) -> RetrievalDecision:
         selected = str(strategy or "guidance").casefold()
         if selected not in RETRIEVAL_STRATEGIES:
@@ -82,6 +80,7 @@ class RepoRetrievalPolicy:
         cache_key = (
             selected, int(state.generation), str(state.status), str(state.error),
             str(query), tuple(changed_paths), bool(semantic_available), declared_paths,
+            task_context,
         )
         cached = self._cache.get(cache_key)
         if cached is not None:
@@ -96,53 +95,30 @@ class RepoRetrievalPolicy:
         items: list[dict] = []
         fallback = ""
         wants_auto = selected in {"auto-context", "policy"}
-        if wants_auto and operation in {"lookup", "semantic_search", "changed_scope"}:
+        # 自动检索只消费模型文本中明确给出的定位符，不根据自然语言猜检索路线。
+        if wants_auto and operation == "symbol_context":
+            symbol = self._quoted_hints(query)[0][0]
             try:
-                if operation == "semantic_search" and semantic_available:
-                    # semantic_search may spend one wait window on index warmup
-                    # and another on embedding.  Keep both inside the outer
-                    # hot-path deadline while allowing budgets above 100ms to
-                    # provide materially more evidence than the 50ms tier.
-                    query_wait_ms = max(1.0, self.hot_path_ms * 0.45)
-                    future = service.submit_bounded_query(
-                        lambda: service.semantic_search(
-                            query, limit=self.limit,
-                            wait_budget_ms=query_wait_ms,
-                        )
+                future = service.submit_bounded_query(
+                    lambda: service.intent_lookup(
+                        symbol, kind="symbol", limit=self.limit, wait_budget_ms=0,
                     )
-                elif operation == "changed_scope":
-                    future = service.submit_bounded_query(
-                        lambda: service.changed_scope(
-                            changed_paths=list(changed_paths) or None,
-                            limit=self.limit, node_limit=20, wait_budget_ms=0,
-                        )
-                    )
-                else:
-                    future = service.submit_bounded_query(
-                        lambda: service.intent_lookup(
-                            query, limit=self.limit, wait_budget_ms=0,
-                        )
-                    )
+                )
                 payload = future.result(timeout=self.hot_path_ms / 1000)
-                items = self._candidate_items(payload, operation)
+                items = [dict(item) for item in payload.get("items", ())]
                 if payload.get("fallback"):
                     fallback = str(payload.get("freshness") or state.status)
             except FutureTimeout:
                 fallback = "hot-path-timeout"
             except (RuntimeError, ValueError, OSError) as exc:
                 fallback = f"{type(exc).__name__}: {exc}"
-        if operation == "semantic_search":
-            accepted, item_confidence = self._semantic_candidates(
-                items, confidence_threshold=self.confidence_threshold,
-            )
-        else:
-            accepted = [
-                item for item in items
-                if float(item.get("score") or 0.0) >= self.confidence_threshold
-            ]
-            item_confidence = max(
-                (float(item.get("score") or 0.0) for item in accepted), default=0.0,
-            )
+        accepted = [
+            item for item in items
+            if float(item.get("score") or 0.0) >= self.confidence_threshold
+        ]
+        item_confidence = max(
+            (float(item.get("score") or 0.0) for item in accepted), default=0.0,
+        )
         candidate_files = tuple(dict.fromkeys((
             *declared_paths,
             *(
@@ -196,127 +172,36 @@ class RepoRetrievalPolicy:
         known_paths: tuple[str, ...] = (),
     ) -> tuple[str, str, tuple[str, ...], float]:
         text = str(query or "")
-        mode = detect_task_mode(text)
-        complexity = estimate_text_complexity(text)
         paths = re.findall(
-            r"(?:^|\s)([\w./-]+\.(?:py|js|jsx|ts|tsx|go|rs|java|rb))\b", text,
+            r"(?<![A-Za-z0-9_./-])([A-Za-z0-9_./-]+\.(?:py|js|jsx|ts|tsx|go|rs|java|rb))\b", text,
         )
-        quoted_hints = re.findall(r"`([^`\n]{2,100})`", text)
-        symbol_hints = [
-            value for value in quoted_hints
-            if re.fullmatch(
-                r"[A-Za-z_][A-Za-z0-9_]*(?:[.:][A-Za-z_][A-Za-z0-9_]*)*",
-                value,
-            )
-        ]
-        literal_hints = [value for value in quoted_hints if value not in symbol_hints]
-        structural_terms = (
-            "call chain", "call path", "caller", "callee", "impact", "dependency",
-            "entrypoint", "module", "调用链", "调用路径", "影响", "依赖", "入口", "模块",
-        )
-        natural_tokens = re.findall(r"[A-Za-z\u4e00-\u9fff]+", text)
-        code_tokens = re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", text)
-        identifier_density = sum("_" in token or any(ch.isupper() for ch in token[1:]) for token in code_tokens)
-        changed_intent = any(term in text.casefold() for term in (
-            "current changes", "changed code", "edited code", "current diff",
-            "working tree", "当前改动", "已修改", "变更范围",
-        ))
+        symbol_hints, literal_hints = RepoRetrievalPolicy._quoted_hints(text)
         if paths:
             return "known-location", "read", ("read_file", "grep_search"), 0.95
         if known_paths:
             return "known-location", "read", ("read_file",), 0.97
-        if changed_paths and (changed_intent or mode in {"refactor", "bugfix", "discuss"}):
-            return "changed-code", "changed_scope", ("repo_context", "read_file"), 0.88
         if literal_hints:
             return "exact-literal", "grep", ("grep_search", "read_file"), 0.94
         if symbol_hints:
             return "known-symbol", "symbol_context", (
                 "repo_context", "read_symbol", "find_symbol_callers",
             ), 0.9
-        if any(term in text.casefold() for term in structural_terms):
-            return "structural", "lookup", ("repo_context", "grep_search", "read_file"), 0.84
-        unknown_location = not paths and (
-            complexity in {"moderate", "complex"}
-            or mode in {"bugfix", "refactor", "feature", "discuss"}
-            or len(natural_tokens) >= 9
-        )
-        # Short natural-language bug reports are common.  They are not exact
-        # symbol queries merely because they contain a few identifier-shaped
-        # words ("duplicate invoice retries"), so let an available semantic
-        # backend participate without weakening the exact path/symbol gates.
-        short_business_intent = (
-            not paths and not symbol_hints and not any(
-                term in text.casefold() for term in structural_terms
-            )
-            and len(natural_tokens) >= 4
-            and identifier_density == 0
-            and mode in {"bugfix", "feature", "discuss", "unknown"}
-        )
-        vocabulary_mismatch = (
-            unknown_location
-            and identifier_density == 0
-        )
-        if (vocabulary_mismatch or short_business_intent) and semantic_available:
-            return "business-intent", "semantic_search", (
-                "semantic_search", "repo_context", "read_file",
-            ), 0.82
-        if unknown_location or mode in {"bugfix", "refactor", "discuss"}:
-            return "unknown-location", "lookup", (
-                "repo_context", "grep_search", "read_file",
-            ), 0.76
-        return "simple", "grep", ("grep_search", "read_file"), 0.7
+        tools = ("repo_context", "grep_search", "read_file")
+        if semantic_available:
+            tools = ("semantic_search", *tools)
+        return "unknown-location", "lookup", tools, 0.0
 
     @staticmethod
-    def _candidate_items(payload: dict, operation: str) -> list[dict]:
-        if operation == "semantic_search":
-            return [dict(item) for item in payload.get("items", ())]
-        if operation == "lookup":
-            return [dict(item) for item in payload.get("items", ())]
-        result = []
-        for path in payload.get("changed_files", ()):
-            result.append({
-                "kind": "file", "locator": str(path), "score": 1.0,
-                "confidence": 1.0, "source": "changed-scope",
-            })
-        return result
-
-    @staticmethod
-    def _semantic_candidates(
-        items: list[dict], *, confidence_threshold: float,
-    ) -> tuple[list[dict], float]:
-        """Calibrate provider-specific cosine scores using rank separation.
-
-        Absolute cosine values are not comparable between embedding models.
-        Auto-context therefore accepts only one leading candidate and only
-        when it is separated from the next distinct locator.  Structural
-        context can expand from that identity after localization.
-        """
-        distinct: list[dict] = []
-        seen: set[str] = set()
-        for raw in items:
-            item = dict(raw)
-            locator = str(item.get("file") or item.get("locator") or "")
-            key = locator or str(item.get("symbol_id") or item.get("identity") or "")
-            if key in seen:
-                continue
-            seen.add(key)
-            distinct.append(item)
-        if not distinct:
-            return [], 0.0
-        top_score = float(distinct[0].get("score") or 0.0)
-        if len(distinct) == 1:
-            return (
-                ([distinct[0]], top_score)
-                if top_score >= confidence_threshold else ([], 0.0)
+    def _quoted_hints(query: str) -> tuple[list[str], list[str]]:
+        quoted = re.findall(r"`([^`\n]{2,100})`", str(query or ""))
+        symbols = [
+            value for value in quoted
+            if re.fullmatch(
+                r"[A-Za-z_][A-Za-z0-9_]*(?:[.:][A-Za-z_][A-Za-z0-9_]*)*",
+                value,
             )
-        runner_up = float(distinct[1].get("score") or 0.0)
-        margin = top_score - runner_up
-        if top_score < 0.10 or margin < 0.015:
-            return [], 0.0
-        evidence_confidence = min(1.0, 0.65 + margin * 4.0)
-        if evidence_confidence < confidence_threshold:
-            return [], 0.0
-        return [distinct[0]], evidence_confidence
+        ]
+        return symbols, [value for value in quoted if value not in symbols]
 
     @staticmethod
     def _languages(service) -> tuple[str, ...]:
@@ -350,15 +235,14 @@ class RepoRetrievalPolicy:
                 "orientation unless a declared path is missing."
             )
         semantic = (
-            " Business-language intent that may not match code vocabulary: use semantic_search, "
-            "then follow its symbol_id/module_id with repo_context."
-            if semantic_available else
-            " Business-language intent with vocabulary mismatch: start broad with repo_context lookup or grep variants."
+            " Available retrieval tools also include semantic_search; choose it when useful."
+            if semantic_available else ""
         )
         return (
             "Retrieval routing: exact literal -> grep_search; exact symbol -> repo_context "
-            "symbol_context or LSP; unknown structural location -> repo_context lookup; "
-            "changed-code reasoning -> changed_scope/impact." + semantic
+            "symbol_context or LSP; otherwise choose general discovery with repo_context lookup "
+            "or grep_search. Changed paths are available to changed_scope/impact."
+            + semantic
         )
 
     def _format_auto_context(

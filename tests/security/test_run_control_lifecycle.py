@@ -258,6 +258,12 @@ def _native_environment(*, result=None, primary_error=None):
             if self._active_run_control is bundle:
                 self._active_run_control = None
 
+        environment_cleanup_complete = False
+        environment_cleanup_failures = {"provider-runtime": "RuntimeError"}
+
+        def request_retirement(self):
+            pass
+
         def close(self):
             raise RuntimeError("cleanup-secret-must-not-escape")
 

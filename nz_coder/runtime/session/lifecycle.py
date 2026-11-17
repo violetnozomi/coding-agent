@@ -48,7 +48,7 @@ def remove_session_worktrees(
             head_commit=str(payload.get("head_commit") or ""),
             mode=mode,
             created_at=str(payload.get("created_at") or ""),
-        ))
+        ), preparing=state.get("worktree_preparing") is True)
         removed.add(target)
 
 

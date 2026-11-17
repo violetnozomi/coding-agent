@@ -4,6 +4,73 @@ from __future__ import annotations
 import pytest
 
 
+@pytest.mark.parametrize("path", [
+    ".gitignore", ".gitattributes", ".gitmodules", ".gitkeep", ".git-backup",
+    ".github/workflows/check.yml", ".hgignore", ".ssh-config", ".aws_notes",
+    ".azure-pipelines.yml", ".nz-coder-notes.md", ".nz-coder-runs-notes.md",
+    ".gcloudignore", ".kubeconfig.sample", ".env.example", ".env.sample", ".env.template",
+    ".git notes.txt", ".ssh backup/config", ".git;notes", ".git|notes",
+])
+@pytest.mark.parametrize("interpreter", [False, True])
+def test_shell_private_scan_preserves_complete_public_name(tmp_path, path, interpreter):
+    import shlex
+    from nz_coder.foundation.workspace_paths import model_command_private_path
+
+    target = tmp_path / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("public fixture\n")
+    command = ("python -c " + shlex.quote(f"from pathlib import Path; print(Path({path!r}).read_text())")
+               if interpreter else "cat " + shlex.quote(path))
+    assert model_command_private_path(command, tmp_path, command_cwd=tmp_path) is None
+
+
+@pytest.mark.parametrize("path", [
+    ".git/config", ".git", ".hg/store/data", ".nz-coder/sessions/private.json",
+    ".nz-coder-runs/private.json", ".ssh/id_ed25519", ".aws/credentials",
+    ".azure/token", ".gcloud/token", ".kube/config", ".env.production.local",
+    ".env.example.private",
+    ".git/folder with space/config", ".git/author's-notes", ".ssh/my key.pem",
+])
+@pytest.mark.parametrize("interpreter", [False, True])
+def test_shell_private_scan_keeps_real_protected_paths_blocked(tmp_path, path, interpreter):
+    import shlex
+    from nz_coder.foundation.workspace_paths import model_command_private_path
+
+    command = ("python -c " + shlex.quote(f"from pathlib import Path; print(Path({path!r}).read_text())")
+               if interpreter else "cat " + shlex.quote(path))
+    assert model_command_private_path(command, tmp_path, command_cwd=tmp_path) is not None
+
+
+def test_original_gitignore_command_passes_policy_and_executes(tmp_path):
+    from nz_coder.permissions import PermissionManager
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.bash import run_bash
+
+    (tmp_path / ".gitignore").write_text("*.pyc\n")
+    command = "cat .gitignore 2>/dev/null; echo '---'; python3 --version"
+    with scoped_workdir(tmp_path):
+        decision = PermissionManager("auto", workspace_trusted=True).check("bash", {"command": command})
+        assert decision["behavior"] != "deny", decision
+        output = run_bash(command)
+    assert "*.pyc" in output
+    assert "Python 3" in output
+    assert output.execution_facts[0].exit_code == 0
+
+
+@pytest.mark.parametrize("command,blocked", [
+    ("cat .git*/config", True),
+    ("cat .[g]it/config", True),
+    ("cat .ssh*/id_ed25519", True),
+    ("cat .gitignore*", False),
+    ("cat .gitattributes?", False),
+    ("cat .github/*", False),
+])
+def test_shell_patterns_distinguish_private_directories_from_public_prefixes(tmp_path, command, blocked):
+    from nz_coder.foundation.workspace_paths import model_command_private_path
+
+    assert (model_command_private_path(command, tmp_path, command_cwd=tmp_path) is not None) is blocked
+
+
 @pytest.mark.parametrize(
     "path",
     [
@@ -134,8 +201,9 @@ def test_shell_and_process_block_known_private_path_reads(tmp_path):
         bash_result = run_bash("cat .env")
         process_result = run_process("start", command="cat .env", tty=False)
 
-    assert bash_result.startswith("Error: Model access blocked")
-    assert process_result.startswith("Error: Model access blocked")
+    assert bash_result.startswith("Error:") and "Model access blocked" in bash_result
+    assert process_result.startswith("Error:") and "Model access blocked" in process_result
+    assert "sentinel-path-secret" not in bash_result + process_result
 
 
 def test_model_listing_filters_nested_private_children(tmp_path):

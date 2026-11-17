@@ -16,6 +16,7 @@ from types import MethodType
 
 from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
 from nz_coder.runtime.execution.loop import AgentLoop
+from nz_coder.tool_platform.execution import ToolExecutionResult
 
 
 @dataclass(frozen=True)
@@ -49,13 +50,17 @@ class _LatencyExecutor:
         self._active = 0
         self.max_active = 0
 
-    def execute_one(self, tool_call: dict, index: int) -> int:
+    def execute_one(self, tool_call: dict, index: int) -> ToolExecutionResult:
         with self._lock:
             self._active += 1
             self.max_active = max(self.max_active, self._active)
         try:
             time.sleep(self.delay_seconds)
-            return index
+            return ToolExecutionResult(
+                name=tool_call["function"]["name"], tool_input=tool_call["function"]["arguments"],
+                output=str(index), executed=True, dispatch_failed=False,
+                command_failed=False, is_write=False, metadata={"index": index},
+            )
         finally:
             with self._lock:
                 self._active -= 1
@@ -80,7 +85,7 @@ async def _run_batch(
     executor = _LatencyExecutor(delay_seconds)
     agent.executor = executor
 
-    def execute_with_hooks(self, tool_call: dict, index: int, messages: list) -> int:
+    def execute_with_hooks(self, tool_call: dict, index: int, messages: list) -> ToolExecutionResult:
         return self.executor.execute_one(tool_call, index)
 
     agent._execute_tool_call_with_hooks = MethodType(execute_with_hooks, agent)
@@ -88,7 +93,7 @@ async def _run_batch(
     started = time.perf_counter()
     results = await agent._dispatch_tool_calls_async(calls, False, [])
     elapsed = time.perf_counter() - started
-    return elapsed, executor.max_active, [item[2] for item in results]
+    return elapsed, executor.max_active, [item[2].metadata["index"] for item in results]
 
 
 async def run_parallel_benchmark_async(

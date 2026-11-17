@@ -136,6 +136,14 @@ def _worktree_root(workspace: Path) -> Path:
     return WorktreeManager(workspace).worktree_dir
 
 
+def _initialize_git_workspace(workspace: Path) -> None:
+    import subprocess
+    from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+
+    for arguments in (("init", "-q"), ("-c", "user.name=Offline", "-c", "user.email=offline@invalid", "commit", "--allow-empty", "-qm", "initial")):
+        subprocess.run(["git", *arguments], cwd=workspace, env=build_sanitized_subprocess_env(), capture_output=True, check=True)
+
+
 def _subagent_state_root(workspace: Path, parent: str = "main-session") -> Path:
     from nz_coder.runtime.agent.subagent import _subagent_root
 
@@ -254,7 +262,7 @@ def test_subagent_injects_parent_context(monkeypatch):
             }),
             encoding="utf-8",
         )
-        scratchpad.update("finding", "timezone parsing points at django/utils/http.py")
+        scratchpad.update_section('focus', [{"summary": "timezone parsing points at django/utils/http.py", "details": ""}])
         fake = FakeClient([FakeResponse(FakeMessage("done"))])
         monkeypatch.setattr(subagent, "OpenAI", lambda **kwargs: fake)
 
@@ -264,7 +272,7 @@ def test_subagent_injects_parent_context(monkeypatch):
         assert "Parent agent context" in system
         assert "django/utils/http.py" in system
         assert "timezone parsing points" in system
-        assert "[Subagent status: completed]" in result
+        assert "[Subagent status: completed_unverified]" in result
     finally:
         scratchpad.clear()
         config.SUBAGENT_MAX_TURNS = old_turns
@@ -298,7 +306,7 @@ def test_subagent_enters_native_agent_facade(monkeypatch):
 
         result = subagent.run_subagent("inspect the repository", agent_type="explore")
 
-        assert "[Subagent status: completed]" in result
+        assert "[Subagent status: completed_unverified]" in result
         assert len(entered) == 1
     finally:
         subagent.set_parent_session(None)
@@ -368,7 +376,10 @@ def test_subagent_semantic_tier_publishes_route_facts(monkeypatch):
         assert route["output_tokens"] == 4
         assert route["duration_ms"] >= 0
         assert result.metadata["child_result"]["summary_kind"] == "excerpt"
-        assert result.metadata["child_result"]["digest"] == "done"
+        assert result.metadata["child_result"]["status"] == "completed_unverified"
+        assert result.metadata["child_result"]["digest"].startswith("本次执行已结束，验证尚未确认。")
+        assert result.metadata["child_result"]["digest"].endswith("模型交付说明（未经独立确认）： done")
+        assert "未评估" in result.metadata["child_result"]["digest"]
     finally:
         config.SUBAGENT_EXPLORE_MODEL = old_fast
         config.SUBAGENT_MAX_TURNS = old_turns
@@ -455,8 +466,8 @@ def test_subagent_hard_postcondition_changes_terminal_result(monkeypatch):
 
         canonical = result.metadata["child_result"]
         assert canonical["status"] == "verification_failed"
-        assert canonical["verification"]["ok"] is False
-        assert canonical["verification"]["reasons"] == [
+        assert canonical["postconditions"]["ok"] is False
+        assert canonical["postconditions"]["reasons"] == [
             "final text was shorter than the required 100 characters"
         ]
         assert "[Child task verification failed]" in canonical["final_text"]
@@ -496,8 +507,8 @@ def test_subagent_gets_one_same_session_verification_repair(monkeypatch):
 
         canonical = result.metadata["child_result"]
         assert len(fake.chat.completions.requests) == 2
-        assert canonical["status"] == "completed"
-        assert canonical["verification"]["ok"] is True
+        assert canonical["status"] == "completed_unverified"
+        assert canonical["postconditions"]["ok"] is True
         assert canonical["route_facts"]["iterations"] == 2
         state = subagent._load_subagent_state(
             "verification-repair-parent",
@@ -537,7 +548,8 @@ def test_verification_repair_can_satisfy_write_postcondition(monkeypatch):
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
     old_timeout = config.SUBAGENT_TIMEOUT_SECONDS
-    config.SUBAGENT_MAX_TURNS = 2
+    # 三步实现额度，加已有的一步修复额度，覆盖最终回复在内的四次请求。
+    config.SUBAGENT_MAX_TURNS = 3
     config.SUBAGENT_TIMEOUT_SECONDS = 30
     try:
         fake = FakeClient([
@@ -546,17 +558,12 @@ def test_verification_repair_can_satisfy_write_postcondition(monkeypatch):
                 "write_file",
                 {"path": "app.py", "content": "VALUE = 2\n"},
             )])),
+            FakeResponse(FakeMessage(tool_calls=[FakeToolCall(
+                "bash", {"command": "python -m py_compile app.py"}, call_id="verify-app",
+            )])),
             FakeResponse(FakeMessage("Implemented and verified app.py.")),
         ])
-        original_dispatch = subagent.dispatch
-
-        def fake_dispatch(name, args):
-            if name == "verify_changed_files":
-                return "OK: changed files compile"
-            return original_dispatch(name, args)
-
         monkeypatch.setattr(subagent, "OpenAI", lambda **_kwargs: fake)
-        monkeypatch.setattr(subagent, "dispatch", fake_dispatch)
 
         result = subagent.run_subagent(
             "update app.py",
@@ -569,10 +576,12 @@ def test_verification_repair_can_satisfy_write_postcondition(monkeypatch):
         )
 
         canonical = result.metadata["child_result"]
-        assert canonical["status"] == "completed"
-        assert canonical["verification"]["ok"] is True
+        assert canonical["status"] == "completed_unverified"
+        assert canonical["verification"]["verification_state"] == "passed"
+        assert canonical["verification"]["review_pending"] is True
+        assert canonical["postconditions"]["ok"] is True
         assert canonical["changed_files"] == ["app.py"]
-        assert canonical["route_facts"]["iterations"] == 3
+        assert canonical["route_facts"]["iterations"] == 4
     finally:
         config.SUBAGENT_MAX_TURNS = old_turns
         config.SUBAGENT_TIMEOUT_SECONDS = old_timeout
@@ -605,11 +614,11 @@ def test_subagent_publishes_canonical_structured_child_result(monkeypatch):
         result = subagent.run_subagent("inspect parser", output_schema=schema)
 
         canonical = result.metadata[CHILD_RESULT_KEY]
-        assert canonical["status"] == "completed"
+        assert canonical["status"] == "completed_unverified"
         assert canonical["final_text"].startswith("Complete.")
         assert "[Subagent session:" not in canonical["final_text"]
         assert canonical["structured"] == {"finding": "parser bug"}
-        assert result.metadata["child_status"] == "completed"
+        assert result.metadata["child_status"] == "completed_unverified"
         assert "## Required Output Format" in (
             fake.chat.completions.requests[0]["messages"][0]["content"]
         )
@@ -618,6 +627,21 @@ def test_subagent_publishes_canonical_structured_child_result(monkeypatch):
         config.SUBAGENT_MAX_TURNS = old_turns
         config.SUBAGENT_TIMEOUT_SECONDS = old_timeout
         _restore_workdir(old, tmp)
+
+
+def test_finalization_binds_current_canonical_despite_save_failure(tmp_path, monkeypatch):
+    from nz_coder.runtime.agent import subagent
+
+    state = {"session_id": "child", "parent_session_id": "parent", "workspace_root": str(tmp_path),
+             "agent_type": "explore", "status": "completed", "settlement_id": "new-round",
+             "child_result_settlement_id": "old-round", "child_result": {"cost": 0.1},
+             "tokens": {"total": 18}, "cost_known": True, "cost": 0.125}
+    monkeypatch.setattr(subagent, "_save_subagent_state", lambda *_: (_ for _ in ()).throw(OSError("storage unavailable")))
+    output = subagent._finalize_subagent_result("done", tmp_path / "missing.md", "completed", state)
+    assert output.metadata["child_result_settlement_id"] == "new-round"
+    assert state["child_result_settlement_id"] == "new-round"
+    assert output.metadata["child_result"]["usage"]["total"] == 18
+    assert output.metadata["child_total_cost"] == 0.125
 
 
 def test_subagent_structured_output_gets_exactly_one_no_tool_repair(monkeypatch):
@@ -720,7 +744,11 @@ def test_public_subagent_session_reader_requires_exact_owned_id(tmp_path):
     state["session_id"] = "subagent-owned"
     state["status"] = "completed"
     state["model_id"] = "provider/model"
-    state["messages"] = [{"role": "user", "content": "inspect"}]
+    from nz_coder.runtime.session.model import Session
+    from nz_coder.runtime.session.store import LegacyJsonSessionStore
+    asyncio.run(LegacyJsonSessionStore().save(Session.create(
+        state["session_id"], [{"role": "user", "content": "inspect"}],
+        workspace=tmp_path, parent_session_id="parent-1")))
     subagent._save_subagent_state("parent-1", state, tmp_path)
 
     summaries = subagent.list_subagent_sessions("parent-1", tmp_path)
@@ -943,7 +971,9 @@ def test_subagent_retries_transient_provider_error_on_same_assistant(monkeypatch
         assert len(assistants) == 1
         assert [part["attempt"] for part in retries] == [1, 2]
         assert all(part["error"]["name"] == "APIError" for part in retries)
-        assert assistants[0]["content"] == "recovered"
+        assert assistants[0]["content"].startswith("本次执行已结束，验证尚未确认。")
+        assert assistants[0]["content"].endswith("模型交付说明（未经独立确认）：\nrecovered")
+        assert "未评估" in assistants[0]["content"]
         assert assistants[0]["_nz_end_state"] == {"reason": "completed"}
     finally:
         subagent.set_parent_session(None)
@@ -965,6 +995,11 @@ def test_fork_clones_referenced_child_identity_and_rewrites_task_part():
             {"role": "assistant", "content": "done"},
         ]
         ensure_message_identities(source["messages"], source["session_id"])
+        from nz_coder.runtime.session.model import Session
+        from nz_coder.runtime.session.store import LegacyJsonSessionStore
+        asyncio.run(LegacyJsonSessionStore().save(Session.create(
+            source["session_id"], source.pop("messages"),
+            workspace=tmp, parent_session_id="parent-old")))
         subagent._save_subagent_state("parent-old", source, tmp)
         parent_messages = [{
             "role": "assistant",
@@ -994,7 +1029,7 @@ def test_fork_clones_referenced_child_identity_and_rewrites_task_part():
             workspace_root=tmp,
         )
 
-        target_id = mapping[source["session_id"]]
+        target_id = mapping.mapping[source["session_id"]]
         metadata = parent_messages[0]["_nz_parts"][0]["state"]["metadata"]
         target = subagent._load_subagent_state("parent-new", target_id, tmp)
         assert metadata["child_session_id"] == target_id
@@ -1002,7 +1037,8 @@ def test_fork_clones_referenced_child_identity_and_rewrites_task_part():
         assert target["agent_id"] != source["agent_id"]
         assert target["parent_session_id"] == "parent-new"
         assert target["parent_agent_id"] == "agent-parent-new"
-        assert {message["_nz_session_id"] for message in target["messages"]} == {
+        assert "messages" not in target
+        assert {message["_nz_session_id"] for message in _native_child_messages(target, "parent-new", tmp)} == {
             target_id
         }
         assert subagent._load_subagent_state(
@@ -1052,7 +1088,7 @@ def test_fork_clones_write_child_changed_and_deleted_files():
         )
 
         target = subagent._load_subagent_state(
-            "parent-new", mapping[source["session_id"]], tmp
+            "parent-new", mapping.mapping[source["session_id"]], tmp
         )
         target_worktree = Path(target["worktree"]["path"])
         assert target["worktree"]["mode"] == "copy"
@@ -1162,7 +1198,7 @@ def test_subagent_keeps_large_tool_output_when_request_capacity_can_hold_it(
         assert not (
             worktree / ".nz-coder" / "tool-results" / "subagent-call_1.txt"
         ).exists()
-        assert "[Subagent status: completed]" in result
+        assert "[Subagent status: completed_unverified]" in result
     finally:
         subagent.set_parent_session(None)
         config.SUBAGENT_MAX_TURNS = old_turns
@@ -1170,29 +1206,31 @@ def test_subagent_keeps_large_tool_output_when_request_capacity_can_hold_it(
         _restore_workdir(old, tmp)
 
 
-def test_general_subagent_reports_verification_failure_and_rolls_back(monkeypatch):
+def test_general_subagent_preserves_actual_failed_check_without_fake_rollback(monkeypatch):
     from nz_coder.foundation import config
     from nz_coder.runtime.agent import subagent
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
     old_timeout = config.SUBAGENT_TIMEOUT_SECONDS
-    config.SUBAGENT_MAX_TURNS = 2
+    config.SUBAGENT_MAX_TURNS = 3
     config.SUBAGENT_TIMEOUT_SECONDS = 30
     try:
         subagent.set_parent_session("main-session")
         fake = FakeClient([
-            FakeResponse(FakeMessage(tool_calls=[FakeToolCall("write_file", {"path": "app.py", "content": "bad"})])),
+            FakeResponse(FakeMessage(tool_calls=[FakeToolCall("write_file", {"path": "app.py", "content": "def broken(:\n"})])),
+            FakeResponse(FakeMessage(tool_calls=[FakeToolCall("bash", {"command": "python -m py_compile app.py"})])),
             FakeResponse(FakeMessage("patched")),
         ])
         monkeypatch.setattr(subagent, "OpenAI", lambda **kwargs: fake)
-        monkeypatch.setattr(subagent, "_run_allowed_tool", lambda *args, **kwargs: "Created app.py")
-        monkeypatch.setattr(subagent, "dispatch", lambda name, args: "FAIL: py_compile changed files\nSyntaxError")
 
         result = subagent.run_subagent("patch app.py", agent_type="general-purpose")
 
-        assert "[Subagent status: verification_failed_rolled_back]" in result
-        assert "SyntaxError" in result
+        assert result.metadata["child_result"]["status"] != "completed"
+        assert "rolled_back" not in result
+        child = subagent._load_subagent_state("main-session", _extract_subagent_session_id(result), tmp)
+        assert (Path(child["worktree"]["path"]) / "app.py").read_text() == "def broken(:\n"
+        assert "SyntaxError" in str(result.metadata["child_result"]["verification"])
     finally:
         subagent.set_parent_session(None)
         config.SUBAGENT_MAX_TURNS = old_turns
@@ -1236,8 +1274,8 @@ def test_subagent_can_request_parent_input_and_resume(monkeypatch):
             if msg.get("role") == "user"
         ]
         assert user_messages[0] == "find the correct file"
-        assert user_messages[-1] == "Use src/app.py."
-        assert "[Subagent status: completed]" in result2
+        assert "Use src/app.py." in user_messages
+        assert "[Subagent status: completed_unverified]" in result2
     finally:
         subagent.set_parent_session(None)
         config.SUBAGENT_MAX_TURNS = old_turns
@@ -1424,12 +1462,11 @@ def test_subagent_blocks_overlapping_active_write_scope(monkeypatch):
 def test_subagent_reports_completed_worktree_conflict(monkeypatch):
     from nz_coder.foundation import config
     from nz_coder.runtime.agent import subagent
-    from nz_coder.runtime.worktree import Worktree
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
     old_timeout = config.SUBAGENT_TIMEOUT_SECONDS
-    config.SUBAGENT_MAX_TURNS = 2
+    config.SUBAGENT_MAX_TURNS = 3
     config.SUBAGENT_TIMEOUT_SECONDS = 30
     try:
         subagent.set_parent_session("main-session")
@@ -1449,33 +1486,14 @@ def test_subagent_reports_completed_worktree_conflict(monkeypatch):
         sibling["worktree_rel"] = f"user-cache://worktrees/{sibling['session_id']}"
         subagent._save_subagent_state("main-session", sibling, tmp)
 
-        child_dir = _worktree_root(tmp) / "child"
-        child_dir.mkdir(parents=True, exist_ok=True)
-
-        def fake_create(self, worktree_id: str, base_ref: str = "HEAD"):
-            return Worktree(
-                id=worktree_id,
-                path=str(child_dir),
-                branch=f"subagent-{worktree_id}",
-                based_on=base_ref,
-                head_commit="def456",
-                mode="git",
-            )
+        _initialize_git_workspace(tmp)
 
         fake = FakeClient([
             FakeResponse(FakeMessage(tool_calls=[FakeToolCall("write_file", {"path": "app.py", "content": "print('child')\n"})])),
+            FakeResponse(FakeMessage(tool_calls=[FakeToolCall("bash", {"command": "python -m py_compile app.py"})])),
             FakeResponse(FakeMessage("patched")),
         ])
-        original_dispatch = subagent.dispatch
-
-        def fake_dispatch(name, args):
-            if name == "verify_changed_files":
-                return "OK: py_compile changed files"
-            return original_dispatch(name, args)
-
         monkeypatch.setattr(subagent, "OpenAI", lambda **kwargs: fake)
-        monkeypatch.setattr(subagent.WorktreeManager, "create", fake_create)
-        monkeypatch.setattr(subagent, "dispatch", fake_dispatch)
 
         result = subagent.run_subagent(
             "edit app.py",
@@ -1532,7 +1550,6 @@ def test_child_runtime_profile_reflects_execution_surface(state, agent_type, exp
 def test_subagent_persists_worktree_and_child_trace(monkeypatch):
     from nz_coder.foundation import config
     from nz_coder.runtime.agent import subagent
-    from nz_coder.runtime.worktree import Worktree
 
     old, tmp = _tmp_workdir()
     old_turns = config.SUBAGENT_MAX_TURNS
@@ -1543,22 +1560,10 @@ def test_subagent_persists_worktree_and_child_trace(monkeypatch):
     config.TRACE_ENABLED = True
     parent_tracer = FakeParentTracer()
     try:
-        wt_dir = _worktree_root(tmp) / "subagent-test"
-        wt_dir.mkdir(parents=True, exist_ok=True)
-
-        def fake_create(self, worktree_id: str, base_ref: str = "HEAD"):
-            return Worktree(
-                id=worktree_id,
-                path=str(wt_dir),
-                branch=f"subagent-{worktree_id}",
-                based_on=base_ref,
-                head_commit="abc123",
-                mode="git",
-            )
+        _initialize_git_workspace(tmp)
 
         fake = FakeClient([FakeResponse(FakeMessage("done"))])
         monkeypatch.setattr(subagent, "OpenAI", lambda **kwargs: fake)
-        monkeypatch.setattr(subagent.WorktreeManager, "create", fake_create)
         subagent.bind_parent_context(
             session_id="main-session",
             tracer=parent_tracer,
@@ -1582,7 +1587,7 @@ def test_subagent_persists_worktree_and_child_trace(monkeypatch):
         ]
         assert any(row.get("event") == "agent_runner_enter" for row in trace_rows)
         assert any(event == "subagent_spawn" for event, _ in parent_tracer.events)
-        assert any(event == "subagent_complete" and payload.get("status") == "completed" for event, payload in parent_tracer.events)
+        assert any(event == "subagent_complete" and payload.get("status") == "completed_unverified" for event, payload in parent_tracer.events)
         assert "[Subagent worktree:" in result
         assert "[Subagent trace:" in result
     finally:
@@ -1607,7 +1612,7 @@ def test_run_subagent_async_completes(monkeypatch):
 
         result = asyncio.run(subagent.run_subagent_async("scan repo", agent_type="explore"))
 
-        assert "[Subagent status: completed]" in result
+        assert "[Subagent status: completed_unverified]" in result
     finally:
         subagent.set_parent_session(None)
         config.SUBAGENT_MAX_TURNS = old_turns
@@ -1637,9 +1642,11 @@ def test_foreground_task_propagates_tool_cancel_into_child_tools(monkeypatch):
         monkeypatch.setattr(subagent, "OpenAI", lambda **kwargs: fake)
 
         def slow_tool(*_args, **_kwargs):
-            observed.append(current_tool_cancel_event())
+            scope = current_tool_cancel_event()
+            observed.append(scope.is_set())
             tool_started.set()
-            cancel_event.wait(1)
+            assert cancel_event.wait(1)
+            observed.append(scope.is_set())
             return "Error: Read cancelled"
 
         monkeypatch.setattr(subagent, "_run_allowed_tool", slow_tool)
@@ -1651,7 +1658,7 @@ def test_foreground_task_propagates_tool_cancel_into_child_tools(monkeypatch):
             result = subagent.run_subagent("inspect README", agent_type="explore")
         canceller.join(1)
 
-        assert observed == [cancel_event]
+        assert observed == [False, True]
         assert "[Subagent status: cancelled]" in result
         session_id = _extract_subagent_session_id(result)
         state = subagent._load_subagent_state("main-session", session_id, tmp)

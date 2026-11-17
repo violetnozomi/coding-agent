@@ -98,6 +98,7 @@ class _CapabilityRule:
     output_tokens: int
     required_terms: tuple[str, ...] = ()
     excluded_terms: tuple[str, ...] = ()
+    exact_match: bool = False
     supports_tools: bool = True
     supports_streaming: bool = True
     supports_reasoning: bool = False
@@ -108,9 +109,14 @@ class _CapabilityRule:
     default_temperature: float | None = None
 
     def matches(self, model_id: str) -> bool:
+        matched = (
+            model_id in self.any_terms
+            if self.exact_match
+            else any(term in model_id for term in self.any_terms)
+        )
         return (
             all(term in model_id for term in self.required_terms)
-            and any(term in model_id for term in self.any_terms)
+            and matched
             and not any(term in model_id for term in self.excluded_terms)
         )
 
@@ -272,12 +278,25 @@ _RULES = (
         default_temperature=0.55,
     ),
     _CapabilityRule(
+        name="deepseek-flash",
+        any_terms=("deepseek-flash",),
+        exact_match=True,
+        family="deepseek",
+        prompt_family="default",
+        context_tokens=1_048_576,
+        # 官方允许 393216 输出；默认请求额度对齐 OpenCode 2.2.5 的 256000。
+        # 仅识别官方 ID，私有模型仍需显式目录；用户配置继续优先。
+        output_tokens=256_000,
+        supports_reasoning=True,
+        preserve_reasoning_content=True,
+    ),
+    _CapabilityRule(
         name="deepseek-v4",
         any_terms=("deepseek-v4-flash", "deepseek-v4-pro"),
         family="deepseek",
         prompt_family="default",
         context_tokens=1_000_000,
-        output_tokens=64_000,
+        output_tokens=256_000,
         supports_reasoning=True,
         preserve_reasoning_content=True,
     ),

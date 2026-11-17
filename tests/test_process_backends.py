@@ -2,6 +2,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import threading
+
+import pytest
+
+from nz_coder.runtime.process import process_backends as backends
 import subprocess
 
 from nz_coder.runtime.process.process_backends import (
@@ -263,3 +269,159 @@ def test_conpty_without_job_uses_pid_scoped_taskkill_fallback(tmp_path, monkeypa
 
     assert backend.lifecycle_mode == "windows-taskkill-fallback"
     assert calls[0][0] == ["taskkill", "/PID", "123", "/T", "/F"]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="real POSIX process/fd ownership")
+@pytest.mark.parametrize("tty", [False, True])
+def test_factory_wrapper_failure_retires_real_spawned_process(
+    tmp_path, monkeypatch, tty
+):
+    created = []
+    acquired_fds = []
+    popen = subprocess.Popen
+
+    def spawn(*args, **kwargs):
+        process = popen(*args, **kwargs)
+        created.append(process)
+        return process
+
+    def broken(*args, **kwargs):
+        if tty:
+            acquired_fds.append(args[1])
+        raise RuntimeError("wrapper failed")
+
+    monkeypatch.setattr(backends.subprocess, "Popen", spawn)
+    monkeypatch.setattr(backends, "PosixPtyBackend" if tty else "PipeBackend", broken)
+    try:
+        with pytest.raises(RuntimeError, match="wrapper failed"):
+            create_process_backend("sleep 60", cwd=tmp_path, tty=tty, rows=24, cols=80)
+        assert created[0].poll() is not None
+        for fd in acquired_fds:
+            with pytest.raises(OSError):
+                os.fstat(fd)
+        for stream in (created[0].stdin, created[0].stdout):
+            assert stream is None or stream.closed
+    finally:
+        for process in created:
+            backends.terminate_process_tree(process, os_name="posix", force=True)
+            process.wait(timeout=3)
+            for stream in (process.stdin, process.stdout):
+                if stream is not None:
+                    stream.close()
+
+
+def test_partial_factory_cleanup_retains_caller_until_exit_confirmed(
+    tmp_path, monkeypatch
+):
+    release = threading.Event()
+    entered = threading.Event()
+    finished = threading.Event()
+
+    class Process:
+        pid = 71
+        stdin = stdout = stderr = None
+
+        def poll(self):
+            return 0 if release.is_set() else None
+
+        def wait(self, timeout=None):
+            entered.set()
+            if not release.wait(timeout):
+                raise subprocess.TimeoutExpired("owned", timeout)
+            return 0
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("wrapper failed")
+
+    monkeypatch.setattr(backends.subprocess, "Popen", lambda *a, **kw: Process())
+    monkeypatch.setattr(backends, "PipeBackend", broken)
+    monkeypatch.setattr(backends, "terminate_process_tree", lambda *a, **kw: None)
+
+    def create():
+        try:
+            with pytest.raises(RuntimeError, match="wrapper failed"):
+                create_process_backend(
+                    "owned", cwd=tmp_path, tty=False, rows=24, cols=80
+                )
+        finally:
+            finished.set()
+
+    worker = threading.Thread(target=create)
+    worker.start()
+    try:
+        assert entered.wait(1)
+        assert not finished.is_set()
+    finally:
+        release.set()
+        worker.join(2)
+    assert finished.is_set()
+
+
+@pytest.mark.parametrize("kind", ["pipe", "pty", "conpty", "job"])
+def test_backend_close_failure_retains_handle_for_retry(monkeypatch, kind):
+    calls = []
+
+    def close(*args, **kwargs):
+        calls.append(True)
+        if len(calls) == 1:
+            raise OSError("close failed")
+        return 1
+
+    if kind == "pipe":
+
+        class Stream:
+            closed = False
+
+            def close(self):
+                close()
+                self.closed = True
+
+        class Process:
+            pid = 71
+            stdin = Stream()
+            stdout = stderr = None
+
+        backend = backends.PipeBackend(Process(), os_name="posix")
+    elif kind == "pty":
+        backend = PosixPtyBackend(type("Process", (), {"pid": 71})(), 101)
+        monkeypatch.setattr(backends.os, "close", close)
+    elif kind == "conpty":
+        process = _FakePtyProcess()
+        process.close = close
+        backend = ConPtyBackend(process)
+    else:
+        kernel = _FakeKernel32()
+        kernel.CloseHandle = close
+        backend = _WindowsJob(101, kernel)
+    with pytest.raises(OSError, match="close failed"):
+        backend.close()
+    backend.close()
+    backend.close()
+    assert len(calls) == 2
+
+
+def test_conpty_unknown_exitstatus_is_not_fabricated_as_zero():
+    process = _FakePtyProcess()
+    process.alive = False
+    process.exitstatus = None
+    backend = ConPtyBackend(process)
+    assert backend.poll() is None
+    with pytest.raises(subprocess.TimeoutExpired):
+        backend.wait(timeout=0.01)
+    process.exitstatus = 7
+    assert backend.wait(timeout=0.01) == 7
+
+
+def test_windows_job_bind_failure_retries_acquired_handles():
+    kernel = _FakeKernel32()
+    kernel.SetInformationJobObject = lambda *a: 0
+    original_close = kernel.CloseHandle
+    attempts = []
+
+    def close(handle):
+        attempts.append(handle)
+        return 0 if len(attempts) == 1 else original_close(handle)
+
+    kernel.CloseHandle = close
+    assert _WindowsJob.bind(4242, os_name="nt", kernel32=kernel) is None
+    assert attempts == [101, 101]

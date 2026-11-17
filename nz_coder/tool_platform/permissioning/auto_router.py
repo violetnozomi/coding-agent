@@ -77,7 +77,7 @@ def canonical_action_digest(
     workspace: Path,
 ) -> str:
     """Return a workspace-bound digest for one exact tool invocation."""
-    normalized_name = str(tool_name or "").strip().lower()
+    normalized_name = str(tool_name or "").strip()
     action = {
         "tool": normalized_name,
         "input": tool_input,
@@ -106,8 +106,9 @@ def route_auto_action(
     approved_digests: set[str] | frozenset[str],
 ) -> AutoRoute:
     """Select hard deny, manual, fast allow, or classifier admission."""
-    name = str(tool_name or "").strip().lower()
-    digest = canonical_action_digest(name, tool_input, workspace)
+    actual_name = str(tool_name or "").strip()
+    name = actual_name.lower()
+    digest = canonical_action_digest(actual_name, tool_input, workspace)
     escaped = _first_workspace_escape(name, tool_input, Path(workspace))
     if escaped:
         return AutoRoute(
@@ -183,7 +184,7 @@ def route_auto_action(
             digest,
         )
 
-    effect = get_tool_side_effect(name)
+    effect = get_tool_side_effect(actual_name)
     if effect in {"reads-network", "mutates-network", "mutates-shell"}:
         return _classify(
             "external_side_effect",
@@ -204,7 +205,7 @@ def route_auto_action(
             "Explicit safe-state tool",
             digest,
         )
-    if is_filesystem_mutation_tool(name) and is_transactional_dynamic_tool(name):
+    if is_filesystem_mutation_tool(name) and is_transactional_dynamic_tool(actual_name):
         return AutoRoute(
             AutoRouteKind.FAST_ALLOW,
             "transactional_edit",

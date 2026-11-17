@@ -123,7 +123,7 @@ def test_local_runner_is_reproducible_and_exercises_scale_cases(tmp_path) -> Non
     assert first["cases"]["F"]["agent_runner_tool_results"] == 40
     assert first["cases"]["F"]["nominal_sla_enforced"] is False
     assert first["cases"]["F"]["nominal_sla_advisory"] is True
-    assert first["cases"]["F"]["agent_runner_result"]["status"] == "completed"
+    assert first["cases"]["F"]["agent_runner_result"]["status"] == "completed_unverified"
     assert first["cases"]["F"]["passed"] is True
     assert first["trajectory_metrics"]["model_calls"] == 41
     assert first["trajectory_metrics"]["tool_calls"] == 40

@@ -1,6 +1,8 @@
 """Agent handoff, structured-output, and terminal transition policy."""
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import copy
 
 from nz_coder.protocol.message_schema import SYNTHETIC_USER_KEY, stamp_user_message
@@ -47,6 +49,7 @@ class ProductionAgentTransitionRuntime:
         schema = graph.agent(host.current_agent_name).output_schema
         if schema is None:
             return False
+        host._structured_outputs.pop(host.current_agent_name, None)
         evaluation = evaluate_structured_output(str(content or ""), schema)
         host._structured_output_evaluations[host.current_agent_name] = {
             "ok": evaluation.ok,
@@ -180,7 +183,10 @@ class ProductionAgentTransitionRuntime:
             ):
                 raise ValueError("Agent handoff input_filter returned invalid messages")
             messages[:] = copy.deepcopy(filtered_messages)
-        host.current_agent_name = signal.target
+        run = host.runtime_state._verification_context
+        with run._state_lock if run is not None else nullcontext():
+            host.recovery.reset_tool_call_history(reason="agent_transition", context_changed=True)
+            host.current_agent_name = signal.target
         self._activate(host, signal.target)
         host._handoff_count += 1
         transition = {
@@ -252,7 +258,10 @@ class ProductionAgentTransitionRuntime:
             child_payload
         ).to_dict()
         messages.append(result_message)
-        host.current_agent_name = caller
+        run = host.runtime_state._verification_context
+        with run._state_lock if run is not None else nullcontext():
+            host.recovery.reset_tool_call_history(reason="agent_transition", context_changed=True)
+            host.current_agent_name = caller
         self._activate(host, caller)
         transition = {
             "from": callee,

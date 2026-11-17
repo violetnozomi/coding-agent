@@ -36,9 +36,20 @@ def test_runtime_core_has_no_coding_or_legacy_concrete_imports() -> None:
 def test_background_and_workflow_do_not_own_model_or_tool_loops() -> None:
     manager = (ROOT / "nz_coder/runtime/agent/agent_manager.py").read_text(encoding="utf-8")
     workflow = (ROOT / "nz_coder/runtime/workflows/workflow_runtime.py").read_text(encoding="utf-8")
-    assert "run_subagent(" in manager
+    manager_tree = ast.parse(manager)
+    assert any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute) and node.func.attr == "run"
+        and node.args and isinstance(node.args[0], ast.Name) and node.args[0].id == "run_subagent"
+        for node in ast.walk(manager_tree)
+    )
+    supervisor = (ROOT / "nz_coder/runtime/agent/process_supervisor.py").read_text(encoding="utf-8")
+    assert any(
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "run_subagent"
+        for node in ast.walk(ast.parse(supervisor))
+    )
     assert "BackgroundAgentManager" in workflow
-    for source in (manager, workflow):
+    for source in (manager, supervisor, workflow):
         assert ".complete_turn(" not in source
         assert ".execute_batch_async(" not in source
         assert "for turn_index" not in source
@@ -653,7 +664,7 @@ def test_memory_recall_and_terminal_learning_are_owned_by_memory_service() -> No
         encoding="utf-8"
     )
     assert "ProductionMemoryService" in service_source
-    assert "run_auto_memory_pipeline_async" in service_source
+    assert "run_auto_memory_pipeline_async" not in service_source
     assert "memory=ProductionMemoryService()" in service_source
 
 
@@ -904,3 +915,15 @@ def test_runtime_package_does_not_import_terminal_interface() -> None:
                     if alias.name.startswith("nz_coder.interface")
                 )
     assert failures == []
+
+
+def test_process_runner_port_keeps_lower_layer_dependencies():
+    port=ast.parse((ROOT/'nz_coder/foundation/process_runner.py').read_text())
+    capability=ast.parse((ROOT/'nz_coder/capabilities/ripgrep.py').read_text())
+    for tree in (port,capability):
+        for node in ast.walk(tree):
+            if isinstance(node,ast.ImportFrom):
+                module=node.module or ''
+                assert not module.startswith(('nz_coder.runtime','nz_coder.tools'))
+            elif isinstance(node,ast.Import):
+                assert all(not alias.name.startswith(('nz_coder.runtime','nz_coder.tools')) for alias in node.names)

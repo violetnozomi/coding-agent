@@ -214,7 +214,7 @@ class ProductionInputPreflight:
         describer = getattr(host, "image_describer", None)
         if not callable(describer):
             describer = ProviderImageDescriber.configured(
-                observer=getattr(host, "_model_gateway_observer", None),
+                observer=host._model_gateway_observer_for_run(),
             )
         for _index, tool_call, result in dispatched:
             if result.name != "read_file" or result.dispatch_failed or not result.attachments:

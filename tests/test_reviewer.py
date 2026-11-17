@@ -8,7 +8,6 @@ from nz_coder.intelligence.reviewer import review_run_evidence, review_run_evide
 
 def test_project_creation_without_created_files_fails():
     review = review_run_evidence({
-        "task_mode": "project_creation",
         "expected_files": ["todo_api/app/main.py"],
     })
 
@@ -18,7 +17,6 @@ def test_project_creation_without_created_files_fails():
 
 def test_project_creation_with_files_but_no_verification_needs_fix():
     review = review_run_evidence({
-        "task_mode": "project_creation",
         "created_files": ["todo_api/app/main.py"],
         "expected_files": ["todo_api/app/main.py"],
     })
@@ -29,7 +27,6 @@ def test_project_creation_with_files_but_no_verification_needs_fix():
 
 def test_project_creation_complete_and_verified_is_approved():
     review = review_run_evidence({
-        "task_mode": "project_creation",
         "created_files": ["todo_api/app/main.py", "todo_api/tests/test_api.py"],
         "expected_files": ["todo_api/app/main.py", "todo_api/tests/test_api.py"],
         "verification_results": [{"status": "passed", "command": "pytest"}],
@@ -41,7 +38,6 @@ def test_project_creation_complete_and_verified_is_approved():
 
 def test_project_creation_sqlite_limitation_is_approved_with_limitations():
     review = review_run_evidence({
-        "task_mode": "project_creation",
         "created_files": ["todo_api/app/main.py"],
         "expected_files": ["todo_api/app/main.py"],
         "verification_results": [{"status": "passed", "command": "python -m py_compile app/main.py"}],
@@ -54,7 +50,6 @@ def test_project_creation_sqlite_limitation_is_approved_with_limitations():
 
 def test_bugfix_modified_without_verification_needs_fix():
     review = review_run_evidence({
-        "task_mode": "bugfix",
         "modified_files": ["nz_coder/loop.py"],
     }, runtime={"has_diff": True})
 
@@ -65,7 +60,6 @@ def test_bugfix_modified_without_verification_needs_fix():
 
 def test_bugfix_with_missing_requested_tests_needs_fix():
     review = review_run_evidence({
-        "task_mode": "feature",
         "modified_files": ["pkg/user_manager.py"],
         "verification_results": [{"status": "passed", "summary": "OK: py_compile changed files"}],
     }, runtime={"has_diff": True, "wants_tests": True, "tests_modified": False})
@@ -75,7 +69,6 @@ def test_bugfix_with_missing_requested_tests_needs_fix():
 
 def test_bugfix_same_basename_in_other_directory_needs_fix():
     review = review_run_evidence({
-        "task_mode": "bugfix",
         "modified_files": ["tmp/user_manager.py"],
         "actual_output_paths": ["tmp/user_manager.py"],
         "verification_results": [{"status": "passed", "summary": "OK: py_compile changed files"}],
@@ -87,7 +80,6 @@ def test_bugfix_same_basename_in_other_directory_needs_fix():
 
 def test_bugfix_modified_and_verified_is_approved():
     review = review_run_evidence({
-        "task_mode": "bugfix",
         "modified_files": ["nz_coder/loop.py"],
         "verification_results": [{"status": "passed", "summary": "OK: py_compile changed files"}],
     }, runtime={"has_diff": True, "diff_chars": 200})
@@ -97,7 +89,6 @@ def test_bugfix_modified_and_verified_is_approved():
 
 def test_unreviewed_patch_risk_is_approved_with_limitation():
     review = review_run_evidence({
-        "task_mode": "bugfix",
         "modified_files": ["pkg/api.py"],
         "verification_results": [{"status": "passed", "summary": "OK"}],
         "impact_review": {
@@ -111,9 +102,8 @@ def test_unreviewed_patch_risk_is_approved_with_limitation():
     assert any("deleted_public_symbols" in item for item in review["limitations"])
 
 
-def test_replanned_patch_risk_is_recorded_as_reviewed():
+def test_rewriting_plan_cannot_confirm_static_risk_was_reviewed():
     review = review_run_evidence({
-        "task_mode": "bugfix",
         "modified_files": ["pkg/api.py"],
         "verification_results": [{"status": "passed", "summary": "OK"}],
         "impact_review": {
@@ -123,8 +113,9 @@ def test_replanned_patch_risk_is_recorded_as_reviewed():
         },
     }, runtime={"has_diff": True, "patch_risk_reviewed": True})
 
-    assert review["review_status"] == "approved"
-    assert any("risk=high" in item for item in review["reasons"])
+    assert review["review_status"] == "approved_with_limitations"
+    assert any("public_signature_change" in item for item in review["limitations"])
+    assert not review["required_next_steps"]
 
 
 def test_unknown_empty_evidence_is_approved():
@@ -135,7 +126,6 @@ def test_unknown_empty_evidence_is_approved():
 
 def test_tool_failures_force_needs_fix():
     review = review_run_evidence({
-        "task_mode": "bugfix",
         "modified_files": ["nz_coder/loop.py"],
         "verification_results": [{"status": "passed", "summary": "OK"}],
         "tool_failures": [{"name": "edit_file", "status": "error", "preview": "Error: failed"}],
@@ -151,3 +141,31 @@ def test_review_handler_returns_valid_json():
     assert payload["review_status"] == "unavailable"
     assert payload["evidence_source"] == "runtime_unavailable"
     assert payload["summary"]
+
+
+def test_expected_artifact_may_be_an_existing_modified_file():
+    review = review_run_evidence({
+        "expected_files": ["app.py"],
+        "modified_files": ["app.py"],
+        "verification_results": [{"status": "passed"}],
+    })
+    assert review["review_status"] == "approved"
+    assert review["missing_evidence"] == []
+
+
+def test_user_test_requirement_remains_when_no_changes_are_recorded():
+    review = review_run_evidence({}, {"wants_tests": True, "tests_modified": False})
+    assert review["review_status"] == "failed"
+    assert review["required_next_steps"]
+
+
+def test_read_only_impact_facts_do_not_require_a_new_code_change():
+    review = review_run_evidence({
+        "impact_review": {
+            "risk": "high", "requires_replan": True,
+            "risk_signals": [{"category": "public_signature_change"}],
+        },
+    })
+    assert review["review_status"] == "approved_with_limitations"
+    assert any("public_signature_change" in item for item in review["limitations"])
+    assert "modified_files" not in review["missing_evidence"]

@@ -1,6 +1,8 @@
 """Interactive Auto-mode classification and session degradation policy."""
 from __future__ import annotations
 
+import asyncio
+
 import json
 import math
 import re
@@ -21,6 +23,7 @@ from nz_coder.runtime.model_gateway import (
     ModelCallPurpose,
     ModelCallStatus,
 )
+from nz_coder.tool_platform.permissioning.interaction import PermissionInteractionError, normalize_permission_reply
 from nz_coder.tool_platform.policies.command_policy import classify_bash
 from nz_coder.tool_platform.permissioning.auto_router import (
     AutoRoute,
@@ -378,9 +381,15 @@ class AutoModeController:
                 dict(tool_input),
                 details,
             )
-        except Exception:
-            raw_answer = "reject"
-        answer = str(raw_answer).strip().lower()
+            answer = normalize_permission_reply(raw_answer)
+        except Exception as exc:
+            failure = exc if isinstance(exc, PermissionInteractionError) else PermissionInteractionError("unavailable")
+            if failure.reason == "cancelled":
+                raise asyncio.CancelledError from None
+            return self._finish(context, tool_name, AutoAdmission(
+                False, True, "interaction_failure", str(failure), failure.reason,
+                route.action_digest, classifier_status,
+            ))
         if answer == "always":
             self.state.approve_action(route.action_digest)
         if answer in {"once", "always"}:

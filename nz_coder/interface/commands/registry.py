@@ -3,11 +3,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import inspect
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 
 CommandHandler = Callable[["CommandContext"], Any]
-BuildAgentFunc = Callable[[str, Any, str, str | None], Any]
+class BuildAgentFunc(Protocol):
+    def __call__(self, system_prompt: str, renderer: Any, session_id: str,
+                 permission_mode: str | None = None, *, activate_session_on_build: bool = True) -> Any: ...
+
 
 _COMMON_COMMANDS = (
     "status",
@@ -31,6 +34,7 @@ _PRODUCT_CATEGORY_BY_COMMAND = {
     "extensions": "Extensions",
     "skills": "Extensions",
     "mcps": "Extensions",
+    "lsp": "Extensions",
     "processes": "Processes",
 }
 
@@ -79,24 +83,35 @@ class CommandContext:
     def session_id(self) -> str:
         return self.session_state["id"]
 
+    def ensure_environment_replaceable(self) -> None:
+        if self.controller is not None:
+            self.controller.ensure_environment_replaceable()
+        elif self.agent.has_pending_settlement:
+            from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
+            raise PublicRuntimeError(PublicError("session_commit_pending",
+                "The previous result is waiting for Session storage.", True))
+
     def replace_agent(self, session_id: str, agent: Any) -> None:
-        previous = self.session_state.get("agent")
+        previous = self.agent
+        try:
+            self.ensure_environment_replaceable()
+            from nz_coder.state.sessions import activate_session
+            activate_session(session_id)
+        except BaseException:
+            if agent is not previous:
+                agent.close()
+            raise
+        if self.controller is not None:
+            self.controller.replace_environment(agent)
         self.session_state["id"] = session_id
         self.session_state["agent"] = agent
         if "session_title" in self.session_state:
             self.session_state["session_title"] = ""
-        controller = self.session_state.get("controller")
-        replace_environment = getattr(controller, "replace_environment", None)
-        if callable(replace_environment):
-            replace_environment(agent)
-        if previous is agent:
-            return
-        close = getattr(previous, "close", None)
-        if callable(close):
+        if previous is not agent:
             try:
-                close()
+                previous.close()
             except Exception:
-                # Session replacement must not fail after the new Agent exists.
+                # 已采用的新环境不因旧环境清理失败而撤销发布。
                 pass
 
 

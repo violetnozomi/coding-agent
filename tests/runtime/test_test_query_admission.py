@@ -81,7 +81,7 @@ def test_read_only_queries_after_edit_reach_model_and_real_retest(monkeypatch, n
     "ls node_modules/.bin | grep jest && python -m pytest tests/",
     "cat tests/test_sentinel.py && python -m pytest tests/",
 ])
-def test_query_cannot_hide_real_broad_test_after_edit(monkeypatch, node_project, command):
+def test_compound_query_and_legal_broad_test_run_after_edit(monkeypatch, node_project, command):
     _prepare_query_files(node_project)
     tests = node_project / "tests"
     tests.mkdir()
@@ -96,13 +96,13 @@ def test_query_cannot_hide_real_broad_test_after_edit(monkeypatch, node_project,
         limit=12, allowed_commands=(command,),
     )
     rejected = next(e for e in trace if e.get("event") == "tool_call" and e.get("input", {}).get("command") == command)
-    assert rejected["dispatch_failed"] is True
+    assert rejected["dispatch_failed"] is False
     assert rejected["command_failed"] is False
-    # 公开 trace 会脱敏失败输出；错误原因必须在真正的模型请求里核验。
+    # 复合查询和真实测试都执行；输出继续沿真实模型工具回复交付。
     delivered = [m for request in requests for m in request["messages"]
                  if m.get("role") == "tool" and m.get("tool_call_id") == rejected["tool_call_id"]]
-    assert delivered and "Broad test runner blocked" in delivered[0]["content"]
-    assert not (node_project / "broad-tests-ran.txt").exists()
+    assert delivered and "Broad test runner blocked" not in delivered[0]["content"]
+    assert (node_project / "broad-tests-ran.txt").read_text() == "ran"
     assert result.status.value == "completed"
     assert state["verification_contract"]["passed"] is True
 
@@ -122,7 +122,6 @@ def test_query_fix_does_not_override_real_permission_denial(monkeypatch, node_pr
 def test_sync_tool_runtime_obeys_same_query_admission(tmp_path, monkeypatch):
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.core.execution_context import scoped_broad_test_guard
     from nz_coder.runtime.process.workdir import scoped_workdir
 
     _prepare_query_files(tmp_path)
@@ -132,6 +131,15 @@ def test_sync_tool_runtime_obeys_same_query_admission(tmp_path, monkeypatch):
         "test", permission_mode="auto", client=object(), trace_enabled=False,
         permission_asker=lambda name, args: name == "bash" and args.get("command") in {QUERIES[0], "pytest"},
     )
+    from nz_coder.runtime.core import MAIN_PROFILE
+    from nz_coder.runtime.core.request import RunRequest, AgentDefinition
+    from nz_coder.runtime.core.run_context import RunContext
+    from nz_coder.runtime.session.model import Session
+    request = RunRequest(agent=AgentDefinition(name="sync", instructions="test"),
+        profile=MAIN_PROFILE, workspace=tmp_path, session_id=agent.session_id, messages=())
+    context = RunContext(request, Session.create(agent.session_id, [], workspace=tmp_path), agent.session_id)
+    agent._native_execution_context(context, agent.runtime_services)
+    agent.verification_runtime.initialize(restored=False)
     messages = []
 
     def invoke(call_id, name, **arguments):
@@ -141,12 +149,12 @@ def test_sync_tool_runtime_obeys_same_query_admission(tmp_path, monkeypatch):
         return next(m["content"] for m in messages if m.get("tool_call_id") == call_id)
 
     try:
-        with scoped_workdir(tmp_path), scoped_broad_test_guard(True):
+        with scoped_workdir(tmp_path):
             invoke("edit", "edit_file", path="module.js", old_text="const value = 1;", new_text="const value = 2;")
             assert (tmp_path / "module.js").read_text() == "const value = 2;\n"
             assert "jest" in invoke("query", "bash", command=QUERIES[0])
-            assert "Broad test runner blocked" in invoke("blocked", "bash", command="pytest")
-            assert agent.runtime_state.broad_test_attempts == 0
+            assert "Broad test runner blocked" not in invoke("suite", "bash", command="pytest")
+            assert agent.runtime_state.broad_test_attempts == 1
             assert agent.runtime_state.exact_test_attempts == 0
     finally:
         agent.close()

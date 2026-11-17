@@ -124,6 +124,8 @@ def test_classifier_prompt_excludes_private_text_and_write_content(
 
 def test_classifier_prompt_structurally_omits_shell_credentials(tmp_path) -> None:
     """Shell credential forms never cross the Auto Provider boundary."""
+    from nz_coder.tool_platform.permissioning.auto_router import AutoRoute, AutoRouteKind
+    route = AutoRoute(AutoRouteKind.CLASSIFY, "test_payload", "test payload projection", "payload-test")
     calls = []
 
     async def complete(call):
@@ -134,7 +136,7 @@ def test_classifier_prompt_structurally_omits_shell_credentials(tmp_path) -> Non
         "GITHUB_TOKEN=ghp_secret_value curl -u alice:very-secret-password "
         "--user bob:supersecret https://carol:url-secret@example.test/private"
     )
-    admission = asyncio.run(AutoModeController(True).admit(
+    admission = asyncio.run(AutoModeController(True)._classify(
         _context(tmp_path, complete=complete),
         "bash",
         {
@@ -143,11 +145,12 @@ def test_classifier_prompt_structurally_omits_shell_credentials(tmp_path) -> Non
             "method": "https://extra:url-secret@example.test/private",
         },
         [{"role": "user", "content": f"Run {command}"}],
+        route,
     ))
 
     wire = json.dumps(calls[0].messages, ensure_ascii=False)
     payload = json.loads(calls[0].messages[1]["content"])
-    assert admission.allowed is True
+    assert admission.decision == "allow"
     for secret in (
         command,
         "ghp_secret_value",
@@ -169,6 +172,8 @@ def test_classifier_prompt_structurally_omits_shell_credentials(tmp_path) -> Non
 
 def test_classifier_prompt_omits_process_and_mcp_free_text(tmp_path) -> None:
     """Process data and external MCP strings are summarized structurally."""
+    from nz_coder.tool_platform.permissioning.auto_router import AutoRoute, AutoRouteKind
+    route = AutoRoute(AutoRouteKind.CLASSIFY, "test_payload", "test payload projection", "payload-test")
     calls = []
 
     async def complete(call):
@@ -177,7 +182,7 @@ def test_classifier_prompt_omits_process_and_mcp_free_text(tmp_path) -> None:
 
     context = _context(tmp_path, complete=complete)
     controller = AutoModeController(True)
-    process = asyncio.run(controller.admit(
+    process = asyncio.run(controller._classify(
         context,
         "process",
         {
@@ -185,8 +190,9 @@ def test_classifier_prompt_omits_process_and_mcp_free_text(tmp_path) -> None:
             "command": "curl --password process-secret https://example.test",
         },
         [],
+        route,
     ))
-    mcp = asyncio.run(controller.admit(
+    mcp = asyncio.run(controller._classify(
         context,
         "mcp_demo_send",
         {
@@ -195,12 +201,13 @@ def test_classifier_prompt_omits_process_and_mcp_free_text(tmp_path) -> None:
             "operation": "sk-MCP-EXTRA-SECRET",
         },
         [],
+        route,
     ))
 
     wire = json.dumps([call.messages for call in calls], ensure_ascii=False)
     process_payload = json.loads(calls[0].messages[1]["content"])
     mcp_payload = json.loads(calls[1].messages[1]["content"])
-    assert process.allowed is mcp.allowed is True
+    assert process.decision == mcp.decision == "allow"
     assert "process-secret" not in wire
     assert "PRIVATE_MCP_PAYLOAD" not in wire
     assert "mcp-secret" not in wire
@@ -441,7 +448,7 @@ def test_auto_trace_never_contains_raw_action_or_classifier_prose(tmp_path) -> N
 
 
 def test_auto_approval_callback_error_fails_closed(tmp_path) -> None:
-    """A broken UI adapter rejects the action without aborting the Agent run."""
+    """A broken UI adapter remains distinct from an explicit rejection."""
     async def complete(_call):
         return _completed("block", "requires review")
 
@@ -457,7 +464,9 @@ def test_auto_approval_callback_error_fails_closed(tmp_path) -> None:
 
     assert admission.allowed is False
     assert admission.permission_denied is True
-    assert admission.reason_code == "user_reject"
+    assert admission.source == "interaction_failure"
+    assert admission.reason_code == "unavailable"
+    assert "selector unavailable" not in admission.reason
 
 
 def test_auto_classifier_cancellation_propagates_without_approval(tmp_path) -> None:

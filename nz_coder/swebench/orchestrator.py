@@ -19,6 +19,7 @@ import os
 import queue as queue_module
 import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 import threading
@@ -28,20 +29,16 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
-from nz_coder.swebench.adapter import SWEBenchAdapter, _safe_name
+from nz_coder.swebench.adapter import SWEBenchAdapter, _safe_name, validate_instance_id
 from nz_coder.swebench.guardrail import PatchGuardrail
 from nz_coder.swebench.models import FailureFeedback, PatchRiskReport, RetryPlan
 from nz_coder.runtime.core.execution_context import (
     agent_timeout_seconds,
-    broad_tests_blocked,
-    declared_test_scopes,
     max_agent_turns,
     max_parallel_tasks,
     nominal_agent_turns,
     repo_intelligence_mode,
     repo_retrieval_strategy,
-    scoped_broad_test_guard,
-    scoped_declared_test_scopes,
     scoped_runtime_overrides,
     strict_local_tools,
 )
@@ -294,8 +291,8 @@ class RetryOrchestrator:
         When *plan* is provided its messages are prepended to the conversation.
         """
         instance = {key: instance[key] for key in ("instance_id", "repo", "base_commit", "problem_statement")}
-        instance_id = instance["instance_id"]
-        repo_dir = work_root / _safe_name(instance_id)
+        instance_id = validate_instance_id(instance["instance_id"])
+        repo_dir = work_root / instance_id
         started = time.time()
         print(f"\n[{instance_id}]")
 
@@ -304,6 +301,7 @@ class RetryOrchestrator:
             instance,
             repo_dir,
             clone_timeout,
+            work_root=work_root,
             sanitize_history=strict,
         )
         if clone["returncode"] != 0:
@@ -551,6 +549,8 @@ class RetryOrchestrator:
         max_new_instances: int | None = None,
     ) -> list[dict]:
         """First-pass: run agent on each instance without previous predictions."""
+        for instance in instances:
+            validate_instance_id(instance["instance_id"])
         results = []
         completed_ids = attempt_journal.completed_ids() if attempt_journal else set()
         open_claims = attempt_journal.attempted_ids() - completed_ids if attempt_journal else set()
@@ -720,6 +720,8 @@ class RetryOrchestrator:
         model_name: str,
     ) -> list[dict]:
         """Second-pass: retry using official harness feedback."""
+        for instance in instances:
+            validate_instance_id(instance["instance_id"])
         results = []
         for index, instance in enumerate(instances, start=1):
             instance_id = instance["instance_id"]
@@ -809,8 +811,6 @@ def _run_agent_attempt_in_subprocess(
             "repo_intelligence_mode": repo_intelligence_mode(),
             "repo_retrieval_strategy": repo_retrieval_strategy(),
         },
-        "broad_tests_blocked": broad_tests_blocked(),
-        "declared_test_scopes": declared_test_scopes(),
     }
     process = ctx.Process(
         target=_agent_attempt_worker,
@@ -951,8 +951,6 @@ def _agent_attempt_worker(
         with (
             scoped_workdir(execution_snapshot["workdir"]),
             scoped_runtime_overrides(**execution_snapshot["runtime_overrides"]),
-            scoped_broad_test_guard(execution_snapshot["broad_tests_blocked"]),
-            scoped_declared_test_scopes(execution_snapshot["declared_test_scopes"]),
         ):
             agent = agent_cls(
                 system_prompt, permission_mode="auto", tracer=tracer,
@@ -1007,7 +1005,7 @@ def _bind_attempt_evidence(agent) -> None:
         return
     directory = current_workdir() / ".nz-coder-runs"
     directory.mkdir(exist_ok=True)
-    original = agent._model_gateway_observer
+    original_factory = agent._model_gateway_observer_for_run
     calls = {}
     call_lock = threading.Lock()
 
@@ -1021,23 +1019,28 @@ def _bind_attempt_evidence(agent) -> None:
         finally:
             os.close(descriptor)
 
-    def observer(name, payload):
-        if name in {"model_call_start", "model_call_finish"}:
-            # 实际 Gateway 边界的保守启动证据；不声称 start 一定已经到达 Provider。
-            key = (threading.get_ident(), str(payload.get("purpose")))
-            with call_lock:
-                if name == "model_call_start":
-                    calls[key] = uuid.uuid4().hex
-                identity = calls.get(key)
-            append(name, {**payload, "call_id": identity})
-        original(name, payload)
+    def observer_for_run():
+        owned_observer = original_factory()
+
+        def observer(name, payload):
+            if name in {"model_call_start", "model_call_finish"}:
+                # 实际 Gateway 边界的保守启动证据；不声称 start 一定已经到达 Provider。
+                key = (threading.get_ident(), str(payload.get("purpose")))
+                with call_lock:
+                    if name == "model_call_start":
+                        calls[key] = uuid.uuid4().hex
+                    identity = calls.get(key)
+                append(name, {**payload, "call_id": identity})
+            owned_observer(name, payload)
+
+        return observer
 
     def tool_result(context):
         append("tool_execution_result", {"result": asdict(context.result),
             "mutation_generation": context.loop.runtime_state.mutation_generation,
             "verification_generation": context.loop.runtime_state.verification_generation})
 
-    agent._model_gateway_observer = observer
+    agent._model_gateway_observer_for_run = observer_for_run
     agent.hooks.register_after_tool_result(tool_result)
 
 
@@ -1234,9 +1237,11 @@ def _prepare_repo(
     repo_dir: Path,
     timeout: int,
     *,
+    work_root: Path,
     sanitize_history: bool = False,
 ) -> dict:
-    repo_dir = Path(repo_dir).resolve()
+    validate_instance_id(instance["instance_id"])
+    repo_dir = _owned_worktree(repo_dir, work_root)
     if repo_dir.exists():
         shutil.rmtree(repo_dir)
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -1246,7 +1251,7 @@ def _prepare_repo(
     clone_url = str(cache_dir) if cache_dir is not None else url
     clone = _run(["git", "clone", "--quiet", clone_url, str(repo_dir)], cwd=repo_dir.parent, timeout=timeout)
     if clone.returncode != 0 and clone_url != url:
-        shutil.rmtree(repo_dir, ignore_errors=True)
+        shutil.rmtree(_owned_worktree(repo_dir, work_root), ignore_errors=True)
         clone = _run(["git", "clone", "--quiet", url, str(repo_dir)], cwd=repo_dir.parent, timeout=timeout)
     if clone.returncode != 0:
         return _process_result(clone, f"git clone failed for {repo}")
@@ -1361,19 +1366,32 @@ def _collect_diff(repo_dir: Path) -> str:
         return result.stdout
 
 
-def _cleanup_completed_worktree(workdir: Path, work_root: Path) -> None:
-    """Remove one completed checkout without allowing a broad delete target."""
+def _owned_worktree(workdir: Path, work_root: Path) -> Path:
+    """先保留末级链接身份，再验证本次授权根的真实直接子目录。"""
+    raw = Path(workdir)
+    try:
+        entry = raw.lstat()
+    except FileNotFoundError:
+        entry = None
+    if entry is not None and (
+        stat.S_ISLNK(entry.st_mode)
+        or getattr(entry, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+    ):
+        raise ValueError(f"refusing linked worktree: {raw}")
     root = Path(work_root).resolve()
-    candidate = Path(workdir).resolve()
-    if candidate.parent != root:
-        raise ValueError(
-            f"refusing cleanup outside a direct child of work root: {candidate}"
-        )
-    if not candidate.exists():
-        return
-    if not candidate.is_dir():
-        raise ValueError(f"refusing cleanup of non-directory worktree: {candidate}")
-    shutil.rmtree(candidate)
+    candidate = raw.resolve()
+    if candidate.parent != root or candidate == root:
+        raise ValueError(f"refusing worktree outside a direct child of work root: {candidate}")
+    if entry is not None and not stat.S_ISDIR(entry.st_mode):
+        raise ValueError(f"refusing non-directory worktree: {raw}")
+    return candidate
+
+
+def _cleanup_completed_worktree(workdir: Path, work_root: Path) -> None:
+    """Remove one completed checkout within this run's work root."""
+    candidate = _owned_worktree(workdir, work_root)
+    if candidate.exists():
+        shutil.rmtree(candidate)
 
 
 # ── Prediction file helpers ───────────────────────────────────────────────────

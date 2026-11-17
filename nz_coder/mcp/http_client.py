@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import queue
 import threading
+import time
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
@@ -15,6 +16,7 @@ from nz_coder.mcp.client import (
     MCPRequestError,
     MCPTimeoutError,
     _NOTIFICATION_CLOSED,
+    _validated_timeout,
 )
 from nz_coder.mcp.oauth import MCPAuthenticationRequired
 
@@ -118,6 +120,7 @@ class MCPHTTPClient(MCPClient):
         timeout: float,
     ) -> Any:
         """POST one request and extract its correlated JSON-RPC response."""
+        deadline = time.monotonic() + _validated_timeout(timeout)
         with self._state_lock:
             if self._closed:
                 raise MCPError(f"MCP server '{self.name}' is closed")
@@ -132,7 +135,7 @@ class MCPHTTPClient(MCPClient):
                 "method": method,
                 "params": params or {},
             },
-            timeout=timeout,
+            timeout=timeout, deadline=deadline,
         )
         response = None
         for message in messages:
@@ -201,7 +204,11 @@ class MCPHTTPClient(MCPClient):
             if thread is not None and thread is not current:
                 thread.join(timeout=0.5)
 
-    def _post(self, message: dict[str, Any], *, timeout: float) -> list[dict[str, Any]]:
+    def _post(
+        self, message: dict[str, Any], *, timeout: float, deadline: float | None = None,
+    ) -> list[dict[str, Any]]:
+        if deadline is None:
+            deadline = time.monotonic() + _validated_timeout(timeout)
         try:
             body = json.dumps(
                 message,
@@ -219,9 +226,17 @@ class MCPHTTPClient(MCPClient):
         )
         try:
             # Serialize POSTs so session establishment cannot race later calls.
-            with self._request_lock:
-                response = self._opener.open(request, timeout=max(0.001, float(timeout)))
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not self._request_lock.acquire(timeout=remaining):
+                raise TimeoutError("MCP HTTP request lock deadline exceeded")
+            try:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("MCP HTTP request deadline exceeded")
+                response = self._opener.open(request, timeout=remaining)
                 try:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("MCP HTTP response deadline exceeded")
                     self._capture_session(response)
                     status = getattr(response, "status", 200)
                     if status == 202:
@@ -242,8 +257,12 @@ class MCPHTTPClient(MCPClient):
                             f"MCP server '{self.name}' returned unsupported "
                             f"content type '{content_type}'"
                         )
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("MCP HTTP response deadline exceeded")
                 finally:
                     response.close()
+            finally:
+                self._request_lock.release()
         except HTTPError as exc:
             if exc.code == 401:
                 error = MCPAuthenticationRequired(

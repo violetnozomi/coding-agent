@@ -1,6 +1,10 @@
 """Tests for model-window-aware context budgeting and overflow persistence."""
 from __future__ import annotations
 
+from tests.fixtures.compaction_summary import summary_json
+
+import copy
+import asyncio
 import json
 import threading
 from types import SimpleNamespace
@@ -17,6 +21,18 @@ from nz_coder.state.context import (
 )
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state.sessions import scoped_session
+
+
+def _completed_tool_batch(*results: dict, tool_name: str = "read_file") -> list[dict]:
+    return [{
+        "role": "assistant",
+        "content": "Inspect the evidence.",
+        "tool_calls": [{
+            "id": result["tool_call_id"],
+            "type": "function",
+            "function": {"name": tool_name, "arguments": "{}"},
+        } for result in results],
+    }, *results]
 
 
 def test_prompt_budget_reserves_small_window_output_proportionally():
@@ -90,25 +106,28 @@ def test_token_estimate_counts_cjk_as_characters_not_json_escape_bytes():
     assert 390 <= estimate <= 420
 
 
-def test_micro_compact_preserves_all_results_in_current_two_user_turns():
+def test_micro_compact_preserves_latest_two_batches_across_control_messages():
     large = "source line\n" * 1000
     messages = [
         {"role": "user", "content": "review the repository"},
-        {"role": "assistant", "content": "", "tool_calls": []},
-        {"role": "tool", "tool_call_id": "one", "content": large},
-        {"role": "tool", "tool_call_id": "two", "content": large},
+        *_completed_tool_batch(
+            {"role": "tool", "tool_call_id": "one", "content": large},
+            {"role": "tool", "tool_call_id": "two", "content": large},
+        ),
         {
             "role": "user",
             "content": "<tool-failure-diagnostic>internal</tool-failure-diagnostic>",
             "_nz_synthetic": True,
         },
-        {"role": "tool", "tool_call_id": "three", "content": large},
+        *_completed_tool_batch(
+            {"role": "tool", "tool_call_id": "three", "content": large},
+            {"role": "tool", "tool_call_id": "four", "content": large},
+        ),
         {
             "role": "user",
             "content": "<verification-required>internal</verification-required>",
             "_nz_synthetic": True,
         },
-        {"role": "tool", "tool_call_id": "four", "content": large},
     ]
 
     replaced = micro_compact(
@@ -120,19 +139,18 @@ def test_micro_compact_preserves_all_results_in_current_two_user_turns():
     assert all(message["content"] == large for message in messages if message["role"] == "tool")
 
 
-def test_micro_compact_prunes_only_old_turns_with_model_aware_budget():
+def test_micro_compact_prunes_only_old_batches_with_model_aware_budget():
     large = "source line\n" * 1000
     old_tool = {"role": "tool", "tool_call_id": "old", "content": large}
     recent_tool = {"role": "tool", "tool_call_id": "recent", "content": large}
     current_tool = {"role": "tool", "tool_call_id": "current", "content": large}
     messages = [
         {"role": "user", "content": "old task"},
-        {"role": "assistant", "content": "", "tool_calls": []},
-        old_tool,
+        *_completed_tool_batch(old_tool),
         {"role": "user", "content": "recent task"},
-        recent_tool,
+        *_completed_tool_batch(recent_tool),
         {"role": "user", "content": "current task"},
-        current_tool,
+        *_completed_tool_batch(current_tool),
     ]
 
     replaced = micro_compact(
@@ -151,9 +169,11 @@ def test_micro_compact_ignores_corrupt_persisted_assistant_timestamp():
     large = "source line\n" * 1000
     messages = [
         {"role": "user", "content": "old"},
-        {"role": "tool", "tool_call_id": "old", "content": large},
+        *_completed_tool_batch({"role": "tool", "tool_call_id": "old", "content": large}),
         {"role": "user", "content": "recent"},
+        *_completed_tool_batch({"role": "tool", "tool_call_id": "recent", "content": "small"}),
         {"role": "user", "content": "current"},
+        *_completed_tool_batch({"role": "tool", "tool_call_id": "current", "content": "small"}),
         {"role": "assistant", "content": "working", "_timestamp": "broken"},
     ]
 
@@ -163,6 +183,287 @@ def test_micro_compact_ignores_corrupt_persisted_assistant_timestamp():
     )
 
     assert replaced == 1
+
+
+@pytest.mark.parametrize("steps", [40, 60])
+@pytest.mark.parametrize("idle", [False, True])
+def test_micro_compact_cleans_old_reads_during_one_long_user_request(steps, idle):
+    """A single autonomous task must not protect every old read indefinitely."""
+    raw = "source line\n" * 1000
+    messages = [{"role": "user", "content": "Fix the parser and preserve all existing requirements."}]
+    results = []
+    for index in range(steps):
+        result = {"role": "tool", "tool_call_id": f"read-{index}", "content": raw}
+        results.append(result)
+        messages.extend(_completed_tool_batch(result))
+    if idle:
+        messages[-2]["_timestamp"] = 1
+    original_non_tools = copy.deepcopy([m for m in messages if m["role"] != "tool"])
+
+    replaced = micro_compact(messages, budget=prompt_budget(100_000, 8_000))
+
+    assert 0 < replaced <= steps - 2
+    assert results[0]["content"] != raw
+    assert all(result["content"] == raw for result in results[-2:])
+    assert [m for m in messages if m["role"] != "tool"] == original_non_tools
+    assert [m["tool_call_id"] for m in messages if m["role"] == "tool"] == [f"read-{i}" for i in range(steps)]
+
+
+def test_micro_compact_counts_parallel_calls_as_one_batch():
+    """The newest two multi-tool batches must keep every result, not just the last two calls."""
+    raw = "source line\n" * 1000
+    messages = [{"role": "user", "content": "Inspect the parser."}]
+    old_results = []
+    for index in range(3):
+        result = {"role": "tool", "tool_call_id": f"old-{index}", "content": raw}
+        old_results.append(result)
+        messages.extend(_completed_tool_batch(result))
+    recent_results = []
+    for batch in range(2):
+        results = [{"role": "tool", "tool_call_id": f"recent-{batch}-{i}", "content": raw} for i in range(3)]
+        recent_results.extend(results)
+        # 内部诊断和纯文本回复不应当被算成新的工具调用批次。
+        messages.extend(_completed_tool_batch(*results))
+        messages.append({"role": "user", "content": "<tool-failure-diagnostic>context only</tool-failure-diagnostic>",
+                         "_nz_synthetic": True})
+        messages.append({"role": "assistant", "content": "Continue inspecting."})
+
+    replaced = micro_compact(messages, budget=prompt_budget(4_000, 1_000))
+
+    assert replaced == 3
+    assert all(result["content"] != raw for result in old_results)
+    assert all(result["content"] == raw for result in recent_results)
+
+
+def test_micro_compact_preserves_partial_batch_in_addition_to_two_complete_batches():
+    """Receiving one parallel result must not age a completed batch or clear the partial result."""
+    raw = "source line\n" * 1000
+    messages = [{"role": "user", "content": "Inspect the parser."}]
+    completed = []
+    for index in range(4):
+        result = {"role": "tool", "tool_call_id": f"done-{index}", "content": raw}
+        completed.append(result)
+        messages.extend(_completed_tool_batch(result))
+    partial = {"role": "tool", "tool_call_id": "partial-first", "content": raw}
+    pending = {"role": "tool", "tool_call_id": "partial-second", "content": raw}
+    messages.extend(_completed_tool_batch(partial, pending)[:-1])
+
+    replaced = micro_compact(messages, budget=prompt_budget(4_000, 1_000))
+
+    assert replaced == 2
+    assert all(result["content"] != raw for result in completed[:2])
+    assert all(result["content"] == raw for result in completed[-2:])
+    assert partial["content"] == raw
+
+
+def test_micro_compact_keeps_older_unfinished_batch_after_later_complete_batches():
+    """An interrupted batch must not become eligible solely because later work completed."""
+    raw = "source line\n" * 1000
+    partial = {"role": "tool", "tool_call_id": "interrupted-first", "content": raw}
+    pending = {"role": "tool", "tool_call_id": "interrupted-second", "content": raw}
+    messages = [
+        {"role": "user", "content": "Inspect the parser."},
+        *_completed_tool_batch(partial, pending)[:-1],
+        {"role": "user", "content": "Resume after interruption."},
+        {"role": "user", "content": "Continue checking."},
+    ]
+    completed = []
+    for index in range(3):
+        result = {"role": "tool", "tool_call_id": f"later-{index}", "content": raw}
+        completed.append(result)
+        messages.extend(_completed_tool_batch(result))
+
+    replaced = micro_compact(messages, budget=prompt_budget(4_000, 1_000))
+
+    assert replaced == 1
+    assert partial["content"] == raw
+    assert completed[0]["content"] != raw
+    assert all(result["content"] == raw for result in completed[-2:])
+
+
+def test_micro_compact_does_not_treat_user_followups_as_completed_tool_batches():
+    """New user messages cannot make an unfinished batch eligible for cleanup."""
+    raw = "source line\n" * 1000
+    partial = {"role": "tool", "tool_call_id": "first", "content": raw}
+    pending = {"role": "tool", "tool_call_id": "second", "content": raw}
+    messages = [
+        {"role": "user", "content": "Inspect the parser."},
+        *_completed_tool_batch(partial, pending)[:-1],
+        {"role": "user", "content": "Continue."},
+        {"role": "user", "content": "Check progress."},
+    ]
+
+    assert micro_compact(messages, budget=prompt_budget(4_000, 1_000)) == 0
+    assert partial["content"] == raw
+
+
+def test_micro_compact_matches_reused_call_ids_with_their_own_batch():
+    """A call ID reused after a retry must not protect every older result with that ID."""
+    raw = "source line\n" * 1000
+    messages = [{"role": "user", "content": "Inspect the parser."}]
+    results = []
+    for _ in range(3):
+        result = {"role": "tool", "tool_call_id": "reused-call", "content": raw}
+        results.append(result)
+        messages.extend(_completed_tool_batch(result))
+
+    assert micro_compact(messages, budget=prompt_budget(4_000, 1_000)) == 1
+    assert results[0]["content"] != raw
+    assert all(result["content"] == raw for result in results[-2:])
+
+
+def test_micro_compact_keeps_old_batches_inside_the_token_protection_budget():
+    """Crossing the two-batch boundary alone must not trigger cleanup."""
+    raw = "source line\n" * 50
+    messages = [{"role": "user", "content": "Inspect the parser."}]
+    for index in range(4):
+        messages.extend(_completed_tool_batch({"role": "tool", "tool_call_id": str(index), "content": raw}))
+
+    assert micro_compact(messages, budget=prompt_budget(4_000, 1_000)) == 0
+    assert all(m["content"] == raw for m in messages if m["role"] == "tool")
+
+
+@pytest.mark.parametrize("idle", [False, True])
+@pytest.mark.parametrize("failure_kind", ["verification", "error_prefix"])
+def test_micro_compact_keeps_structured_failures_and_change_evidence(idle, failure_kind):
+    """Age-based cleanup must not erase failure or mutation facts lacking traceback text."""
+    import time
+
+    raw = "diagnostic detail\n" * 1000
+    read_result = {"role": "tool", "tool_call_id": "read", "content": raw,
+                   "_nz_evidence_kind": "file_read", "_nz_resource": "src/parser.py"}
+    write_result = {"role": "tool", "tool_call_id": "edit", "content": raw,
+                    "_nz_evidence_kind": "file_write", "_nz_mutated_resources": ["src/parser.py"]}
+    failure_result = {"role": "tool", "tool_call_id": "verify", "content": raw,
+                      "_nz_evidence_kind": "verification", "_nz_verification_passed": False}
+    if failure_kind == "error_prefix":
+        failure_result = {"role": "tool", "tool_call_id": "read-error", "content": "Error: " + raw}
+    original_failure = failure_result["content"]
+    messages = [
+        {"role": "user", "content": "Fix parser.py."},
+        *_completed_tool_batch(read_result),
+        *_completed_tool_batch(write_result, tool_name="edit_file"),
+        *_completed_tool_batch(failure_result, tool_name="verify_changed_files"),
+        {"role": "user", "content": "Continue the correction."},
+        *_completed_tool_batch({"role": "tool", "tool_call_id": "recent", "content": "small"}),
+        {"role": "user", "content": "Check the final result."},
+        *_completed_tool_batch({"role": "tool", "tool_call_id": "current", "content": "small"}),
+    ]
+    if idle:
+        messages.append({"role": "assistant", "content": "Continue checking.",
+                         "_timestamp": time.time() - 3600})
+
+    replaced = micro_compact(messages, budget=prompt_budget(4_000, 1_000))
+
+    assert replaced == 1
+    assert read_result["content"] != raw
+    assert write_result["content"] == raw
+    assert failure_result["content"] == original_failure
+    assert "read-only" in read_result["content"]
+    assert "state-changing" in read_result["content"]
+
+
+def test_micro_compact_keeps_existing_artifact_readable_without_its_preview(tmp_path, monkeypatch):
+    """Pruning a large-result preview must keep its opaque address usable and compact only once."""
+    import re
+    from nz_coder.state import context as context_module
+    from nz_coder.tools.artifacts import read_tool_result
+
+    monkeypatch.setattr(context_module, "TRIGGER_CHARS", 1)
+    monkeypatch.setattr(context_module, "PREVIEW_CHARS", 4_000)
+    raw = "UNIQUE_ORIGINAL_OUTPUT\n" + "raw output detail\n" * 1000
+    with scoped_workdir(tmp_path), scoped_session("compact-artifact-handle"):
+        visible = persist_large_output("large-read", raw)
+        artifact_id = re.search(r"artifact_[a-f0-9]{32}", visible).group()
+        result = {"role": "tool", "tool_call_id": "large-read", "content": visible}
+        messages = [
+            {"role": "user", "content": "Inspect the source."},
+            *_completed_tool_batch(result),
+            {"role": "user", "content": "Continue."},
+            *_completed_tool_batch({"role": "tool", "tool_call_id": "recent", "content": "small"}),
+            {"role": "user", "content": "Verify."},
+            *_completed_tool_batch({"role": "tool", "tool_call_id": "current", "content": "small"}),
+        ]
+
+        assert micro_compact(messages, budget=prompt_budget(4_000, 1_000)) == 1
+        assert artifact_id in result["content"]
+        assert "read_tool_result" in result["content"]
+        assert "UNIQUE_ORIGINAL_OUTPUT" not in result["content"]
+        assert len(result["content"]) < len(visible)
+        assert "UNIQUE_ORIGINAL_OUTPUT" in read_tool_result(artifact_id, max_bytes=128)
+        assert micro_compact(messages, budget=prompt_budget(4_000, 1_000)) == 0
+
+
+@pytest.mark.parametrize("kind", ["file_write", "failed_verification", "passed_verification", "artifact"])
+def test_summary_input_prioritizes_existing_evidence_over_repeatable_reads(kind):
+    """Recent source dumps must not consume the entire summary budget before known evidence."""
+    from nz_coder.state.context import _select_summary_input
+
+    critical = {"role": "tool", "tool_call_id": "critical",
+                "content": "IMPORTANT_EVIDENCE " + "diagnostic detail " * 25}
+    if kind == "file_write":
+        critical.update(_nz_evidence_kind="file_write", _nz_mutated_resources=["src/parser.py"])
+    elif kind in {"failed_verification", "passed_verification"}:
+        critical.update(_nz_evidence_kind="verification",
+                        _nz_verification_passed=kind == "passed_verification")
+    else:
+        critical["content"] += "\nFull output artifact: artifact_0123456789abcdef0123456789abcdef"
+    head = [
+        {"role": "user", "content": "Fix src/parser.py."}, critical,
+        {"role": "tool", "tool_call_id": "recent-read", "content": "read source " * 120,
+         "_nz_evidence_kind": "file_read", "_nz_resource": "src/parser.py"},
+    ]
+    original = copy.deepcopy(head)
+
+    selected = _select_summary_input(head, max_tokens=500)
+
+    assert any("IMPORTANT_EVIDENCE" in str(m.get("content", "")) for m in selected)
+    assert selected[0]["content"] == "Fix src/parser.py."
+    assert estimate_tokens(selected) <= 500
+    assert all(not key.startswith("_nz_") for message in selected for key in message)
+    assert head == original
+
+
+def test_summary_input_prefers_known_failure_over_a_newer_artifact_preview():
+    """A recent large read with an artifact must not outrank a known failure."""
+    from nz_coder.state.context import _select_summary_input
+
+    failure = {"role": "tool", "tool_call_id": "failed-test", "content": "KEEP_FAILURE " + "detail " * 70,
+               "_nz_evidence_kind": "verification", "_nz_verification_passed": False}
+    head = [
+        {"role": "user", "content": "Fix parser.py."}, failure,
+        {"role": "tool", "tool_call_id": "recent-read", "content": "read source " * 120
+         + "\nartifact_0123456789abcdef0123456789abcdef"},
+    ]
+
+    selected = _select_summary_input(head, max_tokens=500)
+
+    assert any("KEEP_FAILURE" in str(m.get("content", "")) for m in selected)
+
+
+def test_micro_compact_retains_incomplete_capture_qualification(tmp_path):
+    """Keeping an artifact address must not make an incomplete capture appear complete."""
+    from nz_coder.tool_platform.results import ToolResultBudget, ToolResultProjector
+
+    with scoped_workdir(tmp_path), scoped_session("compact-partial-artifact"):
+        projected = ToolResultProjector(budget=ToolResultBudget(512)).project(
+            "partial-output", "partial progress\n" * 1000, artifact_complete=False,
+        )
+        result = {"role": "tool", "tool_call_id": "partial-output", "content": projected.text}
+        messages = [
+            {"role": "user", "content": "Inspect progress."},
+            *_completed_tool_batch(result),
+            {"role": "user", "content": "Continue."},
+            *_completed_tool_batch({"role": "tool", "tool_call_id": "recent", "content": "small"}),
+            {"role": "user", "content": "Verify."},
+            *_completed_tool_batch({"role": "tool", "tool_call_id": "current", "content": "small"}),
+            {"role": "assistant", "content": "Checking.", "_timestamp": 1},
+        ]
+
+        assert micro_compact(messages, budget=prompt_budget(4_000, 1_000)) == 1
+
+    assert projected.artifact_path in result["content"]
+    assert "incomplete" in result["content"]
 
 
 def test_oversized_user_input_is_persisted_with_readable_reference(tmp_path):
@@ -205,7 +506,7 @@ def test_reused_tool_call_id_does_not_alias_different_large_outputs(
     assert first != second
 
 
-def test_agent_compacts_when_tool_schema_pushes_full_request_over_budget(monkeypatch):
+def test_agent_reports_when_fixed_tool_schema_cannot_fit_after_compaction(monkeypatch):
     from nz_coder.foundation import config
     from nz_coder.runtime.execution import loop as loop_module
     from nz_coder.runtime.execution.loop import AgentLoop
@@ -241,13 +542,21 @@ def test_agent_compacts_when_tool_schema_pushes_full_request_over_budget(monkeyp
     agent = AgentLoop.__new__(AgentLoop)
     agent.system_prompt = "system"
     agent.client = object()
+    agent._model_gateway_observer_for_run = lambda: None
     agent.tracer = Tracer()
+    from nz_coder.runtime.conversation.request_snapshot import FrozenRequestSnapshot, message_version
+    from nz_coder.runtime.conversation.message_projection import project_provider_messages
+    agent._freeze_api_request = lambda rows: FrozenRequestSnapshot(
+        "system", "", "", message_version(rows), project_provider_messages,
+        tuple(agent._active_tool_specs()),
+    )
     messages = [{"role": "user", "content": "small history"}]
 
-    agent._compact_if_needed(messages)
+    with pytest.raises(RuntimeError, match="cannot shrink"):
+        agent._compact_if_needed(messages)
 
     assert compact_calls
-    assert messages == [{"role": "user", "content": "compacted"}]
+    assert messages == [{"role": "user", "content": "small history"}]
 
 
 def test_agent_soft_preflight_does_not_call_summary_model(monkeypatch):
@@ -370,6 +679,11 @@ def test_provider_reported_overflow_triggers_next_turn_compaction():
 
     agent = AgentLoop.__new__(AgentLoop)
     agent.tracer = Tracer()
+    from nz_coder.runtime.conversation.request_snapshot import FrozenRequestSnapshot, message_version
+    from nz_coder.runtime.conversation.message_projection import project_provider_messages
+    agent._freeze_api_request = lambda rows: FrozenRequestSnapshot(
+        "", "", "", message_version(rows), project_provider_messages, (),
+    )
     agent._prompt_budget = lambda: prompt_budget(10_000, 2_000)
     agent._projected_request_tokens = lambda _messages: 4_000
     agent._compact_messages = lambda _messages: [{"role": "user", "content": "compacted"}]
@@ -449,7 +763,9 @@ class _CompactionClient:
 
     def create(self, **kwargs):
         self.request = kwargs
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=self.summary))])
+        return SimpleNamespace(choices=[SimpleNamespace(
+            message=SimpleNamespace(content=self.summary), finish_reason="stop",
+        )])
 
 
 class _SequencedCompactionClient:
@@ -464,7 +780,7 @@ class _SequencedCompactionClient:
         if isinstance(outcome, Exception):
             raise outcome
         return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=outcome))],
+            choices=[SimpleNamespace(message=SimpleNamespace(content=outcome), finish_reason="stop")],
         )
 
 
@@ -474,7 +790,7 @@ def test_auto_compact_reports_compaction_provider_usage(tmp_path, monkeypatch):
     from nz_coder.state.context import auto_compact
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
-    client = _CompactionClient("## Goal\n- keep working")
+    client = _CompactionClient(summary_json('keep working'))
     observed = []
     messages = [
         {"role": "user", "content": "old task"},
@@ -506,7 +822,7 @@ def test_auto_compact_transcript_is_strict_json(tmp_path, monkeypatch):
     from nz_coder.state.sessions import session_transcript_dir
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
-    client = _CompactionClient("## Goal\n- keep working")
+    client = _CompactionClient(summary_json('keep working'))
     messages = [{
         "role": "user",
         "content": "old task",
@@ -541,11 +857,14 @@ def test_agent_compaction_threads_its_gateway_observer(monkeypatch):
     agent.provider = None
     agent._active_model_id = lambda: "fake-model"
     agent._prompt_budget = lambda: prompt_budget(10_000, 2_000)
-    agent._model_gateway_observer = lambda _name, _payload: None
+    def observer(_name, _payload):
+        return None
+
+    agent._model_gateway_observer_for_run = lambda: observer
 
     agent._compact_messages([{"role": "user", "content": "summarize"}])
 
-    assert captured["observer"] is agent._model_gateway_observer
+    assert captured["observer"] is observer
 
 
 def test_auto_compact_honors_cancel_before_provider_dispatch(tmp_path, monkeypatch):
@@ -554,12 +873,12 @@ def test_auto_compact_honors_cancel_before_provider_dispatch(tmp_path, monkeypat
     from nz_coder.state.context import auto_compact
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
-    client = _CompactionClient("unused")
+    client = _CompactionClient(summary_json('unused'))
     cancelled = threading.Event()
     cancelled.set()
 
     with scoped_workdir(tmp_path), scoped_session("compact-cancelled"):
-        with pytest.raises(RuntimeError, match="cancelled"):
+        with pytest.raises(asyncio.CancelledError):
             auto_compact(
                 [{"role": "user", "content": "large history"}],
                 client,
@@ -577,7 +896,7 @@ def test_auto_compact_preserves_recent_complete_turns(tmp_path, monkeypatch):
     from nz_coder.state.sessions import scoped_session
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
-    client = _CompactionClient("## Goal\n- finish migration")
+    client = _CompactionClient(summary_json('finish migration'))
     messages = [
         {"role": "user", "content": "old task"},
         {"role": "assistant", "content": "old result"},
@@ -591,9 +910,9 @@ def test_auto_compact_preserves_recent_complete_turns(tmp_path, monkeypatch):
         result = auto_compact(messages, client, "fake-model")
 
     assert "<session-summary>" in result[0]["content"]
-    assert result[1:] == messages[2:]
+    assert result[1:] == [messages[0], *messages[2:]]
     request_content = client.request["messages"][-1]["content"]
-    assert "## Critical Context" in request_content
+    assert '"findings":' in request_content
     assert "old task" in request_content
     assert "recent task" not in request_content
 
@@ -606,7 +925,7 @@ def test_auto_compact_summary_input_always_anchors_original_task(
     from nz_coder.state.context import auto_compact, prompt_budget
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
-    client = _CompactionClient("## Goal\n- preserve the original task")
+    client = _CompactionClient(summary_json('preserve the original task'))
     original_task = (
         "ORIGINAL TASK ANCHOR: repair the array stacking bug. "
         + ("preserve this requirement; " * 80)
@@ -640,7 +959,7 @@ def test_auto_compact_uses_text_only_specialist_system_prompt(
     from nz_coder.state.context import auto_compact
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
-    client = _CompactionClient("## Goal\n- keep working")
+    client = _CompactionClient(summary_json('keep working'))
 
     with scoped_workdir(tmp_path), scoped_session("compact-specialist-prompt"):
         auto_compact(
@@ -651,12 +970,12 @@ def test_auto_compact_uses_text_only_specialist_system_prompt(
 
     system, user = client.request["messages"]
     assert system["role"] == "system"
-    assert "TEXT ONLY" in system["content"]
+    assert "JSON object" in system["content"]
     assert "Do NOT call any tools" in system["content"]
     assert user["role"] == "user"
 
 
-def test_auto_compact_rejects_tool_protocol_as_summary_and_preserves_task(
+def test_auto_compact_rejects_tool_protocol_without_installing_summary(
     tmp_path,
     monkeypatch,
 ):
@@ -678,17 +997,11 @@ def test_auto_compact_rejects_tool_protocol_as_summary_and_preserves_task(
         {"role": "assistant", "content": "latest result"},
     ]
 
+    original = copy.deepcopy(messages)
     with scoped_workdir(tmp_path), scoped_session("compact-invalid-summary"):
-        result = auto_compact(messages, client, "fake-model")
-
-    summary = result[0]["content"]
-    marker = result[0]["_nz_compaction"]
-    assert "DSML" not in summary
-    assert "## Goal" in summary
-    assert original_task in summary
-    assert marker["summary_recovery"] == {
-        "fallback": "tool-protocol-output",
-    }
+        with pytest.raises(RuntimeError, match="Invalid compaction summary"):
+            auto_compact(messages, client, "fake-model")
+    assert messages == original
 
 
 def test_auto_compact_does_not_send_message_protocol_metadata(tmp_path, monkeypatch):
@@ -698,7 +1011,7 @@ def test_auto_compact_does_not_send_message_protocol_metadata(tmp_path, monkeypa
     from nz_coder.state.sessions import scoped_session
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
-    client = _CompactionClient("summary")
+    client = _CompactionClient(summary_json('summary'))
     messages = [
         {
             "role": "user",
@@ -730,7 +1043,7 @@ def test_auto_compact_updates_previous_anchored_summary(tmp_path, monkeypatch):
     from nz_coder.state.sessions import scoped_session
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
-    client = _CompactionClient("## Goal\n- refreshed goal")
+    client = _CompactionClient(summary_json('refreshed goal'))
     messages = [
         {"role": "user", "content": "<session-summary>\ndurable fact\n</session-summary>"},
         {"role": "user", "content": "new head fact"},
@@ -748,7 +1061,7 @@ def test_auto_compact_updates_previous_anchored_summary(tmp_path, monkeypatch):
     assert "<previous-summary>" in request_content
     assert "durable fact" in request_content
     assert "new head fact" in request_content
-    assert result[1:] == messages[3:]
+    assert result[1:] == [messages[1], *messages[3:]]
     assert "refreshed goal" in result[0]["content"]
 
 
@@ -758,7 +1071,7 @@ def test_auto_compact_uses_provider_capability_snapshot(tmp_path, monkeypatch):
     from nz_coder.providers import OpenAICompatibleProvider, resolve_model_capabilities
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
-    client = _CompactionClient("summary")
+    client = _CompactionClient(summary_json('summary'))
     provider = OpenAICompatibleProvider(
         api_key="key",
         base_url="https://example.test/v1",
@@ -785,9 +1098,10 @@ def test_auto_compact_uses_provider_capability_snapshot(tmp_path, monkeypatch):
             "gpt-5-codex",
             provider=provider,
             capabilities=capabilities,
+            budget=prompt_budget(128_000, 32_000),
         )
 
-    assert client.request["max_completion_tokens"] == 4000
+    assert client.request["max_completion_tokens"] == 32_000
     assert client.request["reasoning_effort"] == "high"
     assert "max_tokens" not in client.request
     assert "_capabilities" not in client.request
@@ -798,7 +1112,7 @@ def test_auto_compact_persists_structured_tail_boundary(tmp_path, monkeypatch):
     from nz_coder.state.context import auto_compact
 
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
-    client = _CompactionClient("summary")
+    client = _CompactionClient(summary_json('summary'))
     messages = [
         {"role": "user", "content": "old", "_nz_message_id": "msg-old"},
         {"role": "assistant", "content": "old result", "_nz_message_id": "msg-old-answer"},
@@ -831,7 +1145,7 @@ def test_auto_compact_retries_once_only_after_payload_shrinks(tmp_path, monkeypa
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
     client = _SequencedCompactionClient([
         RuntimeError("Request Entity Too Large: FUNCTION_PAYLOAD_TOO_LARGE"),
-        "recovered summary",
+        summary_json('recovered summary'),
     ])
     large_output = "tool evidence\n" * 2_000
     tool_message = {
@@ -861,7 +1175,8 @@ def test_auto_compact_retries_once_only_after_payload_shrinks(tmp_path, monkeypa
     assert "tool evidence" in client.requests[0]["messages"][-1]["content"]
     assert "tool evidence" not in client.requests[1]["messages"][-1]["content"]
     assert "Older tool outputs" in client.requests[1]["messages"][-1]["content"]
-    assert tool_message["_nz_tool_compacted_at"] > 0
+    assert tool_message["content"] == large_output
+    assert "_nz_tool_compacted_at" not in tool_message
     assert marker["retried"] is True
     assert marker["after_bytes"] < marker["before_bytes"]
     assert "recovered summary" in result[0]["content"]
@@ -878,7 +1193,7 @@ def test_auto_compact_payload_recovery_degrades_only_tagged_expansion(
     monkeypatch.setattr(context_module, "_get_git_diff_summary", lambda: "")
     client = _SequencedCompactionClient([
         RuntimeError("context length overflow"),
-        "recovered expansion summary",
+        summary_json('recovered expansion summary'),
     ])
     old_user = {
         "role": "user",
@@ -908,13 +1223,14 @@ def test_auto_compact_payload_recovery_degrades_only_tagged_expansion(
     recovery = result[0]["_nz_compaction"]["payload_recovery"]
     assert len(client.requests) == 2
     assert recovery["degraded_input_expansions"] == 1
-    assert record["compacted"] is True
-    assert record["compactionReason"] == "compaction-failed"
+    assert "compacted" not in record
+    assert "compactionReason" not in record
     assert old_user["content"].startswith("keep this natural instruction\n\n")
-    assert "expanded evidence" not in old_user["content"]
+    assert "expanded evidence" in old_user["content"]
+    assert "expanded evidence" not in client.requests[1]["messages"][-1]["content"]
 
 
-def test_auto_compact_skips_retry_and_drops_aggregate_head_at_safe_tail(
+def test_auto_compact_no_shrink_keeps_history_and_reports_error(
     tmp_path,
     monkeypatch,
 ):
@@ -934,18 +1250,15 @@ def test_auto_compact_skips_retry_and_drops_aggregate_head_at_safe_tail(
         {"role": "assistant", "content": "latest result"},
     ]
 
-    with scoped_workdir(tmp_path), scoped_session("compact-aggregate-fallback"):
-        result = auto_compact(messages, client, "fake-model")
-
-    recovery = result[0]["_nz_compaction"]["payload_recovery"]
+    original = copy.deepcopy(messages)
+    with scoped_workdir(tmp_path), scoped_session("compact-aggregate-error"):
+        with pytest.raises(RuntimeError, match="maximum context length exceeded"):
+            auto_compact(messages, client, "fake-model")
     assert len(client.requests) == 1
-    assert recovery["retried"] is False
-    assert recovery["fallback"] == "aggregate-head"
-    assert "Earlier conversation history was omitted" in result[0]["content"]
-    assert result[1:] == messages[2:]
+    assert messages == original
 
 
-def test_auto_compact_second_overflow_falls_back_after_single_retry(
+def test_auto_compact_second_overflow_preserves_history_after_single_retry(
     tmp_path,
     monkeypatch,
 ):
@@ -966,17 +1279,15 @@ def test_auto_compact_second_overflow_falls_back_after_single_retry(
         {"role": "assistant", "content": "latest result"},
     ]
 
-    with scoped_workdir(tmp_path), scoped_session("compact-retry-fallback"):
-        result = auto_compact(messages, client, "fake-model")
-
-    recovery = result[0]["_nz_compaction"]["payload_recovery"]
+    original = copy.deepcopy(messages)
+    with scoped_workdir(tmp_path), scoped_session("compact-retry-error"):
+        with pytest.raises(RuntimeError, match="context window exceeded"):
+            auto_compact(messages, client, "fake-model")
     assert len(client.requests) == 2
-    assert recovery["retried"] is True
-    assert recovery["fallback"] == "aggregate-head"
-    assert "Earlier conversation history was omitted" in result[0]["content"]
+    assert messages == original
 
 
-def test_auto_compact_oversized_user_turn_uses_placeholder_without_retry(
+def test_auto_compact_oversized_user_turn_stays_intact_when_provider_fails(
     tmp_path,
     monkeypatch,
 ):
@@ -989,18 +1300,17 @@ def test_auto_compact_oversized_user_turn_uses_placeholder_without_retry(
     ])
     messages = [{"role": "user", "content": "x" * 20_000}]
 
-    with scoped_workdir(tmp_path), scoped_session("compact-paste-fallback"):
-        result = auto_compact(
-            messages,
-            client,
-            "fake-model",
-            budget=prompt_budget(context_tokens=2_000, output_tokens=500),
-        )
-
-    recovery = result[0]["_nz_compaction"]["payload_recovery"]
+    original = copy.deepcopy(messages)
+    with scoped_workdir(tmp_path), scoped_session("compact-paste-error"):
+        with pytest.raises(RuntimeError, match="context window exceeded"):
+            auto_compact(
+                messages,
+                client,
+                "fake-model",
+                budget=prompt_budget(context_tokens=2_000, output_tokens=500),
+            )
     assert len(client.requests) == 1
-    assert recovery["fallback"] == "oversized-user-turn"
-    assert "over-long pasted block" in result[0]["content"]
+    assert messages == original
 
 
 def test_auto_compact_without_shrink_or_safe_boundary_preserves_error(

@@ -2,6 +2,40 @@
 from __future__ import annotations
 
 
+def _verification_state(workspace=None):
+    from tests.verification_scenarios import VerificationScenario
+    scenario = VerificationScenario(workspace=workspace, plan={"stages": []})
+    scenario.state._scenario = scenario
+    return scenario.state
+
+
+def _observe(state, name, arguments, output, *, succeeded=True, metadata=None, **kwargs):
+    scenario = state._scenario
+    if name == "bash":
+        from nz_coder.runtime.adapters.verification_facts import command_receipt
+        from nz_coder.tool_platform.execution import ToolExecutionResult
+        start = scenario.runtime.begin_tool({"function": {"name": name, "arguments": arguments}})
+        receipt = command_receipt(name, arguments["command"], str(scenario.root),
+            outcome="succeeded" if succeeded else "failed", exit_code=(metadata or {}).get("exit", 0 if succeeded else 1), output=output)
+        scenario.runtime.record_result(ToolExecutionResult(name, arguments, output, True, False, not succeeded, False,
+            execution_facts=(receipt,), execution_id=start.execution_id, metadata=metadata))
+    elif name == "verify_changed_files":
+        scenario.syntax_result(output, passed=succeeded)
+    elif __import__("nz_coder.tools", fromlist=["is_filesystem_mutation_tool"]).is_filesystem_mutation_tool(name) or name == "apply_agent_changes":
+        scenario.write_resource(name, arguments, output=output, dispatch_failed=not succeeded)
+    else:
+        state.observe_tool(name, arguments, output, succeeded=succeeded, metadata=metadata, **kwargs)
+    return None
+
+
+def _execute_requirement(state, command, *, passed, acceptance):
+    state._scenario.execute(state.mutation_generation, command=command, passed=passed, acceptance=acceptance)
+
+
+def _review_requirement(state, *, accepted, fingerprint):
+    state._scenario.review(state.mutation_generation, accepted=accepted, fingerprint=fingerprint)
+
+
 def test_retired_investigation_hard_limit_remains_importable_for_compatibility():
     """Existing integrations may import the retired public policy constant."""
     from nz_coder.runtime.execution.runtime_state import STRICT_INVESTIGATION_HARD_LIMIT
@@ -28,7 +62,8 @@ def test_runtime_state_persists_active_state(tmp_path):
     assert restored.load(path) is True
     assert restored.turn_count == 4
     assert restored.has_diff is True
-    assert restored.task_complexity() == "L1"
+    assert restored.edits_this_run == 1 and restored.diff_chars == 300
+    assert restored.changed_files == ["app.py"]
     assert restored.acceptance_criteria == ["tests/test_app.py::test_bug"]
     assert restored.current_round_instruction_text == "Continue and update app.py."
 
@@ -127,11 +162,10 @@ def test_runtime_state_treats_package_root_failure_as_localized_repair():
 
 
 def test_runtime_state_records_semantic_review_against_current_generation():
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    state = RuntimeState()
-    state.set_task_contract(TaskContract.from_dict({
+    state = _verification_state(workspace=locals().get("tmp_path"))
+    state.set_task_contract(parse_task_contract({
         "objective": "Preserve compatibility",
         "requirements": [{
             "id": "R1",
@@ -139,15 +173,15 @@ def test_runtime_state_records_semantic_review_against_current_generation():
             "kind": "compatibility",
         }],
     }))
-    state.observe_tool("edit_file", {"path": "app.py"}, "Done")
-    state.observe_requirement_verification(
+    _observe(state, "edit_file", {"path": "app.py"}, "Done")
+    _execute_requirement(state,
         "pytest -q tests",
         passed=True,
         acceptance=True,
     )
 
     assert state.semantic_review_pending_only() is True
-    state.observe_requirement_semantic_review(
+    _review_requirement(state,
         accepted=True,
         fingerprint="verifier_ok:compatibility",
     )
@@ -158,11 +192,10 @@ def test_runtime_state_records_semantic_review_against_current_generation():
 
 def test_diff_status_does_not_reopen_verified_requirements():
     """Refreshing same-generation changed paths must be ledger-idempotent."""
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    state = RuntimeState()
-    state.set_task_contract(TaskContract.from_dict({
+    state = _verification_state(workspace=locals().get("tmp_path"))
+    state.set_task_contract(parse_task_contract({
         "objective": "Change behavior without breaking compatibility",
         "requirements": [
             {
@@ -178,17 +211,17 @@ def test_diff_status_does_not_reopen_verified_requirements():
             },
         ],
     }))
-    state.observe_tool("edit_file", {"path": "app.py"}, "Done", succeeded=True)
-    state.observe_requirement_verification(
+    _observe(state, "edit_file", {"path": "app.py"}, "Done", succeeded=True)
+    _execute_requirement(state,
         "pytest -q tests",
         passed=True,
         acceptance=True,
     )
 
-    assert state.requirement_ledger_snapshot().status("R1") == "satisfied"
+    assert state.requirement_ledger_snapshot().status("R1") == "candidate"
     assert state.semantic_review_pending_only() is True
 
-    state.observe_tool(
+    _observe(state,
         "diff_status",
         {},
         "has_non_empty_diff: true\n"
@@ -200,7 +233,7 @@ def test_diff_status_does_not_reopen_verified_requirements():
         succeeded=True,
     )
 
-    assert state.requirement_ledger_snapshot().status("R1") == "satisfied"
+    assert state.requirement_ledger_snapshot().status("R1") == "candidate"
     assert state.semantic_review_pending_only() is True
 
 
@@ -220,14 +253,14 @@ def test_failed_write_does_not_create_a_mutation_generation():
     assert state.source_mutation_generation == 0
 
 
-def test_applied_child_changes_advance_generation_and_attribute_reviewed_files():
+def test_applied_child_changes_advance_generation_and_attribute_reviewed_files(tmp_path):
     """A parent merge must invalidate stale acceptance for every reviewed file."""
     import nz_coder.runtime.agent.agent_manager  # noqa: F401
-    from nz_coder.runtime.agent.task_contract import TaskContract
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
+    from nz_coder.state.workdir import scoped_workdir
 
-    state = RuntimeState()
-    state.set_task_contract(TaskContract.from_dict({
+    state = _verification_state(workspace=locals().get("tmp_path"))
+    state.set_task_contract(parse_task_contract({
         "objective": "Apply the reviewed child implementation",
         "requirements": [{
             "id": "R1",
@@ -238,12 +271,17 @@ def test_applied_child_changes_advance_generation_and_attribute_reviewed_files()
         }],
     }))
 
-    state.observe_tool(
-        "apply_agent_changes",
-        {"reviewed_files": ["src/parser.py", "tests/test_parser.py"]},
-        "Applied reviewed child changes",
-        succeeded=True,
-    )
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/parser.py").write_text("value = 2\n")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests/test_parser.py").write_text("def test_parser(): pass\n")
+    with scoped_workdir(tmp_path):
+        _observe(state,
+            "apply_agent_changes",
+            {"reviewed_files": ["src/parser.py", "tests/test_parser.py"]},
+            "Applied reviewed child changes",
+            succeeded=True,
+        )
 
     assert state.mutation_generation == 1
     assert state.acceptance_mutation_generation == 1
@@ -327,11 +365,10 @@ def test_apply_patch_dry_run_does_not_create_mutation_evidence():
 
 def test_successful_mutating_bash_conservatively_invalidates_acceptance():
     """An unattributed shell write cannot leave source evidence current."""
-    from nz_coder.runtime.agent.task_contract import TaskContract
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    state = RuntimeState()
-    state.set_task_contract(TaskContract.from_dict({
+    state = _verification_state(workspace=locals().get("tmp_path"))
+    state.set_task_contract(parse_task_contract({
         "objective": "Fix parser behavior",
         "requirements": [{
             "id": "R1",
@@ -340,14 +377,14 @@ def test_successful_mutating_bash_conservatively_invalidates_acceptance():
             "expected_artifacts": ["src/parser.py"],
         }],
     }))
-    state.observe_tool("edit_file", {"path": "src/parser.py"}, "Done")
-    state.observe_requirement_verification(
+    _observe(state, "edit_file", {"path": "src/parser.py"}, "Done")
+    _execute_requirement(state,
         "pytest -q tests/test_parser.py",
         passed=True,
         acceptance=True,
     )
 
-    state.observe_tool(
+    _observe(state,
         "bash",
         {"command": "touch src/generated.py"},
         "",
@@ -609,10 +646,10 @@ def test_runtime_state_captures_and_restores_verification_contract(tmp_path):
 
 
 def test_runtime_state_tracks_contract_artifacts_without_todo(tmp_path):
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
+    from nz_coder.state.workdir import scoped_workdir
 
-    contract = TaskContract.from_dict({
+    contract = parse_task_contract({
         "objective": "Create an artifact",
         "requirements": [{
             "id": "R1",
@@ -622,16 +659,18 @@ def test_runtime_state_tracks_contract_artifacts_without_todo(tmp_path):
             "satisfaction_mode": "deterministic",
         }],
     }, workspace=tmp_path)
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
     state.reset(max_turns=20)
     state.set_task_contract(contract)
 
-    state.observe_tool(
-        "write_file",
-        {"path": "app.py", "content": "VALUE = 1\n"},
-        "Created app.py",
-        succeeded=True,
-    )
+    (tmp_path / "app.py").write_text("VALUE = 1\n")
+    with scoped_workdir(tmp_path):
+        _observe(state,
+            "write_file",
+            {"path": "app.py", "content": "VALUE = 1\n"},
+            "Created app.py",
+            succeeded=True,
+        )
 
     assert state.open_todo_items == 0
     assert state.requirement_ledger_snapshot().status("R1") == "satisfied"
@@ -668,8 +707,8 @@ def test_acceptance_criteria_extracts_numbered_requirements():
     assert any("test_user_manager.py" in item for item in criteria)
 
 
-def test_swebench_problem_title_seeds_coding_mode_and_acceptance_criterion():
-    """A wrapped benchmark feature request must not degrade to unknown/L0 work."""
+def test_swebench_problem_title_keeps_acceptance_without_inferred_category():
+    """基准包装可以保留验收文本，但不能发布未经模型判断的类别。"""
     from nz_coder.runtime.execution.runtime_state import RuntimeState
 
     state = RuntimeState()
@@ -683,20 +722,19 @@ def test_swebench_problem_title_seeds_coding_mode_and_acceptance_criterion():
         "source-code changes."
     )
 
-    assert state.task_mode == "feature"
+    assert state.task_assessment_state == {}
     assert state.acceptance_criteria == [
         "Display fixture scope with `pytest --fixtures`"
     ]
 
 
-def test_l0_runtime_state_omits_routine_prompt_block():
+def test_empty_runtime_state_omits_routine_prompt_block():
     from nz_coder.runtime.execution.runtime_state import RuntimeState
 
     state = RuntimeState()
     state.reset(max_turns=50)
     state.turn_count = 1
 
-    assert state.task_complexity() == "L0"
     assert state.build_prompt_block() == ""
 
 
@@ -726,7 +764,7 @@ def test_runtime_state_discuss_mode_does_not_push_source_edit():
 
     block = state.build_prompt_block()
 
-    assert "task_mode=discuss" in block
+    assert "task_mode=" not in block
     assert "No source edit" not in block
     assert "smallest relevant code change" not in block
 
@@ -745,7 +783,7 @@ def test_runtime_state_tests_modified_is_neutral_when_requested():
 
     block = state.build_prompt_block()
 
-    assert "task_mode=test" in block
+    assert "task_mode=" not in block
     assert "test updates requested" in block
     assert "confirm this matches" not in block
 
@@ -905,7 +943,6 @@ def test_current_round_requirements_extend_a_satisfied_task_contract(
 ):
     """Completion must wait for explicit deliverables added by a follow-up."""
     from nz_coder.runtime.verification.completion_gate import CompletionGate
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
     from nz_coder.runtime.agent.task_contract import derive_task_contract
 
     monkeypatch.chdir(tmp_path)
@@ -920,12 +957,12 @@ def test_current_round_requirements_extend_a_satisfied_task_contract(
     original_task = (
         "Fix parser.py and run python -m pytest -q tests/test_parser.py"
     )
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
     state.initial_task_text = original_task
     state.set_acceptance_criteria_from_text(original_task)
     state.set_task_contract(derive_task_contract(
         original_task,
-        acceptance_command=state.verification_contract["command"],
+        acceptance_commands=(state.verification_contract["command"],),
         workspace=tmp_path,
     ))
     ledger = state.requirement_ledger_snapshot()
@@ -934,9 +971,10 @@ def test_current_round_requirements_extend_a_satisfied_task_contract(
         for requirement_id, progress in ledger.items.items()
         if progress.requirement.kind != "verification"
     }
-    for progress in ledger.items.values():
-        progress.status = "satisfied"
-    state.requirement_ledger = ledger.to_dict()
+    state._scenario.write_resource("edit_file", {"path": "parser.py"}, output="Updated parser.py")
+    _execute_requirement(state, state.verification_contract["command"], passed=True, acceptance=True)
+    _review_requirement(state, accepted=True, fingerprint="initial review")
+    assert not state.requirement_ledger_snapshot().unresolved()
     original_objective = state.task_contract["objective"]
 
     state.apply_current_round_instruction(
@@ -982,8 +1020,8 @@ def test_no_command_followup_requires_explicit_artifact_write(
 ):
     """A named write target must not disappear without a new pytest command."""
     from nz_coder.runtime.verification.completion_gate import CompletionGate
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
     from nz_coder.runtime.agent.task_contract import derive_task_contract
+    from nz_coder.state.workdir import scoped_workdir
 
     monkeypatch.chdir(tmp_path)
     (tmp_path / "parser.py").write_text("value = 1\n", encoding="utf-8")
@@ -992,18 +1030,19 @@ def test_no_command_followup_requires_explicit_artifact_write(
     original_task = (
         "Fix parser.py and run python -m pytest -q tests/test_parser.py"
     )
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
     state.initial_task_text = original_task
     state.set_acceptance_criteria_from_text(original_task)
     state.set_task_contract(derive_task_contract(
         original_task,
-        acceptance_command=state.verification_contract["command"],
+        acceptance_commands=(state.verification_contract["command"],),
         workspace=tmp_path,
     ))
     ledger = state.requirement_ledger_snapshot()
-    for progress in ledger.items.values():
-        progress.status = "satisfied"
-    state.requirement_ledger = ledger.to_dict()
+    state._scenario.write_resource("edit_file", {"path": "parser.py"}, output="Updated parser.py")
+    _execute_requirement(state, state.verification_contract["command"], passed=True, acceptance=True)
+    _review_requirement(state, accepted=True, fingerprint="initial review")
+    assert not state.requirement_ledger_snapshot().unresolved()
 
     state.apply_current_round_instruction(
         "Continue and update docs/parser.md.",
@@ -1034,16 +1073,18 @@ def test_no_command_followup_requires_explicit_artifact_write(
         for progress in ledger.items.values()
     ) == 1
 
-    state.observe_tool(
-        "edit_file",
-        {
-            "path": "docs/parser.md",
-            "old_text": "old",
-            "new_text": "new",
-        },
-        "Done",
-        succeeded=True,
-    )
+    (tmp_path / "docs/parser.md").write_text("new\n", encoding="utf-8")
+    with scoped_workdir(tmp_path):
+        _observe(state,
+            "edit_file",
+            {
+                "path": "docs/parser.md",
+                "old_text": "old",
+                "new_text": "new",
+            },
+            "Done",
+            succeeded=True,
+        )
 
     assert state.requirement_ledger_snapshot().status(
         artifact.requirement.id
@@ -1069,7 +1110,7 @@ def test_no_command_read_only_followup_does_not_create_artifact_requirement(
     state.set_acceptance_criteria_from_text(original_task)
     state.set_task_contract(derive_task_contract(
         original_task,
-        acceptance_command=state.verification_contract["command"],
+        acceptance_commands=(state.verification_contract["command"],),
         workspace=tmp_path,
     ))
     before = state.task_contract
@@ -1110,7 +1151,7 @@ def test_no_command_followup_keeps_positive_path_before_test_freeze(tmp_path):
     ] == [["app.py"]]
 
 
-def test_runtime_state_project_creation_guides_greenfield_flow():
+def test_project_request_does_not_force_a_scaffold_tool_sequence():
     from nz_coder.runtime.execution.runtime_state import RuntimeState
 
     state = RuntimeState()
@@ -1120,8 +1161,9 @@ def test_runtime_state_project_creation_guides_greenfield_flow():
 
     block = state.build_prompt_block()
 
-    assert "analyze_project_requirements -> create_project_blueprint -> scaffold_project" in block
-    assert "Do not start with grep_search unless you are intentionally reusing local code." in block
+    assert "analyze_project_requirements -> create_project_blueprint -> scaffold_project" not in block
+    assert "Do not start with grep_search" not in block
+    assert state.task_assessment_state == {}
 
 
 def test_strict_progress_emits_one_nudge_after_twelve_investigations():
@@ -1136,9 +1178,9 @@ def test_strict_progress_emits_one_nudge_after_twelve_investigations():
     first = state.build_prompt_block(strict=True)
     second = state.build_prompt_block(strict=True)
 
-    assert "STRICT CONVERGENCE" in first
+    assert "Synthesize the current evidence" in first
     assert "12 investigation calls" in first
-    assert "STRICT CONVERGENCE" not in second
+    assert "Synthesize the current evidence" not in second
 
 
 def test_terminal_progress_emits_advisory_convergence_nudge():
@@ -1152,10 +1194,10 @@ def test_terminal_progress_emits_advisory_convergence_nudge():
     first = state.build_prompt_block(strict=False)
     second = state.build_prompt_block(strict=False)
 
-    assert "CONVERGENCE NUDGE" in first
+    assert "Synthesize the current evidence" in first
     assert "12 investigation calls" in first
-    assert "do not make speculative edits" in first
-    assert "CONVERGENCE NUDGE" not in second
+    assert "does not establish stagnation" in first
+    assert "Synthesize the current evidence" not in second
 
 
 def test_strict_progress_keeps_investigation_available_after_twenty_calls():
@@ -1195,7 +1237,7 @@ def test_strict_progress_keeps_soft_boundary_after_source_and_test_localization(
         state.observe_tool("grep_search", {"pattern": f"clue-{index}"}, "match")
 
     assert state.investigation_calls_since_edit == 12
-    assert "STRICT CONVERGENCE" in state.build_prompt_block(strict=True)
+    assert "12 investigation calls" in state.build_prompt_block(strict=True)
     assert state.strict_progress_action("read_file") == "allow"
     assert state.strict_progress_action("edit_file") == "allow"
 
@@ -1386,16 +1428,15 @@ def test_successful_write_resets_strict_investigation_generation():
 
 def test_strict_terminal_evidence_is_order_independent_within_generation():
     """Regression: verify-before-diff must settle the same mutation generation."""
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
 
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
     state.reset(max_turns=80)
-    state.observe_tool("edit_file", {"path": "app.py"}, "Done")
-    state.observe_tool("verify_changed_files", {}, "OK: py_compile changed files")
+    _observe(state, "edit_file", {"path": "app.py"}, "Done")
+    _observe(state, "verify_changed_files", {}, "OK: py_compile changed files")
 
     assert state.strict_generation_terminal_ready() is False
 
-    state.observe_tool(
+    _observe(state,
         "diff_status",
         {},
         "\n".join([
@@ -1413,28 +1454,26 @@ def test_strict_terminal_evidence_is_order_independent_within_generation():
 
 def test_new_mutation_invalidates_previous_generation_terminal_evidence():
     """A verification from generation one cannot finalize generation two."""
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
 
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
     state.reset(max_turns=80)
-    state.observe_tool("edit_file", {"path": "app.py"}, "Done")
-    state.observe_tool("diff_status", {}, "has_non_empty_diff: true\ntests_modified: false\nsource_only: true")
-    state.observe_tool("verify_changed_files", {}, "OK: passed")
+    _observe(state, "edit_file", {"path": "app.py"}, "Done")
+    _observe(state, "diff_status", {}, "has_non_empty_diff: true\ntests_modified: false\nsource_only: true")
+    _observe(state, "verify_changed_files", {}, "OK: passed")
     assert state.strict_generation_terminal_ready() is True
 
-    state.observe_tool("edit_file", {"path": "app.py"}, "Done")
+    _observe(state, "edit_file", {"path": "app.py"}, "Done")
 
     assert state.strict_generation_terminal_ready() is False
 
 
 def test_requested_test_changes_can_settle_strict_generation():
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
 
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
     state.reset(max_turns=80)
     state.wants_tests = True
-    state.observe_tool("edit_file", {"path": "pkg/app.py"}, "Done")
-    state.observe_tool(
+    _observe(state, "edit_file", {"path": "pkg/app.py"}, "Done")
+    _observe(state,
         "diff_status",
         {},
         "\n".join([
@@ -1446,7 +1485,7 @@ def test_requested_test_changes_can_settle_strict_generation():
             "  tests/test_app.py",
         ]),
     )
-    state.observe_tool("verify_changed_files", {}, "OK: passed")
+    _observe(state, "verify_changed_files", {}, "OK: passed")
 
     assert state.diff_generation == state.mutation_generation
     assert state.strict_generation_terminal_ready() is True
@@ -1497,14 +1536,13 @@ def test_bash_status_and_verification_do_not_consume_investigation_budget():
 
 
 def _state_with_current_verification_contract():
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
 
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
     state.reset(max_turns=30)
     state.set_acceptance_criteria_from_text(
         "完成后运行 python -m pytest -q cron_engine/tests。"
     )
-    state.observe_tool("edit_file", {"path": "cron_engine/parser.py"}, "Done")
+    _observe(state, "edit_file", {"path": "cron_engine/parser.py"}, "Done")
     state.has_diff = True
     return state
 
@@ -1514,7 +1552,7 @@ def test_model_bash_settles_current_verification_contract_success():
 
     state = _state_with_current_verification_contract()
 
-    observation = state.observe_tool(
+    observation = _observe(state,
         "bash",
         {"command": "python  -m pytest -q 'cron_engine/tests'"},
         "59 passed in 0.20s",
@@ -1522,11 +1560,8 @@ def test_model_bash_settles_current_verification_contract_success():
     )
 
     contract = VerificationContract.from_dict(state.verification_contract)
-    assert observation == {
-        "command": "python  -m pytest -q 'cron_engine/tests'",
-        "output": "59 passed in 0.20s",
-        "passed": True,
-    }
+    assert observation is None
+    assert state.verification_domain.snapshot().execution_ready
     assert contract.attempted_generation == state.mutation_generation == 1
     assert contract.attempts == 1
     assert contract.passed is True
@@ -1539,7 +1574,7 @@ def test_model_bash_records_failed_contract_without_settling_generation():
 
     state = _state_with_current_verification_contract()
 
-    observation = state.observe_tool(
+    observation = _observe(state,
         "bash",
         {"command": "python -m pytest -q cron_engine/tests"},
         "1 failed, 58 passed",
@@ -1547,7 +1582,8 @@ def test_model_bash_records_failed_contract_without_settling_generation():
     )
 
     contract = VerificationContract.from_dict(state.verification_contract)
-    assert observation["passed"] is False
+    assert observation is None
+    assert not state.verification_domain.snapshot().execution_ready
     assert contract.attempted_generation == 1
     assert contract.attempts == 1
     assert contract.passed is False
@@ -1585,13 +1621,13 @@ def test_new_edit_rearms_model_settled_verification_contract():
     from nz_coder.runtime.verification.verification_contract import VerificationContract
 
     state = _state_with_current_verification_contract()
-    state.observe_tool(
+    _observe(state,
         "bash",
         {"command": "python -m pytest -q cron_engine/tests"},
         "59 passed",
         succeeded=True,
     )
-    state.observe_tool("edit_file", {"path": "cron_engine/parser.py"}, "Done")
+    _observe(state, "edit_file", {"path": "cron_engine/parser.py"}, "Done")
 
     contract = VerificationContract.from_dict(state.verification_contract)
     assert contract.is_due(
@@ -1612,13 +1648,13 @@ def test_docs_edit_does_not_rearm_model_settled_verification_contract():
     from nz_coder.runtime.verification.verification_contract import VerificationContract
 
     state = _state_with_current_verification_contract()
-    state.observe_tool(
+    _observe(state,
         "bash",
         {"command": "python -m pytest -q cron_engine/tests"},
         "59 passed",
         succeeded=True,
     )
-    state.observe_tool("edit_file", {"path": "docs/parser.md"}, "Done")
+    _observe(state, "edit_file", {"path": "docs/parser.md"}, "Done")
 
     contract = VerificationContract.from_dict(state.verification_contract)
     assert state.mutation_generation == 2
@@ -1632,15 +1668,14 @@ def test_docs_edit_does_not_rearm_model_settled_verification_contract():
 
 def test_docs_only_task_runs_declared_acceptance_once():
     """Generation zero remains a valid first acceptance scope for docs-only work."""
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
     from nz_coder.runtime.verification.verification_contract import VerificationContract
 
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
     state.reset(max_turns=30)
     state.set_acceptance_criteria_from_text(
         "Update docs/parser.md and run pytest -q tests/test_parser.py"
     )
-    state.observe_tool("edit_file", {"path": "docs/parser.md"}, "Done")
+    _observe(state, "edit_file", {"path": "docs/parser.md"}, "Done")
     state.has_diff = True
 
     contract = VerificationContract.from_dict(state.verification_contract)
@@ -1651,7 +1686,7 @@ def test_docs_only_task_runs_declared_acceptance_once():
         mutation_generation=state.acceptance_mutation_generation,
     ) is True
 
-    state.observe_tool(
+    _observe(state,
         "bash",
         {"command": "pytest -q tests/test_parser.py"},
         "1 passed",
@@ -1673,13 +1708,13 @@ def test_test_edit_rearms_model_settled_verification_contract():
     from nz_coder.runtime.verification.verification_contract import VerificationContract
 
     state = _state_with_current_verification_contract()
-    state.observe_tool(
+    _observe(state,
         "bash",
         {"command": "python -m pytest -q cron_engine/tests"},
         "59 passed",
         succeeded=True,
     )
-    state.observe_tool(
+    _observe(state,
         "edit_file",
         {"path": "cron_engine/tests/test_parser.py"},
         "Done",
@@ -1696,12 +1731,11 @@ def test_test_edit_rearms_model_settled_verification_contract():
 
 def test_docs_edit_keeps_semantic_review_on_last_behavior_generation():
     """A Sidecar verdict after docs work must certify the unchanged code generation."""
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
     state.reset(max_turns=30)
-    state.set_task_contract(TaskContract.from_dict({
+    state.set_task_contract(parse_task_contract({
         "objective": "Preserve parser compatibility",
         "requirements": [
             {
@@ -1717,15 +1751,15 @@ def test_docs_edit_keeps_semantic_review_on_last_behavior_generation():
         ],
         "acceptance_commands": ["pytest -q tests/test_parser.py"],
     }))
-    state.observe_tool("edit_file", {"path": "parser.py"}, "Done")
-    state.observe_requirement_verification(
+    _observe(state, "edit_file", {"path": "parser.py"}, "Done")
+    _execute_requirement(state,
         "pytest -q tests/test_parser.py",
         passed=True,
         acceptance=True,
     )
-    state.observe_tool("edit_file", {"path": "docs/parser.md"}, "Done")
+    _observe(state, "edit_file", {"path": "docs/parser.md"}, "Done")
 
-    state.observe_requirement_semantic_review(
+    _review_requirement(state,
         accepted=True,
         fingerprint="accepted-after-docs",
     )
@@ -1749,12 +1783,11 @@ def test_old_runtime_snapshot_migrates_acceptance_generation_conservatively():
 
 def test_pathless_write_conservatively_invalidates_requirement_evidence():
     """An unattributed mutation cannot preserve code evidence as docs-only."""
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
     state.reset(max_turns=30)
-    state.set_task_contract(TaskContract.from_dict({
+    state.set_task_contract(parse_task_contract({
         "objective": "Fix parser behavior",
         "requirements": [
             {
@@ -1770,14 +1803,14 @@ def test_pathless_write_conservatively_invalidates_requirement_evidence():
             },
         ],
     }))
-    state.observe_tool("edit_file", {"path": "parser.py"}, "Done")
-    state.observe_requirement_verification(
+    _observe(state, "edit_file", {"path": "parser.py"}, "Done")
+    _execute_requirement(state,
         "pytest -q tests/test_parser.py",
         passed=True,
         acceptance=True,
     )
 
-    state.observe_tool("scaffold_project", {}, "Done")
+    _observe(state, "scaffold_project", {}, "Done")
 
     assert state.acceptance_mutation_generation == 2
     assert state.requirement_ledger_snapshot().status("R1") == "candidate"
@@ -1786,7 +1819,7 @@ def test_pathless_write_conservatively_invalidates_requirement_evidence():
 
 def test_current_generation_acceptance_pass_prompts_immediate_finalization():
     state = _state_with_current_verification_contract()
-    state.observe_tool(
+    _observe(state,
         "bash",
         {"command": "python -m pytest -q cron_engine/tests"},
         "59 passed",
@@ -1796,15 +1829,15 @@ def test_current_generation_acceptance_pass_prompts_immediate_finalization():
     block = state.build_prompt_block()
 
     assert "DECLARED ACCEPTANCE PASSED" in block
-    assert "Do not call more tools; give the final summary now." in block
+    assert "Reconcile remaining requirements and provide a final candidate when ready." in block
 
 
-def test_repeated_model_contract_command_is_idempotent_within_generation():
+def test_distinct_model_contract_executions_count_actual_attempts():
     from nz_coder.runtime.verification.verification_contract import VerificationContract
 
     state = _state_with_current_verification_contract()
     for _ in range(2):
-        state.observe_tool(
+        _observe(state,
             "bash",
             {"command": "python -m pytest -q cron_engine/tests"},
             "59 passed",
@@ -1812,7 +1845,7 @@ def test_repeated_model_contract_command_is_idempotent_within_generation():
         )
 
     contract = VerificationContract.from_dict(state.verification_contract)
-    assert contract.attempts == 1
+    assert contract.attempts == 2
 
 
 def test_runtime_state_tracks_open_todo_items_and_contract_readiness():
@@ -1843,12 +1876,12 @@ def test_runtime_state_tracks_open_todo_items_and_contract_readiness():
 
 def test_intermediate_acceptance_pass_does_not_prompt_finalization_with_open_todos():
     state = _state_with_current_verification_contract()
-    state.observe_tool(
+    _observe(state,
         "todo",
         {"items": []},
         "[>] add tests\n[ ] update README\n\n(0/2 completed)",
     )
-    state.observe_tool(
+    _observe(state,
         "bash",
         {"command": "python -m pytest -q cron_engine/tests"},
         "59 passed",
@@ -1863,21 +1896,15 @@ def test_intermediate_acceptance_pass_does_not_prompt_finalization_with_open_tod
 
 
 def test_budget_zone_runtime_acceptance_pass_is_intermediate_without_todos():
-    from nz_coder.runtime.verification.verification_contract import VerificationContract
 
     state = _state_with_current_verification_contract()
-    contract = VerificationContract.from_dict(state.verification_contract)
-    contract.record_attempt(
-        state.mutation_generation,
-        passed=True,
-        output="85 passed",
-        source="runtime",
-        zone="orange",
-    )
-    state.verification_contract = contract.to_dict()
-    state.verification_generation = state.mutation_generation
-    state.py_compile_ok = True
-    state.changed_files_verified = True
+    from nz_coder.runtime.adapters.verification_runtime import scoped_verification_invocation
+    with scoped_verification_invocation("runtime", "orange"):
+        start = state._scenario.runtime.begin_tool({"function": {"name": "bash", "arguments": {"command": state.verification_contract["command"]}}})
+    from nz_coder.runtime.adapters.verification_facts import command_receipt
+    from nz_coder.tool_platform.execution import ToolExecutionResult
+    receipt = command_receipt("bash", state.verification_contract["command"], str(state._scenario.root), outcome="succeeded", exit_code=0, output="85 passed")
+    state._scenario.runtime.record_result(ToolExecutionResult("bash", {"command": receipt.command}, "85 passed", True, False, False, False, execution_facts=(receipt,), execution_id=start.execution_id))
 
     block = state.build_prompt_block()
 
@@ -2059,9 +2086,8 @@ def test_runtime_state_sanitizes_corrupt_persisted_control_fields():
 
 def test_runtime_state_normalizes_nested_contract_counters_on_restore():
     """Valid-shaped nested state with corrupt numbers remains resumable."""
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
 
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
 
     assert state.restore({
         "active": True,
@@ -2086,8 +2112,7 @@ def test_runtime_state_normalizes_nested_contract_counters_on_restore():
     assert state.task_contract["contract_version"] == 1
     assert state.requirement_ledger["latest_generation"] == 0
     assert state.requirement_ledger["latest_verification_generation"] == -1
-    assert state.verification_contract["attempted_generation"] == -1
-    assert state.verification_contract["attempts"] == 0
+    assert state.verification_contract == {}
     assert isinstance(state.requirement_ledger_snapshot().to_dict(), dict)
 
 
@@ -2291,14 +2316,13 @@ def test_runtime_state_records_bounded_provider_turn_ledger_and_round_trips(tmp_
 
 
 def test_legacy_bounded_emergency_state_is_advisory_only():
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
 
-    state = RuntimeState()
+    state = _verification_state(workspace=locals().get("tmp_path"))
     state.work_phase = "bounded_emergency"
     state.has_diff = True
     state.changed_files = ["cron_engine/parser.py"]
     state.requested_paths = ["cron_engine/tests/test_parser.py"]
-    state.verification_contract = {
+    state.verification_definition = {
         "command": "python -m pytest -q cron_engine/tests",
     }
 
@@ -2365,3 +2389,13 @@ def test_node_verification_paths_are_not_required_mutations():
     assert extract_explicit_mutation_paths(
         "Update literal.test.cjs. Run node --test literal.test.cjs."
     ) == ["literal.test.cjs"]
+
+
+def test_recent_scoped_verification_can_render_progress_without_task_category(tmp_path):
+    state = _verification_state(workspace=tmp_path)
+    _observe(state, "edit_file", {"path": "app.py"}, "Done")
+    _observe(state, "diff_status", {}, "has_non_empty_diff: true\ndiff_chars: 20\ntests_modified: false\nsource_only: true")
+    _observe(state, "verify_changed_files", {}, "OK: passed")
+    state.verification_attempts = 1
+    assert state.py_compile_ok
+    assert "verify_changed_files passed" in state.build_prompt_block()

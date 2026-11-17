@@ -312,6 +312,41 @@ def test_worktree_sweep_removes_clean_read_only_and_retains_changed(tmp_path):
     assert any("reported changed files" in item for item in result["warnings"])
 
 
+@pytest.mark.parametrize("mode", ["git", "copy"])
+def test_terminal_sweep_retains_preparing_worktrees_without_probe_or_remove(tmp_path, monkeypatch, mode):
+    from tests.fixtures.process_lifecycle import persist_preparing_worktree
+    from nz_coder.runtime.worktree import WorktreeManager
+    from nz_coder.runtime.workflows.workflow_sweep import sweep_workflow_worktrees
+    state = persist_preparing_worktree(tmp_path, mode=mode, workflow_run_id="run")
+    touched = []
+    def forbidden(*args, **kwargs):
+        touched.append(True)
+        raise AssertionError("preparing target must not be inspected or removed")
+    monkeypatch.setattr(WorktreeManager, "changed_files", forbidden)
+    monkeypatch.setattr(WorktreeManager, "remove", forbidden)
+    result = sweep_workflow_worktrees([state], tmp_path, run_id="run")
+    assert result["removed"] == []
+    assert touched == []
+    assert any("prepar" in warning for warning in result["warnings"])
+    assert Path(state["worktree"]["path"]).exists()
+
+
+def test_workflow_terminal_sweep_retains_preparing_target(tmp_path):
+    from tests.fixtures.process_lifecycle import persist_preparing_worktree
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
+    manager = BackgroundAgentManager(tmp_path, "parent")
+    state = persist_preparing_worktree(tmp_path, mode="copy", workflow_run_id="run")
+    runtime = WorkflowRuntime(manager, run_id="run")
+    try:
+        result = runtime._sweep_terminal_worktrees()
+        assert result["removed"] == []
+        assert any("prepar" in warning for warning in result["warnings"])
+        assert Path(state["worktree"]["path"]).exists()
+    finally:
+        manager.close()
+
+
 @pytest.mark.parametrize(
     "pattern",
     [

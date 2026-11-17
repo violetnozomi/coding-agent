@@ -18,6 +18,7 @@ READ_TOOLS = frozenset({
     "lsp",
     "list_memories",
     "project_profile",
+    "verify_changed_files",
     "plan_verification",
     "analyze_impact",
     "analyze_project_requirements",
@@ -43,7 +44,6 @@ SAFE_STATE_TOOLS = frozenset({
     "recall_memory",
     "read_scratchpad",
     "load_optional_tools",
-    "verify_changed_files",
     "verify_project_build",
 })
 

@@ -23,9 +23,14 @@ def _keys(value, allowed):
 def validate_text_request(payload):
     """不让官方转换器忽略的字段悄悄消失；仅接受本实验的文本请求。"""
     _keys(payload, {"model", "messages", "tools", "tool_choice", "max_tokens", "stream", "stream_options",
-                    "thinking", "reasoning_effort", "temperature", "top_p", "n"})
+                    "thinking", "reasoning_effort", "temperature", "top_p", "n", "response_format"})
     if payload.get("model") not in MODELS or payload.get("n", 1) != 1:
         raise ValueError("unsupported_model_or_choices")
+    if "response_format" in payload:
+        # 只接纳规划实际使用、且原生转换器能完整保留的 JSON 对象模式。
+        _keys(payload["response_format"], {"type"})
+        if payload["response_format"].get("type") != "json_object":
+            raise ValueError("unsupported_response_format")
     if "thinking" in payload:
         _keys(payload["thinking"], {"type"})
         if payload["thinking"].get("type") not in {"enabled", "disabled"}:

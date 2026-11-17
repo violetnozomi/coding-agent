@@ -84,7 +84,7 @@ def test_startup_workspace_override_is_not_used_for_target_workspace(
         if key == "NZ_LSP_PYTHON_COMMAND"
         else default,
     )
-    monkeypatch.setattr("nz_coder.lsp.servers.shutil.which", lambda _name: None)
+    monkeypatch.setattr("nz_coder.lsp.servers.shutil.which", lambda _name, **kwargs: None)
 
     assert resolve_server(source, target) is None
 
@@ -102,7 +102,7 @@ def test_startup_workspace_executable_is_not_system_trusted_in_other_workspace(
     executable.write_text("a", encoding="utf-8")
     source = _source(target)
     monkeypatch.setattr(config, "get", lambda *_args: str(executable))
-    monkeypatch.setattr("nz_coder.lsp.servers.shutil.which", lambda _name: None)
+    monkeypatch.setattr("nz_coder.lsp.servers.shutil.which", lambda _name, **kwargs: None)
 
     assert resolve_server(source, target) is None
 
@@ -120,7 +120,7 @@ def test_trusted_target_workspace_lsp_override_is_applied(tmp_path, monkeypatch)
     untrusted = load_config_snapshot(
         workspace, environ={}, user_config_path=tmp_path / "missing", trust_store=store
     )
-    monkeypatch.setattr("nz_coder.lsp.servers.shutil.which", lambda _name: None)
+    monkeypatch.setattr("nz_coder.lsp.servers.shutil.which", lambda _name, **kwargs: None)
     assert resolve_server(source, workspace, config_snapshot=untrusted) is None
 
     store.trust(workspace, "workspace-config", untrusted.workspace_fingerprint)
@@ -134,7 +134,7 @@ def test_trusted_target_workspace_lsp_override_is_applied(tmp_path, monkeypatch)
     assert Path(server.command[0]).resolve() == Path(sys.executable).resolve()
 
 
-def test_lsp_cache_rotates_when_resolved_fingerprint_changes(tmp_path, monkeypatch):
+def test_lsp_cache_keeps_distinct_profiles_alive_until_owner_closes(tmp_path, monkeypatch):
     from nz_coder.lsp import manager
     from nz_coder.lsp.servers import ResolvedServer
 
@@ -161,8 +161,12 @@ def test_lsp_cache_rotates_when_resolved_fingerprint_changes(tmp_path, monkeypat
             self.process = SimpleNamespace(poll=lambda: None)
             clients.append(self)
 
-        def close(self):
+        def start(self, operation):
+            self._closed = False
+
+        def close(self, **kwargs):
             self.closed = True
+            self._closed = True
 
     manager.close_all_clients()
     monkeypatch.setattr(manager, "resolve_server", resolved)
@@ -172,7 +176,7 @@ def test_lsp_cache_rotates_when_resolved_fingerprint_changes(tmp_path, monkeypat
     second = manager.get_client_for_file(source, workspace)
 
     assert first is not second
-    assert first.closed is True
+    assert first.closed is False
     assert len(clients) == 2
     manager.close_all_clients()
 

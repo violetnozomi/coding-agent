@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import json
+from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.state.sessions import session_runtime_state_path
+from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.runtime.agent.planning_runtime import submit_execution_handoff
 
 from nz_coder.runtime.core.tool_context import (
     ToolExecutionContext,
@@ -10,6 +14,19 @@ from nz_coder.runtime.core.tool_context import (
     ToolProjectionContext,
 )
 from nz_coder.runtime.tool_runtime.observers import LegacyCodingToolObserver
+
+
+def _observe_completion_action(host, result, owner) -> None:
+    from nz_coder.runtime.adapters.verification_runtime import current_verification_origin
+    from nz_coder.runtime.core.execution_context import strict_local_tools
+
+    # 迟到结果、框架补测和严格评测不能替当前普通运行重开收尾机会。
+    if (getattr(host, "active_run_context", None) is not owner
+            or owner is not None and owner.finalized
+            or strict_local_tools() or current_verification_origin() != "model"):
+        return
+    if result.executed and not result.dispatch_failed and not result.permission_denied:
+        host.hooks.observe_model_tool_result(host, result)
 
 
 def tool_context_from_legacy_host(
@@ -42,6 +59,7 @@ def tool_context_from_legacy_host(
         return transitions.signal_from_metadata(host, metadata)
 
     def after_result(messages: list[dict], result, output: str) -> None:
+        _observe_completion_action(host, result, active_marker)
         host.hooks.after_tool_result(host, messages, result, output)
         host.hooks.on_post_tool_use(
             host,
@@ -80,9 +98,9 @@ def tool_context_from_legacy_host(
         return await guardrails.before_tool(host, tool_call, messages)
 
     async def after_tool(tool_call: dict, result, messages: list[dict]):
-        if guardrails is None:
-            return result
-        return await guardrails.after_tool(host, tool_call, result, messages)
+        if guardrails is not None:
+            result = await guardrails.after_tool(host, tool_call, result, messages)
+        return commit_execution_handoff_result(host, tool_call, result, messages)
 
     def metadata_reporter(processor, messages):
         factory = getattr(host, "_tool_metadata_callback", None)
@@ -138,6 +156,19 @@ def tool_context_from_legacy_host(
             signal_from_metadata=signal_from_metadata,
             after_result=after_result,
         ),
+        runtime_state_path=(session_runtime_state_path(run_context.request.session_id)
+                         if run_context is not None and current_run_settings().runtime_state_persist else None),
+        request_superseded=getattr(host, "_has_queued_followup", lambda: False),
+        current_agent_name=lambda: host.current_agent_name,
+    )
+
+
+def commit_execution_handoff_result(host, tool_call, result, messages):
+    if "execution_handoff_proposal" not in (result.metadata or {}):
+        return result
+    return submit_execution_handoff(
+        host.runtime_state, tool_call, result, messages, workspace=current_workdir(),
+        path=host._runtime_state_path if current_run_settings().runtime_state_persist else None,
     )
 
 
@@ -162,7 +193,6 @@ def policy_context_from_legacy_host(host, *, fresh: bool = False) -> ToolPolicyC
         runtime_state=getattr(host, "runtime_state", None),
         recovery=getattr(host, "recovery", None),
         permissions=getattr(host, "permissions", None),
-        stall_orchestrator=getattr(host, "stall_orchestrator", None),
         parse_input=parser,
         trace=trace,
         observability=observability,
@@ -183,6 +213,7 @@ def projection_context_from_legacy_host(
     after_result=None,
 ) -> ToolProjectionContext:
     """Bind stable result operations for direct compatibility callers."""
+    owner = getattr(host, "active_run_context", None)
     if signal_from_metadata is None:
         services = getattr(host, "runtime_services", None)
         signal_from_metadata = (
@@ -195,6 +226,7 @@ def projection_context_from_legacy_host(
             hooks = getattr(host, "hooks", None)
             if hooks is None:
                 return
+            _observe_completion_action(host, result, owner)
             host.hooks.after_tool_result(host, messages, result, output)
             host.hooks.on_post_tool_use(
                 host,
@@ -222,10 +254,8 @@ def projection_context_from_legacy_host(
         signal_from_metadata=signal_from_metadata,
         record_result=getattr(host, "_record_tool_result", lambda _result: False),
         trace_result=getattr(host, "_trace_tool_result", _discard_trace),
-        stall_orchestrator=getattr(host, "stall_orchestrator", None),
         after_result=after_result,
         available_result_tokens=available_result_tokens,
-        runtime_state=getattr(host, "runtime_state", None),
     )
 
 

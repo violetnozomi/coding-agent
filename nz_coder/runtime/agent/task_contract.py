@@ -1,17 +1,17 @@
-"""Planner-owned task contracts and deterministic requirement evidence."""
+"""用户明确要求形成的合同定义、跟进合并与证据投影。"""
 from __future__ import annotations
 
-import json
 import math
 import re
-from dataclasses import asdict, dataclass, field
 from pathlib import Path, PurePosixPath
 
+from nz_coder.runtime.verification.domain.requirements import EvidenceRef, Requirement, TaskContract, apply_write_constraints
+
 from nz_coder.runtime.agent.task_policy import (
+    explicit_read_only_paths,
     is_documentation_file,
-    mutation_instruction_scopes,
+    is_test_file,
     task_forbids_test_changes,
-    task_wants_tests,
 )
 
 
@@ -32,7 +32,6 @@ REQUIREMENT_STATUSES = frozenset({
 })
 SATISFACTION_MODES = frozenset({"deterministic", "semantic", "mixed"})
 REQUIRED_EVIDENCE_TYPES = frozenset({"semantic_review"})
-_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
 
 
 def _persisted_int(value: object, *, default: int = 0) -> int:
@@ -49,641 +48,141 @@ def _persisted_int(value: object, *, default: int = 0) -> int:
         return default
 
 
-@dataclass(frozen=True)
-class EvidenceRef:
-    """One durable, mutation-scoped fact supporting a requirement."""
-
-    type: str
-    path: str | None = None
-    command: str | None = None
-    generation: int = 0
-    fingerprint: str | None = None
 
 
-@dataclass(frozen=True)
-class Requirement:
-    """One normalized requirement emitted by the existing planning call."""
-
-    id: str
-    description: str
-    kind: str
-    expected_artifacts: tuple[str, ...] = ()
-    satisfaction_mode: str = "mixed"
-    depends_on: tuple[str, ...] = ()
-    required_evidence: tuple[str, ...] = ()
-    artifact_operations: tuple[tuple[str, str], ...] = ()
 
 
-@dataclass(frozen=True)
-class TaskContract:
-    """Validated description of what one Agent run must deliver."""
+def parse_task_contract(value: dict, workspace: str | Path | None = None) -> "TaskContract":
+    """校验并归一化宿主提供的正式用户合同定义。"""
+    if not isinstance(value, dict):
+        raise ValueError("task contract must be an object")
+    objective = str(value.get("objective") or "").strip()
+    raw_requirements = value.get("requirements") or []
+    if not isinstance(raw_requirements, list):
+        raise ValueError("task contract requirements must be a list")
+    if len(raw_requirements) > 24:
+        raise ValueError("task contract has too many requirements")
 
-    objective: str = ""
-    requirements: tuple[Requirement, ...] = ()
-    constraints: tuple[str, ...] = ()
-    acceptance_commands: tuple[str, ...] = ()
-    contract_version: int = 2
-
-    def to_dict(self) -> dict:
-        """Return a JSON-safe representation for RuntimeState persistence."""
-        return {
-            "objective": self.objective,
-            "requirements": [
-                {
-                    **asdict(item),
-                    "expected_artifacts": list(item.expected_artifacts),
-                    "depends_on": list(item.depends_on),
-                    "required_evidence": list(item.required_evidence),
-                    "artifact_operations": [list(pair) for pair in item.artifact_operations],
-                }
-                for item in self.requirements
-            ],
-            "constraints": list(self.constraints),
-            "acceptance_commands": list(self.acceptance_commands),
-            "contract_version": self.contract_version,
-        }
-
-    @classmethod
-    def from_dict(cls, value: dict, workspace: str | Path | None = None) -> "TaskContract":
-        """Validate and normalize a planner-provided contract object."""
-        if not isinstance(value, dict):
-            raise ValueError("task contract must be an object")
-        objective = str(value.get("objective") or "").strip()[:2000]
-        raw_requirements = value.get("requirements") or []
-        if not isinstance(raw_requirements, list):
-            raise ValueError("task contract requirements must be a list")
-        if len(raw_requirements) > 24:
-            raise ValueError("task contract has too many requirements")
-
-        requirements: list[Requirement] = []
-        seen_ids: set[str] = set()
-        for index, raw in enumerate(raw_requirements, start=1):
-            if not isinstance(raw, dict):
-                raise ValueError("each task requirement must be an object")
-            requirement_id = str(raw.get("id") or f"R{index}").strip()
-            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,31}", requirement_id):
-                raise ValueError(f"invalid requirement id: {requirement_id!r}")
-            if requirement_id in seen_ids:
-                raise ValueError(f"duplicate requirement id: {requirement_id}")
-            seen_ids.add(requirement_id)
-            description = str(raw.get("description") or "").strip()
-            if not description:
-                raise ValueError(f"requirement {requirement_id} has no description")
-            kind = str(raw.get("kind") or "behavior").strip().lower()
-            if kind not in REQUIREMENT_KINDS:
-                raise ValueError(f"unknown requirement kind: {kind}")
-            satisfaction_mode = str(
-                raw.get("satisfaction_mode") or _default_mode(kind)
-            ).strip().lower()
-            if satisfaction_mode not in SATISFACTION_MODES:
-                raise ValueError(
-                    f"unknown satisfaction mode for {requirement_id}: {satisfaction_mode}"
-                )
-            artifacts = _normalize_paths(
-                raw.get("expected_artifacts") or [],
-                workspace=workspace,
+    requirements: list[Requirement] = []
+    seen_ids: set[str] = set()
+    for index, raw in enumerate(raw_requirements, start=1):
+        if not isinstance(raw, dict):
+            raise ValueError("each task requirement must be an object")
+        requirement_id = str(raw.get("id") or f"R{index}").strip()
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,31}", requirement_id):
+            raise ValueError(f"invalid requirement id: {requirement_id!r}")
+        if requirement_id in seen_ids:
+            raise ValueError(f"duplicate requirement id: {requirement_id}")
+        seen_ids.add(requirement_id)
+        description = str(raw.get("description") or "").strip()
+        if not description:
+            raise ValueError(f"requirement {requirement_id} has no description")
+        kind = str(raw.get("kind") or "behavior").strip().lower()
+        if kind not in REQUIREMENT_KINDS:
+            raise ValueError(f"unknown requirement kind: {kind}")
+        satisfaction_mode = str(
+            raw.get("satisfaction_mode") or _default_mode(kind)
+        ).strip().lower()
+        if satisfaction_mode not in SATISFACTION_MODES:
+            raise ValueError(
+                f"unknown satisfaction mode for {requirement_id}: {satisfaction_mode}"
             )
-            operations = []
-            for pair in raw.get("artifact_operations") or []:
-                if not isinstance(pair, (list, tuple)) or len(pair) != 2:
-                    raise ValueError("artifact_operations must contain path/operation pairs")
-                path, operation = pair
-                if path not in artifacts or operation not in {"change", "create", "delete"}:
-                    raise ValueError("invalid artifact operation or unbound path")
-                if any(prior[0] == path for prior in operations):
-                    raise ValueError("duplicate artifact operation path")
-                operations.append((path, operation))
-            depends_on = tuple(dict.fromkeys(
-                str(item).strip()
-                for item in (raw.get("depends_on") or [])
-                if str(item).strip()
-            ))
-            default_evidence = ["semantic_review"] if kind == "compatibility" else []
-            raw_evidence = raw.get("required_evidence", default_evidence)
-            if not isinstance(raw_evidence, list):
-                raise ValueError(
-                    f"requirement {requirement_id} required_evidence must be a list"
-                )
-            required_evidence = tuple(dict.fromkeys(
-                str(item).strip().lower()
-                for item in raw_evidence
-                if str(item).strip()
-            ))
-            if kind == "compatibility" and "semantic_review" not in required_evidence:
-                required_evidence = (*required_evidence, "semantic_review")
-            unknown_evidence = set(required_evidence) - REQUIRED_EVIDENCE_TYPES
-            if unknown_evidence:
-                raise ValueError(
-                    f"requirement {requirement_id} has unknown required evidence: "
-                    + ", ".join(sorted(unknown_evidence))
-                )
-            requirements.append(Requirement(
-                id=requirement_id,
-                description=description[:2000],
-                kind=kind,
-                expected_artifacts=artifacts,
-                satisfaction_mode=satisfaction_mode,
-                depends_on=depends_on,
-                required_evidence=required_evidence,
-                artifact_operations=tuple(operations),
-            ))
-        known_ids = {item.id for item in requirements}
-        for item in requirements:
-            unknown = set(item.depends_on) - known_ids
-            if unknown:
-                raise ValueError(
-                    f"requirement {item.id} depends on unknown ids: "
-                    + ", ".join(sorted(unknown))
-                )
-        return cls(
-            objective=objective,
-            requirements=tuple(requirements),
-            constraints=_normalize_text_items(value.get("constraints") or [], limit=20),
-            acceptance_commands=_normalize_text_items(
-                value.get("acceptance_commands") or [], limit=10,
-            ),
-            contract_version=max(
-                1,
-                _persisted_int(value.get("contract_version"), default=1),
-            ),
+        artifacts = _normalize_paths(
+            raw.get("expected_artifacts") or [],
+            workspace=workspace,
         )
-
-
-@dataclass
-class RequirementProgress:
-    """Mutable state for one otherwise immutable Requirement."""
-
-    requirement: Requirement
-    status: str = "pending"
-    evidence: list[EvidenceRef] = field(default_factory=list)
-    mutation_generation: int = 0
-
-    def to_dict(self) -> dict:
-        return {
-            "requirement": TaskContract(requirements=(self.requirement,)).to_dict()[
-                "requirements"
-            ][0],
-            "status": self.status,
-            "evidence": [asdict(item) for item in self.evidence],
-            "mutation_generation": self.mutation_generation,
-        }
-
-
-@dataclass
-class RequirementLedger:
-    """Provider-neutral progress state derived from objective runtime evidence."""
-
-    items: dict[str, RequirementProgress] = field(default_factory=dict)
-    latest_generation: int = 0
-    latest_verification_generation: int = -1
-
-    @classmethod
-    def from_contract(cls, contract: TaskContract) -> "RequirementLedger":
-        return cls(items={
-            item.id: RequirementProgress(requirement=item)
-            for item in contract.requirements
-        })
-
-    @classmethod
-    def from_dict(cls, value: dict) -> "RequirementLedger":
-        if not isinstance(value, dict):
-            return cls()
-        result = cls(
-            latest_generation=max(
-                0,
-                _persisted_int(value.get("latest_generation")),
-            ),
-            latest_verification_generation=_persisted_int(
-                value.get("latest_verification_generation"),
-                default=-1,
-            ),
-        )
-        for raw in value.get("items") or []:
-            if not isinstance(raw, dict):
-                continue
-            requirement_raw = raw.get("requirement") or {}
-            try:
-                contract = TaskContract.from_dict({
-                    "objective": "",
-                    "requirements": [requirement_raw],
-                })
-            except (TypeError, ValueError):
-                continue
-            requirement = contract.requirements[0]
-            status = str(raw.get("status") or "pending")
-            if status not in REQUIREMENT_STATUSES:
-                status = "pending"
-            evidence: list[EvidenceRef] = []
-            for evidence_raw in raw.get("evidence") or []:
-                if not isinstance(evidence_raw, dict):
-                    continue
-                evidence.append(EvidenceRef(
-                    type=str(evidence_raw.get("type") or "unknown"),
-                    path=(
-                        str(evidence_raw["path"])
-                        if evidence_raw.get("path") is not None else None
-                    ),
-                    command=(
-                        str(evidence_raw["command"])
-                        if evidence_raw.get("command") is not None else None
-                    ),
-                    generation=max(
-                        0,
-                        _persisted_int(evidence_raw.get("generation")),
-                    ),
-                    fingerprint=(
-                        str(evidence_raw["fingerprint"])
-                        if evidence_raw.get("fingerprint") is not None else None
-                    ),
-                ))
-            result.items[requirement.id] = RequirementProgress(
-                requirement=requirement,
-                status=status,
-                evidence=evidence,
-                mutation_generation=max(
-                    0,
-                    _persisted_int(raw.get("mutation_generation")),
-                ),
-            )
-        return result
-
-    def to_dict(self) -> dict:
-        return {
-            "items": [item.to_dict() for item in self.items.values()],
-            "latest_generation": self.latest_generation,
-            "latest_verification_generation": self.latest_verification_generation,
-        }
-
-    def status(self, requirement_id: str) -> str:
-        item = self.items.get(requirement_id)
-        return item.status if item is not None else "pending"
-
-    def observe_mutation(
-        self, generation: int, paths: list[str] | tuple[str, ...],
-        *, operations: dict[str, str] | None = None,
-    ) -> None:
-        """Record successful writes and invalidate stale semantic verification."""
-        normalized_paths = tuple(dict.fromkeys(
-            path for path in (_normalize_path(item) for item in paths) if path
+        operations = []
+        for pair in raw.get("artifact_operations") or []:
+            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                raise ValueError("artifact_operations must contain path/operation pairs")
+            path, operation = pair
+            if path not in artifacts or operation not in {"change", "create", "delete"}:
+                raise ValueError("invalid artifact operation or unbound path")
+            if any(prior[0] == path for prior in operations):
+                raise ValueError("duplicate artifact operation path")
+            operations.append((path, operation))
+        depends_on = tuple(dict.fromkeys(
+            str(item).strip()
+            for item in (raw.get("depends_on") or [])
+            if str(item).strip()
         ))
-        generation = max(0, int(generation))
-        is_new_generation = generation > self.latest_generation
-        docs_only = bool(normalized_paths) and all(
-            is_documentation_file(path) for path in normalized_paths
-        )
-        if is_new_generation and not docs_only:
-            for progress in self.items.values():
-                if (
-                    progress.status == "satisfied"
-                    and progress.requirement.kind != "docs"
-                ):
-                    progress.status = "candidate" if progress.evidence else "pending"
-            self.latest_generation = generation
-        for progress in self.items.values():
-            matched = [
-                path for path in normalized_paths
-                if path in progress.requirement.expected_artifacts
-            ]
-            if not matched:
-                continue
-            progress.mutation_generation = generation
-            for path in matched:
-                operation = (operations or {}).get(path, "change")
-                # The latest existence-changing operation supersedes the old
-                # fact. An ordinary edit keeps a prior successful creation.
-                progress.evidence[:] = [e for e in progress.evidence if not (
-                    e.path == path and (e.type == "file_deleted" or operation == "delete")
-                )]
-                self._append_evidence(progress, EvidenceRef(
-                    type=(
-                        "file_deleted" if operation == "delete"
-                        else "file_created" if operation == "create"
-                        else "test_added" if progress.requirement.kind == "test"
-                        else "file_changed"
-                    ),
-                    path=path,
-                    generation=generation,
-                ))
-            if progress.status == "satisfied" and not is_new_generation:
-                continue
-            if (
-                progress.requirement.kind in {"docs", "artifact"}
-                and progress.requirement.satisfaction_mode == "deterministic"
-                and self._has_artifact_evidence(progress)
-            ):
-                progress.status = "satisfied"
-            else:
-                progress.status = "candidate"
-
-    def observe_verification(
-        self,
-        generation: int,
-        *,
-        command: str,
-        passed: bool,
-        acceptance: bool,
-    ) -> None:
-        """Promote artifact-backed candidates using current-generation evidence."""
-        generation = max(0, int(generation))
-        if not passed:
-            return
-        self.latest_verification_generation = max(
-            self.latest_verification_generation,
-            generation,
-        )
-        evidence_type = "verification_passed" if acceptance else "command_passed"
-        for progress in self.items.values():
-            if (
-                acceptance
-                and progress.requirement.kind in {"docs", "artifact", "test"}
-                and not self._has_artifact_evidence(progress)
-            ):
-                continue
-            if progress.status not in {"candidate", "in_progress"} and not (
-                acceptance and not progress.requirement.expected_artifacts
-            ):
-                continue
-            if progress.requirement.expected_artifacts and not self._has_artifact_evidence(
-                progress
-            ):
-                continue
-            if not acceptance and not self._targeted_verification_relates(
-                progress,
-                command,
-            ):
-                continue
-            self._append_evidence(progress, EvidenceRef(
-                type=evidence_type,
-                command=str(command),
-                generation=generation,
-            ))
-            progress.status = (
-                "satisfied"
-                if self._required_evidence_satisfied(progress, generation)
-                else "candidate"
+        default_evidence = ["semantic_review"] if kind == "compatibility" else []
+        raw_evidence = raw.get("required_evidence", default_evidence)
+        if not isinstance(raw_evidence, list):
+            raise ValueError(
+                f"requirement {requirement_id} required_evidence must be a list"
             )
-            progress.mutation_generation = generation
+        required_evidence = tuple(dict.fromkeys(
+            str(item).strip().lower()
+            for item in raw_evidence
+            if str(item).strip()
+        ))
+        if kind == "compatibility" and "semantic_review" not in required_evidence:
+            required_evidence = (*required_evidence, "semantic_review")
+        unknown_evidence = set(required_evidence) - REQUIRED_EVIDENCE_TYPES
+        if unknown_evidence:
+            raise ValueError(
+                f"requirement {requirement_id} has unknown required evidence: "
+                + ", ".join(sorted(unknown_evidence))
+            )
+        requirements.append(Requirement(
+            id=requirement_id,
+            description=description[:2000],
+            kind=kind,
+            expected_artifacts=artifacts,
+            satisfaction_mode=satisfaction_mode,
+            depends_on=depends_on,
+            required_evidence=required_evidence,
+            artifact_operations=tuple(operations),
+        ))
+    known_ids = {item.id for item in requirements}
+    for item in requirements:
+        unknown = set(item.depends_on) - known_ids
+        if unknown:
+            raise ValueError(
+                f"requirement {item.id} depends on unknown ids: "
+                + ", ".join(sorted(unknown))
+            )
+    return TaskContract(
+        objective=objective,
+        requirements=tuple(requirements),
+        constraints=_normalize_text_items(value.get("constraints") or [], limit=20),
+        acceptance_commands=_acceptance_commands(value.get("acceptance_commands") or []),
+        contract_version=max(
+            1,
+            _persisted_int(value.get("contract_version"), default=1),
+        ),
+    )
 
-    def observe_semantic_review(
-        self,
-        generation: int,
-        *,
-        accepted: bool,
-        fingerprint: str = "",
-    ) -> None:
-        """Record a real independent semantic verdict for this mutation."""
-        if not accepted:
-            return
-        generation = max(0, int(generation))
-        for progress in self.items.values():
-            if "semantic_review" not in progress.requirement.required_evidence:
-                continue
-            if not self._has_current_evidence(
-                progress,
-                "verification_passed",
-                generation,
-            ):
-                continue
-            self._append_evidence(progress, EvidenceRef(
-                type="semantic_review_passed",
-                generation=generation,
-                fingerprint=str(fingerprint or "") or None,
-            ))
-            if self._required_evidence_satisfied(progress, generation):
-                progress.status = "satisfied"
-                progress.mutation_generation = generation
-
-    def semantic_review_pending_only(self) -> bool:
-        """Return whether semantic review is the sole missing completion fact."""
-        unresolved = self.unresolved()
-        if not unresolved:
-            return False
-        generation = self.latest_generation
-        for progress in unresolved:
-            required = set(progress.requirement.required_evidence)
-            if required != {"semantic_review"}:
-                return False
-            if not self._has_current_evidence(
-                progress,
-                "verification_passed",
-                generation,
-            ):
-                return False
-        return True
-
-    def unresolved(self) -> tuple[RequirementProgress, ...]:
-        """Return hard requirements not yet objectively satisfied."""
-        return tuple(
-            item for item in self.items.values()
-            if item.status != "satisfied"
-        )
-
-    @staticmethod
-    def _append_evidence(progress: RequirementProgress, evidence: EvidenceRef) -> None:
-        if evidence not in progress.evidence:
-            progress.evidence.append(evidence)
-        if len(progress.evidence) > 20:
-            progress.evidence[:] = progress.evidence[-20:]
-
-    @staticmethod
-    def _has_artifact_evidence(progress: RequirementProgress) -> bool:
-        operations = dict(progress.requirement.artifact_operations)
-        types = {
-            "change": {"file_changed", "file_created", "test_added", "symbol_present"},
-            "create": {"file_created"},
-            "delete": {"file_deleted"},
-        }
-        paths = progress.requirement.expected_artifacts
-        if not paths:
-            return any(e.type in types["change"] for e in progress.evidence)
-        return all(any(e.path == path and e.type in types[operations.get(path, "change")]
-                       for e in progress.evidence) for path in paths)
-
-    @classmethod
-    def _required_evidence_satisfied(
-        cls,
-        progress: RequirementProgress,
-        generation: int,
-    ) -> bool:
-        for evidence_type in progress.requirement.required_evidence:
-            recorded_type = {
-                "semantic_review": "semantic_review_passed",
-            }[evidence_type]
-            if not cls._has_current_evidence(
-                progress,
-                recorded_type,
-                generation,
-            ):
-                return False
-        return True
-
-    @staticmethod
-    def _has_current_evidence(
-        progress: RequirementProgress,
-        evidence_type: str,
-        generation: int,
-    ) -> bool:
-        return any(
-            item.type == evidence_type and item.generation == generation
-            for item in progress.evidence
-        )
-
-    @staticmethod
-    def _targeted_verification_relates(
-        progress: RequirementProgress,
-        command: str,
-    ) -> bool:
-        from nz_coder.intelligence.verification_planner import classify_verification_command
-
-        if classify_verification_command(command) != "targeted":
-            return False
-        lowered = str(command or "").casefold().replace("\\", "/")
-        for artifact in progress.requirement.expected_artifacts:
-            stem = PurePosixPath(artifact).stem.casefold()
-            for prefix in ("test_", "test-"):
-                if stem.startswith(prefix):
-                    stem = stem[len(prefix):]
-            if len(stem) >= 2 and stem in lowered:
-                return True
-        return False
-
-
-@dataclass(frozen=True)
-class PlanningEnvelope:
-    """One planner response projected to the existing scratchpad and contract."""
-
-    plan_text: str
-    contract: TaskContract
 
 
 def derive_task_contract(
     task_text: str,
     *,
-    acceptance_command: str = "",
+    acceptance_commands: tuple[str, ...] = (),
     workspace: str | Path | None = None,
     artifact_allowlist: tuple[str, ...] | None = None,
     explicit_path_allowlist: tuple[str, ...] | None = None,
 ) -> TaskContract:
-    """Build a conservative zero-call contract from explicit user intent.
-
-    Behavior contracts require a validated exact acceptance command. Explicit
-    file lifecycle/documentation requests can instead reuse the deterministic
-    artifact contract, without inventing a test obligation for those tasks.
-    """
-    text = " ".join(str(task_text or "").split())
-    command = " ".join(str(acceptance_command or "").split())
-    if not text:
-        return TaskContract()
-
-    lowered = text.casefold()
-    from nz_coder.intelligence.bootstrap_artifacts import (
-        resolve_bootstrap_artifacts,
-    )
-
-    resolution = resolve_bootstrap_artifacts(
-        text,
-        workspace=workspace or Path.cwd(),
-        explicit_path_allowlist=explicit_path_allowlist,
-    )
+    """只把用户明确命令和具体文件操作转为硬条件，泛化质量由评审检查。"""
+    text = str(task_text or "").strip()
+    commands = _acceptance_commands(list(acceptance_commands))
+    from nz_coder.intelligence.bootstrap_artifacts import resolve_bootstrap_artifacts
     from nz_coder.runtime.agent.task_policy import extract_explicit_mutation_operations
-    mutation_operations = extract_explicit_mutation_operations(text)
-    hard_artifact_intent = any(
-        operation in {"create", "delete"} or is_documentation_file(path)
-        for path, operation in mutation_operations.items()
-    )
-    if not command:
-        if not hard_artifact_intent:
-            return TaskContract()
-        paths = tuple(path for path in resolution.required_paths
-                      if path in mutation_operations and (
-                          artifact_allowlist is None or path in artifact_allowlist
-                      ))
-        return derive_round_artifact_contract(text, artifact_paths=paths, workspace=workspace)
-    allowed_artifacts = (
-        None
-        if artifact_allowlist is None
-        else {
-            normalized
-            for normalized in (
-                _normalize_path(item) for item in artifact_allowlist
-            )
-            if normalized
-        }
-    )
-    requirements: list[dict] = []
 
-    def add(
-        kind: str,
-        description: str,
-        mode: str = "semantic",
-        artifacts: tuple[str, ...] = (),
-    ) -> None:
-        if allowed_artifacts is not None:
-            artifacts = tuple(
-                artifact
-                for artifact in artifacts
-                if _normalize_path(artifact) in allowed_artifacts
-            )
-        requirements.append({
-            "id": f"R{len(requirements) + 1}",
-            "description": description,
-            "kind": kind,
-            "expected_artifacts": list(artifacts),
-            "artifact_operations": [
-                [path, mutation_operations[path]] for path in artifacts
-                if path in mutation_operations
-            ],
-            "satisfaction_mode": mode,
-            "depends_on": [],
-            "required_evidence": (
-                ["semantic_review"] if kind == "compatibility" else []
-            ),
-        })
-
-    add(
-        "behavior",
-        f"Implement the requested behavior: {text[:900]}",
-        artifacts=resolution.required_for("behavior"),
-    )
-    if task_wants_tests(text) or resolution.required_for("test"):
-        test_artifacts = resolution.required_for("test")
-        if test_artifacts:
-            for artifact in test_artifacts:
-                add(
-                    "test",
-                    f"Add or update the explicitly requested test coverage in {artifact}.",
-                    artifacts=(artifact,),
-                )
-        else:
-            add("test", "Add or update the explicitly requested test coverage.")
-    if resolution.required_for("docs") or _contains_any(
-        " ".join(mutation_instruction_scopes(text)).casefold(),
-        ("readme", "documentation", "docs", "document ", "文档", "说明"),
-    ):
-        add(
-            "docs",
-            "Update the explicitly requested documentation.",
-            "mixed",
-            resolution.required_for("docs"),
-        )
-    if _contains_any(lowered, (
-        "compatib", "preserve", "backward", "public api",
-        "兼容", "保持现有", "公开 api", "不破坏",
-    )):
-        add("compatibility", "Preserve the requested compatibility guarantees.")
-    if command:
-        add("verification", f"Pass the exact acceptance command: {command}")
-    constraints = (
-        ["Do not modify test files."]
-        if task_forbids_test_changes(text) else []
-    )
-    return TaskContract.from_dict({
-        "objective": text[:2000],
-        "requirements": requirements,
-        "constraints": constraints,
-        "acceptance_commands": [command],
-        "contract_version": 2,
-    }, workspace=workspace)
+    resolution = resolve_bootstrap_artifacts(text, workspace=workspace or Path.cwd(),
+        explicit_path_allowlist=explicit_path_allowlist)
+    operations = extract_explicit_mutation_operations(text)
+    paths = tuple(path for path in resolution.required_paths if path in operations
+                  and (artifact_allowlist is None or path in artifact_allowlist))
+    artifacts = derive_round_artifact_contract(text, artifact_paths=paths, workspace=workspace)
+    requirements = list(artifacts.requirements)
+    if commands:
+        requirements.append(Requirement(
+            f"R{len(requirements) + 1}", "Pass every exact acceptance command:\n" + "\n".join(commands),
+            "verification", satisfaction_mode="deterministic"))
+    return TaskContract(objective=text, requirements=tuple(requirements),
+        constraints=tuple(_instruction_constraints(text)), acceptance_commands=commands)
 
 
 def derive_round_artifact_contract(
@@ -693,14 +192,14 @@ def derive_round_artifact_contract(
     workspace: str | Path | None = None,
 ) -> TaskContract:
     """Build only deterministic artifact obligations from explicit write targets."""
-    text = " ".join(str(task_text or "").split())
+    text = str(task_text or "").strip()
     from nz_coder.runtime.agent.task_policy import extract_explicit_mutation_operations
 
     operations = extract_explicit_mutation_operations(text)
     requirements: list[dict] = []
     for raw_path in artifact_paths[:20]:
         path = _normalize_path(raw_path)
-        if not path:
+        if not path or path in explicit_read_only_paths(text) or (task_forbids_test_changes(text) and is_test_file(path)):
             continue
         is_docs = is_documentation_file(path)
         kind = "docs" if is_docs else "artifact"
@@ -714,12 +213,10 @@ def derive_round_artifact_contract(
             "depends_on": [],
             "required_evidence": [],
         })
-    if not requirements:
-        return TaskContract()
-    return TaskContract.from_dict({
-        "objective": text[:2000],
+    return parse_task_contract({
+        "objective": text,
         "requirements": requirements,
-        "constraints": [],
+        "constraints": _instruction_constraints(text),
         "acceptance_commands": [],
         "contract_version": 2,
     }, workspace=workspace)
@@ -727,15 +224,12 @@ def derive_round_artifact_contract(
 
 def merge_round_task_contract(
     current: TaskContract,
-    ledger: RequirementLedger,
     round_contract: TaskContract,
     *,
     allow_test_changes: bool | None = None,
-) -> tuple[TaskContract, RequirementLedger]:
+    allow_write_paths: tuple[str, ...] = (),
+) -> TaskContract:
     """Merge explicit follow-up requirements while preserving prior evidence."""
-    if not round_contract.requirements:
-        return current, ledger
-
     existing_non_verification = [
         item for item in current.requirements if item.kind != "verification"
     ]
@@ -787,6 +281,10 @@ def merge_round_task_contract(
         )
 
     constraints = list(current.constraints)
+    new_readonly = {p for clause in round_contract.constraints for p in explicit_read_only_paths(clause)}
+    allowed = set(allow_write_paths) - new_readonly
+    constraints = [clause for clause in constraints
+                   if not (set(explicit_read_only_paths(clause)) & allowed)]
     immutable_tests = "Do not modify test files."
     if allow_test_changes is True:
         constraints = [item for item in constraints if item != immutable_tests]
@@ -796,32 +294,26 @@ def merge_round_task_contract(
         if constraint not in constraints:
             constraints.append(constraint)
 
+    objective = current.objective or round_contract.objective
+    followup = "\n\nUser follow-up:\n" + round_contract.objective
+    if current.objective and round_contract.objective and round_contract.objective != current.objective and not current.objective.endswith(followup):
+        objective += followup
     merged_contract = TaskContract(
-        objective=current.objective or round_contract.objective,
+        objective=objective,
         requirements=tuple(merged_requirements),
         constraints=tuple(constraints),
-        acceptance_commands=(
-            round_contract.acceptance_commands or current.acceptance_commands
-        ),
+        acceptance_commands=tuple(dict.fromkeys((*current.acceptance_commands, *round_contract.acceptance_commands))),
         contract_version=max(
             current.contract_version,
             round_contract.contract_version,
         ),
     )
-    merged_items: dict[str, RequirementProgress] = {}
-    for requirement in merged_contract.requirements:
-        prior = ledger.items.get(requirement.id)
-        if prior is not None and prior.requirement == requirement:
-            merged_items[requirement.id] = prior
-        else:
-            merged_items[requirement.id] = RequirementProgress(
-                requirement=requirement
-            )
-    return merged_contract, RequirementLedger(
-        items=merged_items,
-        latest_generation=ledger.latest_generation,
-        latest_verification_generation=ledger.latest_verification_generation,
-    )
+    return apply_write_constraints(merged_contract)
+
+
+def _instruction_constraints(text: str) -> list[str]:
+    constraints = ["Do not modify test files."] if task_forbids_test_changes(text) else []
+    return constraints + [f"Do not modify {path}." for path in explicit_read_only_paths(text)]
 
 
 def fallback_plan_text(contract: TaskContract) -> str:
@@ -844,19 +336,6 @@ def fallback_plan_text(contract: TaskContract) -> str:
             f" - {target} - {requirement.description[:240]}"
         )
     return "\n".join(lines)
-
-
-def parse_planner_output(raw_text: str, workspace: str | Path) -> PlanningEnvelope:
-    """Parse JSON plan+contract output, preserving legacy Markdown fallback."""
-    raw = str(raw_text or "").strip()
-    payload = _extract_json(raw)
-    if payload is None:
-        return PlanningEnvelope(plan_text=raw, contract=TaskContract())
-    contract = TaskContract.from_dict(payload, workspace=workspace)
-    plan_text = _format_plan(payload.get("plan") or [])
-    if not plan_text:
-        plan_text = "## Plan\n1. Implement and verify the task contract."
-    return PlanningEnvelope(plan_text=plan_text, contract=contract)
 
 
 def _contains_any(text: str, markers: tuple[str, ...]) -> bool:
@@ -896,38 +375,6 @@ def _next_requirement_id(used_ids: set[str]) -> str:
     return requirement_id
 
 
-def _extract_json(raw: str) -> dict | None:
-    candidate = raw
-    fence = _JSON_FENCE_RE.search(raw)
-    if fence:
-        candidate = fence.group(1)
-    elif not raw.lstrip().startswith("{"):
-        return None
-    try:
-        value = json.loads(candidate)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"planner output JSON is invalid: {exc.msg}") from exc
-    if not isinstance(value, dict):
-        raise ValueError("planner output must be an object")
-    return value
-
-
-def _format_plan(raw_steps) -> str:
-    if not isinstance(raw_steps, list):
-        raise ValueError("planner plan must be a list")
-    lines = ["## Plan"]
-    for index, raw in enumerate(raw_steps[:5], start=1):
-        if not isinstance(raw, dict):
-            continue
-        title = str(raw.get("title") or "").strip()
-        if not title:
-            continue
-        target = str(raw.get("target") or "need to search").strip()
-        verification = str(raw.get("verification") or "focused verification").strip()
-        lines.append(f"{index}. {title} - {target} - {verification}")
-    return "\n".join(lines) if len(lines) > 1 else ""
-
-
 def _normalize_paths(values, workspace: str | Path | None) -> tuple[str, ...]:
     if not isinstance(values, list):
         raise ValueError("expected_artifacts must be a list")
@@ -964,6 +411,13 @@ def _strip_relative_prefix(value: str) -> str:
     return normalized
 
 
+def _acceptance_commands(values) -> tuple[str, ...]:
+    # 命令是执行身份；截断或折叠引号内空白会把用户的验收换成另一条命令。
+    if not isinstance(values, list) or any(not isinstance(item, str) for item in values):
+        raise ValueError("acceptance commands must be a list of strings")
+    return tuple(dict.fromkeys(item.strip() for item in values if item.strip()))
+
+
 def _normalize_text_items(values, *, limit: int) -> tuple[str, ...]:
     if not isinstance(values, list):
         raise ValueError("task contract text collections must be lists")
@@ -975,17 +429,13 @@ def _normalize_text_items(values, *, limit: int) -> tuple[str, ...]:
 
 
 def _default_mode(kind: str) -> str:
-    return "deterministic" if kind in {"docs", "artifact"} else "mixed"
+    return "deterministic" if kind in {"docs", "artifact", "verification"} else "mixed"
 
 
 __all__ = [
     "EvidenceRef",
-    "PlanningEnvelope",
     "Requirement",
-    "RequirementLedger",
-    "RequirementProgress",
     "TaskContract",
     "derive_round_artifact_contract",
     "merge_round_task_contract",
-    "parse_planner_output",
 ]

@@ -7,6 +7,7 @@ seen. It does not gate or change AgentLoop control flow.
 """
 from __future__ import annotations
 
+import copy
 import json
 import re
 from collections import Counter
@@ -84,10 +85,13 @@ def _status_from_output(output: str) -> str:
     return "unknown"
 
 
-def _verification_status(output: str, success: bool) -> str:
+def _verification_status(output: str, success: bool, *, exit_code: int | None = None) -> str:
     if not success:
         parsed = _status_from_output(output)
         return parsed if parsed in {"failed", "error", "denied"} else "failed"
+    # 已有实际退出状态时，预期异常的日志不能把真实成功重新解释为失败。
+    if type(exit_code) is int:
+        return "passed" if exit_code == 0 else "failed"
     return "failed" if verification_output_failed(output) else "passed"
 
 
@@ -99,16 +103,17 @@ def _looks_like_limitation(text: str) -> bool:
 @dataclass
 class RunEvidence:
     run_id: str
-    task_mode: str = "unknown"
+    task_assessment: dict | None = None
     project_spec: dict | None = None
     blueprint: dict | None = None
     created_files: list[str] = field(default_factory=list)
     modified_files: list[str] = field(default_factory=list)
     expected_files: list[str] = field(default_factory=list)
     actual_output_paths: list[str] = field(default_factory=list)
-    verification_results: list[dict] = field(default_factory=list)
-    verification_evidence: list[dict] = field(default_factory=list)
-    build_results: list[dict] = field(default_factory=list)
+    _verification_results: list[dict] = field(default_factory=list, repr=False)
+    _verification_evidence: list[dict] = field(default_factory=list, repr=False)
+    _build_results: list[dict] = field(default_factory=list, repr=False)
+    verification_domain: object | None = field(default=None, repr=False)
     impact_review: dict | None = None
     completeness_review: dict | None = None
     limitations: list[str] = field(default_factory=list)
@@ -142,6 +147,34 @@ class RunEvidence:
             return False
         paths = collect_filesystem_mutation_paths(tool_input)
         return not paths or not all(is_documentation_file(path) for path in paths)
+
+    @property
+    def verification_results(self) -> list[dict]:
+        if self.verification_domain is None:
+            return self._verification_results
+        snapshot = self.verification_domain.snapshot()
+        facts = {fact.execution_id: fact for fact in snapshot.executions}
+        return [
+            {"command": facts[decision.execution_id].command.original, "check_command": spec.command.original,
+             "stage": spec.stage, "status": decision.status,
+             "summary": decision.reason, "cwd": facts[decision.execution_id].command.cwd,
+             "evidence_generation": decision.evidence_generation,
+             "exit_code": facts[decision.execution_id].exit_code}
+            for spec in snapshot.specs for decision in (snapshot.decision(spec.id),)
+            if decision.execution_id in facts and decision.status != "covered"
+        ][-_MAX_RESULTS:]
+
+    @property
+    def verification_evidence(self) -> list[dict]:
+        if self.verification_domain is None:
+            return self._verification_evidence
+        return [dict(item) for item in self.verification_results]
+
+    @property
+    def build_results(self) -> list[dict]:
+        if self.verification_domain is None:
+            return self._build_results
+        return [item for item in self.verification_results if item["stage"] == "static"]
 
     def _upsert_verification_result(self, items: list[dict], payload: dict) -> None:
         """Keep the latest result for one stage/command instead of stale failure history."""
@@ -337,7 +370,7 @@ class RunEvidence:
         exit_code: int | None = None,
     ) -> list[str]:
         command = str(tool_input.get("command") or "").strip()
-        status = _verification_status(output, success)
+        status = _verification_status(output, success, exit_code=exit_code)
         if status == "failed" and is_environment_verification_failure(
             command,
             output,
@@ -478,7 +511,7 @@ class RunEvidence:
                     self._append_unique(self.modified_files, path, _MAX_FILES)
                     self._append_unique(self.actual_output_paths, path, _MAX_FILES)
 
-        if success and self._write_invalidates_verification(tool_name, tool_input):
+        if self.verification_domain is None and success and self._write_invalidates_verification(tool_name, tool_input):
             self.verification_results.clear()
             self.verification_evidence.clear()
             self.build_results.clear()
@@ -493,7 +526,7 @@ class RunEvidence:
                 self._append_unique(self.actual_output_paths, path, _MAX_FILES)
 
         bash_verification_stage = None
-        if tool_name == "bash" and not dispatch_failed:
+        if self.verification_domain is None and tool_name == "bash" and not dispatch_failed:
             bash_verification_stage = self._record_bash_verification(
                 tool_input, output_text, success and not command_failed,
                 exit_code=(
@@ -509,13 +542,13 @@ class RunEvidence:
             self._record_blueprint(payload)
         elif tool_name == "scaffold_project":
             self._record_scaffold(output_text)
-        elif tool_name == "write_files_batch":
+        elif tool_name == "write_files_batch" and success:
             self._record_write_batch(payload if isinstance(payload, dict) else None, tool_input, output_text)
-        elif tool_name == "verify_project_build":
+        elif tool_name == "verify_project_build" and self.verification_domain is None:
             self._record_verify_project_build(output_text)
-        elif tool_name == "verify_changed_files":
+        elif tool_name == "verify_changed_files" and self.verification_domain is None:
             self._record_verify_changed_files(output_text)
-        elif tool_name == "python_symbol_check":
+        elif tool_name == "python_symbol_check" and self.verification_domain is None:
             self._record_symbol_check(tool_input, output_text, success)
         elif tool_name == "analyze_impact":
             self._record_impact(payload if isinstance(payload, dict) else None, output_text)
@@ -559,7 +592,7 @@ class RunEvidence:
     def to_dict(self) -> dict:
         return {
             "run_id": self.run_id,
-            "task_mode": self.task_mode,
+            "task_assessment": copy.deepcopy(self.task_assessment),
             "project_spec": self.project_spec,
             "blueprint": self.blueprint,
             "created_files": list(self.created_files),
@@ -579,7 +612,7 @@ class RunEvidence:
 
     def review_input(self) -> dict:
         return {
-            "task_mode": self.task_mode,
+            "task_assessment": copy.deepcopy(self.task_assessment),
             "created_files": list(self.created_files),
             "modified_files": list(self.modified_files),
             "expected_files": list(self.expected_files),

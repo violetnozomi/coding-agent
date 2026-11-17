@@ -1,0 +1,51 @@
+"""真实持久会话场景；每次解析都生成新的离线Runtime，避免复用已退休对象。"""
+
+import json
+from dataclasses import replace
+
+from nz_coder.foundation.workspace_trust import load_config_snapshot
+from nz_coder.runtime.core.request import RunOptions
+from nz_coder.runtime.execution import native_sdk
+from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.state import sessions
+from tests.runtime.test_native_product_runtime import _runtime, _request
+from tests.runtime.test_working_memory_reminders import _reply as _reply, _call as _call
+
+
+def setup(monkeypatch, workspace, provider):
+    for name in ("XDG_STATE_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+        monkeypatch.setenv(name, str(workspace.parent / (workspace.name + "-" + name)))
+
+    def runtime(_selection):
+        return replace(_runtime(), provider=provider)
+
+    monkeypatch.setattr(native_sdk, "resolve_model_runtime", runtime)
+    monkeypatch.setattr(
+        "nz_coder.runtime.execution.loop.resolve_model_runtime", runtime
+    )
+    snapshot = load_config_snapshot(
+        workspace,
+        environ={
+            "NZ_PLANNING_ENABLED": "0",
+            "RUNTIME_STATE_PERSIST": "1",
+            "NZ_WORKING_MEMORY_REMINDER_STEPS": "0",
+        },
+    )
+    request = replace(
+        _request(workspace),
+        session_id="resume-test",
+        metadata={
+            "permission_mode": "auto",
+            "persist_session": True,
+        },
+    )
+    return request, RunOptions(
+        config_snapshot=snapshot, permission_asker=lambda *_: "once"
+    )
+
+
+def payload(workspace, request):
+    with scoped_workdir(workspace):
+        return json.loads(
+            (sessions.session_dir() / (request.session_id + ".json")).read_text()
+        )

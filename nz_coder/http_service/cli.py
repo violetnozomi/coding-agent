@@ -4,7 +4,8 @@ from __future__ import annotations
 import argparse
 import os
 
-from nz_coder.foundation import config
+from nz_coder.providers.models import active_model_selection
+from nz_coder.providers.configuration import provider_connection
 
 from .server import SessionHTTPService
 
@@ -33,8 +34,10 @@ def serve_main(argv: list[str] | None = None) -> int:
         help="Bearer token; defaults to NZ_HTTP_TOKEN or a generated secret",
     )
     args = parser.parse_args(argv)
-    if not config.API_KEY:
-        print("Error: API_KEY is required before starting the Session service.")
+    selection = active_model_selection()
+    connection = provider_connection(selection.provider)
+    if not connection.configured:
+        print(f"Error: {connection.credential_name} is required before starting the Session service.")
         return 1
     try:
         service = SessionHTTPService(

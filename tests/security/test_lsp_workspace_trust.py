@@ -39,7 +39,7 @@ def test_workspace_node_modules_lsp_is_not_started_before_trust(tmp_path, monkey
 
     manager.close_all_clients()
     assert manager.get_client_for_file(source, workspace) is None
-    assert "requires trust" in manager.client_startup_error(source, workspace)
+    assert "/lsp trust" in manager.client_startup_error(source, workspace)
     assert manager.client_status_summary(workspace)[0]["status"] == "trust-required"
     manager.close_all_clients()
 
@@ -67,14 +67,19 @@ def test_lsp_trust_is_invalidated_when_workspace_executable_changes(
 def test_system_lsp_remains_trusted(tmp_path, monkeypatch):
     from nz_coder.lsp.servers import resolve_server
 
-    source = tmp_path / "main.go"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    source = workspace / "main.go"
     source.write_text("package main\n", encoding="utf-8")
+    executable = tmp_path / "system" / "gopls"
+    executable.parent.mkdir()
+    executable.write_bytes(b"system executable fixture")
     monkeypatch.setattr(
         "nz_coder.lsp.servers.shutil.which",
-        lambda name: f"/usr/bin/{name}",
+        lambda _name, **_kwargs: str(executable),
     )
 
-    server = resolve_server(source, tmp_path)
+    server = resolve_server(source, workspace)
 
     assert server is not None
     assert server.source == "system"

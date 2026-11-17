@@ -62,6 +62,10 @@ RUNTIME_LEAF_PACKAGES = (
 
 RUNTIME_EXECUTION_IMPORT_ALLOWLIST = {
     (
+        "nz_coder/runtime/adapters/context.py",
+        "nz_coder.runtime.execution.runtime_state",
+    ),
+    (
         "nz_coder/runtime/adapters/runner.py",
         "nz_coder.runtime.execution.run_lifecycle",
     ),
@@ -171,7 +175,6 @@ INTERNAL_RUNTIME_ROOT_MODULES = {
     "sidecar_verifier",
     "snapshot_runtime",
     "stall_detector",
-    "stall_sidecar",
     "structured_output",
     "subagent",
     "task_contract",

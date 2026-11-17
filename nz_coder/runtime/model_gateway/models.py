@@ -14,11 +14,9 @@ class ModelCallPurpose(str, Enum):
 
     CODING = "coding"
     PLANNING = "planning"
-    REPLANNING = "replanning"
     COMPACTION = "compaction"
     MEMORY = "memory"
     VERIFIER = "verifier"
-    STALL_SIDECAR = "stall_sidecar"
     VISION = "vision"
     AUTO_MODE = "auto_mode"
 

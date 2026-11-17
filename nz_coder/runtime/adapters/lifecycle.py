@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import copy
 
-from nz_coder.protocol.message_schema import bind_user_context, is_synthetic_user_message
+from nz_coder.protocol.message_schema import bind_user_context
 from nz_coder.runtime.observability.run_evidence import RunEvidence
 from nz_coder.runtime.core.lifecycle_context import (
     LifecycleExecutionContext,
@@ -13,6 +13,7 @@ from nz_coder.runtime.session.session_revert import SessionReverter
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.state.sessions import session_runtime_state_path
 from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.runtime.core.execution_context import is_genuine_runtime_followup, explicit_replacement_task
 
 
 def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
@@ -30,7 +31,6 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
             "sidecar_unattributed_write_ops": "_sidecar_unattributed_write_ops",
             "last_status": "last_status",
             "restored_state": "_restored_state",
-            "replan_count": "_replan_count",
             "reflection_signature": "_reflection_signature",
             "reflection_attempts": "_reflection_attempts",
             "cached_reflection_review": "_cached_reflection_review",
@@ -55,22 +55,28 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
         current_round_instruction: str = "",
         current_user_message: dict | None = None,
     ) -> bool:
-        genuine_followup = (
-            isinstance(current_user_message, dict)
-            and current_user_message.get("role") == "user"
-            and not is_synthetic_user_message(current_user_message)
-            and isinstance(current_user_message.get("content"), str)
-        )
+        host._last_compaction_operation_id = None
+        host._compaction_read_baseline = frozenset()
+        genuine_followup = is_genuine_runtime_followup(current_user_message)
+        replacement = explicit_replacement_task(current_user_message)
+        if replacement is not None:
+            task_text = replacement
         if current_user_message is not None and not genuine_followup:
             current_round_instruction = ""
         if genuine_followup:
             current_round_instruction = current_user_message["content"]
         host._runtime_state_path = session_runtime_state_path(host.session_id)
         host.runtime_state.reset(max_turns=max_turns, timeout_seconds=timeout)
-        host.runtime_state.set_acceptance_criteria_from_text(task_text)
+        host.runtime_state.set_acceptance_criteria_from_text(task_text, workspace=current_workdir())
         host.runtime_state.initial_task_text = task_text
         restored = False
-        if current_run_settings().runtime_state_persist:
+        if replacement is not None:
+            from nz_coder.tools.todo import clear as clear_todo
+
+            result = clear_todo()
+            if result.startswith("Error:"):
+                host.tracer.log("todo_clear_failed", error=result)
+        if replacement is None and current_run_settings().runtime_state_persist:
             restored = host.runtime_state.load(
                 host._runtime_state_path,
                 allow_inactive=resume_activation or genuine_followup,
@@ -86,10 +92,14 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
                     host.runtime_state.timeout_seconds = timeout
                 if not host.runtime_state.initial_task_text:
                     host.runtime_state.initial_task_text = task_text
-                if host.runtime_state.plan_text:
-                    host._sp.replace_category("plan", host.runtime_state.plan_text)
         if not restored:
-            if resume_activation or genuine_followup:
+            if replacement is not None:
+                # 新正文独立授权；撤销前言的旧路径不能重新变成需求或引用。
+                host.runtime_state.task_references_bound = True
+                host.runtime_state.extend_task_references_from_user_instruction(
+                    {**current_user_message, "content": replacement}, workspace=current_workdir(),
+                )
+            elif resume_activation or genuine_followup:
                 # Lost/legacy checkpoint: the workspace may already contain
                 # agent edits. A continuation summary cannot certify originals.
                 host.runtime_state.task_references_bound = True
@@ -100,9 +110,12 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
                 references=[{k: v for k, v in ref.items() if k != "text"}
                             for ref in host.runtime_state.task_reference_evidence],
                 omitted_count=host.runtime_state.task_reference_omitted_count,
-                original_capture_unavailable=bool(resume_activation or genuine_followup),
+                original_capture_unavailable=bool(replacement is None and (resume_activation or genuine_followup)),
             )
-        if current_round_instruction and (restored or resume_activation or genuine_followup):
+        if replacement is not None:
+            host.runtime_state.apply_current_round_test_preferences(current_round_instruction)
+            host.runtime_state.current_round_instruction_text = current_round_instruction.strip()[:4000]
+        elif current_round_instruction and (restored or resume_activation or genuine_followup):
             host.runtime_state.apply_current_round_instruction(
                 current_round_instruction,
                 # Only a canonical genuine user message may create a new
@@ -139,9 +152,8 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
     return LifecycleExecutionContext(
         run_state=state,
         session_id=host.session_id,
-        vm=host.vm,
+        verification_runtime=host.verification_runtime,
         recovery=host.recovery,
-        stall_orchestrator=getattr(host, "stall_orchestrator", None),
         admission_handle=host.admission_handle,
         runtime_state=host.runtime_state,
         permissions_mode=host.permissions.mode,
@@ -151,13 +163,16 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
         model_capabilities=host.model_capabilities,
         current_agent_name=lambda: host.current_agent_name,
         structured_outputs=lambda: host._structured_outputs,
+        output_schema_requested=lambda: bool(
+            host.agent_graph is not None and host.current_agent_name
+            and host.agent_graph.agent(host.current_agent_name).output_schema is not None
+        ),
         clear_reverter=lambda: _clear_reverter(host),
         clear_read_cache=lambda: _clear_read_cache(host),
         reset_hooks=host.hooks.reset_run_state,
         clear_reasoning_escalation=host._agent_reasoning_escalated.clear,
         restore_agent_role=lambda: _restore_agent_role(host),
         bind_user_messages=lambda messages: _bind_new_user_messages(host, messages),
-        scratchpad_plan=lambda text: host._sp.replace_category("plan", text),
         prepare_runtime_state=prepare_runtime_state,
         start_run_evidence=lambda: _start_run_evidence(host),
         persist_runtime_state=host._persist_runtime_state,
@@ -171,7 +186,6 @@ def lifecycle_context_from_legacy_host(host) -> LifecycleExecutionContext:
         run_evidence=lambda: host.run_evidence,
         trace_evidence_summary=host._run_evidence_summary,
         trace=tracer.log,
-        publish_event=host._emit_session_event,
         save_learnings=host._maybe_save_learnings,
         save_learnings_async=host._maybe_save_learnings_async,
         commit=commit,
@@ -190,7 +204,6 @@ def _state_from_host(host) -> LifecycleRunState:
         ),
         last_status=copy.deepcopy(getattr(host, "last_status", {})),
         restored_state=bool(getattr(host, "_restored_state", False)),
-        replan_count=int(getattr(host, "_replan_count", 0)),
         reflection_signature=str(getattr(host, "_reflection_signature", "")),
         reflection_attempts=int(getattr(host, "_reflection_attempts", 0)),
         cached_reflection_review=getattr(host, "_cached_reflection_review", None),
@@ -228,8 +241,9 @@ def _clear_read_cache(host) -> None:
 
 
 def _start_run_evidence(host) -> None:
-    host.run_evidence = RunEvidence(run_id=host.tracer.run_id)
-    host.run_evidence.task_mode = host.runtime_state.task_mode
+    host.run_evidence = RunEvidence(run_id=host.tracer.run_id, verification_domain=host.verification_runtime.domain)
+    from nz_coder.runtime.agent.task_intent import current_task_assessment
+    host.run_evidence.task_assessment = current_task_assessment(host.runtime_state)
 
 
 def _bind_new_user_messages(host, messages: list) -> None:

@@ -7,7 +7,9 @@ import subprocess
 from enum import Enum
 from pathlib import Path
 from pathlib import PurePosixPath
+from typing import Callable
 
+from nz_coder.protocol.public_error import PublicInputError
 from nz_coder.tools import is_filesystem_mutation_tool
 
 
@@ -66,11 +68,22 @@ def normalize_evidence_refs(value: object) -> list[str]:
     return list(dict.fromkeys(refs))
 
 
+
+def resolve_effective_evidence_refs(declared_refs: object, state_refs: object) -> list[str]:
+    if declared_refs is None and isinstance(state_refs, list):
+        declared_refs = list(state_refs)
+    normalized = normalize_evidence_refs(declared_refs)
+    if state_refs and normalized != state_refs:
+        raise PublicInputError('evidence_refs cannot change when resuming a child session')
+    return normalized
+
+
 def build_evidence_briefing(
     refs: list[str],
     *,
     workspace: Path,
     load_task_state,
+    diff_lookup: Callable[[str], str] | None = None,
 ) -> str:
     """Resolve validated refs into one bounded, explicitly untrusted briefing."""
     if not refs:
@@ -82,6 +95,7 @@ def build_evidence_briefing(
             ref,
             workspace=workspace,
             load_task_state=load_task_state,
+            diff_lookup=diff_lookup,
         )
         content = content[:_MAX_EVIDENCE_ITEM_CHARS]
         entry = f"### {ref}\n{content}"[:remaining]
@@ -101,7 +115,7 @@ def build_evidence_briefing(
     )
 
 
-def _resolve_evidence_ref(ref: str, *, workspace: Path, load_task_state) -> str:
+def _resolve_evidence_ref(ref: str, *, workspace: Path, load_task_state, diff_lookup=None) -> str:
     kind, raw_value = ref.split(":", 1)
     value = raw_value.strip()
     if kind == "finding":
@@ -118,6 +132,8 @@ def _resolve_evidence_ref(ref: str, *, workspace: Path, load_task_state) -> str:
         if not text:
             raise ValueError(f"evidence task '{value}' has no terminal result")
         return text
+    if kind == 'diff' and diff_lookup is not None:
+        return diff_lookup(ref)
     candidate = _safe_evidence_path(workspace, value)
     if kind == "file":
         if not candidate.is_file():

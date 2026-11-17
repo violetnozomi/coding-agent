@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from nz_coder.runtime.adapters.model import model_context_from_legacy_host
 from nz_coder.runtime.core.model_context import ModelExecutionContext
 
@@ -89,3 +91,17 @@ def test_model_context_rejects_non_callable_capability() -> None:
         assert "gateway" in str(error)
     else:
         raise AssertionError("invalid ModelExecutionContext was accepted")
+
+
+@pytest.mark.parametrize("profile,repair,supports,allowed", [
+    ("main", "", True, True), ("read_child", "", True, False),
+    ("write_child", "", True, False), ("main", "repair", True, False),
+    ("main", "", False, False),
+])
+def test_memory_eligibility_tracks_current_profile_repair_and_model(profile, repair, supports, allowed):
+    host = _Host()
+    context = model_context_from_legacy_host(host)
+    host.runtime_profile = profile
+    host._structured_output_active_repair = repair
+    host.model_capabilities = SimpleNamespace(supports_tools=supports)
+    assert context.working_memory_allowed() is allowed

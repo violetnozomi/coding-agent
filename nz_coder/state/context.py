@@ -1,18 +1,20 @@
 """Context budgeting, persistence, pruning, and conversation compaction.
 
 改进点（对标 Claude Code）：
-  1. micro_compact 改为按 token 量而非条数截断（大结果优先压缩）
+  1. micro_compact 按完整工具批次与 token 额度清理旧结果
   2. 新增时间间隔触发的 micro_compact（idle 超过阈值则清除老结果）
   3. estimate_tokens 针对 CJK 字符修正权重（减少误差）
 """
 from __future__ import annotations
 
 import copy
+import asyncio
 import json
 import math
 import re
 import threading
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -25,6 +27,10 @@ from nz_coder.protocol.message_schema import (
     SESSION_SUMMARY_KEY,
     TOOL_COMPACTED_AT_KEY,
     is_synthetic_user_message,
+)
+from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
+from nz_coder.state.compaction_summary import (
+    SUMMARY_INSTRUCTIONS, parse_compaction_summary, render_compaction_summary,
 )
 from nz_coder.state.workdir import current_workdir
 from nz_coder.state.sessions import active_session_id, session_transcript_dir
@@ -43,59 +49,17 @@ _COMPACT_RECENT_MIN_TOKENS = 2_000
 _COMPACT_RECENT_MAX_TOKENS = 8_000
 _SUMMARY_OPEN = "<session-summary>"
 _SUMMARY_CLOSE = "</session-summary>"
-_COMPACT_FALLBACK_TASK_CHARS = 4_000
 _COMPACTION_RECOVERY_PREFIX = (
     "The previous compaction request exceeded the provider's 4MB payload limit.\n\n"
     "Older tool outputs and media attachments were removed from this compaction request."
 )
-_OVERSIZED_PASTE_PLACEHOLDER = (
-    "[The previous turn contained an over-long pasted block that was omitted "
-    "because it exceeded the model context. If you need its contents, reference "
-    "the file with @file or resend it in smaller parts.]"
-)
-_OVERSIZED_HISTORY_PLACEHOLDER = (
-    "[Earlier conversation history was omitted because it exceeded the model "
-    "context in aggregate; only the most recent turns are kept. If you need "
-    "earlier information, please provide the key details again.]"
-)
 _COMPACTION_SYSTEM_PROMPT = """You are a context summarization specialist.
 
-CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.
+CRITICAL: Respond with exactly one JSON object. Do NOT call any tools.
 Tool calls will be rejected and waste the compaction turn.
 
 Do not continue the conversation or answer the user's task. Produce only the
 requested continuation summary."""
-_SUMMARY_TEMPLATE = """Output exactly this Markdown structure and keep the section order unchanged:
-
-## Goal
-- Current task and success criteria
-
-## Constraints & Preferences
-- User constraints, preferences, and project rules
-
-## Progress
-### Done
-- Completed work and exact files changed
-### In Progress
-- Current work
-### Blocked
-- Blockers or failed approaches
-
-## Key Decisions
-- Decisions and reasons
-
-## Next Steps
-- Ordered next actions
-
-## Critical Context
-- Exact identifiers, commands, errors, and facts needed to continue
-
-## Relevant Files
-- Exact path and why it matters
-
-Use terse bullets. Keep every section, using \"(none)\" when empty. Do not mention compaction."""
-
-
 @dataclass(frozen=True)
 class PromptBudget:
     """Model-window-aware token limits shared by request and compaction paths."""
@@ -285,11 +249,30 @@ def _has_failure_signal(content: str) -> bool:
     if not isinstance(content, str):
         return False
     return (
-        "Traceback (most recent call last)" in content
+        content.startswith("Error:")
+        or "Traceback (most recent call last)" in content
         or "FAILURES" in content
         or bool(re.search(r"FAILED\s+[\w/\\.\-]+::", content))
         or (content.startswith("Command exited with code") and len(content) > 300)
     )
+
+
+def _protected_tool_evidence(message: dict) -> bool:
+    """Keep mutation facts and known failures even without traceback text."""
+    return message.get("role") == "tool" and (
+        message.get("_nz_evidence_kind") == "file_write"
+        or (
+            message.get("_nz_evidence_kind") == "verification"
+            and message.get("_nz_verification_passed") is False
+        )
+        or _has_failure_signal(message.get("content", ""))
+    )
+
+
+def _artifact_references(content: object) -> list[str]:
+    if not isinstance(content, str):
+        return []
+    return list(dict.fromkeys(re.findall(r"artifact_[a-f0-9]{32}", content)))
 
 
 def micro_compact(
@@ -299,16 +282,14 @@ def micro_compact(
 ) -> int:
     """Prune stale tool output without erasing the active reasoning window.
 
-    InfCode protects the two most recent user turns, then keeps a
-    model-window-derived amount of older tool output. The previous NZ-Coder
-    implementation kept only three results once all tool output crossed a
-    fixed 8K-token threshold. A review that needed four or more files could
-    therefore continually erase and re-read its own evidence.
+    Protect the two newest complete tool-call batches and every unfinished
+    batch, then keep a model-window-derived amount of older tool output.
+    User instructions and assistant conclusions are never replaced here.
 
     Return the number of results replaced, primarily for observability/tests.
     """
     active_budget = budget or prompt_budget()
-    candidates = _tool_results_before_recent_turns(messages, keep_turns=2)
+    candidates = _tool_results_before_recent_batches(messages, keep_batches=2)
     if not candidates:
         return 0
 
@@ -325,7 +306,7 @@ def micro_compact(
         seen_tokens += tokens
         if seen_tokens <= protected_tokens:
             continue
-        if _has_failure_signal(message.get("content", "")):
+        if _protected_tool_evidence(message):
             continue
         to_prune.append(message)
         prunable_tokens += tokens
@@ -336,39 +317,56 @@ def micro_compact(
 
 
 _COMPACTED_TOOL_RESULT = (
-    "[Earlier tool result compacted. Do not repeat the identical call merely "
-    "to recover it; re-run only when the workspace changed or exact content "
-    "is essential.]"
+    "[Earlier tool result compacted. Re-run read-only tools when current file "
+    "or search evidence is needed. Do not repeat the identical call for "
+    "state-changing operations merely to recover its output.]"
 )
 
 
-def _tool_results_before_recent_turns(messages: list, *, keep_turns: int) -> list[dict]:
-    """Return tool results older than the newest complete user turns."""
-    user_indexes = [
-        index for index, message in enumerate(messages)
-        if _is_human_user_turn(message)
-    ]
-    if len(user_indexes) <= keep_turns:
-        return []
-    cutoff = user_indexes[-keep_turns]
+def _tool_results_before_recent_batches(messages: list, *, keep_batches: int) -> list[dict]:
+    """Return results belonging to older, fully settled tool-call batches."""
+    completed: list[list[dict]] = []
+    pending: set[str] = set()
+    results: list[dict] = []
+    for message in messages:
+        if message.get("role") == "assistant":
+            pending = {call["id"] for call in message.get("tool_calls") or []}
+            results = []
+        elif message.get("role") == "tool" and message.get("tool_call_id") in pending:
+            pending.remove(message["tool_call_id"])
+            results.append(message)
+            # 同一模型回复中的并行调用全部返回后才计为一批；
+            # 未完成或无法归属的结果不进入清理候选区。
+            if not pending:
+                completed.append(results)
+                results = []
+    cutoff = max(0, len(completed) - keep_batches)
     return [
-        message for message in messages[:cutoff]
-        if message.get("role") == "tool"
+        message for batch in completed[:cutoff] for message in batch
     ]
 
 
 def _replace_tool_results(messages: list[dict]) -> int:
-    """Replace eligible, non-diagnostic tool results with compact markers."""
+    """Drop old previews while preserving existing opaque result references."""
     replaced = 0
     for message in messages:
         content = message.get("content", "")
         if (
             isinstance(content, str)
             and len(content) > 200
-            and content != _COMPACTED_TOOL_RESULT
-            and not _has_failure_signal(content)
+            and not _protected_tool_evidence(message)
         ):
-            message["content"] = _COMPACTED_TOOL_RESULT
+            replacement = _COMPACTED_TOOL_RESULT
+            references = _artifact_references(content)
+            if references:
+                qualification = " (incomplete capture)" if "(incomplete" in content else ""
+                replacement += (
+                    f"\nSaved output references{qualification}: " + ", ".join(references)
+                    + ". Use read_tool_result with an artifact ID to inspect the saved content."
+                )
+            if len(replacement) >= len(content):
+                continue
+            message["content"] = replacement
             message[TOOL_COMPACTED_AT_KEY] = time.time()
             replaced += 1
     return replaced
@@ -443,8 +441,13 @@ def _public_compaction_message(message: dict) -> dict:
     }
 
 
-def _estimate_compaction_messages(messages: list[dict]) -> int:
+def _estimate_compaction_messages(
+    messages: list[dict],
+    project_history: Callable[[list], list] | None = None,
+) -> int:
     """Estimate a compaction slice without counting durable Session metadata."""
+    if project_history is not None:
+        return estimate_tokens(project_history(copy.deepcopy(messages)))
     return estimate_tokens([
         _public_compaction_message(message)
         for message in messages
@@ -455,6 +458,8 @@ def _estimate_compaction_messages(messages: list[dict]) -> int:
 def _select_compaction_parts(
     messages: list[dict],
     budget: PromptBudget | None = None,
+    *,
+    project_history: Callable[[list], list] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Split summary head from a model-budgeted recent tail.
 
@@ -477,7 +482,7 @@ def _select_compaction_parts(
     for start in reversed(recent):
         if (
             start > 0
-            and _estimate_compaction_messages(messages[start:]) <= preserve_tokens
+            and _estimate_compaction_messages(messages[start:], project_history) <= preserve_tokens
         ):
             keep_start = start
             continue
@@ -491,7 +496,7 @@ def _select_compaction_parts(
             if not _valid_tail_boundary(messages[suffix_start]):
                 continue
             if (
-                _estimate_compaction_messages(messages[suffix_start:])
+                _estimate_compaction_messages(messages[suffix_start:], project_history)
                 <= preserve_tokens
             ):
                 keep_start = suffix_start
@@ -530,7 +535,18 @@ def _select_summary_input(head: list[dict], max_tokens: int) -> list[dict]:
             remaining -= anchor_tokens
             anchor_index = candidate_index
 
-    for index, message in reversed(candidates):
+    # 先给已有修改、验证和存储句柄留位置，再用近期普通输出填充剩余预算。
+    # 验证通过与失败同级，避免只选到旧失败而漏掉后续成功。
+    prioritized = sorted(
+        reversed(candidates),
+        key=lambda item: (
+            0 if (
+                _protected_tool_evidence(item[1])
+                or item[1].get("_nz_evidence_kind") == "verification"
+            ) else 1 if _artifact_references(item[1].get("content", "")) else 2
+        ),
+    )
+    for index, message in prioritized:
         if index == anchor_index:
             continue
         public_message = _public_compaction_message(message)
@@ -562,65 +578,6 @@ def _compaction_task_anchor(
     return None
 
 
-def _compaction_summary_rejection(summary: object) -> str | None:
-    """Reject empty or raw provider tool-protocol output as a summary."""
-    if not isinstance(summary, str) or not summary.strip():
-        return "empty-provider-output"
-    text = summary.strip().lower()
-    if not text.startswith(("<", "{")):
-        return None
-    if (
-        ("dsml" in text and ("tool_calls" in text or "invoke" in text))
-        or text.startswith("<tool_call")
-        or text.startswith("<function=")
-        or text.startswith('{"tool_calls"')
-    ):
-        return "tool-protocol-output"
-    return None
-
-
-def _semantic_compaction_fallback(
-    head: list[dict],
-    previous_summary: str,
-) -> str:
-    """Build bounded continuity state without trusting invalid model output."""
-    if previous_summary and _compaction_summary_rejection(previous_summary) is None:
-        return previous_summary
-    anchor = _compaction_task_anchor(head)
-    task = "(unknown; recover from the preserved recent turns)"
-    if anchor is not None:
-        content = anchor[1].get("content", "")
-        if isinstance(content, str) and content.strip():
-            task = " ".join(content.split())
-            if len(task) > _COMPACT_FALLBACK_TASK_CHARS:
-                task = task[:_COMPACT_FALLBACK_TASK_CHARS].rstrip() + " ... [truncated]"
-    return f"""## Goal
-- {task}
-
-## Constraints & Preferences
-- (none)
-
-## Progress
-### Done
-- (none)
-### In Progress
-- Continue the original task using the preserved recent turns
-### Blocked
-- Compaction provider returned unusable output
-
-## Key Decisions
-- Preserve the original task instead of accepting provider tool-protocol output
-
-## Next Steps
-- Resume from the preserved recent turns
-
-## Critical Context
-- The original task remains authoritative
-
-## Relevant Files
-- (none)"""
-
-
 def _is_compaction_payload_error(error: Exception) -> bool:
     """Recognize only InfCode's summary-payload/context recovery failures."""
     from nz_coder.foundation.error_classification import is_context_overflow_error
@@ -650,26 +607,8 @@ def _strip_compaction_payload(head: list[dict]) -> tuple[int, int]:
     return stripped_tools, degraded_expansions
 
 
-def _natural_user_tokens(message: dict) -> int:
-    """Estimate only user-authored text, excluding tagged synthetic expansion."""
-    if not _is_human_user_turn(message):
-        return 0
-    natural = message.get("_nz_user_text", message.get("content", ""))
-    return estimate_tokens(natural if isinstance(natural, str) else "")
-
-
-def _compaction_fallback(
-    head: list[dict],
-    tail: list[dict],
-    usable_input_tokens: int,
-) -> tuple[str, str] | None:
-    """Return InfCode's bounded placeholder fallback and its reason."""
-    threshold = max(1, int(usable_input_tokens))
-    if any(_natural_user_tokens(message) > threshold for message in head):
-        return _OVERSIZED_PASTE_PLACEHOLDER, "oversized-user-turn"
-    if tail:
-        return _OVERSIZED_HISTORY_PLACEHOLDER, "aggregate-head"
-    return None
+class CompactionGenerationError(RuntimeError):
+    """已结清的摘要模型请求失败；不包含存储、取消或宿主错误。"""
 
 
 def _create_compaction_completion(
@@ -679,6 +618,7 @@ def _create_compaction_completion(
     request: dict,
     observer: Callable[[str, dict], None] | None = None,
     cancel_event: threading.Event | None = None,
+    model_runtime=None,
 ):
     from nz_coder.model_gateway import (
         ModelCall,
@@ -691,7 +631,7 @@ def _create_compaction_completion(
     )
 
     active_provider = provider or OpenAIClientBridgeProvider()
-    runtime = resolve_model_runtime(ModelSelectionRequest(
+    runtime = model_runtime or resolve_model_runtime(ModelSelectionRequest(
         provider_name=str(getattr(active_provider, "name", "openai-compatible")),
         model_id=str(request["model"]),
         provider=active_provider,
@@ -704,14 +644,39 @@ def _create_compaction_completion(
         ModelCall(
             purpose=ModelCallPurpose.COMPACTION,
             messages=request["messages"],
-            max_output_tokens=int(request.get("max_tokens") or 4000),
+            max_output_tokens=request["max_tokens"],
             timeout_seconds=600.0,
         ),
         cancel_event=cancel_event,
     )
+    if outcome.status is ModelCallStatus.CANCELLED:
+        raise asyncio.CancelledError()
     if outcome.status is not ModelCallStatus.COMPLETED:
-        raise RuntimeError(outcome.error or outcome.status.value)
+        lifecycle = outcome.provider_metadata.get("request_lifecycle", {})
+        if lifecycle.get("dispatch_blocked") or runtime.inflight_status()["inflight_calls"]:
+            raise RuntimeError("Compaction Provider runtime is unavailable or request has not settled")
+        raise CompactionGenerationError(outcome.error or outcome.status.value)
+    if outcome.tool_calls or outcome.finish_reason != "stop":
+        raise PublicRuntimeError(PublicError(
+            "invalid_compaction_summary",
+            "Invalid compaction summary: expected a complete JSON response without tool calls",
+        ))
     return outcome.content
+
+
+def _compaction_output_limit(messages: list[dict], budget: PromptBudget) -> int:
+    """摘要沿用正常输出额度；完整摘要输入也必须留在模型窗口内。"""
+    output = budget.output_reserve_tokens
+    if budget.context_tokens > 0:
+        # 与正式发送一致计算整个请求，并为本地 token 估算留出余量。
+        input_tokens = math.ceil(estimate_request_tokens(messages) * 1.15)
+        output = min(output, budget.context_tokens - input_tokens)
+    if output <= 0:
+        raise PublicRuntimeError(PublicError(
+            "compaction_budget_exhausted",
+            "Compaction input and output cannot fit in the model context window",
+        ))
+    return output
 
 
 def auto_compact(
@@ -722,11 +687,14 @@ def auto_compact(
     *,
     provider=None,
     capabilities=None,
+    model_runtime=None,
     observer: Callable[[str, dict], None] | None = None,
     cancel_event: threading.Event | None = None,
     budget: PromptBudget | None = None,
     auto: bool = False,
     overflow: bool = False,
+    current_facts: str = "",
+    project_history: Callable[[list], list] | None = None,
 ) -> list:
     """Update an anchored summary while preserving a bounded recent turn tail."""
     transcript_dir = session_transcript_dir()
@@ -742,7 +710,13 @@ def auto_compact(
             ) + "\n")
 
     active_budget = budget or prompt_budget()
-    head, tail = _select_compaction_parts(messages, active_budget)
+    head, tail = _select_compaction_parts(messages, active_budget, project_history=project_history)
+    # 恢复尝试只修改候选；无效摘要或请求失败不能清掉调用者原证据。
+    head = copy.deepcopy(head)
+    # 用户原文独立于摘要模型和其选材预算；只压缩助手叙述及工具材料。
+    original_users = copy.deepcopy([message for message in head if _is_human_user_turn(message)])
+    operation_id = uuid.uuid4().hex
+    request_index = 0
     previous_summary = _extract_previous_summary(head)
     usable = active_budget.usable_input_tokens or active_budget.soft_preflight_tokens
     summary_input_tokens = min(
@@ -750,6 +724,17 @@ def auto_compact(
         max(2_000, int(usable * 0.65)),
     )
     selected = _select_summary_input(head, summary_input_tokens)
+    if observer is not None:
+        observer("compaction_selection", {
+            "operation_id": operation_id,
+            **_selection_coverage(head, selected),
+            "input_budget_tokens": summary_input_tokens,
+            "selected_token_estimate": _estimate_compaction_messages(selected),
+            "current_facts_token_estimate": estimate_tokens(current_facts) if current_facts else 0,
+            "actual_cost": None,
+            "preceding_coding_usage": next((message.get("_nz_usage") for message in reversed(messages)
+                                             if message.get("role") == "assistant" and isinstance(message.get("_nz_usage"), dict)), None),
+        })
     conv_text = json.dumps(selected, default=str, ensure_ascii=False)
 
     # 改进：summary prompt 包含文件修改状态，防止 compact 后丢失"已编辑"信息
@@ -763,35 +748,46 @@ def auto_compact(
         )
     else:
         anchor = "Create a new continuity summary from the conversation."
-    prompt = f"{anchor}\n\n{_SUMMARY_TEMPLATE}{diff_section}"
+    prompt = f"{anchor}\n\n{SUMMARY_INSTRUCTIONS}{diff_section}"
+    if current_facts:
+        prompt += ("\n\nThe following deterministic state is authoritative for this operation. "
+                   "Earlier summaries are historical background; do not promote old validation to current. "
+                   "Preserve historical reasoning without duplicating this replaceable current-state block.\n"
+                   + current_facts)
     if focus:
         prompt += f"\nPay special attention to: {focus}\n"
 
     def request_summary(request_prompt: str, conversation: str):
+        nonlocal request_index
+        request_index += 1
+        request_id = f"{operation_id}:{request_index}"
+        def observe(name, payload):
+            if observer is not None:
+                usage = payload.get("usage")
+                known = isinstance(usage, dict) and any(isinstance(value, (int, float)) and value > 0 for value in usage.values())
+                observer(name, {**payload, "compaction_operation_id": operation_id,
+                                "compaction_request_id": request_id,
+                                "compaction_usage_known": known if name == "model_call_finish" else None,
+                                "price_version": payload.get("price_version")})
+        request_messages = [
+            {"role": "system", "content": _COMPACTION_SYSTEM_PROMPT},
+            {"role": "user", "content": request_prompt + "\n\n" + conversation},
+        ]
         return _create_compaction_completion(
             client,
             provider,
             capabilities,
             {
                 "model": model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": _COMPACTION_SYSTEM_PROMPT,
-                    },
-                    {
-                        "role": "user",
-                        "content": request_prompt + "\n\n" + conversation,
-                    },
-                ],
-                "max_tokens": 4000,
+                "messages": request_messages,
+                "max_tokens": _compaction_output_limit(request_messages, active_budget),
             },
-            observer,
+            observe,
             cancel_event,
+            model_runtime=model_runtime,
         )
 
     recovery: dict[str, object] | None = None
-    summary_recovery: dict[str, str] | None = None
     try:
         summary = request_summary(prompt, conv_text)
     except Exception as first_error:
@@ -827,17 +823,19 @@ def auto_compact(
                     raise
                 terminal_error = retry_error
         if recovered_summary is None:
-            fallback = _compaction_fallback(head, tail, usable)
-            if fallback is None:
-                raise terminal_error
-            summary, fallback_reason = fallback
-            recovery["fallback"] = fallback_reason
-        else:
-            summary = recovered_summary
-    rejection = _compaction_summary_rejection(summary)
-    if rejection is not None:
-        summary = _semantic_compaction_fallback(head, previous_summary)
-        summary_recovery = {"fallback": rejection}
+            raise terminal_error
+        summary = recovered_summary
+    try:
+        structured, discarded_fields = parse_compaction_summary(summary)
+    except PublicRuntimeError:
+        if observer is not None:
+            observer("compaction_summary_rejected", {"operation_id": operation_id, "reason": "invalid_structure"})
+        raise
+    summary = render_compaction_summary(structured)
+    if observer is not None:
+        observer("compaction_summary_validated", {
+            "operation_id": operation_id, "discarded_fields": discarded_fields,
+        })
     summary_message = {
         "role": "user",
         "content": (
@@ -859,6 +857,8 @@ def auto_compact(
                 if isinstance(message.get(MESSAGE_ID_KEY), str)
             ],
             "created_at": time.time(),
+            "operation_id": operation_id,
+            "background_only": bool(current_facts),
             # Transcript archives are private runtime state, not project files.
             # Keep their host path out of model-visible/session metadata.
             "archive": (
@@ -869,8 +869,6 @@ def auto_compact(
     }
     if recovery is not None:
         summary_message[COMPACTION_KEY]["payload_recovery"] = recovery
-    if summary_recovery is not None:
-        summary_message[COMPACTION_KEY]["summary_recovery"] = summary_recovery
     latest_summary = next(
         (
             message.get(SESSION_SUMMARY_KEY)
@@ -882,7 +880,32 @@ def auto_compact(
     )
     if latest_summary is not None:
         summary_message[SESSION_SUMMARY_KEY] = copy.deepcopy(latest_summary)
-    return [summary_message, *tail]
+    return [summary_message, *original_users, *tail]
+
+
+def _selection_coverage(head: list, selected: list) -> dict:
+    """数量只说明选材可达性，不将其当成摘要语义保真率。"""
+    from collections import Counter
+
+    def key(message):
+        return json.dumps(_public_compaction_message(message), ensure_ascii=False, sort_keys=True, default=str)
+    remaining = Counter(key(message) for message in selected)
+    categories = {}
+    candidates = [message for message in head if not _is_compaction_summary(message)]
+    for message in candidates:
+        kind = str(message.get("_nz_evidence_kind") or message.get("role") or "unknown")
+        bucket = categories.setdefault(kind, {"candidate": 0, "selected": 0, "omitted": 0})
+        bucket["candidate"] += 1
+        included = remaining[key(message)] > 0
+        bucket["selected" if included else "omitted"] += 1
+        if included:
+            remaining[key(message)] -= 1
+    return {
+        "candidate_messages": len(candidates), "selected_messages": len(selected),
+        "candidate_tool_batches": sum(bool(message.get("tool_calls")) for message in candidates),
+        "selected_tool_batches": sum(bool(message.get("tool_calls")) for message in selected),
+        "categories": categories,
+    }
 
 
 def _get_git_diff_summary() -> str:

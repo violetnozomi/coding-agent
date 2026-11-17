@@ -13,16 +13,16 @@ from pathlib import Path
 
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.intelligence.project_profile import build_project_profile, load_project_profile
-from nz_coder.runtime.agent.task_policy import (
-    is_test_file,
-    language_for_path,
-    native_runner_positional_selectors,
-    test_command_targets,
-)
+from nz_coder.foundation.file_kinds import language_for_path
+from nz_coder.runtime.agent.task_policy import _package_script_name, _python_entry, _segment_test_selection, is_test_file, native_runner_positional_selectors, unittest_selectors
 from nz_coder.tools import register
 
 
 VERIFICATION_STAGE_ORDER = ("static", "targeted", "regression")
+# 引号和转义中的控制符属于词内容；执行时使用原文，避免重建命令改变语义。
+_SHELL_WORD_RE = re.compile(
+    r'''(?:[^\s;&|'"\\]|\\[\s\S]|'[^']*'|"(?:[^"\\]|\\[\s\S])*")+|[;&|]+|\n'''
+)
 
 
 def _q(value: str) -> str:
@@ -70,46 +70,43 @@ def normalize_verification_command(command: str) -> str:
     return " ".join(str(command or "").strip().split())
 
 
-def _shell_parts(command: str) -> tuple[list[list[str]], list[str]]:
-    """Tokenize shell segments and preserve the operators between them."""
+def _shell_parts(command: str) -> tuple[list[tuple[list[str], str]], list[str]]:
+    """Return parsed words, original segment text, and shell control operators."""
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n")
-        lexer.whitespace = " \t\r"
-        lexer.whitespace_split = True
-        lexer.commenters = ""
-        tokens = list(lexer)
-    except (TypeError, ValueError):
+        words = list(_SHELL_WORD_RE.finditer(command))
+    except TypeError:
         return [], []
 
-    segments: list[list[str]] = []
+    segments: list[str] = []
     operators: list[str] = []
-    current: list[str] = []
-    for index, token in enumerate(tokens):
+    start = 0
+    end = 0
+    for index, word in enumerate(words):
+        if command[end:word.start()].strip():
+            return [], []
+        end = word.end()
+        token = word.group()
         if token and all(char in ";&|\n" for char in token):
-            # ``shlex`` separates the ampersand in ``2>&1`` / ``&>file``.
-            # Those are redirections, not control-flow operators.
-            previous = current[-1] if current else ""
-            following = tokens[index + 1] if index + 1 < len(tokens) else ""
+            previous = words[index - 1].group() if index else ""
+            following = words[index + 1].group() if index + 1 < len(words) else ""
             if token == "&" and (
-                (previous.endswith(">") and following.lstrip("-").isdigit())
+                (previous.endswith((">", "<")) and following.lstrip("-").isdigit())
                 or following.startswith(">")
             ):
-                current.append(token)
                 continue
-            if current:
-                segments.append(current)
-                current = []
+            segment = command[start:word.start()].strip()
+            if segment:
+                segments.append(segment)
             operators.append(token)
-            continue
-        current.append(token)
-    if current:
-        segments.append(current)
-    return segments, operators
-
-
-def _shell_segments(command: str) -> list[list[str]]:
-    """Tokenize shell segments without treating quoted command names as calls."""
-    return _shell_parts(command)[0]
+            start = word.end()
+    if command[end:].strip():
+        return [], []
+    if command[start:].strip():
+        segments.append(command[start:].strip())
+    try:
+        return [(shlex.split(segment), segment) for segment in segments], operators
+    except ValueError:
+        return [], []
 
 
 def _strip_command_wrappers(tokens: list[str]) -> list[str]:
@@ -128,34 +125,41 @@ def _strip_command_wrappers(tokens: list[str]) -> list[str]:
     return result
 
 
-def verification_command_segments(command: str) -> list[list[str]]:
-    """Return actual command segments with wrappers removed for coverage checks."""
-    result: list[list[str]] = []
-    for raw_tokens in _shell_segments(command):
+def _verification_segments(command: str) -> list[tuple[list[str], str]]:
+    result: list[tuple[list[str], str]] = []
+    for raw_tokens, source in _shell_parts(command)[0]:
         tokens = _strip_command_wrappers(raw_tokens)
         if not tokens:
             continue
         executable = Path(tokens[0]).name.lower()
         args = tokens[1:]
         if executable in {"bash", "sh", "zsh"} and len(args) >= 2 and args[0] in {"-c", "-lc"}:
-            result.extend(verification_command_segments(args[1]))
+            result.extend(_verification_segments(args[1]))
         else:
-            result.append(tokens)
+            result.append((tokens, source))
     return result
 
 
-def verification_success_is_reliable(command: str) -> bool:
+def verification_command_segments(command: str) -> list[list[str]]:
+    """Return actual command segments with wrappers removed for coverage checks."""
+    return [tokens for tokens, _source in _verification_segments(command)]
+
+
+def verification_success_is_reliable(command: str, *, pipefail: bool = False, cwd: str | None = None) -> bool:
     """Whether one zero exit code proves every classified segment succeeded.
 
     A pure ``&&`` chain is reliable because the shell stops at the first
-    failure.  Pipes, ``||``, semicolons, and background execution can hide a
-    failed verifier behind a later successful command, so their zero exit code
-    is never accepted as positive evidence.
+    failure. A supported display pipeline also needs the executing shell's
+    pipefail and the actual cwd for any directory wrapper. Other control flow
+    can hide a failed verifier behind a later successful command.
     """
     raw_segments, operators = _shell_parts(command)
     if any(operator != "&&" for operator in operators):
-        return False
-    for raw_tokens in raw_segments:
+        if not pipefail:
+            return False
+        from nz_coder.runtime.verification.domain.identity import command_identity, verified_check_subject
+        return verified_check_subject(command_identity(command, cwd or ".")) is not None
+    for raw_tokens, _source in raw_segments:
         tokens = _strip_command_wrappers(raw_tokens)
         if not tokens:
             continue
@@ -176,6 +180,25 @@ def is_python_probe_command(command: str) -> bool:
         if re.match(r"^(python|pypy)(\d+(\.\d+)*)?$", executable) and "-c" in tokens[1:]:
             return True
     return False
+
+
+def is_unclassified_python_script(command: str) -> bool:
+    """识别无框架分类的单条脚本；不用运行中补入的计划反推脚本类型。"""
+    segments, operators = _shell_parts(command)
+    if operators or len(segments) != 1:
+        return False
+    tokens = _strip_command_wrappers(segments[0][0])
+    if not tokens or not re.fullmatch(r"(?:python|pypy)(?:\d+(?:\.\d+)*)?", Path(tokens[0]).name.lower()):
+        return False
+    args = tokens[1:]
+    if any(arg in {"-h", "--help", "-V", "--version"} for arg in args):
+        return False
+    while args and args[0] in {"-u", "-B", "-E", "-I", "-O", "-OO", "-s", "-S", "-P", "-q"}:
+        args = args[1:]
+    if args[:1] == ["--"]:
+        args = args[1:]
+    return bool(args and not args[0].startswith("-") and args[0].endswith(".py")
+                and classify_verification_command(command) is None)
 
 
 def verification_output_failed(output: str) -> bool:
@@ -473,19 +496,10 @@ def _boolean_flag_enabled(args: list[str], name: str) -> bool:
 
 
 def _pytest_stage(args: list[str]) -> str | None:
-    lowered = [arg.lower() for arg in args]
-    if _has_flag(args, _NON_EXECUTION_FLAGS | _PYTEST_NON_EXECUTION_FLAGS):
+    selection = _segment_test_selection(["pytest", *args])
+    if selection is None:
         return None
-    if any(arg in {"-k", "--lf", "--last-failed", "--ff", "--failed-first"} for arg in lowered):
-        return "targeted"
-    for arg in args:
-        value = arg.strip()
-        if not value or value.startswith("-"):
-            continue
-        normalized = value.replace("\\", "/")
-        if "::" in normalized or normalized.endswith(".py"):
-            return "targeted"
-    return "regression"
+    return "targeted" if selection.focused else "regression"
 
 
 def _segment_is_non_execution(tokens: list[str]) -> bool:
@@ -498,10 +512,9 @@ def _segment_is_non_execution(tokens: list[str]) -> bool:
     lowered_args = [arg.lower() for arg in args]
     if "-V" in args or _has_flag(args, _NON_EXECUTION_FLAGS):
         return True
-    if re.match(r"^(python|pypy)(\d+(\.\d+)*)?$", executable) and "-m" in args:
-        module_index = args.index("-m") + 1
-        module = lowered_args[module_index] if module_index < len(lowered_args) else ""
-        module_args = args[module_index + 1:]
+    entry = _python_entry(tokens)
+    if entry is not None and entry[2]:
+        module, module_args, _is_module = entry
         if module in {"pytest", "py.test"}:
             return _has_flag(module_args, _PYTEST_NON_EXECUTION_FLAGS)
         if module == "unittest":
@@ -535,56 +548,36 @@ def _segment_verification_stage(tokens: list[str]) -> str | None:
     if executable in {"bash", "sh", "zsh"} and len(args) >= 2 and args[0] in {"-c", "-lc"}:
         return classify_verification_command(args[1])
 
-    native_runner_index = next(
-        (
-            index
-            for index, token in enumerate(tokens)
-            if token.replace("\\", "/").endswith("tests/runtests.py")
-        ),
-        None,
-    )
-    if native_runner_index is not None:
-        return (
-            "targeted"
-            if native_runner_positional_selectors(tokens[native_runner_index + 1:])
-            else "regression"
-        )
-
-    if executable.startswith(("python", "pypy")):
-        if args and args[0].removeprefix("./") == "bin/test":
-            return (
-                "targeted"
-                if native_runner_positional_selectors(args[1:], runner="bin/test")
-                else None
-            )
-        if "-m" in args:
-            module_index = args.index("-m") + 1
-            module = lowered_args[module_index] if module_index < len(lowered_args) else ""
-            module_args = args[module_index + 1:]
-            if module in {"py_compile", "compileall", "mypy", "pyright"}:
+    entry = _python_entry(tokens)
+    if entry is not None:
+        runner, runner_args, module = entry
+        if not module and runner.replace("\\", "/").endswith("tests/runtests.py"):
+            return "targeted" if native_runner_positional_selectors(runner_args) else "regression"
+        if not module and runner.removeprefix("./") == "bin/test":
+            return "targeted" if native_runner_positional_selectors(runner_args, runner="bin/test") else None
+        if module:
+            if runner in {"py_compile", "compileall", "mypy", "pyright"}:
                 return "static"
-            if module == "ruff" and module_args and module_args[0].lower() == "check":
-                return None if any(arg.lower().startswith("--fix") for arg in module_args) else "static"
-            if module in {"pytest", "py.test"}:
-                return _pytest_stage(module_args)
-            if module == "unittest":
-                return "targeted" if any(not arg.startswith("-") for arg in module_args) else "regression"
-            if module in {"tox", "nox"}:
+            if runner == "ruff" and runner_args[:1] == ["check"]:
+                return None if any(arg.startswith("--fix") for arg in runner_args) else "static"
+            if runner in {"pytest", "py.test"}:
+                return _pytest_stage(runner_args)
+            if runner == "unittest":
+                return "targeted" if unittest_selectors(tokens) else "regression"
+            if runner in {"tox", "nox"}:
                 return "regression"
-        if any(Path(arg).name == "manage.py" for arg in args) and "test" in lowered_args:
-            test_index = lowered_args.index("test")
-            return "targeted" if any(not arg.startswith("-") for arg in args[test_index + 1:]) else "regression"
-        if "-c" in args:
-            script_index = args.index("-c") + 1
-            script = args[script_index].lower() if script_index < len(args) else ""
-            if "assert" in script:
-                return "static"
+        if not module and Path(runner).name == "manage.py" and runner_args[:1] == ["test"]:
+            return "targeted" if any(not arg.startswith("-") for arg in runner_args[1:]) else "regression"
+        if runner == "-c" and runner_args and "assert" in runner_args[0].lower():
+            return "static"
+    if executable.replace("\\", "/").endswith("tests/runtests.py"):
+        return "targeted" if native_runner_positional_selectors(args) else "regression"
 
     if executable in {"pytest", "py.test", "pytest3"}:
         return _pytest_stage(args)
     if executable == "node" and args[:1] == ["--test"]:
-        targets = test_command_targets(shlex.join(["node", *args]))
-        return "targeted" if targets and all(is_test_file(path) for path in targets) else None
+        selection = _segment_test_selection(tokens)
+        return "targeted" if selection is not None and selection.focused else "regression"
     if executable == "go" and lowered_args:
         if lowered_args[0] == "vet":
             return "static"
@@ -604,13 +597,12 @@ def _segment_verification_stage(tokens: list[str]) -> str | None:
                 return None
             return "targeted" if any(not arg.startswith("-") for arg in args[1:]) else "regression"
     if executable in {"npm", "pnpm", "yarn"}:
-        joined = " ".join(lowered_args)
-        if "typecheck" in lowered_args or "lint" in lowered_args:
+        if _segment_test_selection(tokens) is not None:
+            return "regression"
+        if _package_script_name(tokens) in {"typecheck", "lint"}:
             if any(arg.startswith("--fix") for arg in lowered_args):
                 return None
             return "static"
-        if lowered_args and (lowered_args[0] == "test" or joined.startswith("run test")):
-            return "targeted" if "--" in args and args.index("--") < len(args) - 1 else "regression"
     if executable == "tsc":
         return "static" if _boolean_flag_enabled(args, "--noemit") else None
     if executable == "eslint":
@@ -657,12 +649,13 @@ def classify_verification_segments(
 ) -> list[tuple[str, str]]:
     """Return every real verification segment instead of only the highest stage."""
     classified: list[tuple[str, str]] = []
-    for tokens in verification_command_segments(command):
+    for tokens, source in _verification_segments(command):
         if _segment_is_non_execution(tokens):
             continue
         stage = _planned_stage_for_segment(tokens, plan) or _segment_verification_stage(tokens)
         if stage is not None:
-            classified.append((stage, shlex.join(tokens)))
+            # 分类使用去壳参数，复测执行保留原文，避免把重定向变成普通参数。
+            classified.append((stage, source))
     return classified
 
 
@@ -924,6 +917,14 @@ def _python_test_runner(profile: dict) -> str | None:
     )
     if native:
         return native
+    unittest_command = next(
+        (command for command in commands
+         if len(verification_command_segments(command)) == 1
+         and unittest_selectors(verification_command_segments(command)[0]) is not None),
+        None,
+    )
+    if unittest_command:
+        return unittest_command
     pytest_command = next(
         (
             command
@@ -955,12 +956,78 @@ def _native_python_test_selector(target: str) -> str:
     return ".".join(label_parts) or str(target or "")
 
 
+def _unittest_target_command(runner: str, target: str, *, explicit_selection: bool = False) -> str | None:
+    segments, operators = _shell_parts(runner)
+    if operators or len(segments) != 1:
+        return None
+    raw_tokens, _source = segments[0]
+    tokens = _strip_command_wrappers(raw_tokens)
+    entry = _python_entry(tokens)
+    if entry is None or entry[0] != "unittest" or not entry[2]:
+        return None
+    # 保留原始前缀，避免重建带空格的环境赋值时改变 shell 的赋值语义。
+    prefix_count = len(raw_tokens) - len(entry[1])
+    words = list(_SHELL_WORD_RE.finditer(runner))
+    prefix = runner[:words[prefix_count - 1].end()]
+    args = entry[1]
+    discovery = args[:1] == ["discover"]
+    remaining = args[1:] if discovery else args
+    behavior: list[str] = []
+    top_level: str | None = None
+    positional_count = 0
+    index = 0
+    flags = {"-v", "--verbose", "-q", "--quiet", "-f", "--failfast",
+             "-c", "--catch", "-b", "--buffer", "--locals"}
+    values = {"-k", "--durations"}
+    discovery_values = {"-s", "--start-directory", "-p", "--pattern", "-t", "--top-level-directory"}
+    while index < len(remaining):
+        token = remaining[index]
+        index += 1
+        option, separator, _value = token.partition("=")
+        if token in flags:
+            behavior.append(token)
+        elif option in values | discovery_values:
+            value = _value
+            if not separator:
+                if index == len(remaining):
+                    return None
+                value = remaining[index]
+                index += 1
+            if option in values and not (explicit_selection and option == "-k"):
+                behavior.extend((option, value))
+            elif discovery and option in {"-t", "--top-level-directory"}:
+                top_level = value
+        elif token.startswith("-k") and len(token) > 2:
+            if not explicit_selection:
+                behavior.append(token)
+        elif token.startswith("-"):
+            return None
+        elif discovery:
+            positional_count += 1
+            if positional_count == 3:
+                top_level = token
+        # 起始目录/模式改为相关文件集合，top-level 决定包内相对导入语义，必须保留。
+    if target.endswith(".py"):
+        path = Path(target)
+        discovery_context = ["-t", top_level] if top_level is not None else []
+        return prefix + " " + shlex.join([
+            "discover", "-s", path.parent.as_posix(), "-p", path.name, *discovery_context, *behavior,
+        ])
+    if all(part.isidentifier() for part in target.split(".")):
+        return prefix + " " + shlex.join([*behavior, target])
+    return None
+
+
 def _python_target_command(
     runner: str,
     target: str,
     *,
     native_runner_kind: str = "",
+    explicit_selection: bool = False,
 ) -> str:
+    unittest_command = _unittest_target_command(runner, str(target), explicit_selection=explicit_selection)
+    if any(unittest_selectors(words) is not None for words in verification_command_segments(runner)):
+        return unittest_command or ""
     selector = (
         _native_python_test_selector(target)
         if native_runner_kind == "django"
@@ -993,7 +1060,6 @@ def plan_verification_commands(
     failing_tests: list[str] | None = None,
     traceback: str | None = None,
     project_profile: dict | None = None,
-    task_mode: str | None = None,
     include_broad: bool = False,
     deleted_files: list[str] | None = None,
     related_tests: list[str] | None = None,
@@ -1001,8 +1067,6 @@ def plan_verification_commands(
     use_repo_intelligence: bool = True,
 ) -> dict:
     """Return focused first-pass commands plus optional broader fallbacks."""
-    del task_mode  # compatibility parameter; no special branching needed here.
-
     changed_files_provided = changed_files is not None
     changed = _validated_changed_files([str(f) for f in (changed_files or []) if f])
     if not changed and not changed_files_provided:
@@ -1053,7 +1117,9 @@ def plan_verification_commands(
         )
 
     for test in failing[:6]:
-        if test.endswith(".py") or ".py::" in test or "::" in test or test.startswith(("tests/", "test/")):
+        if (test.endswith(".py") or ".py::" in test or "::" in test or test.startswith(("tests/", "test/"))
+                or python_test_runner and "." in test and all(part.isidentifier() for part in test.split("."))
+                and any(unittest_selectors(words) is not None for words in verification_command_segments(python_test_runner))):
             runner = python_test_runner or "pytest"
             _add_planned_command(
                 recommended, stage_commands, "targeted",
@@ -1061,6 +1127,7 @@ def plan_verification_commands(
                     runner,
                     test,
                     native_runner_kind=native_runner_kind,
+                    explicit_selection=True,
                 ),
                 "exact failing test provided",
                 required=True,
@@ -1112,6 +1179,9 @@ def plan_verification_commands(
                 f"related test from {structural_source or 'repository graph'}",
                 required=False,
             )
+    if python_test_runner and (py_source or (py_files or failing) and any(
+        unittest_selectors(words) is not None for words in verification_command_segments(python_test_runner)
+    )):
         target = recommended if include_broad else fallback
         _add_planned_command(
             target, stage_commands, "regression", python_test_runner,

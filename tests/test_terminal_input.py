@@ -64,6 +64,25 @@ def test_command_argument_completion_covers_sessions_and_modes(tmp_path):
     ]
 
 
+@pytest.mark.parametrize("command, expected", [
+    ("/mode", ["default", "auto", "plan", "acceptEdits"]),
+    ("/resume", ["session-alpha", "session-beta"]),
+    ("/model", ["list", "reset", "offline/model"]),
+])
+@pytest.mark.parametrize("whitespace", [" ", "   "])
+def test_command_empty_argument_offers_all_candidates(tmp_path, command, expected, whitespace):
+    completer = TerminalCompleter(
+        build_default_registry(), tmp_path,
+        session_provider=lambda: ("session-alpha", "session-beta"),
+        model_provider=lambda: ("offline/model",),
+    )
+
+    matches = _complete(completer, command + whitespace)
+
+    assert [item.text for item in matches] == expected
+    assert all(item.start_position == 0 for item in matches)
+
+
 def test_file_reference_completion_is_bounded_to_workspace_snapshot(tmp_path):
     completer = TerminalCompleter(
         build_default_registry(),

@@ -174,6 +174,7 @@ def test_image_provider_does_not_bleed_between_workspaces(tmp_path):
 
 
 def test_bash_package_policy_uses_target_run_settings(tmp_path, monkeypatch):
+    from nz_coder.runtime.process import bash_execution
     from nz_coder.runtime.core.run_settings import RunSettings, scoped_run_settings
     from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.tools import bash as bash_module
@@ -190,7 +191,7 @@ def test_bash_package_policy_uses_target_run_settings(tmp_path, monkeypatch):
         launches.append(True)
         raise OSError("launch-secret-must-not-escape")
 
-    monkeypatch.setattr(bash_module.subprocess, "Popen", fail_launch)
+    monkeypatch.setattr(bash_execution.subprocess, "Popen", fail_launch)
     with scoped_workdir(tmp_path / "denied"), scoped_run_settings(denied):
         assert "Package install blocked" in bash_module.run_bash("pip install package")
     with scoped_workdir(tmp_path / "allowed"), scoped_run_settings(allowed):
@@ -201,6 +202,7 @@ def test_bash_package_policy_uses_target_run_settings(tmp_path, monkeypatch):
 
 
 def test_bash_timeout_uses_target_run_settings(tmp_path, monkeypatch):
+    from nz_coder.runtime.process import bash_execution
     from nz_coder.runtime.core.run_settings import RunSettings, scoped_run_settings
     from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.tools import bash as bash_module
@@ -217,7 +219,7 @@ def test_bash_timeout_uses_target_run_settings(tmp_path, monkeypatch):
         launches.append(True)
         raise OSError("launch-secret-must-not-escape")
 
-    monkeypatch.setattr(bash_module.subprocess, "Popen", fail_launch)
+    monkeypatch.setattr(bash_execution.subprocess, "Popen", fail_launch)
     with scoped_workdir(tmp_path / "short"), scoped_run_settings(short):
         assert "between 1 and 2s" in bash_module.run_bash("echo ok", timeout=10)
     with scoped_workdir(tmp_path / "long"), scoped_run_settings(long):

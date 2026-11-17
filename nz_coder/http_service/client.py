@@ -65,7 +65,7 @@ class NZCoderClient:
     def health(self) -> dict:
         return self._request("GET", "/health", authenticated=False)
 
-    def list_sessions(self) -> list[dict]:
+    def list_sessions(self) -> dict:
         return self._request("GET", "/session")
 
     def list_workspaces(self) -> list[dict]:
@@ -273,29 +273,57 @@ class NZCoderClient:
             },
         )
 
+    def lsp_status(self, session_id: str) -> dict:
+        return self._request('GET',f'/session/{session_id}/lsp')
+
+    def lsp_control(self, session_id: str, entry_id: str, action: str) -> dict:
+        return self._request('POST',f'/session/{session_id}/lsp/control',
+                             {'entry_id':entry_id,'action':action})
+
     def memory_status(self, session_id: str) -> dict:
         return self._request("GET", f"/session/{session_id}/memory")
 
-    def get_memory_proposal(self, session_id: str, fingerprint: str) -> dict:
-        encoded = quote(str(fingerprint), safe="")
-        return self._request("GET", f"/session/{session_id}/memory/{encoded}")
+    def list_memories(self, session_id: str, *, type=None, status="active", limit=50, cursor=None) -> dict:
+        query = {"status": status, "limit": limit}
+        if type is not None:
+            query["type"] = type
+        if cursor is not None:
+            query["cursor"] = cursor
+        return self._request("GET", f"/session/{session_id}/memory/records?{urlencode(query)}")
 
-    def review_memory(
-        self,
-        session_id: str,
-        fingerprint: str,
-        action: str,
-        *,
-        reason: str = "",
-    ) -> dict:
+    def search_memories(self, session_id: str, query: str, *, limit=5) -> dict:
+        return self._request("GET", f"/session/{session_id}/memory/search?{urlencode({'q': query, 'limit': limit})}")
+
+    def read_memory(self, session_id: str, memory_id: str, *, revision=None) -> dict:
+        path = f"/session/{session_id}/memory/records/{quote(memory_id, safe='')}"
+        if revision is not None:
+            path += "?" + urlencode({"revision": revision})
+        return self._request("GET", path)
+
+    def memory_history(self, session_id: str, memory_id: str) -> list:
+        return self._request("GET", f"/session/{session_id}/memory/records/{quote(memory_id, safe='')}/history")
+
+    def mutate_memory(self, session_id: str, command: dict, *, operation_id: str) -> dict:
+        return self._request("POST", f"/session/{session_id}/memory/mutate",
+                             {"command": dict(command), "operation_id": operation_id})
+
+    def get_memory_proposal(self, session_id: str, proposal_id: str) -> dict:
+        return self._request("GET", f"/session/{session_id}/memory/proposals/{quote(proposal_id, safe='')}")
+
+    def review_memory(self, session_id: str, proposal_id: str, action: str, *,
+                      expected_proposal_revision: int, operation_id: str, reason="",
+                      expected_revision=None, related_records=None) -> dict:
         if action not in {"approve", "reject"}:
             raise ValueError("memory action must be approve or reject")
-        encoded = quote(str(fingerprint), safe="")
-        return self._request(
-            "POST",
-            f"/session/{session_id}/memory/{encoded}/{action}",
-            {"reason": str(reason)} if action == "reject" else {},
-        )
+        body = {"expected_proposal_revision": expected_proposal_revision, "operation_id": operation_id}
+        if action == "reject":
+            body["reason"] = reason
+        else:
+            if expected_revision is not None:
+                body["expected_revision"] = expected_revision
+            if related_records is not None:
+                body["related_records"] = related_records
+        return self._request("POST", f"/session/{session_id}/memory/proposals/{quote(proposal_id, safe='')}/{action}", body)
 
     def abort(self, session_id: str) -> dict:
         return self._request("POST", f"/session/{session_id}/abort", {})

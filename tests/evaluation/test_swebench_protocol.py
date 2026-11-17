@@ -51,11 +51,20 @@ def offline_environment(system_prompt, *, actions=None, **kwargs):
 
         def create_completion(self, _client, **request):
             names = [t.get("function", {}).get("name") for t in request.get("tools", [])]
-            role = "auxiliary" if names == ["emit_sidecar_verdict"] else "main"
+            from nz_coder.runtime.conversation.working_memory import _SYSTEM as memory_system
+            messages = request["messages"]
+            if names == ["emit_sidecar_verdict"]:
+                role = "sidecar"
+            elif not names and messages[0] == {"role": "system", "content": memory_system}:
+                role = "working_memory"
+            else:
+                role = "main"
             with (workspace / ".nz-coder-runs" / "actual-provider-requests.jsonl").open("a") as output:
                 output.write(json.dumps({"role": role, "request": request}) + "\n")
-            if role == "auxiliary":
-                actions = [["emit_sidecar_verdict", {"verdict": "accept", "reason": "Offline verdict only"}]]
+            if role == "working_memory":
+                actions = json.dumps({"status": "unchanged"})
+            elif role == "sidecar":
+                actions = [["emit_sidecar_verdict", {"verdict": "revise", "reason": "Offline fixture has no independent delivery review."}]]
             else:
                 actions = plan[self.position]
                 self.position += 1

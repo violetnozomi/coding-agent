@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from nz_coder.foundation.process_runner import ProcessRunner, ProcessInterrupted
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.protocol.public_error import PublicInputError
 
@@ -188,11 +189,20 @@ def _run_ripgrep_lines(
     cancel_event: threading.Event | None,
     timeout: float,
     reader_name: str,
+    runner: ProcessRunner | None = None,
 ) -> _RipgrepProcessResult:
     """Run one rg process; a true callback result requests settled early stop."""
     duration = float(timeout)
     if not math.isfinite(duration) or duration <= 0:
         raise ValueError("ripgrep timeout must be a positive finite number")
+    if runner is not None:
+        try:
+            result = runner.lines(tuple(args), cwd=cwd, timeout=timeout, on_line=on_line)
+        except ProcessInterrupted as exc:
+            if exc.reason == 'cancelled':
+                raise RipgrepCancelled from exc
+            raise subprocess.TimeoutExpired(args, timeout) from exc
+        return _RipgrepProcessResult(result.returncode, result.stderr, result.stopped_early)
     environment = build_sanitized_subprocess_env()
     environment.pop("RIPGREP_CONFIG_PATH", None)
     _raise_if_cancelled(cancel_event)
@@ -400,6 +410,7 @@ def list_ripgrep_files(
     exclude: Callable[[str], bool] | None = None,
     cancel_event: threading.Event | None = None,
     timeout: float = 30.0,
+    runner: ProcessRunner | None = None,
 ) -> RipgrepFilesResult:
     """Return the first consumer-visible file window from `rg --files`.
 
@@ -414,7 +425,7 @@ def list_ripgrep_files(
     if max_depth is not None and (type(max_depth) is not int or max_depth < 0):
         raise ValueError("ripgrep max_depth must be a non-negative integer")
     _raise_if_cancelled(cancel_event)
-    binary = shutil.which("rg")
+    binary = shutil.which("rg", path=runner.search_path) if runner is not None else shutil.which("rg")
     if not binary:
         return _fallback_files(
             base,
@@ -453,6 +464,7 @@ def list_ripgrep_files(
         cancel_event=cancel_event,
         timeout=timeout,
         reader_name="nz-rg-files-reader",
+        runner=runner,
     )
     if not outcome.stopped_early and outcome.code not in (0, 1):
         raise RuntimeError(
@@ -477,6 +489,7 @@ def search_ripgrep(
     case_insensitive: bool = False,
     cancel_event: threading.Event | None = None,
     timeout: float = 30.0,
+    runner: ProcessRunner | None = None,
 ) -> RipgrepSearchResult:
     """Run InfCode's strict `rg --json` search producer."""
     base = Path(cwd).resolve()
@@ -487,7 +500,7 @@ def search_ripgrep(
     if limit is not None and (type(limit) is not int or limit < 0):
         raise ValueError("ripgrep search limit must be a non-negative integer")
     _raise_if_cancelled(cancel_event)
-    binary = shutil.which("rg")
+    binary = shutil.which("rg", path=runner.search_path) if runner is not None else shutil.which("rg")
     if not binary:
         raise FileNotFoundError("ripgrep")
     args = [
@@ -522,6 +535,7 @@ def search_ripgrep(
         cancel_event=cancel_event,
         timeout=timeout,
         reader_name="nz-rg-search-reader",
+        runner=runner,
     )
     if outcome.code not in (0, 1, 2):
         raise RuntimeError(

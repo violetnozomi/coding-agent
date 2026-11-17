@@ -9,7 +9,7 @@ from typing import Callable, Protocol, runtime_checkable
 from nz_coder.protocol.message_schema import ASSISTANT_USAGE_KEY
 from nz_coder.runtime.core.request import AgentDefinition, AgentHandoff, RunOptions, RunRequest
 from nz_coder.runtime.core.profiles import READ_CHILD_PROFILE, RunProfile
-from nz_coder.runtime.core.result import RunResult, RunStatus, TokenUsage
+from nz_coder.runtime.core.result import RunResult, RunStatus, TokenUsage, normalize_run_status
 from nz_coder.runtime.agent.handoffs import AgentGraph, AgentSpec, HandoffSpec
 from nz_coder.runtime.execution.runner import AgentRunner
 from nz_coder.runtime.execution.native_sdk import build_native_sdk_runner
@@ -42,6 +42,10 @@ class AgentClient:
             raise TypeError("AgentClient runner must expose async run_result")
         if self.runner is not None and self.agent_factory is not None:
             raise ValueError("AgentClient accepts runner or agent_factory, not both")
+        object.__setattr__(self, "_native_runner", (
+            self.runner if self.runner is not None else
+            build_native_sdk_runner() if self.agent_factory is None else None
+        ))
 
     async def run(
         self,
@@ -58,6 +62,7 @@ class AgentClient:
         workflow_approval_asker=None,
         event_bus=None,
         config_snapshot=None,
+        session_lease=None,
     ) -> RunResult:
         """Execute one immutable request through the production Agent runtime."""
         if not isinstance(request, RunRequest):
@@ -75,9 +80,7 @@ class AgentClient:
             raise ValueError("Use either on_token or on_final_text, not both")
         committed_text_callback = on_final_text or on_token
 
-        native_runner = self.runner
-        if native_runner is None and self.agent_factory is None:
-            native_runner = build_native_sdk_runner()
+        native_runner = self._native_runner
         if native_runner is not None:
             return await native_runner.run_result(request, RunOptions(
                 stream=request.stream,
@@ -91,6 +94,7 @@ class AgentClient:
                 workflow_approval_asker=workflow_approval_asker,
                 event_bus=event_bus,
                 config_snapshot=config_snapshot,
+                session_lease=session_lease,
             ))
 
         messages = copy.deepcopy(list(request.messages))
@@ -99,6 +103,8 @@ class AgentClient:
             raise AssertionError("default SDK execution must select the native runner")
         with scoped_workdir(request.workspace):
             agent = factory(request)
+            if session_lease is not None:
+                agent._requested_session_lease = session_lease
             try:
                 status = await agent.run(
                     messages,
@@ -108,10 +114,19 @@ class AgentClient:
                     stream=request.stream,
                 )
             finally:
+                if session_lease is not None:
+                    agent._requested_session_lease = None
                 close = getattr(agent, "close", None)
                 if callable(close):
                     close()
         return _normalize_result(request, agent, messages, status)
+
+    async def retry_settlement(self, workspace, session_id):
+        """仅重试本进程保存失败的原结果，不运行模型或工具。"""
+        runner = self._native_runner
+        if runner is None or not callable(getattr(runner, "retry_settlement", None)):
+            raise TypeError("This AgentClient runner does not support settlement retry")
+        return await runner.retry_settlement(workspace, session_id)
 
     async def run_child(
         self,
@@ -265,19 +280,16 @@ def _normalize_result(
     raw_status: object,
 ) -> RunResult:
     status_payload = raw_status if isinstance(raw_status, dict) else {}
+    content = status_payload.get("content")
+    if not isinstance(content, str):
+        raise ValueError("agent_factory run result must contain string content")
     raw_name = str(status_payload.get("status") or "error")
-    status = {
-        "completed": RunStatus.COMPLETED,
-        "completed_unverified": RunStatus.COMPLETED,
-        "interrupted": RunStatus.INTERRUPTED,
-        "cancelled": RunStatus.CANCELLED,
-        "max_turns": RunStatus.MAX_TURNS,
-    }.get(raw_name, RunStatus.ERROR)
+    status = normalize_run_status(status_payload.get("status"))
     runtime = status_payload.get("runtime")
     runtime = runtime if isinstance(runtime, dict) else {}
     return RunResult(
         status=status,
-        final_text=_last_assistant_text(messages),
+        final_text=content,
         messages=messages,
         usage=_aggregate_usage(messages),
         session_id=request.session_id,
@@ -292,22 +304,10 @@ def _normalize_result(
             "trace_id": str(getattr(agent, "trace_id", "")),
             "runtime": copy.deepcopy(runtime),
             "raw_status": raw_name,
+            "verification": copy.deepcopy(status_payload.get("verification") or {}),
+            "authored_content": str(status_payload.get("authored_content") or ""),
         },
     )
-
-
-def _last_assistant_text(messages: list[dict]) -> str:
-    for message in reversed(messages):
-        if isinstance(message, dict) and message.get("role") == "assistant":
-            if (
-                message.get("_nz_internal") is True
-                or message.get("_nz_visible") is False
-            ):
-                continue
-            content = message.get("content", "")
-            if isinstance(content, str) and content:
-                return content
-    return ""
 
 
 def _aggregate_usage(messages: list[dict]) -> TokenUsage:

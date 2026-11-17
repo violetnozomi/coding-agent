@@ -3,6 +3,18 @@
 import pytest
 
 
+@pytest.mark.parametrize("arguments, expected", [
+    ("tests.test_core -v", "targeted"),
+    ("-k next_id tests.test_core.lowercase_case.test_next_id", "targeted"),
+    ("-k next_id", "regression"),
+    ("discover -s tests -p test_core.py -t . -v", "regression"),
+])
+def test_unittest_stage_uses_the_same_explicit_selection(arguments, expected):
+    from nz_coder.intelligence.verification_planner import classify_verification_command
+
+    assert classify_verification_command("python3.13 -m unittest " + arguments) == expected
+
+
 @pytest.mark.parametrize("command", [
     "python3 bin/test test_sympify --no-colors",
     "python bin/test sympy/core/tests/test_sympify.py --tb short",
@@ -395,6 +407,45 @@ def test_classify_verification_segments_returns_each_real_stage():
     ]
 
 
+def test_extracted_go_test_preserves_descriptor_redirection():
+    from nz_coder.intelligence.verification_planner import classify_verification_segments
+    from nz_coder.tool_platform.policies.command_policy import classify_bash
+
+    target = "go test ./oval/ -run 'Test_lessThan|TestIsOvalDefAffected' -v 2>&1"
+    segments = classify_verification_segments(target + " | tail -60")
+
+    assert segments == [("targeted", target)]
+    assert classify_bash(segments[0][1])["mutating"] is False
+
+
+def test_extracted_command_preserves_real_arguments_environment_and_exit_code():
+    import json
+    import shlex
+    import subprocess
+
+    from nz_coder.intelligence.verification_planner import classify_verification_segments
+
+    code = (
+        "import json,os,sys; assert 'VERIFY_LABEL' in os.environ; "
+        "print(json.dumps([os.environ['VERIFY_LABEL'], *sys.argv[1:]])); "
+        "print('diagnostic', file=sys.stderr); sys.exit(3)"
+    )
+    command = (
+        "VERIFY_LABEL='a  b' python -c " + shlex.quote(code)
+        + " '2>' '&' 1 'a|b' 2>&1"
+    )
+    segments = classify_verification_segments(command)
+    assert len(segments) == 1
+    result = subprocess.run(["bash", "-c", segments[0][1]], capture_output=True, text=True)
+
+    assert result.returncode == 3
+    assert result.stderr == ""
+    assert "diagnostic" in result.stdout
+    assert json.loads(next(line for line in result.stdout.splitlines() if line.startswith("["))) == [
+        "a  b", "2>", "&", "1", "a|b",
+    ]
+
+
 @pytest.mark.parametrize(
     ("command", "expected"),
     [
@@ -405,6 +456,9 @@ def test_classify_verification_segments_returns_each_real_stage():
         ("pytest\ntrue", False),
         ("bash -lc 'pytest || true'", False),
         ("pytest 2>&1", True),
+        ("pytest -k 'a & b'", True),
+        ("pytest '&'", True),
+        ("pytest '2>' '&' 1", True),
     ],
 )
 def test_verification_success_reliability_preserves_shell_flow(command, expected):
@@ -571,3 +625,28 @@ def test_plan_requires_build_when_root_metadata_exists(
     static = next(stage for stage in plan["stages"] if stage["name"] == "static")
     assert static["required"] is True
     assert expected_command in [item["command"] for item in static["commands"]]
+
+
+def test_task_type_cannot_be_passed_to_waive_observed_patch_risks(tmp_path, monkeypatch):
+    from nz_coder.foundation import config
+    from nz_coder.intelligence.impact_analyzer import analyze_patch_impact
+
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    diff = """diff --git a/api.py b/api.py
+--- a/api.py
++++ b/api.py
+@@ -1 +1 @@
+-def serve(value):
++def serve(value, *, mode):
+"""
+    facts = {
+        "changed_files": ["api.py", "extra.py", "worker.py", "queue.py", "storage.py"],
+        "diff_text": diff,
+        "project_profile": {},
+        "requested_paths": ["api.py"],
+    }
+    with pytest.raises(TypeError, match="task_mode"):
+        analyze_patch_impact(**facts, task_mode="project_creation")
+    impact = analyze_patch_impact(**facts)
+    categories = {signal["category"] for signal in impact["risk_signals"]}
+    assert {"broad_scope_expansion", "public_signature_change", "requested_scope_expansion"} <= categories

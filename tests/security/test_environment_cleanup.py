@@ -24,8 +24,12 @@ def _environment():
 
     environment = ProductRunEnvironment.__new__(ProductRunEnvironment)
     environment._environment_cleanup_lock = threading.RLock()
+    environment._session_checkpoint_lock = threading.RLock()
+    environment._session_checkpoint_retired = False
+    environment._session_checkpoint_writer = None
+    environment.verification_runtime = None
     environment._environment_cleanup_completed = {
-        "run-control", "stall-sidecar", "background-agents", "repo-intelligence",
+        "run-control", "background-agents", "repo-intelligence",
     }
     environment._environment_cleanup_failures = {}
     environment._environment_provider_ids_closed = set()

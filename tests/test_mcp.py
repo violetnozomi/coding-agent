@@ -41,6 +41,139 @@ FIXTURE_SERVER = Path(__file__).parent / "fixtures" / "mcp_echo_server.py"
 ORPHAN_SERVER = Path(__file__).parent / "fixtures" / "mcp_orphan_server.py"
 
 
+def _unreadable_stdin_client(tmp_path):
+    server = tmp_path / "not_reading.py"
+    server.write_text(
+        "import json, pathlib, sys, time\n"
+        "for line in sys.stdin:\n"
+        "    request = json.loads(line)\n"
+        "    if request.get('method') == 'initialize':\n"
+        "        result = {'protocolVersion': '2024-11-05', 'capabilities': {}, 'serverInfo': {}}\n"
+        "        print(json.dumps({'jsonrpc': '2.0', 'id': request['id'], 'result': result}), flush=True)\n"
+        "    elif request.get('method') == 'notifications/initialized':\n"
+        "        pathlib.Path('not-reading').write_text('ready')\n"
+        "        time.sleep(30)\n",
+    )
+    client = MCPClient(
+        name="blocked-stdin", command=(sys.executable, str(server)), cwd=tmp_path,
+        startup_timeout_seconds=2, tool_timeout_seconds=0.05,
+    )
+    client.start()
+    deadline = time.monotonic() + 2
+    while not (tmp_path / "not-reading").exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert (tmp_path / "not-reading").exists()
+    return client
+
+
+def _stop_test_mcp(client):
+    if client.process is not None and client.process.poll() is None:
+        from nz_coder.runtime.process.platform_runtime import terminate_process_tree
+
+        terminate_process_tree(client.process, force=True)
+        client.process.wait(timeout=3)
+    client.close()
+
+
+def test_mcp_tool_timeout_covers_blocked_stdin_write(tmp_path):
+    """服务停止读管道时，发送阶段也必须受工具请求期限约束。"""
+    client = _unreadable_stdin_client(tmp_path)
+    errors = []
+
+    def call():
+        try:
+            client.call_tool("blocked", {"payload": "x" * (1024 * 1024)})
+        except Exception as exc:
+            errors.append(exc)
+
+    caller = threading.Thread(target=call)
+    caller.start()
+    try:
+        caller.join(timeout=1)
+        assert not caller.is_alive(), "MCP send ignored the configured timeout"
+        assert len(errors) == 1 and isinstance(errors[0], MCPTimeoutError)
+        assert client.process.poll() is not None
+    finally:
+        _stop_test_mcp(client)
+        caller.join(timeout=2)
+        assert not caller.is_alive()
+
+
+def test_mcp_close_interrupts_blocked_stdin_before_closing_stream(tmp_path):
+    """关闭不应等待阻塞写入先释放 stdin 的内部锁。"""
+    client = _unreadable_stdin_client(tmp_path)
+    client.tool_timeout_seconds = 10
+    entered = threading.Event()
+
+    def call():
+        entered.set()
+        try:
+            client.call_tool("blocked", {"payload": "x" * (1024 * 1024)})
+        except MCPError:
+            pass
+
+    caller = threading.Thread(target=call)
+    closer = threading.Thread(target=client.close)
+    caller.start()
+    try:
+        assert entered.wait(1)
+        caller.join(timeout=0.05)
+        assert caller.is_alive()
+        closer.start()
+        closer.join(timeout=1)
+        assert not closer.is_alive(), "MCP close waited for a blocked pipe writer"
+        caller.join(timeout=1)
+        assert not caller.is_alive()
+        assert client.process.poll() is not None
+    finally:
+        _stop_test_mcp(client)
+        caller.join(timeout=2)
+        if closer.ident is not None:
+            closer.join(timeout=2)
+
+
+def test_mcp_close_keeps_incomplete_process_cleanup_retryable(tmp_path, monkeypatch):
+    """终止没有实际生效时，不能将客户端清理标记为完成。"""
+    import subprocess
+
+    client = _unreadable_stdin_client(tmp_path)
+    try:
+        with monkeypatch.context() as fault:
+            fault.setattr(client, "_terminate_process", lambda *_args, **_kwargs: None)
+
+            def timed_out_wait(timeout=None):
+                raise subprocess.TimeoutExpired("offline MCP", timeout)
+
+            fault.setattr(client.process, "wait", timed_out_wait)
+            with pytest.raises(MCPError):
+                client.close()
+        client.close()
+        assert client.process.poll() is not None
+    finally:
+        _stop_test_mcp(client)
+
+
+def test_mcp_waiting_sender_times_out_without_retiring_transport(tmp_path):
+    client = MCPClient(
+        name="queued-sender", command=(sys.executable, str(FIXTURE_SERVER)), cwd=tmp_path,
+        startup_timeout_seconds=2, tool_timeout_seconds=0.03,
+    )
+    client.start()
+    try:
+        client._write_lock.acquire()
+        try:
+            with pytest.raises(MCPTimeoutError):
+                client.call_tool("echo", {"value": "queued"})
+            assert client.process.poll() is None
+            assert not client._pending
+        finally:
+            client._write_lock.release()
+        result = client.call_tool("echo", {"value": "after-timeout"})
+        assert "after-timeout" in str(result)
+    finally:
+        _stop_test_mcp(client)
+
+
 def _server_config(tmp_path: Path, *, name: str = "echo") -> MCPServerConfig:
     return MCPServerConfig(
         name=name,
@@ -1040,8 +1173,10 @@ def test_mcp_runtime_rotates_with_run_snapshot(tmp_path, monkeypatch):
     tool_names = {
         spec["function"]["name"] for spec in completions.requests[0]["tools"]
     }
-    assert result["status"] == "completed"
-    assert second["status"] == "completed"
+    assert result["status"] == "completed_unverified"
+    assert second["status"] == "completed_unverified"
+    assert agent.run_evidence.review_input()["verification_results"] == []
+    assert agent.run_evidence.review_input()["verification_evidence"] == []
     assert "mcp_fake_ping" in tool_names
     assert events == ["start", "close", "start", "close"]
     agent.close()

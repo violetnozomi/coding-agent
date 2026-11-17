@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from nz_coder.protocol.message_schema import message_records
+from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, message_records
 from nz_coder.state.sessions import list_sessions, load_session, session_subagent_dir
 
 _MAX_SESSIONS = 10_000
@@ -158,7 +158,10 @@ def _empty_stats(days: int | None) -> dict[str, Any]:
 
 def _consume_parent_messages(stats: dict[str, Any], messages: list[dict], session_id: str) -> int:
     session_total = 0
-    for raw, record in zip(messages, message_records(messages, session_id)):
+    records = message_records(messages, session_id)
+    raw_by_id = {message[MESSAGE_ID_KEY]: message for message in messages}
+    for record in records:
+        raw = raw_by_id[record["info"]["id"]]
         info = record["info"]
         if info.get("role") == "assistant":
             cost = _number(info.get("cost"))

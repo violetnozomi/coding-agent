@@ -99,11 +99,6 @@ HOST_CONFIG_KEYS = {
         'CONTEXT_REPLAY_COMPACTION_TOKENS', 'MAX_CONTEXT_TOKENS',
         'MAX_OUTPUT_TOKENS', 'PERSIST_OUTPUT_TRIGGER', 'PERSIST_PREVIEW_CHARS',
     },
-    'nz_coder/state/memory.py': {
-        'MEMORY_AUTO_DREAM', 'MEMORY_AUTO_DREAM_MIN_HOURS',
-        'MEMORY_AUTO_DREAM_MIN_NEW_SESSIONS', 'MEMORY_AUTO_EXTRACT',
-        'MEMORY_CLEANUP_DAYS',
-    },
     'nz_coder/state/sessions.py': {'PERMISSION_MODE', 'SESSION_DIR'},
     'nz_coder/state/skills.py': {'CONFIG_SNAPSHOT', 'SKILLS_DIR'},
     'nz_coder/state/trace.py': {'TRACE_DIR'},
@@ -115,7 +110,7 @@ HOST_CONFIG_KEYS = {
     'nz_coder/tool_platform/permissioning/manager.py': {'PERMISSION_MODE'},
 }
 
-CONFIG_SITE_INVENTORY_SHA256 = '3356a0c9eee42e2d0e1502da118627e6eb04b4037841509ed46f219e9babf40a'
+CONFIG_SITE_INVENTORY_SHA256 = '395d93a7e8b22d92ba385c3cb08f24d29756ac0640f37570ceb2c48251cf58df'
 
 
 WORKSPACE_INPUTS = {
@@ -208,14 +203,14 @@ PUBLIC_ERROR_MODULE_COUNTS = {
     'nz_coder/foundation/workspace_trust.py': ('trusted local validation', 1),
     'nz_coder/intelligence/semantic.py': ('trusted local validation', 1),
     'nz_coder/intelligence/verification.py': ('trusted local validation', 1),
-    'nz_coder/interface/commands/handlers/core.py': ('trusted local validation', 8),
+    'nz_coder/interface/commands/handlers/core.py': ('trusted local validation', 4),
     'nz_coder/interface/commands/handlers/workflow.py': ('trusted local validation', 3),
     'nz_coder/interface/custom_commands.py': ('trusted local validation', 1),
     'nz_coder/interface/setup/doctor.py': ('trusted local validation', 2),
     'nz_coder/project_creation/verifier.py': ('trusted local validation', 1),
     'nz_coder/runtime/agent/agent_manager.py': ('private diagnostic', 1),
     'nz_coder/runtime/agent/agent_resilience.py': ('trusted local validation', 1),
-    'nz_coder/runtime/execution/loop.py': ('private diagnostic', 20),
+    'nz_coder/runtime/execution/loop.py': ('private diagnostic', 19),
     'nz_coder/runtime/execution/provider_stream.py': ('private diagnostic', 1),
     'nz_coder/runtime/execution/run_lifecycle.py': ('private diagnostic', 2),
     'nz_coder/runtime/execution/runner.py': ('private diagnostic', 2),
@@ -227,9 +222,10 @@ PUBLIC_ERROR_MODULE_COUNTS = {
     'nz_coder/runtime/tool_runtime/policy.py': ('private diagnostic', 1),
     'nz_coder/runtime/verification/hooks.py': ('private diagnostic', 4),
     'nz_coder/runtime/verification/recovery.py': ('private diagnostic', 3),
-    'nz_coder/runtime/verification/stall_sidecar.py': ('private diagnostic', 1),
     'nz_coder/runtime/workflows/workflow_generation.py': ('trusted local validation', 1),
     'nz_coder/state/context.py': ('private diagnostic', 1),
+    # 仅在建表失败时内部识别 FTS5 缺失；公开返回使用 PublicError。
+    'nz_coder/state/memory_store.py': ('private diagnostic', 1),
     'nz_coder/state/trace.py': ('private diagnostic', 2),
     'nz_coder/state/workspace.py': ('trusted local validation', 1),
     'nz_coder/swebench/orchestrator.py': ('private diagnostic', 5),

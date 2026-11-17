@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from nz_coder.runtime.execution.turn_economy import (
     begin_provider_turn,
     early_tool_completion_ready,
@@ -24,6 +26,8 @@ def _state(**overrides):
         "completion_review_rejections": 0,
         "last_completion_review_rejection": "",
         "verification_contract": {},
+        "verification_domain": None,
+        "task_contract": {},
         "requirement_ledger": {},
     }
     values.update(overrides)
@@ -176,73 +180,39 @@ def test_provider_turn_outcome_distinguishes_final_and_error():
     assert error.outcome == "provider_error"
 
 
-def test_early_tool_completion_requires_current_exact_and_complete_ledger():
-    current = _state(
-        has_diff=True,
-        mutation_generation=3,
-        verification_contract={
-            "command": "python -m pytest -q tests",
-            "targets": ["tests"],
-            "attempted_generation": 3,
-            "passed": True,
-        },
-        requirement_ledger={"items": []},
-    )
-    assert early_tool_completion_ready(current) is True
-
-    current.verification_contract["attempted_generation"] = 2
-    assert early_tool_completion_ready(current) is False
-    current.verification_contract["attempted_generation"] = 3
-    current.verification_contract["passed"] = False
-    assert early_tool_completion_ready(current) is False
+@pytest.mark.parametrize("command", [
+    "python -m pytest -q tests", "python -m unittest discover -s tests -v",
+])
+def test_early_tool_completion_requires_current_exact_and_complete_ledger(command):
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.runtime.verification.domain.requirements import TaskContract
+    scenario = VerificationScenario(TaskContract(acceptance_commands=(command,)))
+    scenario.mutate(3, ["app.py"])
+    assert not early_tool_completion_ready(scenario.state)
+    scenario.execute(3, command=command, passed=True, acceptance=True)
+    assert early_tool_completion_ready(scenario.state)
+    scenario.mutate(4, ["app.py"])
+    assert not early_tool_completion_ready(scenario.state)
 
 
 def test_early_tool_completion_keeps_acceptance_current_after_docs_only_edit():
-    state = _state(
-        has_diff=True,
-        mutation_generation=4,
-        acceptance_mutation_generation=3,
-        verification_contract={
-            "command": "python -m pytest -q tests",
-            "targets": ["tests"],
-            "attempted_generation": 3,
-            "passed": True,
-        },
-        requirement_ledger={"items": []},
-    )
-
-    assert early_tool_completion_ready(state) is True
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.runtime.verification.domain.requirements import TaskContract
+    command = "python -m pytest -q tests"
+    scenario = VerificationScenario(TaskContract(acceptance_commands=(command,)))
+    scenario.mutate(3, ["app.py"])
+    scenario.execute(3, command=command, passed=True, acceptance=True)
+    scenario.mutate(4, ["README.md"])
+    assert early_tool_completion_ready(scenario.state)
 
 
 def test_early_tool_completion_accepts_runtime_owned_semantic_review_only():
-    state = _state(
-        has_diff=True,
-        mutation_generation=4,
-        verification_contract={
-            "command": "pytest -q tests",
-            "targets": ["tests"],
-            "attempted_generation": 4,
-            "passed": True,
-        },
-        requirement_ledger={
-            "latest_generation": 4,
-            "items": [{
-                "requirement": {
-                    "id": "R1",
-                    "description": "preserve compatibility",
-                    "kind": "compatibility",
-                    "expected_artifacts": [],
-                    "satisfaction_mode": "mixed",
-                    "depends_on": [],
-                    "required_evidence": ["semantic_review"],
-                },
-                "status": "candidate",
-                "evidence": [{"type": "verification_passed", "generation": 4}],
-                "mutation_generation": 4,
-            }],
-        },
-    )
-
-    assert early_tool_completion_ready(state) is True
-    state.requirement_ledger["items"][0]["evidence"] = []
-    assert early_tool_completion_ready(state) is False
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.runtime.verification.domain.requirements import Requirement, TaskContract
+    command = "pytest -q tests"
+    scenario = VerificationScenario(TaskContract(requirements=(
+        Requirement("R1", "preserve compatibility", "compatibility", satisfaction_mode="semantic"),
+    ), acceptance_commands=(command,)))
+    scenario.mutate(4, ["app.py"])
+    scenario.execute(4, command=command, passed=True, acceptance=True)
+    assert early_tool_completion_ready(scenario.state)

@@ -11,6 +11,7 @@ class MemoryRecallState:
 
     last_query: str = ""
     last_block: str = ""
+    cache_key: tuple | None = None
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class MemoryExecutionContext:
     provider: object | None = None
     capabilities: object | None = None
     observer: Callable[[str, dict], None] | None = None
+    model_runtime: object | None = None
 
     def __post_init__(self) -> None:
         if not self.session_id:

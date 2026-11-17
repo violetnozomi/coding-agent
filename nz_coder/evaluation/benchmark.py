@@ -233,14 +233,9 @@ def count_vowels(s):
             )
             if result.returncode == 0:
                 return {"passed": True, "reason": f"All {func_count} tests passed"}
-            # Try running without pytest
-            result2 = subprocess.run(
-                [sys.executable, str(test_fp)],
-                capture_output=True, text=True, timeout=10, cwd=str(BENCH_DIR)
-            )
-            if result2.returncode == 0:
-                return {"passed": True, "reason": "Tests passed (direct execution)"}
-            return {"passed": False, "reason": f"Tests failed: {result.stdout[-300:]}"}
+            if "No module named pytest" in result.stderr:
+                return {"passed": False, "reason": "Environment unavailable: pytest is not installed"}
+            return {"passed": False, "reason": f"Tests failed (exit {result.returncode}): {(result.stdout + result.stderr)[-300:]}"}
         except Exception as e:
             return {"passed": False, "reason": f"Error: {e}"}
 

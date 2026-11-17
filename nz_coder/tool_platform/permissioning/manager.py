@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import copy
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nz_coder.foundation import config
 
 from .checker import PermissionChecker
-from .interaction import format_tool_summary, read_permission_answer
+from .interaction import PermissionInteractionError, format_tool_summary, normalize_permission_reply, read_permission_answer
 from .modes import normalize_mode
 from .rules import (
     PermissionRule,
@@ -38,6 +40,9 @@ class PermissionManager:
         workspace_trusted: bool = True,
         project_control_snapshot: ProjectControlSnapshot | None = None,
     ):
+        from nz_coder.runtime.process.workdir import current_workdir
+        self._permission_workspace = current_workdir().resolve()
+        self._command_fork = False
         self._mode = normalize_mode(mode or config.PERMISSION_MODE)
         self._renderer = renderer
         self._asker = asker
@@ -119,6 +124,21 @@ class PermissionManager:
         """Dynamically add an allow rule for this session."""
         self._allow_rules.extend(parse_rules([rule_str], "allow"))
 
+    def fork_for_commands(self, workspace: Path) -> PermissionManager:
+        """冻结父权限；精确输入允许不能随委派迁移到另一个实际工作区。"""
+        fork = copy.copy(self)
+        root = Path(workspace).resolve()
+        fork._checker = PermissionChecker(self.mode, workspace_trusted=self._checker.workspace_trusted)
+        fork._allow_rules = [rule for rule in self._allow_rules
+                             if root == self._permission_workspace or not rule.content.startswith("input-sha256:")]
+        fork._deny_rules = list(self._deny_rules)
+        fork._ask_rules = list(self._ask_rules)
+        fork._special_allows = set()
+        fork._renderer = None
+        fork._permission_workspace = root
+        fork._command_fork = True
+        return fork
+
     def set_asker(self, asker: Callable[[str, dict], bool | str] | None) -> None:
         """Replace the interactive adapter without changing permission policy."""
         self._asker = asker
@@ -150,25 +170,32 @@ class PermissionManager:
 
     def ask_user(self, tool_name: str, tool_input: dict) -> bool:
         """Interactive confirmation. Returns True if user approves."""
+        if self._command_fork and self._asker is None:
+            raise PermissionInteractionError("unavailable")
         if self._asker is not None:
-            answer = self._asker(tool_name, tool_input)
-            if isinstance(answer, str):
-                normalized = answer.strip().lower()
-                if normalized == "always":
-                    self._add_scoped_allow(tool_name, tool_input, persist=True)
-                    return True
-                if normalized == "once":
-                    return True
-                if normalized == "reject":
-                    return False
-            return bool(answer)
+            try:
+                displayed_input = dict(tool_input)
+                if self._command_fork:
+                    from nz_coder.tools.bash import _resolve_bash_workdir
+                    cwd, error = _resolve_bash_workdir(tool_input.get("workdir"), workspace=self._permission_workspace)
+                    if error:
+                        raise PermissionInteractionError("unavailable")
+                    displayed_input["workdir"] = str(cwd)
+                answer = normalize_permission_reply(self._asker(tool_name, displayed_input))
+            except PermissionInteractionError:
+                raise
+            except Exception:
+                raise PermissionInteractionError("unavailable") from None
+            if answer == "always":
+                self._add_scoped_allow(tool_name, tool_input, persist=True)
+            return answer != "reject"
         summary = format_tool_summary(tool_name, tool_input)
         if self._renderer:
             self._renderer.pause()
         try:
             answer = self._read_permission_answer(summary)
             if answer is None:
-                return False
+                raise PermissionInteractionError("unavailable")
             if answer == "a":
                 self.mode = "auto"
                 return True
@@ -200,15 +227,16 @@ class PermissionManager:
         if key in self._special_allows:
             return True
         if self._asker is None:
-            return False
-        answer = self._asker(str(permission), dict(metadata))
-        if isinstance(answer, str):
-            normalized = answer.strip().lower()
-            if normalized == "always":
-                self._special_allows.add(key)
-                return True
-            return normalized == "once"
-        return bool(answer)
+            raise PermissionInteractionError("unavailable")
+        try:
+            answer = normalize_permission_reply(self._asker(str(permission), dict(metadata)))
+        except PermissionInteractionError:
+            raise
+        except Exception:
+            raise PermissionInteractionError("unavailable") from None
+        if answer == "always":
+            self._special_allows.add(key)
+        return answer != "reject"
 
     def _add_scoped_allow(
         self,
@@ -221,7 +249,9 @@ class PermissionManager:
         try:
             rule = scoped_allow_rule(tool_name, tool_input)
             if persist:
-                persist_allow_rule(rule)
+                from nz_coder.runtime.process.workdir import scoped_workdir
+                with scoped_workdir(self._permission_workspace):
+                    persist_allow_rule(rule)
         except (OSError, PermissionError, ValueError) as exc:
             log.warning("Could not persist permission rule: %s", exc)
             return False

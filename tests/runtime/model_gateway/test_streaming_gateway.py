@@ -177,7 +177,7 @@ def test_stream_retries_without_forced_tool_choice_when_gateway_rejects_it() -> 
     ], max_retries=0)
     base = _call()
     call = ModelCall(
-        purpose=ModelCallPurpose.STALL_SIDECAR,
+        purpose=ModelCallPurpose.VERIFIER,
         messages=base.messages,
         tools=base.tools,
         tool_choice={"type": "function", "function": {"name": "read_file"}},

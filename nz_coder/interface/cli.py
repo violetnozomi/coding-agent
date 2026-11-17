@@ -7,6 +7,7 @@ import re
 
 import select
 import sys
+import threading
 import time
 
 from rich.console import Console
@@ -30,10 +31,10 @@ from nz_coder.interface.run_renderer import TerminalRunRenderer
 from nz_coder.interface.terminal_input import TerminalInput
 from nz_coder.interface.submission import build_user_submission
 from nz_coder.protocol.message_schema import bind_user_context
-from nz_coder.state.memory import memory_mgr
+from nz_coder.state.memory import current_memory_manager
 from nz_coder.state.skills import skill_loader  # noqa: F401  compatibility alias
 from nz_coder.runtime.conversation.prompt import build
-from nz_coder.state.sessions import activate_session, create_session_id, save_session
+from nz_coder.state.sessions import activate_session, create_session_id, load_session
 
 theme = Theme({
     "tool": "bold yellow",
@@ -399,7 +400,7 @@ class StreamingRenderer:
 
 
 def _build_agent(system_prompt: str, renderer: StreamingRenderer, session_id: str,
-                 permission_mode: str = None, config_snapshot=None):
+                 permission_mode: str = None, config_snapshot=None, *, activate_session_on_build: bool = True):
     from nz_coder.providers.configuration import provider_connection
     from nz_coder.providers.models import active_model_selection
     from nz_coder.runtime.execution.composition import build_product_environment
@@ -421,6 +422,7 @@ def _build_agent(system_prompt: str, renderer: StreamingRenderer, session_id: st
         renderer=renderer,
         permission_mode=permission_mode,
         session_id=session_id,
+        activate_session_on_build=activate_session_on_build,
         client=None if connection.configured else _UnavailableModelClient(connection.provider),
         auto_mode_classifier_enabled=config.AUTO_MODE_CLASSIFIER_ENABLED,
         config_snapshot=config_snapshot,
@@ -520,7 +522,7 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
             "Agent requests will fail until a provider is connected.[/error]"
         )
 
-    memory_mgr.load_all()
+    current_memory_manager().load_all()
     # Project skill descriptions are attached by the per-submission Run
     # Control. Keeping them out of this Session base avoids stale authority.
     system_prompt = build(memory_block="", skill_descriptions="")
@@ -581,6 +583,7 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
         active_console,
         renderer,
         detail_provider=lambda: input_ui.preferences.tool_details,
+        terminal_source="result",
     )
 
     def _on_tool(name, output):
@@ -632,8 +635,10 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
         submission_snapshot = load_config_snapshot(current_workdir())
 
         if stripped.startswith("!"):
+            from nz_coder.foundation.async_utils import to_thread_settled
             from nz_coder.interface.direct_shell import execute_direct_shell
             from nz_coder.tool_platform.permissioning import PermissionManager
+            from nz_coder.tools import scoped_tool_cancellation
 
             command = stripped[1:].strip()
             agent = session_state["agent"]
@@ -644,12 +649,29 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
                 workspace_trusted=submission_snapshot.control_plane_trusted,
                 project_control_snapshot=submission_snapshot.project_control,
             )
+            cancel_event = threading.Event()
+
+            async def run_shell():
+                with scoped_tool_cancellation(cancel_event):
+                    return await to_thread_settled(
+                        execute_direct_shell,
+                        command,
+                        permissions=shell_permissions,
+                        cancel_callback=cancel_event.set,
+                    )
+
+            shell_task = asyncio.create_task(run_shell())
+            surface = input_ui.fullscreen
+            if surface is not None:
+                surface.begin_run()
+                surface.set_cancel_run(shell_task.cancel)
             try:
-                result = await asyncio.to_thread(
-                    execute_direct_shell,
-                    command,
-                    permissions=shell_permissions,
-                )
+                try:
+                    result = await shell_task
+                finally:
+                    # 工作线程已结清后才能恢复输入和持久提示区域。
+                    if surface is not None:
+                        surface.end_run()
             except (asyncio.CancelledError, KeyboardInterrupt):
                 _consume_current_task_cancellation()
                 active_console.print("[info]Command cancelled.[/info]")
@@ -801,6 +823,22 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
             run_view.close()
             input_ui.refresh_files()
 
+        if cancelled or failure is not None:
+            # 异常返回可能尚未同步历史；恢复已提交原件，避免覆盖终态和下一轮冲突。
+            try:
+                saved = load_session(session_state["id"])
+            except (OSError, ValueError):
+                saved = {}
+            saved_messages = saved.get("messages")
+            if (
+                saved.get("session_id") == session_state["id"]
+                and isinstance(saved_messages, list)
+                and all(isinstance(message, dict) for message in saved_messages)
+            ):
+                history[:] = saved_messages
+            active_console.print()
+            continue
+
         result_status = (
             str(result.get("status") or "") if isinstance(result, dict) else ""
         )
@@ -825,7 +863,7 @@ async def _run_cli_impl(owner_state: list[dict]) -> None:
                 model_id=str(getattr(agent, "model_id", "unknown")),
                 variant=getattr(agent, "model_variant", None),
             ))
-        save_session(history, mode=agent.permissions.mode, session_id=session_state["id"])
+        # Runner 已提交本轮原件；此处仅保留内存提示，不能再覆写整份旧历史。
         active_console.print()
 
 
@@ -976,7 +1014,13 @@ def _attach_terminal_interactions(agent, terminal_input, renderer) -> None:  # n
     """Bind async terminal askers when the Agent supports interaction injection."""
     set_followup_pending = getattr(agent, "set_followup_pending", None)
     if callable(set_followup_pending):
-        set_followup_pending(terminal_input.has_pending_submission)
+        set_followup_pending(
+            terminal_input.has_pending_submission,
+            waiter=(
+                terminal_input.fullscreen.wait_for_pending_submission
+                if terminal_input.fullscreen is not None else None
+            ),
+        )
     if callable(getattr(agent, "set_interaction_askers", None)):
         bridge = bind_terminal_interactions(agent, terminal_input, renderer)
         setattr(agent, "_terminal_interaction_bridge", bridge)

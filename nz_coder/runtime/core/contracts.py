@@ -69,8 +69,12 @@ class SessionRepository(Protocol):
 class SessionRuntimePort(Protocol):
     """Open and persist the Session-owned state for one Runner frame."""
 
-    async def open(self, request: RunRequest) -> RunContext:
+    async def open(self, request: RunRequest, *, session_lease=None) -> RunContext:
         """Load or create the Session and return its isolated RunContext."""
+        ...
+
+    def abandon(self, context: RunContext) -> None:
+        """Retire a preparation owner after its checkpoint writer has stopped."""
         ...
 
     async def checkpoint(self, context: RunContext, status: str) -> None:
@@ -84,7 +88,7 @@ class SessionRuntimePort(Protocol):
 
 @runtime_checkable
 class MemoryService(Protocol):
-    """Run-scoped memory recall and terminal learning boundary."""
+    """Run-scoped memory projection and operation settlement boundary."""
 
     def prompt_block(self, context: MemoryExecutionContext, query: str) -> str:
         """Return prompt-safe relevant memory for the current run."""
@@ -93,7 +97,7 @@ class MemoryService(Protocol):
     async def finalize(
         self, context: MemoryExecutionContext, messages: list, status: str,
     ) -> None:
-        """Persist eligible terminal observations without changing the result."""
+        """Finish already-started operations without automatic learning."""
         ...
 
 

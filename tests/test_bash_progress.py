@@ -157,7 +157,7 @@ def test_long_failed_bash_preserves_middle_diagnostic_for_artifact_recovery(tmp_
             signal_from_metadata=lambda _metadata: None,
             record_result=lambda _result: False,
             trace_result=lambda *_args, **_kwargs: None,
-            stall_orchestrator=None,
+
             after_result=lambda _messages, _result, _output: None,
         ),
         [(0, {

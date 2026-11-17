@@ -106,6 +106,7 @@ jobs:
       - run: python -m pip install -e ".[dev]" build "setuptools>=68" wheel
       - run: mkdir -p artifacts
       - name: Linux product acceptance
+        shell: bash
         run: >-
           python -m pytest -q
           tests/test_terminal_product_final.py

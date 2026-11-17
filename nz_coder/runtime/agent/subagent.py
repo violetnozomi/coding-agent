@@ -5,6 +5,7 @@ import asyncio
 import copy
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
+from dataclasses import dataclass, asdict
 import json
 import math
 import re
@@ -13,12 +14,13 @@ import threading
 import time
 import uuid
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Iterator, TYPE_CHECKING
 
 from openai import OpenAI
 
 from nz_coder.foundation import config
-from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.runtime.core.run_settings import RunSettings, current_run_settings, scoped_run_settings
+from nz_coder.foundation.workspace_trust import ConfigSnapshot
 from nz_coder.state.changes import ChangeTracker
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.protocol.message_schema import (
@@ -43,9 +45,9 @@ from nz_coder.providers import (
     create_provider,
     prompt_family_guidance,
 )
-from nz_coder.protocol.public_error import format_public_error, to_public_error
+from nz_coder.protocol.public_error import PublicError, PublicInputError, PublicRuntimeError, format_public_error, public_error_from_wire, to_public_error
 from nz_coder.runtime.core.execution_context import (
-    scoped_broad_test_guard,
+    CommandExecutionPolicy,
     scoped_runtime_overrides,
 )
 from nz_coder.runtime.agent.child_result import CHILD_RESULT_KEY, child_result_from_state
@@ -56,7 +58,7 @@ from nz_coder.runtime.agent.child_contracts import (
     build_verification_instruction,
     build_verification_repair_prompt,
     evaluate_child_verification,
-    normalize_evidence_refs,
+    resolve_effective_evidence_refs,
     normalize_verification_contract,
     presentation_excerpt,
 )
@@ -92,6 +94,13 @@ from nz_coder.tools import (
     scoped_dynamic_tools_disabled,
 )
 from nz_coder.state.trace import TraceRecorder
+from nz_coder.state.memory_scope import MemoryScope, current_memory_scope, scoped_memory_scope
+
+if TYPE_CHECKING:
+    from nz_coder.runtime.agent.prepared_evidence import PreparedDiffEvidence
+    from nz_coder.runtime.process.preparation import PreparationScope
+    from nz_coder.runtime.process.command_broker import CommandAuthority
+
 
 _SUBAGENT_TYPE_ALIASES = {
     "general": "general-purpose",
@@ -101,6 +110,40 @@ _SUBAGENT_TYPE_ALIASES = {
 }
 _CANONICAL_SUBAGENT_TYPES = {"explore", "plan", "general-purpose", "reflection"}
 _READ_ONLY_TYPES = {"explore", "plan", "reflection"}
+
+
+@dataclass(frozen=True)
+class PreparedSubagentWorkspace:
+    """Parent-prepared execution root; only trusted spawn code installs it."""
+
+    parent_workspace: Path
+    execution_root: Path
+    execution_identity: tuple[int, int]
+    worktree: Worktree
+    scratch_path: Path
+    config_snapshot: ConfigSnapshot | None
+    diff_evidence: PreparedDiffEvidence | None
+    environment: object | None = None
+    deadline: float | None = None
+
+
+_PREPARED_WORKSPACE: ContextVar[PreparedSubagentWorkspace | None] = ContextVar(
+    "nz_prepared_child_workspace", default=None,
+)
+
+
+@contextmanager
+def scoped_prepared_subagent_workspace(prepared: PreparedSubagentWorkspace) -> Iterator[None]:
+    token = _PREPARED_WORKSPACE.set(prepared)
+    try:
+        yield
+    finally:
+        _PREPARED_WORKSPACE.reset(token)
+
+
+def subagent_strict_local_tools() -> bool:
+    """保留当前子执行的显式委派策略，不继承父主会话的strict。"""
+    return False
 
 
 def _child_runtime_profile(state: dict, agent_type: str) -> str:
@@ -140,6 +183,7 @@ def _child_activation_messages(
     )
     native = asyncio.run(store.load(identity, Path(workspace)))
     if native is not None:
+        _bind_native_child_memory_scope(native, state)
         state.pop("messages", None)
     messages = [] if native is not None else copy.deepcopy(state.get("messages") or [])
     if prompt:
@@ -172,17 +216,29 @@ def _persist_native_child_projection(
             )
         else:
             session.replace_transcript(messages, allow_terminal=True)
+        _bind_native_child_memory_scope(session, state)
         session.record_status(_child_session_status(status))
         await store.save(session)
 
     asyncio.run(persist())
 
 
+def _bind_native_child_memory_scope(session, state):
+    raw = state.get("memory_scope")
+    if raw is None:
+        return
+    scope = MemoryScope.from_dict(raw)
+    prior = session.metadata.get("memory_scope")
+    if prior is not None and MemoryScope.from_dict(prior) != scope:
+        raise PublicInputError("Child Session memory scope does not match its trusted parent")
+    session.metadata["memory_scope"] = scope.to_dict()
+
+
 def _child_session_status(status: str) -> SessionStatus:
     return {
         "running": SessionStatus.RUNNING,
         "completed": SessionStatus.COMPLETED,
-        "completed_unverified": SessionStatus.COMPLETED,
+        "completed_unverified": SessionStatus.COMPLETED_UNVERIFIED,
         "cancelled": SessionStatus.CANCELLED,
         "interrupted": SessionStatus.INTERRUPTED,
         "needs_parent": SessionStatus.INTERRUPTED,
@@ -194,6 +250,7 @@ def _child_session_status(status: str) -> SessionStatus:
         "verification_failed": SessionStatus.ERROR,
     }.get(str(status), SessionStatus.ERROR)
 _SUBAGENT_BLOCKED_TOOLS = {
+    "update_working_plan",
     "task",
     "agent_manager",
     "workflow_run",
@@ -238,7 +295,10 @@ _PARENT_CONTEXT_DEFAULT: dict[str, Any] = {
     "trace_id": None,
     "model_id": None,
     "config_snapshot": None,
+    "memory_scope": None,
+    "command_authorizer": None,
 }
+_UNSET_COMMAND_AUTHORIZER = object()
 _PARENT_CONTEXT: ContextVar[dict[str, Any]] = ContextVar(
     "nz_coder_parent_context",
     default=_PARENT_CONTEXT_DEFAULT,
@@ -311,10 +371,13 @@ def bind_parent_context(
     trace_id: str | None = None,
     model_id: str | None = None,
     config_snapshot: Any = None,
+    memory_scope: dict | None = None,
+    command_authorizer=_UNSET_COMMAND_AUTHORIZER,
 ) -> None:
     if (
         session_id is None and tracer is None and agent_id is None
-        and trace_id is None and model_id is None and config_snapshot is None
+        and trace_id is None and model_id is None and config_snapshot is None and memory_scope is None
+        and command_authorizer is _UNSET_COMMAND_AUTHORIZER
     ):
         _PARENT_CONTEXT.set(dict(_PARENT_CONTEXT_DEFAULT))
         return
@@ -331,7 +394,15 @@ def bind_parent_context(
         context["model_id"] = model_id
     if config_snapshot is not None:
         context["config_snapshot"] = config_snapshot
+    if memory_scope is not None:
+        context["memory_scope"] = MemoryScope.from_dict(memory_scope).to_dict()
+    if command_authorizer is not _UNSET_COMMAND_AUTHORIZER:
+        context["command_authorizer"] = command_authorizer
     _PARENT_CONTEXT.set(context)
+
+
+def current_parent_command_authorizer():
+    return _PARENT_CONTEXT.get().get("command_authorizer")
 
 
 @contextmanager
@@ -384,6 +455,19 @@ def _completion_with_timeout(
 _ORIGINAL_COMPLETION_WITH_TIMEOUT = _completion_with_timeout
 
 
+_SUBAGENT_CLEANUP_OWNER: ContextVar[tuple[str, object] | None] = ContextVar("subagent_cleanup_owner", default=None)
+
+
+@contextmanager
+def scoped_subagent_cleanup_owner(session_id: str, callback):
+    """仅把当前真实环境交给原任务；不另建资源登记表。"""
+    token = _SUBAGENT_CLEANUP_OWNER.set((session_id, callback))
+    try:
+        yield
+    finally:
+        _SUBAGENT_CLEANUP_OWNER.reset(token)
+
+
 def _cleanup_subagent_resources(agent, model_runtime, tracer) -> None:
     """Retire the single active owner without changing the business result."""
     try:
@@ -419,6 +503,11 @@ def _cleanup_subagent_scope(
     """Always restore parent authority even if a cleanup implementation regresses."""
     try:
         _cleanup_subagent_resources(agent, model_runtime, tracer)
+        if _SUBAGENT_CLEANUP_OWNER.get() is None:
+            # 前台没有 manager 接手；原 worker 持有并重试，直到真实环境退出。
+            while agent is not None and getattr(agent, "environment_cleanup_complete", True) is False:
+                time.sleep(0.01)
+                _cleanup_subagent_resources(agent, model_runtime, tracer)
     finally:
         _PARENT_CONTEXT.reset(parent_context_token)
 
@@ -646,13 +735,10 @@ def _parent_context_block(parent_session_id: str | None = None) -> str:
                 parts.append("Parent RuntimeState:\n" + "\n".join(lines[:12]))
             break
 
-    try:
-        from nz_coder.tools.scratchpad import scratchpad
-        scratch = scratchpad.read()
-    except Exception:
-        scratch = ""
-    if scratch and scratch != "Scratchpad is empty.":
-        parts.append("Parent scratchpad:\n" + scratch[:2000])
+    from nz_coder.tools.scratchpad import current_scratchpad
+    scratch = current_scratchpad().build_prompt_block(include_read_hint=False)
+    if scratch:
+        parts.append("Parent scratchpad summaries:\n" + scratch)
 
     if not parts:
         return ""
@@ -662,16 +748,42 @@ def _parent_context_block(parent_session_id: str | None = None) -> str:
     )
 
 
-def _run_allowed_tool(name: str, args: dict, allowed_tool_names: set[str], agent_type: str) -> str:
-    from nz_coder.tools.bash import run_bash
-
+def _run_allowed_tool(name: str, args: dict, allowed_tool_names: set[str], agent_type: str,
+                      *, command_authorizer=None, deadline: float | None = None) -> str:
     if name not in allowed_tool_names:
         return f"Error: tool not available to subagent: {name}"
+    from nz_coder.runtime.process.command_channel import current_command_client
+    from nz_coder.tool_platform.permissioning.command_authorization import (
+        authorization_failure, command_authorization_identity, scoped_command_authorization,
+    )
+    from nz_coder.tools import current_tool_cancel_event
+
+    command_scope = nullcontext()
+    if name in {"bash", "process"} and current_command_client() is None and command_authorizer is not None:
+        requested = dict(args)
+        if name == "bash":
+            requested["read_only"] = agent_type in _READ_ONLY_TYPES
+        try:
+            expected = command_authorization_identity(name, requested)
+        except (OSError, ValueError, TypeError, RuntimeError) as exc:
+            return authorization_failure(format_public_error(exc))
+        error = command_authorizer.authorize(name, requested, workspace=current_workdir(),
+            read_only=agent_type in _READ_ONLY_TYPES, cancel_event=current_tool_cancel_event(), deadline=deadline)
+        if error is not None:
+            return error
+        command_scope = scoped_command_authorization(name, requested, expected_identity=expected)
+    with command_scope:
+        return _dispatch_allowed_tool(name, args, agent_type)
+
+
+def _dispatch_allowed_tool(name: str, args: dict, agent_type: str) -> str:
+    from nz_coder.tools.bash import run_bash
     if name == "bash":
         return run_bash(
             args.get("command", ""),
             read_only=(agent_type in _READ_ONLY_TYPES),
             timeout=args.get("timeout"),
+            workdir=args.get("workdir"),
         )
     return dispatch(name, args)
 
@@ -735,9 +847,14 @@ def _finalize_subagent_result(
         state,
         final_text=final_text,
         status=status,
-        verification=verification,
+
     )
     state[CHILD_RESULT_KEY] = outcome.to_dict()
+    settlement_id = str(state.get("settlement_id") or "")
+    if settlement_id:
+        state["child_result_settlement_id"] = settlement_id
+        if outcome.cost is not None:
+            state["child_cost_baseline"] = outcome.cost
     try:
         _save_subagent_state(
             str(state.get("parent_session_id") or "main-session"),
@@ -749,6 +866,14 @@ def _finalize_subagent_result(
         # must not erase an otherwise settled child terminal.
         pass
     metadata: dict[str, Any] = outcome.to_metadata()
+    if state.get("memory_scope"):
+        metadata["memory_scope"] = copy.deepcopy(state["memory_scope"])
+        metadata["memory_proposal_source_session"] = str(state.get("session_id") or "")
+    if isinstance(state.get('environment_preparation'), dict):
+        record = state['environment_preparation']
+        metadata['environment_preparation'] = {key: record[key] for key in ('status', 'phase', 'mode', 'level', 'exit_code', 'log_path') if key in record}
+    if settlement_id:
+        metadata["child_result_settlement_id"] = settlement_id
     if state.get("cost_known") is True:
         total_cost = _finite_cost(state.get("cost")) or 0.0
         before = _finite_cost(state.get("_invocation_cost_before")) or 0.0
@@ -804,10 +929,6 @@ def _finite_cost(value: Any) -> float | None:
     if not math.isfinite(result) or result < 0 or result > 1_000_000_000:
         return None
     return result
-def _verification_passed(output: str) -> bool:
-    return output.startswith(("OK:", "WARN:")) or output.startswith("No changed Python files")
-
-
 def _verification_summary(output: str, max_chars: int = 1200) -> str:
     output = output.strip()
     if len(output) <= max_chars:
@@ -890,6 +1011,8 @@ def _new_subagent_state(
     parent_session_id: str,
     agent_type: str,
     allowed_tools: list[str] | None,
+    *,
+    memory_scope: MemoryScope | None = None,
 ) -> dict:
     session_id = f"subagent-{uuid.uuid4().hex[:8]}"
     return {
@@ -898,6 +1021,7 @@ def _new_subagent_state(
         "parent_session_id": parent_session_id,
         "parent_agent_id": _PARENT_CONTEXT.get().get("agent_id"),
         "parent_trace_id": _PARENT_CONTEXT.get().get("trace_id"),
+        "memory_scope": (memory_scope or _parent_memory_scope(_workspace_root())).to_dict(),
         "trace_id": "",
         "trace_run_id": "",
         "trace_rel": "",
@@ -914,6 +1038,23 @@ def _new_subagent_state(
         "created_at": time.time(),
         "updated_at": time.time(),
     }
+
+
+def _parent_memory_scope(workspace: Path) -> MemoryScope:
+    raw = _PARENT_CONTEXT.get().get("memory_scope")
+    if raw is not None:
+        return MemoryScope.from_dict(raw)
+    return current_memory_scope() or MemoryScope.for_workspace(workspace)
+
+
+def _bind_subagent_memory_scope(state: dict, workspace: Path) -> MemoryScope:
+    """恢复只能沿可信父身份绑定，不能按子工作树路径或 remote 猜库。"""
+    scope = _parent_memory_scope(workspace)
+    prior = state.get("memory_scope")
+    if prior is not None and MemoryScope.from_dict(prior) != scope:
+        raise PublicInputError("Child memory scope does not match its trusted parent")
+    state["memory_scope"] = scope.to_dict()
+    return scope
 
 
 def _load_subagent_state(parent_session_id: str, session_id: str, workspace_root: str | Path | None = None) -> dict:
@@ -974,7 +1115,7 @@ def list_subagent_sessions(
         session_id = str(state.get("session_id") or "")
         if not session_id:
             continue
-        messages = state.get("messages") if isinstance(state.get("messages"), list) else []
+        messages = _child_history_projection(state, _workspace_root(workspace_root))
         updated_at = state.get("updated_at")
         if (
             isinstance(updated_at, bool)
@@ -1005,7 +1146,44 @@ def load_subagent_session(
     state = _load_subagent_state(parent_session_id, requested, workspace_root)
     if str(state.get("session_id") or "") != requested:
         return {}
-    return copy.deepcopy(state)
+    projected = copy.deepcopy(state)
+    projected["messages"] = _child_history_projection(state, _workspace_root(workspace_root))
+    return projected
+
+
+def _child_session_workspace(state: dict, workspace: Path) -> Path:
+    worktree = _validated_persisted_worktree(workspace, state)
+    return Path(worktree.path) if worktree is not None else workspace
+
+
+def _child_history_projection(state: dict, workspace: Path) -> list[dict]:
+    native = LegacyJsonSessionStore().load_session(
+        SessionIdentity(state["session_id"], state["parent_session_id"]),
+        _child_session_workspace(state, workspace),
+    )
+    return copy.deepcopy(native.transcript) if native is not None else []
+
+
+@dataclass
+class ClonedSubagent:
+    workspace: Path
+    state: dict
+    task_artifact: Path
+    session_file: Path | None = None
+    session_artifact: Path | None = None
+    discarded: bool = False
+
+
+@dataclass(frozen=True)
+class SubagentCloneResult:
+    mapping: dict[str, str]
+    created: tuple[ClonedSubagent, ...]
+
+
+def discard_cloned_subagents(result: SubagentCloneResult) -> None:
+    """仅清理本次 fork 记录的目标；父保存失败时也可重复调用。"""
+    for resource in reversed(result.created):
+        _remove_cloned_child(resource)
 
 
 def clone_referenced_subagents(
@@ -1015,18 +1193,22 @@ def clone_referenced_subagents(
     *,
     parent_agent_id: str = "",
     workspace_root: str | Path | None = None,
-) -> dict[str, str]:
+) -> SubagentCloneResult:
     """Clone task-child state/worktrees and rewrite durable ToolPart references."""
     workspace = _workspace_root(workspace_root)
     remapped: dict[str, str] = {}
-    created: list[tuple[str, dict]] = []
+    created: list[ClonedSubagent] = []
+    cloned_states: dict[str, dict] = {}
+    store = LegacyJsonSessionStore()
 
-    def clone_child(source_parent: str, target_parent: str, child_id: str) -> str:
+    def clone_child(source_parent: str, target_parent: str, child_id: str,
+                    source_workspace: Path, target_workspace: Path, target_parent_agent: str) -> str:
         if child_id in remapped:
             return remapped[child_id]
-        source = _load_subagent_state(source_parent, child_id, workspace)
+        source = _load_subagent_state(source_parent, child_id, source_workspace)
         if not source:
             return child_id
+        _require_completed_preparation(source)
         if str(source.get("status") or "") in {
             "queued", "running", "cancel_requested",
         }:
@@ -1039,7 +1221,7 @@ def clone_referenced_subagents(
         cloned["session_id"] = target_id
         cloned["agent_id"] = f"agent-{uuid.uuid4().hex[:8]}"
         cloned["parent_session_id"] = target_parent
-        cloned["parent_agent_id"] = parent_agent_id or None
+        cloned["parent_agent_id"] = target_parent_agent or None
         cloned["parent_trace_id"] = None
         cloned["trace_id"] = ""
         cloned["trace_run_id"] = ""
@@ -1051,23 +1233,48 @@ def clone_referenced_subagents(
         cloned["updated_at"] = time.time()
         from nz_coder.protocol.message_schema import rebind_fork_history
 
+        from nz_coder.runtime.session.session_revert import copy_fork_snapshots
+
+        source_root = _child_session_workspace(source, source_workspace)
+        native = store.load_session(SessionIdentity(child_id, source_parent), source_root)
         cloned_messages = rebind_fork_history(
-            list(cloned.get("messages") or []),
-            target_id,
+            native.transcript if native is not None else [], target_id,
         )
-        clone_references(source_parent=child_id, target_parent=target_id, items=cloned_messages)
-        cloned["messages"] = cloned_messages
-        try:
-            _clone_child_worktree(workspace, source, cloned)
-            _save_subagent_state(target_parent, cloned, workspace)
-        except Exception:
-            _remove_cloned_child(target_parent, cloned, workspace)
-            remapped.pop(child_id, None)
-            raise
-        created.append((target_parent, cloned))
+        cloned.pop("messages", None)
+        outcome = cloned.get("child_result")
+        if isinstance(outcome, dict):
+            outcome.update(task_id=target_id, session_id=target_id,
+                           agent_id=cloned["agent_id"], parent_session_id=target_parent, trace_id="")
+        cloned_states[child_id] = cloned
+        # 先登记目标，任何阶段失败均能回收本次新建资源，包括递归子任务。
+        resource = ClonedSubagent(target_workspace, cloned,
+            _subagent_artifact_dir(target_parent, target_id, target_workspace))
+        created.append(resource)
+        _clone_child_worktree(target_workspace, source, cloned, source_workspace=source_workspace)
+        target_root = _child_session_workspace(cloned, target_workspace)
+        from nz_coder.state.sessions import _session_path, session_artifact_dir
+        with scoped_workdir(target_root):
+            resource.session_file = _session_path(target_id)
+            resource.session_artifact = session_artifact_dir(target_id)
+        clone_references(source_parent=child_id, target_parent=target_id,
+                         items=cloned_messages, source_workspace=source_root,
+                         target_workspace=target_root, target_parent_agent=cloned["agent_id"])
+        if native is not None:
+            snapshot = native.snapshot()
+            metadata = copy.deepcopy(snapshot.metadata)
+            for key in ("legacy_payload", "_nz_checkpoint_commits", "active_interaction_run_id"):
+                metadata.pop(key, None)
+            forked = Session(identity=SessionIdentity(target_id, target_parent),
+                workspace=target_root, transcript=cloned_messages, status=snapshot.status,
+                metadata=metadata, usage=snapshot.usage, closed=snapshot.closed)
+            copy_fork_snapshots(source_root, child_id, target_id, cloned_messages,
+                                target_workspace=target_root)
+            store.save_session(forked)
+        _save_subagent_state(target_parent, cloned, target_workspace)
         return target_id
 
-    def clone_references(*, source_parent: str, target_parent: str, items: list[dict]) -> None:
+    def clone_references(*, source_parent: str, target_parent: str, items: list[dict],
+                         source_workspace: Path, target_workspace: Path, target_parent_agent: str) -> None:
         for message in items:
             if not isinstance(message, dict):
                 continue
@@ -1091,81 +1298,98 @@ def clone_referenced_subagents(
                     )
                     if key is None:
                         continue
+                    original_child = str(metadata[key])
                     metadata[key] = clone_child(
                         source_parent,
                         target_parent,
-                        str(metadata[key]),
+                        original_child, source_workspace, target_workspace, target_parent_agent,
                     )
+                    child = cloned_states.get(original_child)
+                    if child is not None:
+                        for field, value in (("child_parent_session_id", target_parent),
+                                             ("child_agent_id", child["agent_id"]),
+                                             ("child_trace_id", "")):
+                            if field in metadata:
+                                metadata[field] = value
+                        outcome = metadata.get("child_result")
+                        if isinstance(outcome, dict):
+                            outcome.update(task_id=child["session_id"], session_id=child["session_id"],
+                                parent_session_id=target_parent, agent_id=child["agent_id"], trace_id="")
 
+    prepared_messages = copy.deepcopy(messages)
     try:
         clone_references(
             source_parent=source_parent_session_id,
             target_parent=target_parent_session_id,
-            items=messages,
+            items=prepared_messages, source_workspace=workspace, target_workspace=workspace,
+            target_parent_agent=parent_agent_id,
         )
-        return remapped
+        messages[:] = prepared_messages
+        return SubagentCloneResult(remapped, tuple(created))
     except Exception:
-        for parent_id, state in reversed(created):
-            _remove_cloned_child(parent_id, state, workspace)
+        discard_cloned_subagents(SubagentCloneResult(remapped, tuple(created)))
         raise
 
 
-def _clone_child_worktree(workspace: Path, source: dict, target: dict) -> None:
-    old_worktree = _validated_persisted_worktree(workspace, source)
+def _clone_child_worktree(workspace: Path, source: dict, target: dict, *, source_workspace: Path) -> None:
+    _require_completed_preparation(source)
+    old_worktree = _validated_persisted_worktree(source_workspace, source)
     if old_worktree is None or old_worktree.mode == "direct":
         worktree = _direct_worktree(workspace, target)
     else:
         manager = WorktreeManager(repo_root=workspace)
+        receipt = source.get('environment_preparation') or {}
+        manager.snapshot_exclusions = tuple(receipt.get('owned', []) + receipt.get('borrowed', []))
+        name = _managed_worktree_name(target['session_id'])
+        mode = 'git' if manager.is_git_repo() else 'copy'
+        target['worktree'] = asdict(Worktree(name, str(manager.worktree_dir / name),
+            'subagent-' + name if mode == 'git' else '', old_worktree.based_on,
+            old_worktree.head_commit, mode=mode))
+        target['worktree_preparing'] = True
+        _save_subagent_state(str(target['parent_session_id']), target, workspace)
         worktree = manager.create(
-            target["session_id"],
-            old_worktree.head_commit or old_worktree.based_on or "HEAD",
+            target['session_id'], old_worktree.head_commit or old_worktree.based_on or 'HEAD',
+            snapshot_source=Path(old_worktree.path),
         )
     scratch_path = _prepare_subagent_workspace(workspace, target, worktree)
-    if old_worktree is not None and old_worktree.mode != "direct":
-        old_root = Path(old_worktree.path).resolve()
-        new_root = Path(worktree.path).resolve()
-        for raw in list(source.get("changed_files") or []):
-            relative = _normalize_scope_path(str(raw), workspace)
-            if not relative or relative == ".":
-                raise ValueError("cannot clone a child with an unbounded changed path")
-            old_path = (old_root / relative).resolve()
-            new_path = (new_root / relative).resolve()
-            old_path.relative_to(old_root)
-            new_path.relative_to(new_root)
-            if old_path.is_file() and not old_path.is_symlink():
-                new_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(old_path, new_path)
-            elif not old_path.exists():
-                if new_path.is_dir() and not new_path.is_symlink():
-                    shutil.rmtree(new_path)
-                else:
-                    new_path.unlink(missing_ok=True)
-            else:
-                raise ValueError(f"unsupported changed child path: {relative}")
+    target.pop('worktree_preparing', None)
+    target.pop('environment_preparation', None)
+    for key in ('delivery_baseline', 'baseline_hashes'):
+        if key in source:
+            target[key] = copy.deepcopy(source[key])
     if old_worktree is not None:
         old_scratch = _subagent_artifact_dir(
             str(source.get("parent_session_id") or "main-session"),
             str(source.get("session_id") or ""),
-            workspace,
+            source_workspace,
         ) / "scratch.md"
         if old_scratch.is_file() and not old_scratch.is_symlink():
             scratch_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(old_scratch, scratch_path)
 
 
-def _remove_cloned_child(parent_session_id: str, state: dict, workspace: Path) -> None:
-    worktree = _deserialize_worktree(state.get("worktree"))
-    if worktree is not None and worktree.mode in {"git", "copy"}:
+def _remove_cloned_child(resource: ClonedSubagent) -> None:
+    if resource.discarded:
+        return
+    # 保存具体路径，重复清理不再依赖已被移除的工作树重新推导存储归属。
+    if resource.session_file is not None:
+        resource.session_file.unlink(missing_ok=True)
+    if resource.session_artifact is not None:
         try:
-            WorktreeManager(workspace).remove(worktree)
-        except Exception:
-            pass
-    artifact = _subagent_artifact_dir(
-        parent_session_id,
-        str(state.get("session_id") or ""),
-        workspace,
-    )
-    shutil.rmtree(artifact, ignore_errors=True)
+            shutil.rmtree(resource.session_artifact)
+        except FileNotFoundError:
+            if resource.session_artifact.exists():
+                raise
+    worktree = _deserialize_worktree(resource.state.get("worktree"))
+    if worktree is not None and worktree.mode in {"git", "copy"}:
+        WorktreeManager(resource.workspace).remove(
+            worktree, preparing=resource.state.get('worktree_preparing') is True)
+    try:
+        shutil.rmtree(resource.task_artifact)
+    except FileNotFoundError:
+        if resource.task_artifact.exists():
+            raise
+    resource.discarded = True
 
 
 def _dedupe_paths(paths: list[str]) -> list[str]:
@@ -1317,15 +1541,55 @@ def _format_scope_conflict_block(claimed_paths: list[str], conflicts: list[dict]
     return "\n".join(lines)
 
 
-def _collect_changed_files(parent_workspace: Path, worktree: Worktree, change_tracker: ChangeTracker) -> list[str]:
+def _collect_changed_files(parent_workspace: Path, worktree: Worktree, change_tracker: ChangeTracker, state: dict) -> list[str]:
+    from nz_coder.runtime.worktree.environment import source_manifest
+    baseline = state.get("delivery_baseline")
+    if isinstance(baseline, dict) and baseline.get("version") == 1:
+        root = Path(worktree.path)
+        receipt = state.get("environment_preparation") or {}
+        manager = WorktreeManager(parent_workspace)
+        module_paths = set(receipt.get("module_paths", [])) | {p["path"] for p in receipt.get("submodules", [])}
+        expected_links = {}
+        current_links = {}
+        if worktree.mode == "git":
+            expected_links = manager.gitlinks(root, ref=worktree.head_commit or "HEAD")
+            current_links = manager.gitlinks(root)
+            module_paths.update(expected_links)
+            module_paths.update(current_links)
+            selected = manager._run_git(["-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard", "-z"])
+            if selected.returncode:
+                raise PublicRuntimeError(PublicError("child_source_unavailable", "Unable to inspect child source candidates."))
+            candidates = set(filter(None, selected.stdout.split("\0")))
+        else:
+            manager.snapshot_exclusions = tuple(receipt.get("owned", []) + receipt.get("borrowed", []))
+            candidates = set(manager._inventory(root, git=False)[0])
+        excluded = receipt.get("owned", []) + receipt.get("borrowed", []) + sorted(module_paths)
+        original = baseline["files"]
+        # 使用 Git/既有 copy 清单选择新增源码，保留原路径以比较删除和 ignored 配置。
+        current = source_manifest(root, excluded, paths=candidates | set(original))
+        changed = {p for p in set(original) | set(current) if original.get(p) != current.get(p)}
+        for name in module_paths:
+            if expected_links.get(name) != current_links.get(name):
+                changed.add(name)
+            module_root = root / name
+            if not module_root.exists():
+                continue
+            if module_root.is_symlink() or not module_root.is_dir():
+                changed.add(name)
+                continue
+            if not any(module_root.iterdir()):
+                continue  # 未初始化的空依赖不等于模块修改。
+            result = manager._run_git(["-C", str(module_root), "status", "--porcelain", "-z"])
+            head = manager._run_git(["-C", str(module_root), "rev-parse", "HEAD"])
+            top = manager._run_git(["-C", str(module_root), "rev-parse", "--show-toplevel"])
+            if (result.returncode or result.stdout or head.returncode
+                    or head.stdout.strip() != expected_links.get(name)
+                    or top.returncode or Path(top.stdout.strip()).resolve() != module_root.resolve()):
+                changed.add(name)
+        return sorted(changed)
+    # 旧会话仍能报告变化，但缺少可信交付基线不能进入自动应用。
     if worktree.mode == "git":
-        manager = WorktreeManager(repo_root=parent_workspace)
-        changed = [
-            path for path in manager.changed_files(worktree.path)
-            if not path.startswith((".nz-coder/", ".nz-coder-runs/"))
-        ]
-        if changed:
-            return changed
+        return WorktreeManager(parent_workspace).changed_files(worktree.path)
     return change_tracker.changed_paths()
 
 
@@ -1429,21 +1693,41 @@ def _ensure_subagent_worktree(
     state: dict,
     *,
     config_snapshot=None,
+    preparation: PreparationScope | None = None,
 ) -> Worktree:
+    _require_completed_preparation(state)
+    if preparation is not None:
+        preparation.checkpoint()
     existing = _validated_persisted_worktree(parent_workspace, state)
-    if existing is not None and Path(existing.path).exists():
+    if existing is not None:
+        if not Path(existing.path).is_dir():
+            raise PublicRuntimeError(PublicError("preparation_workspace_missing", "Registered child workspace is missing; retain its state and recover it explicitly."))
         return existing
     worktree_enabled = (
         config_snapshot.get_bool("SUBAGENT_WORKTREE_ENABLED", True)
         if config_snapshot is not None else current_run_settings().subagent_worktree_enabled
     )
-    if not worktree_enabled:
+    from nz_coder.runtime.worktree.environment import WorkspacePreparationSpec
+    spec = WorkspacePreparationSpec.from_snapshot(config_snapshot)
+    read_only = state.get("agent_type") in _READ_ONLY_TYPES
+    if not worktree_enabled or (read_only and spec.value.get("read_only_mode") == "direct"):
         return _direct_worktree(parent_workspace, state)
-    manager = WorktreeManager(repo_root=parent_workspace)
+    profile = spec.profile(state.get("environment_mode", "reuse"))
+    manager = WorktreeManager(repo_root=parent_workspace, preparation=preparation,
+                             symlink_directories=[] if read_only else profile.get("symlink_directories", []))
     worktree = manager.create(state["session_id"], "HEAD")
+    state["source_copy_manifest"] = manager.source_manifest
     if worktree.mode not in {"git", "copy"}:
         return _direct_worktree(parent_workspace, state)
     return worktree
+
+
+def _require_completed_preparation(state: dict) -> None:
+    if state.get("worktree_preparing") is True:
+        raise PublicRuntimeError(PublicError(
+            "preparation_incomplete",
+            "Previous worktree preparation is incomplete; explicitly clean it up before retrying.",
+        ))
 
 
 def _relative_to_parent(path: Path, parent_workspace: Path) -> str:
@@ -1476,6 +1760,165 @@ def _prepare_subagent_workspace(parent_workspace: Path, state: dict, worktree: W
     )
     state["scratch_rel"] = f"user-state://subagents/{state['session_id']}/scratch.md"
     return scratch_path
+
+
+def _preview_subagent_command_policy(
+    prompt: str, state: dict, *, execution_root: Path,
+    config_snapshot: ConfigSnapshot | None, settings: RunSettings,
+) -> CommandExecutionPolicy:
+    from nz_coder.foundation.workspace_trust import scoped_config_snapshot
+    from nz_coder.runtime.core.execution_context import derive_command_execution_policy, is_genuine_runtime_followup
+    from nz_coder.runtime.core.execution_context import command_activation
+    from nz_coder.runtime.adapters.context import new_runtime_state
+    from nz_coder.runtime.session.runtime import preview_activation_transcript
+
+    root, child_snapshot, child_settings = execution_root, config_snapshot, settings
+    store = LegacyJsonSessionStore()
+    identity = SessionIdentity(str(state["session_id"]), str(state["parent_session_id"]))
+    with (
+        scoped_workdir(root), scoped_run_settings(child_settings),
+        scoped_config_snapshot(child_snapshot) if child_snapshot is not None else nullcontext(),
+    ):
+        native = asyncio.run(store.load(identity, root))
+        requested = [] if native is not None else copy.deepcopy(state.get("messages") or [])
+        if prompt:
+            requested.append({"role": "user", "content": prompt})
+        activation = command_activation(preview_activation_transcript(native, requested))
+        runtime = new_runtime_state()
+        runtime.reset(max_turns=settings.subagent_max_turns, timeout_seconds=settings.subagent_timeout_seconds)
+        restored = False
+        if child_settings.runtime_state_persist:
+            restored = runtime.load(
+                session_runtime_state_path(identity.session_id),
+                allow_inactive=activation.resume_activation or is_genuine_runtime_followup(activation.current_user_message),
+            )
+        policy = derive_command_execution_policy(
+            activation, restored=restored, initial_task_text=runtime.initial_task_text,
+            strict_local_tools=subagent_strict_local_tools(),
+        )
+        return policy
+
+
+def prepare_subagent_workspace(
+    state: dict, *, workspace: Path, config_snapshot, settings, preparation: PreparationScope,
+) -> PreparedSubagentWorkspace:
+    from nz_coder.foundation.workspace_trust import inherited_config_snapshot
+    from nz_coder.runtime.process.command_broker import command_directory_identity
+    from nz_coder.runtime.worktree.environment import WorkspacePreparationSpec, prepare_environment, source_manifest
+
+    workspace = Path(workspace).resolve()
+    spec = WorkspacePreparationSpec.from_snapshot(config_snapshot)
+    mode = state.get("environment_mode", "reuse")
+    spec.profile(mode)
+    manager = WorktreeManager(workspace, preparation=preparation)
+    modules = dict(manager.gitlinks()) if manager.is_git_repo() else {}
+    module_paths = list(dict.fromkeys([*modules, *spec.value.get("submodules", [])]))
+    spec.profile(mode, module_paths=module_paths)
+    if state["agent_type"] not in _READ_ONLY_TYPES and any(
+        path == module or path.startswith(module + "/")
+        for path in state.get("claimed_paths", []) for module in module_paths
+    ):
+        raise PublicRuntimeError(PublicError(
+            "preparation_submodule_unsupported", "Writing a dependency submodule is unsupported; use its own repository workspace.",
+        ))
+    def persist():
+        if not preparation.publish_state(state):
+            _save_subagent_state(str(state["parent_session_id"]), state, workspace)
+    preparation.checkpoint()
+    with scoped_workdir(workspace), scoped_run_settings(settings):
+        worktree = _ensure_subagent_worktree(workspace, state, config_snapshot=config_snapshot, preparation=preparation)
+        root = Path(worktree.path).resolve()
+        # 恢复路径也绑定到同一准备域，但不把完整树重新标为半成品。
+        if worktree.mode != "direct" and preparation.target is None:
+            preparation.record_target(worktree)
+        scratch = _prepare_subagent_workspace(workspace, state, worktree)
+        state.pop("worktree_preparing", None)
+        persist()
+        receipt = prepare_environment(spec, parent=workspace, child=root, state=state,
+                                      preparation=preparation, mode=mode,
+                                      read_only=state["agent_type"] in _READ_ONLY_TYPES, persist=persist, log_directory=scratch.parent / "preparation", module_paths=module_paths)
+        if "delivery_baseline" not in state and "source_copy_manifest" in state:
+            manifest = source_manifest(root, receipt.excluded)
+            state["delivery_baseline"] = {"version": 1, "files": manifest}
+            state["baseline_hashes"] = {name: entry["sha256"] for name, entry in state["source_copy_manifest"].items() if entry["kind"] == "file"}
+            state.pop("source_copy_manifest", None)
+        persist()
+    child_snapshot = inherited_config_snapshot(config_snapshot, root) if config_snapshot is not None else None
+    return PreparedSubagentWorkspace(workspace, root, command_directory_identity(root), worktree,
+                                    scratch, child_snapshot, None, receipt.environment, preparation.deadline)
+
+
+def prepare_subagent_command_context(
+    prompt: str, state: dict, *, workspace: Path,
+    config_snapshot: ConfigSnapshot | None, settings: RunSettings, settlement_id: str,
+    preparation: PreparationScope,
+) -> tuple[PreparedSubagentWorkspace, CommandAuthority]:
+    """Prepare once in the parent and read the same activation/restore policy."""
+    from nz_coder.runtime.process.command_broker import CommandAuthority, command_directory_identity
+
+    prepared = prepare_subagent_workspace(state, workspace=workspace, config_snapshot=config_snapshot,
+                                          settings=settings, preparation=preparation)
+    root, child_snapshot = prepared.execution_root, prepared.config_snapshot
+    child_settings = RunSettings.from_snapshot(child_snapshot) if child_snapshot is not None else settings
+    identity = SessionIdentity(str(state["session_id"]), str(state["parent_session_id"]))
+    preparation.checkpoint()
+    policy = _preview_subagent_command_policy(
+        prompt, state, execution_root=root, config_snapshot=child_snapshot,
+        settings=child_settings,
+    )
+    preparation.checkpoint()
+    with scoped_workdir(root), scoped_run_settings(child_settings):
+        agent_type = _normalize_agent_type(state["agent_type"])
+        allowed = state.get("allowed_tools") or (list(_REFLECTION_DEFAULT_TOOLS) if agent_type == "reflection" else None)
+        tools = frozenset(spec["function"]["name"] for spec in _subagent_tools(agent_type, allowed))
+        directory_identity = command_directory_identity(root)
+    preparation.checkpoint()
+    authority = CommandAuthority(
+        workspace, root, directory_identity, identity.parent_session_id,
+        identity.session_id, settlement_id, agent_type, agent_type in _READ_ONLY_TYPES,
+        tools, child_snapshot, child_settings, policy, prepared.environment,
+    )
+    return prepared, authority
+
+
+def _select_subagent_workspace(parent_workspace: Path, state: dict, parent_snapshot, *, cancel_event=None):
+    from nz_coder.runtime.process.preparation import PreparationScope
+    prepared = _PREPARED_WORKSPACE.get()
+    if prepared is None:
+        settings = RunSettings.from_snapshot(parent_snapshot) if parent_snapshot is not None else current_run_settings()
+        deadline = time.monotonic() + settings.subagent_timeout_seconds
+        def target(worktree):
+            state.update(worktree=asdict(worktree), worktree_preparing=True)
+            _save_subagent_state(state['parent_session_id'], state, parent_workspace)
+        scope = PreparationScope(parent_workspace, parent_session_id=state['parent_session_id'],
+            child_session_id=state['session_id'], settlement_id=state.get('settlement_id', state['session_id']),
+            config_snapshot=parent_snapshot, run_settings=settings,
+            cancel_event=cancel_event or threading.Event(), deadline=deadline, on_target=target)
+        try:
+            prepared = prepare_subagent_workspace(state, workspace=parent_workspace,
+                config_snapshot=parent_snapshot, settings=settings, preparation=scope)
+            scope.seal()
+        finally:
+            while not scope.close(deadline=time.monotonic() + .05):
+                pass
+    from nz_coder.foundation.workspace_trust import inherited_config_snapshot
+    from nz_coder.runtime.process.command_broker import command_directory_identity
+    if (prepared.parent_workspace != parent_workspace.resolve()
+            or Path(prepared.worktree.path).resolve() != prepared.execution_root
+            or command_directory_identity(prepared.execution_root) != prepared.execution_identity):
+        raise ValueError("Prepared child workspace identity changed")
+    expected = inherited_config_snapshot(parent_snapshot, prepared.execution_root) if parent_snapshot is not None else None
+    if expected != prepared.config_snapshot:
+        raise ValueError("Prepared child configuration does not match its parent epoch")
+    if prepared.environment is not None:
+        prepared.environment.validate()
+    if cancel_event is not None and cancel_event.is_set():
+        from nz_coder.runtime.process.preparation import PreparationInterrupted
+        raise PreparationInterrupted("cancelled")
+    if prepared.deadline is not None and time.monotonic() >= prepared.deadline:
+        from nz_coder.runtime.process.preparation import PreparationInterrupted
+        raise PreparationInterrupted("timeout")
+    return prepared
 
 
 def _trace_enabled() -> bool:
@@ -1523,6 +1966,7 @@ async def run_subagent_async(
     model_hint: str | None = None,
     evidence_refs: list[str] | None = None,
     verification: dict | None = None,
+    environment_mode: str | None = None,
 ) -> str:
     """Async wrapper for spawning or resuming a child agent session."""
     from nz_coder.foundation.async_utils import to_thread_settled
@@ -1541,6 +1985,7 @@ async def run_subagent_async(
         model_hint=model_hint,
         evidence_refs=evidence_refs,
         verification=verification,
+        environment_mode=environment_mode,
         cancel_callback=effective_cancel.set,
     )
 
@@ -1556,6 +2001,7 @@ def run_subagent(
     model_hint: str | None = None,
     evidence_refs: list[str] | None = None,
     verification: dict | None = None,
+    environment_mode: str | None = None,
 ) -> str:
     """Spawn or resume a subagent session and return a summary or parent request."""
     _ensure_subagent_tool_registry()
@@ -1570,15 +2016,29 @@ def run_subagent(
     state = _load_subagent_state(parent_session_id, session_id, parent_workspace) if session_id else {}
     if session_id and not state:
         return f"Error: Unknown subagent session '{session_id}'"
+    # task state 只投影本次运行的错误；旧失败仍保存在原生会话中。
+    state.pop("public_error", None)
     try:
         if not state:
             normalized_type = _normalize_agent_type(agent_type)
             state = _new_subagent_state(parent_session_id, normalized_type, allowed_tools)
         else:
             normalized_type = _normalize_agent_type(state.get("agent_type") or agent_type or "explore")
+        child_memory_scope = _bind_subagent_memory_scope(state, parent_workspace)
     except ValueError as exc:
         return format_public_error(exc)
     state["workspace_root"] = str(parent_workspace)
+    if environment_mode is not None:
+        if environment_mode not in {"reuse", "private"}:
+            return "Error: environment_mode must be reuse or private"
+        if environment_mode != state.get('environment_mode', 'reuse'):
+            from nz_coder.runtime.agent.agent_manager import bound_background_agent_manager
+            owner = bound_background_agent_manager(parent_session_id)
+            live = owner._jobs.get(state.get('session_id')) if owner is not None else None
+            if live is not None and not live.done_event.is_set():
+                return 'Error: settle the active child before switching its environment'
+        state["environment_mode"] = environment_mode
+    state.setdefault("environment_mode", "reuse")
 
     if allowed_tools is None:
         allowed_tools = state.get("allowed_tools") or None
@@ -1604,16 +2064,22 @@ def run_subagent(
         return format_public_error(exc)
     if declared_hint:
         state["model_hint"] = declared_hint
-    declared_refs = evidence_refs
-    if declared_refs is None and isinstance(state.get("evidence_refs"), list):
-        declared_refs = list(state["evidence_refs"])
     try:
-        normalized_refs = normalize_evidence_refs(declared_refs)
+        normalized_refs = resolve_effective_evidence_refs(evidence_refs, state.get("evidence_refs"))
     except ValueError as exc:
         return format_public_error(exc)
-    if state.get("evidence_refs") and normalized_refs != state.get("evidence_refs"):
-        return "Error: evidence_refs cannot change when resuming a child session"
     state["evidence_refs"] = normalized_refs
+    diff_lookup = None
+    from nz_coder.runtime.process.command_channel import current_command_client
+    if current_command_client() is not None:
+        from nz_coder.runtime.agent.prepared_evidence import bind_diff_lookup
+        prepared = _PREPARED_WORKSPACE.get()
+        diff_lookup = bind_diff_lookup(
+            prepared.diff_evidence if prepared is not None else None,
+            workspace=parent_workspace, parent_session_id=parent_session_id,
+            child_session_id=state["session_id"], settlement_id=state.get("settlement_id"),
+            refs=normalized_refs,
+        )
     declared_verification = verification
     if declared_verification is None and isinstance(
         state.get("verification_contract"), dict
@@ -1659,6 +2125,8 @@ def run_subagent(
     previous_result = state.get(CHILD_RESULT_KEY)
     if previous_cost is None and isinstance(previous_result, dict):
         previous_cost = _finite_cost(previous_result.get("cost"))
+    if previous_cost is None:
+        previous_cost = _finite_cost(state.get("child_cost_baseline"))
     state["_invocation_cost_before"] = previous_cost or 0.0
     state.setdefault("claimed_paths", [])
     state.setdefault("changed_files", [])
@@ -1684,10 +2152,17 @@ def run_subagent(
             )
             return _format_scope_conflict_block(list(state.get("claimed_paths") or []), scope_conflicts)
 
-    worktree = _ensure_subagent_worktree(
-        parent_workspace, state, config_snapshot=parent_snapshot,
-    )
-    scratch_path = _prepare_subagent_workspace(parent_workspace, state, worktree)
+    try:
+        prepared_workspace = _select_subagent_workspace(parent_workspace, state, parent_snapshot, cancel_event=cancel_event)
+    except Exception as exc:
+        from nz_coder.runtime.process.preparation import PreparationInterrupted
+        status = ("cancelled" if exc.reason == "cancelled" else "timeout") if isinstance(exc, PreparationInterrupted) else "error"
+        state['status'] = status
+        public = to_public_error(exc)
+        state['public_error'] = public.to_dict()
+        scratch = _subagent_artifact_dir(parent_session_id, state['session_id'], parent_workspace) / 'scratch.md'
+        return _finalize_subagent_result(public.message, scratch, status, state)
+    worktree, scratch_path = prepared_workspace.worktree, prepared_workspace.scratch_path
     child_tracer = _build_subagent_tracer(parent_workspace, parent_session_id, state)
     state["status"] = "running"
     _save_subagent_state(parent_session_id, state, parent_workspace)
@@ -1707,12 +2182,17 @@ def run_subagent(
         child_trace_path=state["trace_rel"],
     )
 
-    messages, native_session_active = _child_activation_messages(
-        state,
-        prompt,
-        workspace=worktree.path,
-        store=LegacyJsonSessionStore(),
-    )
+    try:
+        messages, native_session_active = _child_activation_messages(
+            state,
+            prompt,
+            workspace=worktree.path,
+            store=LegacyJsonSessionStore(),
+        )
+    except (ValueError, PublicInputError) as exc:
+        # 错库历史不可进入运行，也不能留下 running 占用父任务的路径声明。
+        state.update(status="error", public_error=to_public_error(exc).to_dict())
+        return _finalize_subagent_result(format_public_error(exc), scratch_path, "error", state)
     for message in messages:
         if isinstance(message, dict) and message.get("role") == "user":
             bind_user_context(
@@ -1805,7 +2285,7 @@ def run_subagent(
                 )
         if verification:
             state["verification"] = str(verification)[:1200]
-        state["changed_files"] = _collect_changed_files(parent_workspace, worktree, change_tracker)
+        state["changed_files"] = _collect_changed_files(parent_workspace, worktree, change_tracker, state)
         conflicts = _completed_changed_file_conflicts(parent_session_id, state, parent_workspace) if detect_conflicts else []
         state["conflicts"] = conflicts
         if session_is_authoritative:
@@ -1887,7 +2367,8 @@ def run_subagent(
         parent_snapshot.get_int("SUBAGENT_TIMEOUT_SECONDS", 180, minimum=1)
         if parent_snapshot is not None else current_run_settings().subagent_timeout_seconds
     ))
-    deadline = time.monotonic() + subagent_timeout
+    deadline = prepared_workspace.deadline or (time.monotonic() + subagent_timeout)
+    subagent_timeout = max(.001, deadline - time.monotonic())
     parent_context = _parent_context_block(parent_session_id)
     tool_scope = ", ".join(sorted(allowed_tools)) if allowed_tools else "default tools for this mode"
     system = f"""You are an isolated child coding agent working in: {worktree.path}
@@ -1923,6 +2404,7 @@ Only use it when you need to leave detailed notes for the parent and your curren
             evidence_briefing = build_evidence_briefing(
                 normalized_refs,
                 workspace=parent_workspace,
+                diff_lookup=diff_lookup,
                 load_task_state=lambda task_id: _load_subagent_state(
                     parent_session_id,
                     task_id,
@@ -1997,6 +2479,9 @@ NEXT:
         },
     ]
 
+    parent_command_authorizer = current_parent_command_authorizer()
+    command_authorizer = parent_command_authorizer.fork(Path(worktree.path)) if parent_command_authorizer is not None else None
+
     class _ChildToolExecutor:
         """Child dispatch adapter consumed by the shared Tool Runtime."""
 
@@ -2004,6 +2489,8 @@ NEXT:
             self._fallback = fallback
 
         def execute_one(self, tool_call: dict, index: int) -> ToolExecutionResult:
+            if cancel_event is not None and cancel_event.is_set():
+                raise asyncio.CancelledError()
             name = str(tool_call.get("function", {}).get("name") or "unknown")
             if name in {"message_parent", "send_message"}:
                 return self._fallback.execute_one(tool_call, index)
@@ -2020,16 +2507,28 @@ NEXT:
                 args,
                 allowed_tool_names,
                 normalized_type,
+                command_authorizer=command_authorizer,
+                deadline=deadline,
             )
+            if cancel_event is not None and cancel_event.is_set():
+                raise asyncio.CancelledError()
             output = str(raw_output)
+            command_metadata = dict(raw_output.metadata) if isinstance(raw_output, ToolOutput) else {}
+            from nz_coder.tools import get_dynamic_tool_binding_identity
             from nz_coder.tool_platform.execution import command_failed_from_result
+            from nz_coder.runtime.adapters.verification_facts import host_execution_receipts
+            admission_failed = (
+                name in {"bash", "process"} and get_dynamic_tool_binding_identity(name) is None
+                and command_metadata.get("command_not_executed") is True
+                and command_metadata.get("permission_denied") is True
+            )
 
             return ToolExecutionResult(
                 name=name,
                 tool_input=args,
                 output=output,
-                executed=True,
-                dispatch_failed=output.startswith(("Error:", "Denied")),
+                executed=not admission_failed,
+                dispatch_failed=admission_failed or output.startswith(("Error:", "Denied")),
                 command_failed=command_failed_from_result(
                     name,
                     output,
@@ -2041,7 +2540,7 @@ NEXT:
                     structured=isinstance(raw_output, ToolOutput),
                 ),
                 is_write=is_transactional_write_tool(name),
-                permission_denied=output.startswith("Denied"),
+                permission_denied=admission_failed or output.startswith("Denied"),
                 title=(raw_output.title if isinstance(raw_output, ToolOutput) else ""),
                 metadata=(
                     dict(raw_output.metadata)
@@ -2053,6 +2552,7 @@ NEXT:
                     if isinstance(raw_output, ToolOutput)
                     else []
                 ),
+                execution_facts=host_execution_receipts(name, raw_output),
             )
     graph = AgentGraph(
         [AgentSpec(
@@ -2130,22 +2630,29 @@ NEXT:
                     return content
         return "(no summary)"
 
+    def _authored_summary() -> str:
+        # 运行时验证附录不能满足子任务对模型报告正文的长度/内容要求。
+        return str(run_status.get("authored_content") or "")
+
     agent = None
     run_status: dict = {"status": "error"}
-    automatic_verification = ""
     parent_context_token = _PARENT_CONTEXT.set(dict(_PARENT_CONTEXT.get()))
     from nz_coder.foundation.workspace_trust import (
         inherited_config_snapshot,
         scoped_config_snapshot,
     )
 
-    child_snapshot = (
+    prepared = _PREPARED_WORKSPACE.get()
+    child_snapshot = prepared.config_snapshot if prepared is not None else (
         inherited_config_snapshot(parent_snapshot, worktree.path)
         if parent_snapshot is not None else None
     )
+    from nz_coder.runtime.process.execution_environment import scoped_execution_environment
     try:
         with (
+            scoped_execution_environment(prepared_workspace.environment),
             scoped_workdir(worktree.path),
+            scoped_memory_scope(child_memory_scope),
             scoped_config_snapshot(child_snapshot)
             if child_snapshot is not None else nullcontext(),
             scoped_runtime_overrides(
@@ -2155,9 +2662,8 @@ NEXT:
                     + (1 if verification_repair_budget else 0)
                 ),
                 agent_timeout_seconds=subagent_timeout,
-                strict_local_tools=False,
+                strict_local_tools=subagent_strict_local_tools(),
             ),
-            scoped_broad_test_guard(),
             scoped_dynamic_tools_disabled(),
             scoped_dynamic_tools(dynamic_tools),
             scoped_tool_cancellation(cancel_event)
@@ -2172,9 +2678,14 @@ NEXT:
                 config_snapshot=child_snapshot,
                 tool_allowlist=tuple(sorted(all_tool_names)),
                 sidecar_verifier=False,
-                stall_sidecar=lambda _signal: {"is_stuck": False, "trace": "child"},
             )
+            cleanup_owner = _SUBAGENT_CLEANUP_OWNER.get()
+            if cleanup_owner is not None and cleanup_owner[0] == state["session_id"]:
+                cleanup_owner[1](agent)
             agent.runtime_profile = _child_runtime_profile(state, normalized_type)
+            # 后台/工作流是运行形态；长期记忆能力始终由真实子任务类型决定。
+            declared_memory_capability = "read" if normalized_type in _READ_ONLY_TYPES else "propose"
+            agent.memory_capability = min((agent.memory_capability, declared_memory_capability), key={"read": 0, "propose": 1, "manage": 2}.get)
             _bind_child_session_identity(agent, parent_session_id)
             agent.executor = _ChildToolExecutor(agent.executor)
             from nz_coder.tools.files import bind_tool_state
@@ -2193,14 +2704,14 @@ NEXT:
                 if (
                     verification_contract is not None
                     and not parent_request
-                    and str(run_status.get("status") or "") == "completed"
+                    and str(run_status.get("status") or "") in {"completed", "completed_unverified"}
                 ):
                     _persist_state("running")
                     verification_result = evaluate_child_verification(
                         verification_contract,
                         state=state,
                         messages=messages,
-                        final_text=_latest_summary(),
+                        final_text=_authored_summary(),
                     )
                     if (
                         verification_result is not None
@@ -2214,7 +2725,7 @@ NEXT:
                             "role": "user",
                             "content": build_verification_repair_prompt(
                                 original_prompt=prompt,
-                                previous_final_text=_latest_summary(),
+                                previous_final_text=_authored_summary(),
                                 result=verification_result,
                             ),
                             SYNTHETIC_USER_KEY: True,
@@ -2223,13 +2734,6 @@ NEXT:
                         run_status = asyncio.run(
                             agent.run(messages, stream=False)
                         )
-                if (
-                    normalized_type == "general-purpose"
-                    and bool(getattr(agent.vm, "_has_write", False))
-                ):
-                    automatic_verification = str(
-                        dispatch("verify_changed_files", {})
-                    )
     except (asyncio.CancelledError, KeyboardInterrupt):
         run_status = {"status": "cancelled"}
     except Exception as exc:
@@ -2249,42 +2753,39 @@ NEXT:
     _record_usage_from_messages()
     if "structured" in run_status:
         state["structured_output"] = copy.deepcopy(run_status["structured"])
+    else:
+        state.pop("structured_output", None)
     if agent is not None:
         evaluation = getattr(agent, "_structured_output_evaluations", {}).get(
             normalized_type,
         )
         if isinstance(evaluation, dict):
             state["structured_output_evaluation"] = copy.deepcopy(evaluation)
+    execution_verification = run_status.get("verification")
+    if isinstance(execution_verification, dict):
+        state["execution_verification"] = copy.deepcopy(execution_verification)
     raw_status = str(run_status.get("status") or "error")
-    if cancel_event is not None and cancel_event.is_set():
+    runtime = getattr(agent, "verification_runtime", None)
+    execution_frozen = runtime is not None and runtime.run_context.terminal_status is not None
+    if cancel_event is not None and cancel_event.is_set() and not execution_frozen:
         raw_status = "cancelled"
-    if _completion_with_timeout is not _ORIGINAL_COMPLETION_WITH_TIMEOUT:
-        failed_assistant = next(
-            (
-                item for item in reversed(messages)
-                if isinstance(item, dict)
-                and isinstance(item.get("_nz_assistant_error"), dict)
-            ),
-            None,
-        )
-        if failed_assistant is not None:
-            error_payload = failed_assistant["_nz_assistant_error"]
-            data = error_payload.get("data") if isinstance(error_payload, dict) else {}
-            raw_message = str(
-                (data or {}).get("message") or "Provider request failed"
-            )
-            public = to_public_error(RuntimeError(raw_message))
-            message = public.message
-            failed_assistant["_nz_assistant_error"] = {
-                "name": "APIError",
-                "data": {"message": message, "isRetryable": False},
-            }
-            failed_assistant["_nz_finish"] = "error"
-            failed_assistant["_nz_end_state"] = {"reason": "errored"}
-            raw_status = "error"
-            run_status["last_error"] = message
-            run_status["public_error"] = public.to_dict()
-            state["public_error"] = public.to_dict()
+    if raw_status in {"error", "aborted"}:
+        public = public_error_from_wire(run_status.get("public_error"))
+        if public is None and agent is not None:
+            interaction = agent.event_publisher.interaction_run_id
+            # 恢复历史由 Native runner 加载，必须按交互身份排除上轮错误。
+            failed_assistant = next((item for item in reversed(messages)
+                if isinstance(item, dict) and item.get("role") == "assistant"
+                and item.get("_nz_interaction_run_id") == interaction
+                and isinstance(item.get("_nz_assistant_error"), dict)), None)
+            if failed_assistant is not None:
+                data = failed_assistant["_nz_assistant_error"].get("data")
+                if isinstance(data, dict):
+                    public = public_error_from_wire(data.get("public_error"))
+        public = public or to_public_error(RuntimeError())
+        run_status["last_error"] = public.message
+        run_status["public_error"] = public.to_dict()
+        state["public_error"] = public.to_dict()
     status_map = {
         "completed": "completed",
         "completed_unverified": "completed_unverified",
@@ -2297,13 +2798,6 @@ NEXT:
     }
     result_status = status_map.get(raw_status, "error")
     summary = _latest_summary()
-    if automatic_verification and not _verification_passed(automatic_verification):
-        result_status = "verification_failed_rolled_back"
-        summary = append_verification_failure(summary, {
-            "ok": False,
-            "enforcement": "hard",
-            "reasons": [_verification_summary(automatic_verification)],
-        })
 
     if parent_request:
         result_status = "needs_parent"
@@ -2330,11 +2824,11 @@ NEXT:
         verification_contract,
         state=state,
         messages=messages,
-        final_text=summary,
+        final_text=_authored_summary(),
     )
     verification_summary = ""
     if verification_result is not None:
-        state["verification_result"] = verification_result
+        state["postconditions"] = verification_result
         verification_summary = _verification_summary(
             "passed" if verification_result.get("ok") else "; ".join(
                 verification_result.get("reasons") or ["failed"]
@@ -2342,11 +2836,12 @@ NEXT:
         )
         if not verification_result.get("ok"):
             summary = append_verification_failure(summary, verification_result)
-            result_status = (
-                "completed_unverified"
-                if verification_result.get("enforcement") == "warn"
-                else "verification_failed"
-            )
+            if result_status in {"completed", "completed_unverified"}:
+                result_status = (
+                    "completed_unverified"
+                    if verification_result.get("enforcement") == "warn"
+                    else "verification_failed"
+                )
 
     conflicts = _persist_state(
         result_status,
@@ -2393,6 +2888,7 @@ register(
         "type": "object",
         "properties": {
             "prompt": {"type": "string", "description": "Task description or follow-up reply for the child agent."},
+            "environment_mode": {"type": "string", "enum": ["reuse", "private"], "description": "Reuse ready dependencies or select the configured private environment; omitted resume keeps prior mode."},
             "agent_type": {
                 "type": "string",
                 "enum": ["explore", "plan", "general-purpose", "reflection"],

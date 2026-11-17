@@ -1,11 +1,13 @@
 """Canonical product-runtime composition used by the public Python SDK."""
 from __future__ import annotations
 
-import asyncio
 import copy
+import threading
+from pathlib import Path
 import uuid
 from dataclasses import replace
 
+from nz_coder.foundation.async_utils import to_thread_settled
 from nz_coder.runtime.execution.composition import declared_runtime
 from nz_coder.runtime.core.request import RunOptions, RunRequest
 from nz_coder.runtime.model_gateway import ModelSelectionRequest, resolve_model_runtime
@@ -68,6 +70,7 @@ def build_product_run_environment(
     options: RunOptions,
     *,
     config_snapshot=None,
+    activate_session_on_build: bool = True,
 ):
     """Build the complete production capability graph for one product run."""
     if not isinstance(request, RunRequest):
@@ -113,6 +116,7 @@ def build_product_run_environment(
         with scoped_workdir(request.workspace):
             environment = declared_runtime(graph).build(
                 session_id=request.session_id,
+                activate_session_on_build=activate_session_on_build,
                 permission_mode=request.metadata.get("permission_mode"),
                 permission_asker=options.permission_asker,
                 question_asker=options.question_asker,
@@ -171,8 +175,95 @@ class NativeSDKRunner:
 
     def __init__(self, environment=None) -> None:
         self._environment = environment
+        self._cleanup_lock = threading.RLock()
+        self._pending_environments = {}
+        self._active_keys = set()
+        self._cleanup_keys = set()
+
+    @staticmethod
+    def _key(workspace, session_id):
+        return Path(workspace).resolve(), str(session_id)
+
+    def request_retirement(self, workspace, session_id) -> None:
+        with self._cleanup_lock:
+            environment = self._pending_environments.get(self._key(workspace, session_id))
+        if environment is not None:
+            environment.request_retirement()
+
+    def retry_cleanup(self, workspace, session_id, *, allow_active=False) -> bool:
+        """由原 caller 重试同会话资源；锁只登记，不包住慢 close。"""
+        key = self._key(workspace, session_id)
+        with self._cleanup_lock:
+            if key in self._active_keys and not allow_active:
+                return False
+            environment = self._pending_environments.get(key)
+            if environment is None:
+                return True
+            if key in self._cleanup_keys:
+                return False
+            self._cleanup_keys.add(key)
+        try:
+            try:
+                environment.close()
+            except BaseException as exc:
+                _record_cleanup_failure(environment, exc)
+                return False
+            complete = environment.environment_cleanup_complete
+            if complete and not environment.has_pending_settlement:
+                with self._cleanup_lock:
+                    if self._pending_environments.get(key) is environment:
+                        del self._pending_environments[key]
+            return complete
+        finally:
+            with self._cleanup_lock:
+                self._cleanup_keys.discard(key)
+
+    def _settlement_environment(self, workspace, session_id):
+        key = self._key(workspace, session_id)
+        with self._cleanup_lock:
+            environment = self._environment or self._pending_environments.get(key)
+        if environment is not None and self._key(environment.workdir, environment.session_id) == key:
+            return environment
+        return None
+
+    def _has_pending_settlement(self, workspace, session_id) -> bool:
+        environment = self._settlement_environment(workspace, session_id)
+        return environment is not None and environment.has_pending_settlement
+
+    async def retry_settlement(self, workspace, session_id):
+        from nz_coder.runtime.core.result import SessionSettlementResult
+        key = self._key(workspace, session_id)
+        environment = self._settlement_environment(*key)
+        if environment is None:
+            return SessionSettlementResult(str(session_id), None, "idle")
+        result = await environment.retry_settlement()
+        if self._environment is None and result.state == "committed":
+            await to_thread_settled(self.retry_cleanup, *key)
+        return result
 
     async def run_result(
+        self, request: RunRequest, options: RunOptions | None = None,
+    ):
+        from nz_coder.protocol.public_error import PublicRuntimeError
+        if not isinstance(request, RunRequest):
+            raise TypeError("NativeSDKRunner requires RunRequest")
+        key = self._key(request.workspace, request.session_id)
+        with self._cleanup_lock:
+            if key in self._active_keys:
+                raise RuntimeError("Session execution or cleanup is in progress")
+            self._active_keys.add(key)
+        try:
+            settlement = await self.retry_settlement(*key)
+            if settlement.state in {"pending", "conflict"}:
+                raise PublicRuntimeError(settlement.error)
+            if self._environment is None and not await to_thread_settled(self.retry_cleanup, *key, allow_active=True):
+                raise RuntimeError("Session environment cleanup is incomplete")
+            return await self._run_result(request, options)
+        finally:
+            with self._cleanup_lock:
+                self._active_keys.discard(key)
+
+    async def _run_result(
         self, request: RunRequest, options: RunOptions | None = None,
     ):
         if not isinstance(request, RunRequest):
@@ -193,6 +284,9 @@ class NativeSDKRunner:
             config_snapshot=run_snapshot,
         )
         owns_environment = self._environment is None
+        if owns_environment:
+            with self._cleanup_lock:
+                self._pending_environments[self._key(request.workspace, request.session_id)] = environment
         messages = copy.deepcopy(list(effective_request.messages))
         if selected.event_bus is not None:
             effective_request = replace(effective_request, metadata={
@@ -203,10 +297,23 @@ class NativeSDKRunner:
             })
 
         async def execute(_owner, _messages, *_callbacks):
-            return await environment.runner.run_result(effective_request, selected)
+            try:
+                return await environment.runner.run_result(effective_request, selected)
+            finally:
+                if owns_environment:
+                    environment.request_retirement()
 
         run_control = None
         try:
+            trusted_scope = environment.memory_scope.to_dict()
+            supplied_scope = effective_request.metadata.get("memory_scope")
+            if supplied_scope is not None and supplied_scope != trusted_scope:
+                raise ValueError("Request memory scope differs from its trusted environment")
+            effective_request = replace(effective_request, metadata={
+                **effective_request.metadata,
+                "memory_scope": trusted_scope,
+                "memory_capability": environment.memory_capability,
+            })
             run_control = environment.prepare_run_control(
                 run_snapshot,
                 provider_name=(
@@ -239,11 +346,9 @@ class NativeSDKRunner:
                 execute=execute,
                 run_control=run_control,
             )
-            return replace(result, metadata={
-                **result.metadata,
-                "changed_files": environment.change_tracker.current_changed_paths(),
-            })
         except BaseException:
+            if owns_environment:
+                environment.request_retirement()
             if (
                 run_control is not None
                 and getattr(environment, "_active_run_control", None) is run_control
@@ -253,9 +358,16 @@ class NativeSDKRunner:
         finally:
             if owns_environment:
                 try:
-                    await asyncio.to_thread(environment.close)
+                    await to_thread_settled(self.retry_cleanup, request.workspace, request.session_id, allow_active=True)
                 except BaseException as exc:
                     _record_cleanup_failure(environment, exc)
+        return replace(result, metadata={
+            **result.metadata,
+            "changed_files": environment.change_tracker.current_changed_paths(),
+            **({"environment_cleanup_complete": environment.environment_cleanup_complete,
+                "environment_cleanup_failures": environment.environment_cleanup_failures}
+               if owns_environment else {}),
+        })
 
 
 def build_native_sdk_runner() -> NativeSDKRunner:

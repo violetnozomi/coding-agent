@@ -64,7 +64,8 @@ def _safe_event_properties(properties: dict[str, Any]) -> dict[str, Any]:
         "blocked",
     }:
         if "output" in projected:
-            projected["output"] = "Tool execution failed."
+            public = public_error_from_wire(projected.get("public_error"))
+            projected["output"] = public.message if public is not None else "Tool execution failed."
     payload = json_safe_value(projected)
     return payload if isinstance(payload, dict) else {}
 
@@ -81,6 +82,8 @@ def _project_public_failures(
         return "[maximum event nesting depth reached]"
     normalized_field = field.casefold().replace("-", "_")
     if normalized_field in {"error", "last_error", "public_error"}:
+        if value is None:
+            return None
         if normalized_field == "error":
             assistant_error = normalize_assistant_error(value)
             if assistant_error is not None:

@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import os
+from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 import re
-import shlex
 
 from nz_coder.protocol.public_error import PublicInputError
 
@@ -36,6 +36,7 @@ _PUBLIC_ENV_TEMPLATES = frozenset({".env.example", ".env.sample", ".env.template
 _WINDOWS_ABSOLUTE = re.compile(r"^[A-Za-z]:[/\\]")
 
 
+
 class WorkspacePathError(PublicInputError):
     """A requested filesystem capability is outside the allowed boundary."""
 
@@ -44,9 +45,12 @@ class WorkspacePathPolicy:
     """Resolve workspace paths and keep private host state away from models."""
 
     def __init__(self, root: str | os.PathLike[str]):
-        self.root = Path(root).expanduser().resolve(strict=True)
-        if not self.root.is_dir():
-            raise WorkspacePathError("Workspace root must be a directory")
+        try:
+            self.root = Path(root).expanduser().resolve(strict=True)
+            if not self.root.is_dir():
+                raise WorkspacePathError("Workspace root must be a directory")
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise WorkspacePathError("Cannot resolve workspace root.") from exc
 
     def validate_model_read(self, path: str | os.PathLike[str]) -> Path:
         return self._validate_model(path, operation="read")
@@ -93,24 +97,23 @@ class WorkspacePathPolicy:
         requested = _portable_path(path)
         if _WINDOWS_ABSOLUTE.match(requested) and os.name != "nt":
             raise WorkspacePathError(f"Path escapes workspace: {requested}")
-        raw = Path(requested or ".").expanduser()
-        candidate = raw if raw.is_absolute() else self.root / raw
-        resolved = candidate.resolve(strict=False)
         try:
-            resolved.relative_to(self.root)
-        except ValueError as exc:
-            raise WorkspacePathError(f"Path escapes workspace: {requested}") from exc
+            raw = Path(requested or ".").expanduser()
+            candidate = raw if raw.is_absolute() else self.root / raw
+            resolved = candidate.resolve(strict=False)
+            if not resolved.is_relative_to(self.root):
+                raise WorkspacePathError(f"Path escapes workspace: {requested}")
+            ancestor = candidate
+            while not ancestor.exists() and ancestor != ancestor.parent:
+                ancestor = ancestor.parent
+            if not ancestor.resolve(strict=True).is_relative_to(self.root):
+                raise WorkspacePathError(f"Path escapes workspace: {requested}")
+        except WorkspacePathError:
+            raise
+        except (OSError, RuntimeError, ValueError) as exc:
+            # 原异常的 filename 可能是整段程序或凭据，公开原因不能复制它。
+            raise WorkspacePathError("Cannot resolve workspace path.") from exc
 
-        # ``resolve(strict=False)`` follows every existing ancestor. Recheck
-        # the nearest existing ancestor to make the nonexistent-write contract
-        # explicit and portable across pathlib implementations.
-        ancestor = candidate
-        while not ancestor.exists() and ancestor != ancestor.parent:
-            ancestor = ancestor.parent
-        try:
-            ancestor.resolve(strict=True).relative_to(self.root)
-        except (OSError, ValueError) as exc:
-            raise WorkspacePathError(f"Path escapes workspace: {requested}") from exc
         return resolved
 
 
@@ -138,44 +141,70 @@ def _private_path_reason(path: str) -> str:
         return "credential-like files are host-only"
     if name.endswith(_PRIVATE_SUFFIXES):
         return "private-key-like files are host-only"
-    if "credential" in name or "service-account" in name or "service_account" in name:
+    from nz_coder.foundation.file_kinds import is_source_file
+
+    if not is_source_file(name) and ("credential" in name or "service-account" in name or "service_account" in name):
         return "credential-like files are host-only"
     return ""
 
 
-def model_command_private_path(command: str, workspace: Path) -> str | None:
+def private_program_literal(source: str) -> str | None:
+    """未知解释器只保留明确私有字面量保护，不对整段源码做文件系统操作。"""
+    for match in re.finditer(r"(['\"])(.*?)\1", source, flags=re.DOTALL):
+        if _private_path_reason(match[2]):
+            return match[2]
+    return None
+
+
+def model_command_private_path(command: str, workspace: Path, *, command_cwd: Path | None = None, _depth: int = 0) -> str | None:
     """Return the first explicit private path referenced by a shell command.
 
     This is a defense-in-depth lexical gate, not an OS sandbox. It prevents
     known read commands and obvious interpreter snippets from naming host-only
     workspace state while the permission layer still governs shell execution.
     """
-    text = str(command or "")
+    from nz_coder.foundation.shell_syntax import (
+        ShellSyntaxError, file_operands, inline_source, python_effects, shell_commands,
+    )
+    if _depth > 8:
+        raise ShellSyntaxError("shell analysis nesting limit")
     policy = WorkspacePathPolicy(workspace)
-    candidates: list[str] = []
-    for segment in re.split(r"(?:&&|\|\||[;|&\n])", text):
-        try:
-            tokens = shlex.split(segment, posix=os.name != "nt")
-        except ValueError:
-            tokens = segment.split()
-        for token in tokens[1:]:
-            value = token.strip("\"'()[]{};,`")
-            if "=" in value and not value.startswith(("/", "\\")):
-                value = value.split("=", 1)[1]
-            if value and not value.startswith("-") and "://" not in value:
-                candidates.append(value)
-    # Also catch direct path literals embedded in interpreter expressions.
-    candidates.extend(re.findall(
-        r"(?:[A-Za-z]:)?(?:^|[\"'=(\s])((?:\.{0,2}[/\\])?(?:\.env(?:\.[\w-]+)?|\.git|\.nz-coder|\.ssh|\.aws|\.azure|\.gcloud|\.kube)(?:[/\\][^\"')\s;&|]*)?)",
-        text,
-        flags=re.IGNORECASE,
-    ))
+    candidates = []
+    for segment in shell_commands(command):
+        candidates.extend(token.value for token in file_operands(segment))
+        candidates.extend(token.value for operator, token in segment.redirects
+                          if token.heredoc is None and not operator.endswith("&"))
+        program = inline_source(segment)
+        if program:
+            if program[0] == "python":
+                effects = python_effects(program[1])
+                candidates.extend(effects.files)
+                for child in effects.commands:
+                    nested = model_command_private_path(child, workspace, command_cwd=command_cwd, _depth=_depth + 1)
+                    if nested:
+                        return nested
+            elif program[0] == "shell":
+                nested = model_command_private_path(program[1], workspace, command_cwd=command_cwd, _depth=_depth + 1)
+                if nested:
+                    return nested
+            else:
+                literal = private_program_literal(program[1])
+                if literal:
+                    return literal
     for candidate in candidates:
         try:
-            policy.validate_model_read(candidate)
+            if any(part.startswith(".") and any(char in part for char in "*?[")
+                   and any(fnmatchcase(private, part.lower()) for private in _PRIVATE_DIRECTORIES)
+                   for part in PurePosixPath(_portable_path(candidate)).parts):
+                return candidate
+            resolved_candidate = (command_cwd / candidate) if command_cwd is not None else candidate
+            policy.validate_model_read(resolved_candidate)
         except WorkspacePathError as exc:
             if "Model access blocked" in str(exc):
                 return candidate
+            if "escapes workspace" not in str(exc):
+                raise
+
     return None
 
 

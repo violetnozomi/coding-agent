@@ -8,7 +8,8 @@ from pathlib import Path
 
 from nz_coder.foundation import config
 from nz_coder.tool_platform.command_policy import classify_bash
-from nz_coder.tools import register
+from nz_coder.tools import ToolOutput, register
+from nz_coder.runtime.adapters.verification_facts import command_receipt
 from nz_coder.tools.files import _safe_path
 
 
@@ -90,11 +91,17 @@ def _looks_like_missing_dependency(output: str, project_dir: Path) -> bool:
 
 
 def _run_one(command: str, project_dir: Path) -> dict:
+    def observation(status, preview, *, outcome="not_executed", exit_code=None, complete=True):
+        return {"command": command, "status": status, "preview": preview[:800],
+                "receipt": command_receipt("verify_project_build", command, str(project_dir),
+                    outcome=outcome, exit_code=exit_code, output=preview, output_complete=complete,
+                    environment_error=status == "missing_dependency")}
+
     classification = classify_bash(command)
     if classification.get("dangerous"):
-        return {"command": command, "status": "blocked", "preview": classification["reason"]}
+        return observation("blocked", classification["reason"])
     if not _is_allowed_verification_command(command):
-        return {"command": command, "status": "blocked", "preview": "command not in verification allowlist"}
+        return observation("blocked", "command not in verification allowlist")
     try:
         result = subprocess.run(
             shlex.split(command),
@@ -106,23 +113,21 @@ def _run_one(command: str, project_dir: Path) -> dict:
             timeout=config.PROJECT_VERIFY_TIMEOUT_SECONDS,
         )
     except FileNotFoundError as exc:
-        return {"command": command, "status": "missing_dependency", "preview": str(exc)}
+        return observation("missing_dependency", str(exc))
     except subprocess.TimeoutExpired:
-        return {
-            "command": command,
-            "status": "timeout",
-            "preview": f"timed out after {config.PROJECT_VERIFY_TIMEOUT_SECONDS}s",
-        }
+        return observation("timeout", f"timed out after {config.PROJECT_VERIFY_TIMEOUT_SECONDS}s",
+                           outcome="timed_out", complete=False)
 
     output = ((result.stdout or "") + (result.stderr or "")).strip()
-    preview = output[:800]
+    output[:800]
     if result.returncode == 0:
         status = "passed"
     elif _looks_like_missing_dependency(output, project_dir):
         status = "missing_dependency"
     else:
         status = "failed"
-    return {"command": command, "status": status, "preview": preview}
+    return observation(status, output, outcome="succeeded" if result.returncode == 0 else "failed",
+                       exit_code=result.returncode)
 
 
 def verify_project_build(project_dir: str, commands: list[str] | None = None) -> str:
@@ -137,6 +142,8 @@ def verify_project_build(project_dir: str, commands: list[str] | None = None) ->
         results = [_run_one(command, root) for command in command_list]
         if all(item["status"] == "passed" for item in results):
             prefix = "OK: project build verification passed"
+        elif any(item["status"] in {"failed", "timeout", "blocked"} for item in results):
+            prefix = "FAIL: project build verification failed"
         elif any(item["status"] == "missing_dependency" for item in results):
             prefix = "WARN: project build verification needs local dependencies"
         else:
@@ -149,7 +156,7 @@ def verify_project_build(project_dir: str, commands: list[str] | None = None) ->
                 lines.append(f"  {item['preview'].replace(chr(10), ' ')[:240]}")
         if prefix.startswith("WARN:"):
             lines.append("Next step: create a virtualenv, install project dependencies, then rerun the blocked command.")
-        return "\n".join(lines)
+        return ToolOutput("\n".join(lines), execution_facts=tuple(item["receipt"] for item in results))
     except Exception as exc:
         return f"Error: {exc}"
 

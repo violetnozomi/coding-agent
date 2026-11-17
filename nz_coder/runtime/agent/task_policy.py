@@ -13,36 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-_TEST_DIR_NAMES = {"test", "tests", "testing", "__tests__", "spec", "specs"}
-_TEST_SUFFIXES = (
-    "_test.py", "_test.go", "_test.rb", "_spec.rb",
-    ".test.js", ".test.jsx", ".test.ts", ".test.tsx",
-    ".spec.js", ".spec.jsx", ".spec.ts", ".spec.tsx",
-    ".test.mjs", ".spec.mjs", ".test.cjs", ".spec.cjs",
+from nz_coder.foundation.file_kinds import (
+    is_documentation_file,
+    is_test_file,
 )
-_SOURCE_LANG_BY_EXT = {
-    ".py": "python",
-    ".pyi": "python",
-    ".js": "javascript",
-    ".jsx": "javascript",
-    ".mjs": "javascript",
-    ".cjs": "javascript",
-    ".ts": "typescript",
-    ".tsx": "typescript",
-    ".go": "go",
-    ".rs": "rust",
-    ".java": "java",
-    ".kt": "kotlin",
-    ".kts": "kotlin",
-    ".rb": "ruby",
-    ".php": "php",
-    ".c": "c",
-    ".h": "c",
-    ".cc": "cpp",
-    ".cpp": "cpp",
-    ".hpp": "cpp",
-    ".cs": "csharp",
-}
 _NATIVE_RUNNER_OPTIONS_WITH_VALUES = frozenset({
     "--bisect",
     "--durations",
@@ -67,8 +41,9 @@ _TEST_CHANGE_NEGATION_RE = re.compile(
     r"|(?:\bwithout\s+(?:adding|changing|editing|modifying|touching|updating)\s+"
     r"(?:the\s+)?tests?\b)"
     r"|(?:(?:不要|不得|不可|不允许|不)\s*"
-    r"(?:新增|添加|改动|更改|修改|触碰|更新|编写)\s*(?:现有)?(?:测试|测试文件|用例))"
-    r"|(?:(?:测试|测试文件|用例).{0,6}(?:保持不变|不要改|不得改|不修改))",
+    r"(?:新增|添加|改动|更改|修改|触碰|更新|编写)\s*(?:现有)?(?:测试|验收文件|用例))"
+    r"|(?P<test_subject>测试|测试文件|验收文件|用例)"
+    r"(?P<test_link>.{0,6})(?P<test_predicate>保持不变|不要改|不得改|不修改)",
     re.IGNORECASE,
 )
 _TEST_CHANGE_REQUEST_RE = re.compile(
@@ -156,32 +131,6 @@ def native_runner_positional_selectors(
             continue
         selectors.append(token)
     return tuple(selectors)
-
-
-def language_for_path(path: str) -> str:
-    """返回路径对应的主语言，未知则返回 ``other``。"""
-    suffix = Path(normalize_path(path)).suffix.lower()
-    return _SOURCE_LANG_BY_EXT.get(suffix, "other")
-
-
-def is_source_file(path: str) -> bool:
-    """True 表示路径看起来是可编译/可检查的源码文件。"""
-    return language_for_path(path) != "other"
-
-
-def is_test_file(path: str) -> bool:
-    """语言无关的测试文件识别。
-
-    覆盖 Python、JS/TS、Go、Ruby 及常见 tests/spec/__tests__ 目录。
-    """
-    p = normalize_path(path)
-    if not p:
-        return False
-    parts = [part.lower() for part in p.split("/") if part]
-    name = parts[-1] if parts else ""
-    if any(part in _TEST_DIR_NAMES for part in parts[:-1]):
-        return True
-    return name.startswith("test_") or name.endswith(_TEST_SUFFIXES)
 
 
 def is_ephemeral_scratch_file(path: str) -> bool:
@@ -272,83 +221,6 @@ def update_ephemeral_scratch_lifecycle(
     return False, tracked - normalized_paths
 
 
-def is_documentation_file(path: str) -> bool:
-    """Return whether a workspace path belongs to documentation-only scope."""
-    normalized = normalize_path(path)
-    if not normalized:
-        return False
-    parts = [part.casefold() for part in normalized.split("/") if part]
-    suffix = Path(normalized).suffix.casefold()
-    return bool(
-        suffix in {".md", ".rst", ".txt"}
-        or any(part in {"doc", "docs"} for part in parts[:-1])
-    )
-
-
-
-
-def detect_task_mode(text: str) -> str:
-    """从用户文本粗略识别任务模式。
-
-    匹配优先级是 project_creation > test > refactor > feature > bugfix > discuss > unknown。
-    例如 “创建一个 FastAPI Todo API，带 pytest 测试” 会归为 project_creation，
-    因为“创建项目”的意图比“包含测试”更基础也更关键。
-    """
-    lowered = (text or "").lower()
-    if not lowered.strip():
-        return "unknown"
-
-    project_creation_markers = (
-        "from scratch", "build a new project", "scaffold", "project skeleton",
-        "create a fastapi project", "create a fastapi app", "create a cli tool",
-        "完整 demo", "从零创建", "从 0 创建", "从0创建", "搭一个项目",
-        "生成一个 fastapi 项目", "生成一个项目", "创建项目骨架", "做一个 cli 工具",
-        "帮我搭一个项目", "帮我创建一个项目", "实现一个完整 demo",
-    )
-    refactor_markers = ("refactor", "rename", "migrate", "migration", "重构", "迁移", "改名")
-    feature_markers = (
-        "add ", "implement", "create", "new ", "endpoint", "feature",
-        "初始化", "新建", "创建", "实现", "添加", "加一个",
-    )
-    bug_markers = (
-        "bug", "traceback", "error", "failing", "failed", "regression",
-        "报错", "失败", "修复", "问题", "异常",
-    )
-    discuss_markers = (
-        "explain", "why", "how should", "design", "proposal", "方案", "讨论",
-        "解释", "为什么", "怎么设计", "如何设计",
-    )
-
-    if any(marker in lowered for marker in project_creation_markers):
-        return "project_creation"
-    if (
-        any(word in lowered for word in ("create", "build", "generate", "scaffold", "创建", "生成", "搭", "做一个"))
-        and any(word in lowered for word in (" project", "项目", " demo", "cli", "package", "fastapi", "service", "脚手架"))
-    ):
-        return "project_creation"
-    if task_wants_tests(text):
-        return "test"
-    if any(marker in lowered for marker in refactor_markers):
-        return "refactor"
-    if any(marker in lowered for marker in feature_markers):
-        return "feature"
-    if (
-        re.search(r"\bfix(?:es|ed|ing)?\b", lowered)
-        or any(marker in lowered for marker in bug_markers)
-    ):
-        return "bugfix"
-    if re.search(
-        r"\bsolve\s+swe-bench(?:\s+(?:lite|verified))?\s+instance\b",
-        lowered,
-    ):
-        # A benchmark envelope always requests repository mutation even when
-        # its issue title starts with a verb outside the generic feature list.
-        return "feature"
-    if any(marker in lowered for marker in discuss_markers) or "?" in lowered or "？" in lowered:
-        return "discuss"
-    return "unknown"
-
-
 def task_wants_tests(text: str) -> bool:
     """True 表示用户明确要求测试相关工作。"""
     value = str(text or "")
@@ -359,247 +231,542 @@ def task_wants_tests(text: str) -> bool:
 
 def task_forbids_test_changes(text: str) -> bool:
     """Return whether the user explicitly keeps test artifacts immutable."""
-    return _TEST_CHANGE_NEGATION_RE.search(str(text or "")) is not None
-
-
-def estimate_text_complexity(text: str) -> str:
-    """从用户任务文本预估复杂度，用于 planning 触发判断。
-
-    不依赖 RuntimeState（planning 前没有 diff/edit 信息）。返回
-    ``simple`` / ``moderate`` / ``complex``。
-    """
-    if not text or len(text.strip()) < 20:
-        return "simple"
-
-    lowered = text.lower()
-    score = 0
-    file_refs = re.findall(r"[\w/\-]+\.(?:py|js|ts|go|rs|java|rb)\b", text)
-    if len(set(file_refs)) >= 3:
-        score += 2
-    elif len(set(file_refs)) >= 1:
-        score += 1
-
-    if re.search(r"(?:^|\n)\s*(?:\d+[.)]\s|[-*]\s)", text, re.MULTILINE):
-        score += 2
-    if any(w in lowered for w in ("then ", "after that", "finally", "第一步", "然后", "最后")):
-        score += 1
-
-    if len(text) > 800:
-        score += 1
-    if len(text) > 2000:
-        score += 1
-
-    if any(w in lowered for w in (
-        "across", "multiple files", "refactor", "migrate", "rename all",
-        "每个文件", "所有模块", "批量",
-    )):
-        score += 2
-
-    if score >= 4:
-        return "complex"
-    if score >= 2:
-        return "moderate"
-    return "simple"
-
-
-_TEST_RUNNER_MARKERS = (
-    "pytest", "tox", "nox", "runtests.py", "bin/test", "manage.py test", "unittest",
-    "npm test", "npm run test", "pnpm test", "pnpm run test",
-    "yarn test", "yarn run test", "vitest", "jest",
-    "go test", "cargo test", "mvn test", "gradle test", "./gradlew test",
-    "make test",
-)
-
-
-def _test_command_candidates(command: str) -> list[str]:
-    """只读片段中的测试器名称是查询内容，不是测试执行。"""
-    command = command or ""
-    # 沿用验证链的引号感知分段；局部导入避免 planner 的策略导入形成环。
-    from nz_coder.intelligence.verification_planner import (
-        classify_verification_command,
-        verification_command_segments,
-    )
-    from nz_coder.tool_platform.command_policy import classify_bash, is_known_read_only_command
-
-    if classify_bash(command)["mutating"]:
-        # 求值/写入语法不能按普通查询放行，保留既有保守判断。
-        return [command]
-    segments = verification_command_segments(command)
-    if not segments:
-        return [command]
-    candidates = []
-    for tokens in segments:
-        executable = Path(tokens[0]).name.lower()
-        head = " ".join(tokens[:2]) if executable == "git" else executable
-        observation = is_known_read_only_command(head) or executable == "printf"
-        if executable == "find":
-            # find 的执行动作不属于查询；不改变安全策略的只读白名单。
-            observation = not any(
-                token in {"-exec", "-execdir", "-ok", "-okdir", "-delete"}
-                for token in tokens[1:]
-            )
-        if not observation:
-            if executable not in _TEST_RUNNER_MARKERS and classify_verification_command(shlex.join(tokens)) is None:
-                # 未识别的消费方可能执行管道输入，不能丢掉上游名称证据。
-                return [command]
-            candidates.append(shlex.join(tokens))
-    return candidates
-
-
-def _is_exact_test_segment(command: str) -> bool:
-    try:
-        tokens = shlex.split(command or "")
-    except ValueError:
-        return False
-    if (
-        len(tokens) >= 2
-        and tokens[0] in {"python", "python3"}
-        and tokens[1].removeprefix("./") == "bin/test"
-    ):
-        return bool(native_runner_positional_selectors(tokens[2:], runner="bin/test"))
-    cmd = " ".join((command or "").strip().lower().split())
-    if not cmd:
-        return False
-    if not any(marker in cmd for marker in _TEST_RUNNER_MARKERS):
-        return False
-    if "::" in cmd:
-        return True
-    if re.search(r"\s-run\s+\w+", cmd):
-        return True
-    if " --test " in cmd or " --filter " in cmd:
-        return True
-    if re.search(r"\s\S+\.(?:py|js|jsx|ts|tsx|go|rs|rb)\b", cmd):
-        return True
+    value = str(text or "")
+    offset = 0
+    while match := _TEST_CHANGE_NEGATION_RE.search(value, offset):
+        # 保留既有候选集合；只核对原来跨分句串接的“测试→禁改”关系。
+        if match.group("test_subject") is None or not re.search(
+            r"[，,。；;、！!？?]", match.group("test_link")
+        ):
+            return True
+        material = next(
+            (name for name in ("测试文件", "测试用例", "验收文件", "用例")
+             if value.startswith(name, match.start())),
+            "",
+        )
+        if material and re.match(
+            r"[^\S\n]*[，,。；;、！!？?]",
+            value[match.start() + len(material):match.start("test_predicate")],
+        ):
+            return True
+        if value[max(0, match.start() - 2):match.start()] in {"现有", "原有", "已有"}:
+            return True
+        predicate = match.group("test_predicate")
+        following = re.split(
+            r"[，,。；;、！!？?\n]", value[match.end():], maxsplit=1,
+        )[0].strip()
+        # 原候选“不要改/不得改”可能停在完整动词前；其后才是宾语。
+        if predicate in {"不要改", "不得改"} and following.startswith(("动", "写", "变")):
+            following = following[1:].strip()
+        if predicate == "保持不变" or not following or following.startswith(("任何", "任意")):
+            return True
+        # 候选可能覆盖紧随其后的“不要修改测试”；从起点后继续查，保留重叠约束。
+        offset = match.start() + 1
     return False
+
+
+_PYTHON_FLAGS = {"-u", "-B", "-E", "-I", "-O", "-OO", "-s", "-S", "-P", "-q", "-b", "-bb"}
+
+
+def _python_entry(tokens: list[str] | tuple[str, ...]) -> tuple[str, list[str], bool] | None:
+    """只沿真实解释器入口跳过已知开关，不在脚本参数中搜索 -m。"""
+    if not tokens or not re.fullmatch(r"(?:python|pypy)(?:\d+(?:\.\d+)*)?", Path(tokens[0]).name):
+        return None
+    args = list(tokens[1:])
+    while args:
+        if args[0] in _PYTHON_FLAGS:
+            args.pop(0)
+        elif args[0] in {"-W", "-X", "--check-hash-based-pycs"}:
+            if len(args) < 2:
+                return None
+            args = args[2:]
+        elif args[0].startswith(("-W", "-X")) and len(args[0]) > 2:
+            args.pop(0)
+        else:
+            break
+    if args[:1] == ["-m"] and len(args) >= 2:
+        return args[1], args[2:], True
+    if args[:1] == ["-c"] and len(args) >= 2:
+        return "-c", args[1:], False
+    if args and not args[0].startswith("-"):
+        return args[0], args[1:], False
+    return None
+
+
+def unittest_selectors(tokens: list[str] | tuple[str, ...]) -> tuple[str, ...] | None:
+    """保留完整原生选择器；未知选项和 discover 不证明唯一文件范围。"""
+    entry = _python_entry(tokens)
+    if entry is None or entry[0] != "unittest" or not entry[2]:
+        return None
+    return _unittest_selection(entry[1]).targets
+
+
+def _unittest_selection(args: list[str]) -> _TestSelection:
+    if args and args[0] == "discover":
+        # 发现参数定义递归集合，不能承诺唯一物理文件；未知参数保持未知。
+        values = {"-s", "--start-directory", "-p", "--pattern", "-t", "--top-level-directory", "-k", "--durations"}
+        flags = {"-v", "--verbose", "-q", "--quiet", "-f", "--failfast", "-c", "--catch", "-b", "--buffer", "--locals"}
+        index = 1
+        while index < len(args):
+            token = args[index]
+            index += 1
+            option, separator, value = token.partition("=")
+            if option in values:
+                if not separator:
+                    if index >= len(args):
+                        return _TestSelection("unknown")
+                    value = args[index]
+                    index += 1
+                if not value:
+                    return _TestSelection("unknown")
+            elif token.startswith("-") and token not in flags:
+                return _TestSelection("unknown")
+        return _TestSelection("all")
+    selectors: list[str] = []
+    index = 0
+    positional = False
+    flags = {"-v", "--verbose", "-q", "--quiet", "-f", "--failfast",
+             "-c", "--catch", "-b", "--buffer", "--locals"}
+    while index < len(args):
+        token = args[index]
+        index += 1
+        if not positional and token == "--":
+            positional = True
+            continue
+        if not positional and token in flags:
+            continue
+        if not positional and token.split("=", 1)[0] == "--durations":
+            if "=" in token:
+                value = token.split("=", 1)[1]
+            else:
+                if index >= len(args):
+                    return _TestSelection("unknown")
+                value = args[index]
+                index += 1
+            if not re.fullmatch(r"[+-]?\d+", value):
+                return _TestSelection("unknown")
+            continue
+        if not positional and token == "-k":
+            if index >= len(args) or args[index].startswith("-"):
+                return _TestSelection("unknown")
+            index += 1
+            continue
+        if not positional and token.startswith("-k") and len(token) > 2:
+            continue
+        if token.startswith("-"):
+            return _TestSelection("unknown")
+        normalized = _normalize_test_target(token)
+        if not normalized:
+            return _TestSelection("unknown")
+        if not normalized.endswith(".py") and not all(part.isidentifier() for part in normalized.split(".")):
+            return _TestSelection("unknown")
+        if normalized not in selectors:
+            selectors.append(normalized)
+    return _TestSelection("bounded" if selectors else "all", tuple(selectors), bool(selectors))
+
+
+def unittest_selector_matches_path(selector: str, path: str) -> bool:
+    """从已知测试文件生成模块名，避免猜测点号选择器中类名的分界。"""
+    relative = str(path).replace("\\", "/").removeprefix("./")
+    if not relative.endswith(".py") or relative.startswith("/") or ".." in relative.split("/"):
+        return False
+    module = relative[:-3].replace("/", ".")
+    return selector == relative or selector == module or selector.startswith(module + ".")
+
+
+def declared_unittest_scopes(text: str) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(
+        target for command in _declared_test_commands(text)
+        for words in _command_segments(command)
+        for target in unittest_selectors(words) or ()
+        if target in test_command_targets(command)
+    ))
+
+
+def canonical_unittest_discovery(command: str) -> str | None:
+    """保留完整字面量 discover 集合身份；不把其参数冒充测试选择器。"""
+    quote, escaped = "", False
+    for char in command:
+        if char in "\n\r":
+            return None
+        if escaped:
+            escaped = False
+        elif char == "\\" and quote != "'":
+            escaped = True
+        elif quote:
+            if char == quote:
+                quote = ""
+            elif quote == '"' and char in "$`":
+                return None
+        elif char in "'\"":
+            quote = char
+        elif char in ";&|><$`*?[]{}~":
+            return None
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return None
+    entry = _python_entry(tokens)
+    if (entry is None or not entry[2] or entry[0] != "unittest"
+            or entry[1][:1] != ["discover"]):
+        return None
+    argument_start = len(tokens) - len(entry[1]) + 1
+    result = list(tokens[:argument_start])
+    values = {"-s", "--start-directory", "-p", "--pattern", "-t", "--top-level-directory",
+              "-k", "--durations"}
+    flags = {"-f", "--failfast", "-c", "--catch", "-b", "--buffer", "--locals"}
+    index, positionals, positional_only = argument_start, 0, False
+    while index < len(tokens):
+        token = tokens[index]
+        index += 1
+        option, separator, value = token.partition("=")
+        if not positional_only and token == "--":
+            positional_only = True
+            result.append(token)
+        elif not positional_only and token in {"-v", "--verbose", "-q", "--quiet"}:
+            continue
+        elif not positional_only and option in values:
+            if separator:
+                if not value:
+                    return None
+                result.append(token)
+            else:
+                if index >= len(tokens) or tokens[index].startswith("-"):
+                    return None
+                result.extend((token, tokens[index]))
+                index += 1
+        elif not positional_only and token in flags:
+            result.append(token)
+        elif not positional_only and token.startswith("-"):
+            return None
+        else:
+            positionals += 1
+            if positionals > 3:
+                return None
+            result.append(token)
+    return shlex.join(result)
+
+
+@dataclass(frozen=True)
+class _TestSelection:
+    # all 是已知全量；unknown 是识别到入口但不能解释选择，二者都不授予目标证明。
+    kind: str
+    targets: tuple[str, ...] = ()
+    focused: bool = False
+
+
+_PYTEST_VALUE_OPTIONS = {
+    "-k", "-m", "-c", "-o", "--override-ini", "--basetemp", "--confcutdir",
+    "--ignore", "--ignore-glob", "--deselect", "--maxfail", "--rootdir", "--tb",
+    "--timeout", "--junitxml", "--junit-xml", "--junit-prefix", "--capture",
+    "--color", "--code-highlight", "--assert", "--import-mode", "--log-level",
+    "--log-format", "--log-date-format", "--log-cli-level", "--log-cli-format",
+    "--log-cli-date-format", "--log-file", "--log-file-level", "--log-file-format",
+    "--log-file-date-format", "--durations", "--durations-min", "-W", "--pythonwarnings",
+    "-p", "--html",
+}
+_PYTEST_FLAGS = {
+    "-q", "--quiet", "-v", "--verbose", "-s", "-x", "--exitfirst", "--disable-warnings",
+    "--disable-pytest-warnings", "--showlocals", "-l", "--full-trace", "--strict-config",
+    "--strict-markers", "--continue-on-collection-errors", "--lf", "--last-failed",
+    "--ff", "--failed-first", "--nf", "--new-first", "--cache-clear", "--stepwise",
+    "--sw", "--stepwise-skip", "--sw-skip", "--show-capture=no", "--self-contained-html",
+}
+_NON_TEST_FLAGS = {"--help", "-h", "--version", "-V", "--collect-only", "--co", "--trace-config", "--fixtures", "--fixtures-per-test", "--markers", "--setup-plan"}
+
+
+def _pytest_selection(args: list[str]) -> _TestSelection | None:
+    targets = []
+    positional = False
+    index = 0
+    filtered = False
+    while index < len(args):
+        token = args[index]
+        index += 1
+        option, separator, value = token.partition("=")
+        if not positional and option in _NON_TEST_FLAGS:
+            return None
+        if not positional and token == "--":
+            positional = True
+            continue
+        if not positional and option in _PYTEST_VALUE_OPTIONS:
+            if not separator:
+                if index >= len(args):
+                    return _TestSelection("unknown")
+                value = args[index]
+                index += 1
+            if not value:
+                return _TestSelection("unknown")
+            filtered |= option in {"-k", "-m"}
+            continue
+        if not positional and (token in _PYTEST_FLAGS or re.fullmatch(r"-[qv]+|-r[a-zA-Z]+", token)):
+            filtered |= token in {"--lf", "--last-failed", "--ff", "--failed-first"}
+            continue
+        if not positional and token.startswith("-"):
+            return _TestSelection("unknown")
+        target = _normalize_test_target(token)
+        if not target:
+            return _TestSelection("unknown")
+        targets.append(target)
+    focused = filtered or bool(targets) and all("::" in target or target.split("::", 1)[0].endswith(".py") for target in targets)
+    return _TestSelection("bounded" if targets or filtered else "all", tuple(dict.fromkeys(targets)), focused)
+
+
+def _package_script_name(tokens: list[str]) -> str | None:
+    if not tokens or Path(tokens[0]).name.lower() not in {"npm", "pnpm", "yarn"}:
+        return None
+    args = tokens[1:]
+    index = 0
+    while index < len(args) and args[index].startswith("-"):
+        option, separator, _value = args[index].partition("=")
+        index += 1
+        if not separator and option in {"--prefix", "--workspace", "-w", "--dir", "-C", "--cwd"}:
+            index += 1
+    if args[index:index + 1] == ["run"]:
+        index += 1
+    return args[index] if index < len(args) else None
+
+
+def _segment_test_selection(tokens: list[str]) -> _TestSelection | None:
+    if not tokens:
+        return None
+    executable = Path(tokens[0]).name.lower()
+    args = list(tokens[1:])
+    if executable in {"pytest", "py.test", "pytest3"}:
+        return _pytest_selection(args)
+    entry = _python_entry(tokens)
+    if entry is not None:
+        runner, runner_args, module = entry
+        if module and runner in {"pytest", "py.test"}:
+            return _pytest_selection(runner_args)
+        if module and runner == "unittest":
+            if any(arg.split("=", 1)[0] in _NON_TEST_FLAGS for arg in runner_args):
+                return None
+            return _unittest_selection(runner_args)
+        if runner.removeprefix("./") == "bin/test":
+            selectors = native_runner_positional_selectors(runner_args, runner="bin/test")
+            return _TestSelection("bounded" if selectors else "unknown", selectors, bool(selectors))
+        if Path(runner).name == "runtests.py" or (Path(runner).name == "manage.py" and runner_args[:1] == ["test"]):
+            return _TestSelection("unknown")
+        return None
+    if executable == "node" and args[:1] == ["--test"]:
+        if not args[1:]:
+            return _TestSelection("all")
+        targets = tuple(_normalize_test_target(arg) for arg in args[1:])
+        if any(arg.startswith("-") or any(c in arg for c in "*?[]$`;&|<>") or not target
+               for arg, target in zip(args[1:], targets)):
+            return _TestSelection("unknown")
+        return _TestSelection("bounded", tuple(dict.fromkeys(targets)), True)
+    if executable == "go" and args[:1] == ["test"]:
+        for index, arg in enumerate(args[1:], 1):
+            if arg == "-run" and index + 1 < len(args):
+                return _TestSelection("bounded", focused=args[index + 1] != "^$")
+            if arg.startswith("-run="):
+                return _TestSelection("bounded", focused=arg[5:] != "^$")
+        return _TestSelection("all")
+    if _package_script_name(tokens) == "test":
+        return _TestSelection("unknown")
+    if (executable in {"jest", "vitest", "tox", "nox"}
+            or executable == "cargo" and args[:1] == ["test"]
+            or executable in {"mvn", "mvnw", "gradle", "gradlew", "make"} and "test" in args):
+        return _TestSelection("unknown")
+    # 未建模的 CLI 可能转交测试器；只读展示中的名称不属于执行。
+    if executable not in {"echo", "printf", "rg", "grep", "egrep", "fgrep", "cat", "sed", "awk", "ls", "head", "tail"}:
+        if any(Path(arg).name in {"pytest", "py.test", "jest", "vitest", "unittest"} for arg in args):
+            return _TestSelection("unknown")
+    return None
+
+
+def _command_segments(command: str) -> list[list[str]]:
+    from nz_coder.intelligence.verification_planner import verification_command_segments
+    from nz_coder.runtime.verification.domain.identity import command_identity, observed_check_subject
+
+    identity = command_identity(command or "", ".")
+    subject = observed_check_subject(identity) if identity.opaque else None
+    if subject is not None:
+        command = shlex.join(subject.argv)
+    return verification_command_segments(command or "")
+
+
+def _test_selections(command: str) -> tuple[_TestSelection, ...]:
+    selections = tuple(selection for words in _command_segments(command)
+                       if (selection := _segment_test_selection(words)) is not None)
+    if selections:
+        return selections
+    # 命令替换和 shell 消费管道不能从展示文本证明范围。
+    if re.search(r"(?:\$\([^)]*\b(?:pytest|jest)\b|\b(?:echo|printf)\s+[^|]*\b(?:pytest|jest)\b[^|]*\|\s*(?:sh|xargs)\b)", command or ""):
+        return (_TestSelection("unknown"),)
+    return ()
 
 
 def is_exact_test_command(command: str) -> bool:
-    """True 表示每个测试执行片段都是聚焦/精确测试。"""
-    candidates = [
-        candidate for candidate in _test_command_candidates(command)
-        if any(marker in candidate.lower() for marker in _TEST_RUNNER_MARKERS)
-    ]
-    return bool(candidates) and all(_is_exact_test_segment(candidate) for candidate in candidates)
+    """只作调度观察：每个测试片段都具有已解释的聚焦选择。"""
+    selections = _test_selections(command)
+    return bool(selections) and all(item.kind == "bounded" and item.focused for item in selections)
 
 
 def is_broad_test_command(command: str) -> bool:
-    """判断命令是否是 broad test runner。"""
-    for candidate in _test_command_candidates(command):
-        cmd = " ".join(candidate.strip().lower().split())
-        if not any(marker in cmd for marker in _TEST_RUNNER_MARKERS):
-            continue
-        if _is_exact_test_segment(candidate):
-            continue
-        if "go test" in cmd and " ./..." not in cmd and " -run " in cmd:
-            continue
-        return True
-    return False
-
-
-_SHELL_BOUNDARIES = {"|", "||", "&&", ";"}
-_PYTEST_VALUE_OPTIONS = {
-    "-k", "-m", "--basetemp", "--confcutdir", "--ignore", "--ignore-glob",
-    "--maxfail", "--rootdir", "--tb", "--timeout",
-}
+    """只作调度观察；未知选择不具有执行拒绝或权限例外的含义。"""
+    return any(item.kind != "bounded" or not item.focused for item in _test_selections(command))
 
 
 def test_command_targets(command: str) -> tuple[str, ...]:
-    """Return normalized explicit test targets from a supported test command.
-
-    The parser is deliberately conservative: a command with no path target is
-    repository-wide and therefore returns an empty tuple. Shell output filters
-    after a pipe are never interpreted as test scope.
-    """
-    try:
-        tokens = shlex.split(command or "", posix=True)
-    except ValueError:
+    """所有测试片段均有完整目标时才返回；保留 node id 和完整 unittest 选择器。"""
+    selections = _test_selections(command)
+    if not selections or any(item.kind != "bounded" or not item.targets for item in selections):
         return ()
-    lowered = [token.lower() for token in tokens]
-    if lowered[:2] == ["node", "--test"]:
-        # Only direct, bounded Node test paths are eligible. Flags that alter
-        # selection/execution and shell syntax must not become acceptance.
-        args = tokens[2:]
-        if any(
-            token.startswith("-")
-            or re.match(r"^[A-Za-z]:", token)
-            or any(char in token for char in "|;&><$`*?[]")
-            or not _normalize_test_target(token)
-            for token in args
-        ):
-            return ()
-        return tuple(dict.fromkeys(_normalize_test_target(token) for token in args))
-    try:
-        runner = lowered.index("pytest")
-    except ValueError:
-        return ()
+    return tuple(dict.fromkeys(target for item in selections for target in item.targets))
 
-    targets: list[str] = []
-    skip_value = False
-    for token in tokens[runner + 1:]:
-        if token in _SHELL_BOUNDARIES or token.startswith((">", "2>")):
-            break
-        if skip_value:
-            skip_value = False
+
+_DECLARATION_EXCLUSION_RE = re.compile(
+    r"\b(?:do\s+not|don't|must\s+not|never|previously|historical|formerly|example|quoted)\b"
+    r"|\balready\s+(?:ran|executed)\b|\bwithout\s+(?:running|executing)\b"
+    r"|\bexplain\s+(?:the\s+)?command\b|不要|不得|无需|不需要|历史|以前|之前|示例|例如|仅供参考|引用",
+    re.IGNORECASE,
+)
+_TEST_COMMAND_START_RE = re.compile(
+    r"(?<![\w/.-])(?:(?:/[^\s`]+/)?(?:python|pypy)(?:\d+(?:\.\d+)*)?\s+|pytest\b|py\.test\b|node\s+--test\b)"
+)
+
+
+_PLAIN_TEST_INSTRUCTION_RE = re.compile(
+    r"(?P<english>(?:^[ \t]*(?:(?:[-*]|\d+[.)])[ \t]+)?|\.[ \t]+|[!?。；！？][ \t]*|[ \t]+and[ \t]+)(?:please\s+)?(?:run|execute)\s+"
+    r"(?:(?:the\s+)?(?:exact\s+)?(?:acceptance\s+)?(?:command|check)\s+)?)"
+    r"|(?P<chinese>(?:运行|执行)\s*|(?:验收|验证)命令\s*[:：]?\s*)",
+    re.IGNORECASE,
+)
+
+
+def _positive_command_context(text: str, start: int, end: int) -> bool:
+    prefix = re.split(r"[\n。；;!?！？]|\.(?=\s|$)", text[:start])[-1]
+    suffix = re.split(r"[\n。；;!?！？]|\.(?=\s|$)", text[end:])[0]
+    if _DECLARATION_EXCLUSION_RE.search(prefix + " " + suffix):
+        return False
+    # 标题只约束紧邻引用；新的明确指令或空行结束该语境。
+    line_start = text.rfind("\n", 0, start) + 1
+    local_prefix = text[line_start:start].strip()
+    if not local_prefix or local_prefix.startswith("```"):
+        for line in reversed(text[:max(0, line_start - 1)].split("\n")):
+            previous = line.strip()
+            if not previous:
+                break
+            if previous.endswith((":", "：")):
+                return _DECLARATION_EXCLUSION_RE.search(previous) is None
+            if not previous.startswith("`") and not _TEST_COMMAND_START_RE.match(previous):
+                break
+    return True
+
+
+def _plain_declared_command(raw: str) -> str:
+    """自然语言分隔符只在引号和转义之外生效，不能改写真实参数。"""
+    quote = ""
+    escaped = False
+    for index, char in enumerate(raw):
+        if escaped:
+            escaped = False
             continue
-        option = token.split("=", 1)[0].lower()
-        if option in _PYTEST_VALUE_OPTIONS and "=" not in token:
-            skip_value = True
+        if char == "\\" and quote != "'":
+            escaped = True
             continue
-        if token.startswith("-"):
+        if quote:
+            if char == quote:
+                quote = ""
             continue
-        normalized = _normalize_test_target(token)
-        if normalized and normalized not in targets:
-            targets.append(normalized)
-    return tuple(targets)
+        if char in "'\"":
+            quote = char
+            continue
+        # 独立的目录参数 . 仍属于命令；文件名后的句号才结束裸声明。
+        sentence_dot = (char == "." and (index + 1 == len(raw) or raw[index + 1].isspace())
+                        and (index == 0 or not raw[index - 1].isspace()))
+        if char in "\n`。；，,!?！？" or sentence_dot:
+            return raw[:index].strip()
+        if (char.isspace() and re.match(r"\s+(?:and|when|then)\b", raw[index:], re.IGNORECASE)
+                or raw.startswith(("并且", "并"), index)):
+            return raw[:index].strip()
+    return raw.strip()
+
+
+def _declared_command_spans(text: str) -> tuple[tuple[int, str], ...]:
+    """保留原位置，代码块只处理一次，避免其内部裸命令逃逸否定标题。"""
+    value = str(text or "")
+    fences = list(re.finditer(r"^[ \t]*```[^\n]*\n(?P<body>.*?)^[ \t]*```[^\n]*", value, re.MULTILINE | re.DOTALL))
+    candidates: list[tuple[int, str]] = []
+    masked = list(value)
+    for fence in fences:
+        if _positive_command_context(value, fence.start(), fence.end()):
+            for position, command in _declared_command_spans(fence["body"]):
+                candidates.append((fence.start("body") + position, command))
+        for index in range(fence.start(), fence.end()):
+            if masked[index] != "\n":
+                masked[index] = " "
+    scan = "".join(masked)
+    quoted = list(re.finditer(r"`([^`\n]+)`", scan))
+    shell_literals = list(re.finditer(r"(?<!\w)'[^'\n]*'|\"(?:\\.|[^\"\\\n])*\"", scan))
+    for match in quoted:
+        if (not any(span.start() <= match.start() < span.end() for span in shell_literals)
+                and _positive_command_context(value, match.start(), match.end())):
+            candidates.append((match.start(), match[1].strip()))
+    for clause in re.finditer(r"[^\n]+", scan):
+        instructions = list(_PLAIN_TEST_INSTRUCTION_RE.finditer(clause[0]))
+        starts = [clause.start()] if _TEST_COMMAND_START_RE.match(clause[0].lstrip()) else []
+        for match in instructions:
+            absolute = clause.start() + match.start()
+            if any(span.start() <= absolute < span.end() for span in (*quoted, *shell_literals)):
+                continue
+            prefix = clause[0][:match.start()].strip()
+            coordinated = match[0].lstrip().lower().startswith("and ")
+            if coordinated and starts:
+                previous_command = value[starts[-1]:absolute].lstrip()
+                if _TEST_COMMAND_START_RE.match(previous_command) is None:
+                    continue
+            local_prefix = re.split(r"[。；!?！？]|\.(?=\s)", prefix)[-1]
+            if match.lastgroup == "chinese" and local_prefix and re.search(r"[A-Za-z_=;&|<>$]", local_prefix):
+                continue
+            starts.append(clause.start() + match.end())
+        for start in starts:
+            raw = value[start:clause.end()]
+            start += len(raw) - len(raw.lstrip())
+            raw = raw.lstrip()
+            if any(span.start() <= start < span.end() for span in quoted):
+                continue
+            if _TEST_COMMAND_START_RE.match(raw) is None:
+                continue
+            # 分号仍属于完整 shell 命令，合同层不能把复合命令裁成单个测试。
+            command = _plain_declared_command(raw)
+            if _positive_command_context(value, start, start + len(command)):
+                candidates.append((start, command))
+    return tuple(sorted(candidates, key=lambda item: item[0]))
+
+
+def _declared_test_commands(text: str) -> tuple[str, ...]:
+    """共享声明边界：代码片段保留全命令；不截取 env 或复合命令中的子串。"""
+    return tuple(dict.fromkeys(command for _position, command in _declared_command_spans(text)))
+
+
+def _declared_discovery_scopes(text: str) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(command for candidate in _declared_test_commands(text)
+                               if (command := canonical_unittest_discovery(candidate)) is not None))
 
 
 def declared_test_scopes(text: str) -> tuple[str, ...]:
-    """Extract explicit pytest path scopes from the natural user request."""
-    scopes: list[str] = []
-    pattern = re.compile(
-        r"(?:python(?:3(?:\.\d+)?)?\s+-m\s+)?pytest\b([^\n`。；;，,]*)",
-        re.IGNORECASE,
-    )
-    for match in pattern.finditer(text or ""):
-        command = "pytest" + match.group(1)
+    """从正向完整声明提取已知测试目标；discover 仅保留集合命令身份。"""
+    scopes = []
+    for command in _declared_test_commands(text):
         for target in test_command_targets(command):
-            if _looks_like_test_scope(target) and target not in scopes:
+            if target not in scopes:
                 scopes.append(target)
-    return tuple(scopes)
-
-
-def test_command_within_scopes(command: str, scopes: tuple[str, ...]) -> bool:
-    """Return whether every explicit pytest target stays inside user scope."""
-    targets = test_command_targets(command)
-    normalized_scopes = tuple(
-        target for target in (_normalize_test_target(scope) for scope in scopes)
-        if target
-    )
-    if not targets or not normalized_scopes:
-        return False
-    return all(
-        any(target == scope or target.startswith(scope + "/") for scope in normalized_scopes)
-        for target in targets
-    )
+    return tuple(dict.fromkeys((*scopes, *_declared_discovery_scopes(text))))
 
 
 def _normalize_test_target(value: str) -> str:
-    target = str(value or "").strip().strip("`'\".,:;()[]{}")
-    target = target.split("::", 1)[0].replace("\\", "/")
-    if not target or target in {".", "./"} or target.startswith("/"):
+    target = str(value or "").replace("\\", "/")
+    path, separator, nodes = target.partition("::")
+    if (not path or path in {".", "./"} or path.startswith("/")
+            or re.match(r"^[A-Za-z]:", path) or any(char in target for char in "\n\r\x00")
+            or any(char in path for char in "$`;&|<>") or ".." in path.split("/")):
         return ""
-    normalized = posixpath.normpath(target)
-    if normalized == ".." or normalized.startswith("../"):
-        return ""
-    return normalized.removeprefix("./")
-
-
-def _looks_like_test_scope(target: str) -> bool:
-    parts = [part.lower() for part in target.split("/") if part]
-    return bool(
-        is_test_file(target)
-        or any(part in _TEST_DIR_NAMES for part in parts)
-    )
+    normalized = posixpath.normpath(path).removeprefix("./")
+    return normalized + (separator + nodes if separator else "")
 
 
 _ROUND_MUTATION_INTENT_RE = re.compile(
@@ -624,7 +791,7 @@ _TRACEBACK_EVIDENCE_RE = re.compile(
 
 _TASK_REFERENCE_SCOPE_RE = re.compile(
     r"\b(?:follow|according\s+to|based\s+on|described\s+in|specified\s+in|"
-    r"requirements?\s+in)\b|按照|根据|依据|遵循", re.IGNORECASE,
+    r"requirements?\s+in|required\s+by)\b|按照|根据|依据|遵循", re.IGNORECASE,
 )
 _REFERENCE_SCOPE_RE = re.compile(
     r"\b(?:read|inspect|look\s+at|explain|summarize|consult|use|using|"
@@ -632,7 +799,9 @@ _REFERENCE_SCOPE_RE = re.compile(
     re.IGNORECASE,
 )
 _VERIFY_SCOPE_RE = re.compile(
-    r"\b(?:run|execute|validate|verify|check)\b|运行|执行|验证|校验",
+    r"\b(?:run|execute|validate|verify|check)\b|运行|执行|验证|校验"
+    r"|(?:使|让|确保)(?=[^。！？;；\n]{0,160}通过)"
+    r"|\b(?:make|ensure)\b(?=[^.!?;\n]{0,160}\bpass(?:es|ing)?\b)",
     re.IGNORECASE,
 )
 _NEGATED_REFERENCE_RE = re.compile(
@@ -706,7 +875,9 @@ def _instruction_scopes(text: str):
         matches = list(_SCOPE_MARKERS.finditer(masked))
         prefix_end = matches[0].start() if matches else len(masked)
         yield "context", clause[:prefix_end]
-        for index, match in enumerate(matches):
+        index = 0
+        while index < len(matches):
+            match = matches[index]
             end = matches[index + 1].start() if index + 1 < len(matches) else len(masked)
             role = match.lastgroup
             if role in {"negated", "negated_reference"}:
@@ -716,11 +887,61 @@ def _instruction_scopes(text: str):
             if (role == "context" and re.match(r"use\b", scope, re.IGNORECASE)
                     and re.search(r"\bas\s+(?:the\s+)?(?:requirements?|task\s+specification)\b", scope, re.IGNORECASE)):
                 role = "task_reference"
+            # “阅读文档后完成其中要求”授予只读规范身份；不扩展普通阅读或否定句。
+            if role == "context" and re.match(r"(?:读取|阅读)", scope):
+                documents = list(_INSTRUCTION_PATH_RE.finditer(scope))
+                if len(documents) == 1 and is_documentation_file(documents[0].group(1)):
+                    suffix = clause[match.start() + documents[0].end():]
+                    if re.match(r"^[`\"'\s,，]*(?:后|并且|然后|并|再)?\s*(?:从零)?(?:完成|实现|开发)\s*其中(?:的)?", suffix):
+                        role = "task_reference"
+            reference_scopes = []
+            next_index = index + 1
+            if role == "mutation":
+                while next_index < len(matches):
+                    reference = matches[next_index]
+                    if (reference.lastgroup != "task_reference"
+                            or not re.fullmatch(r"required\s+by", reference.group(), re.IGNORECASE)):
+                        break
+                    reference_end = matches[next_index + 1].start() if next_index + 1 < len(matches) else len(masked)
+                    reference_scope = clause[reference.start():reference_end]
+                    colon = re.search(r":(?!\s*\d)", reference_scope)
+                    separator = colon.start() if colon else -1
+                    if separator < 0:
+                        comma = reference_scope.find(",")
+                        list_continues = re.search(
+                            r"\band\s*,\s*(?:as\s+)?$",
+                            clause[match.end():reference.start()], re.IGNORECASE,
+                        )
+                        rename_continues = (
+                            re.match(r"rename\b|重命名", scope, re.IGNORECASE)
+                            and re.match(r"\s*to\b", reference_scope[comma + 1:], re.IGNORECASE)
+                        )
+                        if comma >= 0 and (list_continues or rename_continues):
+                            separator = comma
+                    if separator < 0 or not explicit_instruction_paths(reference_scope[:separator], limit=None):
+                        break
+                    # 行号冒号和多来源逗号不结束引用；明确输出列表继续属于原修改动词。
+                    # 拼回同一作用域，保留跨限定语的 rename/create/delete 语义。
+                    reference_scopes.append(reference_scope[:separator])
+                    scope += " " + reference_scope[separator + 1:]
+                    next_index += 1
             yield role, scope
+            for reference_scope in reference_scopes:
+                yield "task_reference", reference_scope
+            index = next_index
 
 
 def mutation_instruction_scopes(text: str) -> tuple[str, ...]:
     return tuple(scope for role, scope in _instruction_scopes(text) if role == "mutation")
+
+
+def explicit_read_only_paths(text: str) -> tuple[str, ...]:
+    """保留明确禁改的文件身份，避免后续合同再次从普通提及推断写入。"""
+    return tuple(dict.fromkeys(
+        path for _role, scope in _instruction_scopes(text)
+        if _ROUND_NEGATED_MUTATION_RE.match(scope)
+        for path in explicit_instruction_paths(scope, limit=None)
+    ))
 
 
 def classify_instruction_paths(text: str) -> tuple[InstructionPathRole, ...]:
@@ -742,7 +963,15 @@ def classify_instruction_paths(text: str) -> tuple[InstructionPathRole, ...]:
             )
             if item not in result:
                 result.append(item)
-    return tuple(result)
+    readonly = set(explicit_read_only_paths(text))
+    immutable_tests = task_forbids_test_changes(text)
+    normalized = []
+    for item in result:
+        if item.role == "mutation" and (item.path in readonly or (immutable_tests and is_test_file(item.path))):
+            item = InstructionPathRole(item.path, "context")
+        if item not in normalized:
+            normalized.append(item)
+    return tuple(normalized)
 
 
 def extract_task_reference_paths(text: str) -> tuple[str, ...]:

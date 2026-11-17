@@ -42,6 +42,9 @@ def repo_context(
             result = service.process_context(module, max_depth=4, limit=bounded)
         elif operation == "symbol_search":
             result = service.search_symbols(module, limit=bounded)
+        elif operation == "symbol_ref":
+            # 直接按确切 ID 读取紧凑引用，避免截断长上下文后拼接残缺对象。
+            result = service.index.symbol_ref(module)
         elif operation == "lookup":
             if repo_intelligence_mode() != "lookup":
                 return "Error: unified structural lookup is disabled for this runtime tier"
@@ -49,8 +52,10 @@ def repo_context(
         elif operation == "runtime_metrics":
             result = service.metrics()
         else:
-            return "Error: operation must be overview, module_context, relationship_scan, cyclic_dependencies, changed_scope, lookup, symbol_search, symbol_context, process_context, or runtime_metrics"
+            return "Error: operation must be overview, module_context, relationship_scan, cyclic_dependencies, changed_scope, lookup, symbol_search, symbol_context, symbol_ref, process_context, or runtime_metrics"
         encoded = json.dumps(result, ensure_ascii=False, indent=2, default=str)
+        if operation == "symbol_ref":
+            return encoded
         return encoded[:40_000] + ("\n[truncated]" if len(encoded) > 40_000 else "")
     except Exception as error:
         return format_public_error(error)
@@ -60,7 +65,8 @@ register(
     name="repo_context",
     description=(
         "Query persistent lexical/structural repository intelligence: overview, "
-        "module dependencies/dependents, unified structural intent lookup, symbol/process call contexts, dependency cycles, or changed scope."
+        "module dependencies/dependents, unified structural intent lookup, symbol/process call contexts, "
+        "exact symbol_ref by ID for LSP queries, dependency cycles, or changed scope."
     ),
     parameters={
         "type": "object",
@@ -68,9 +74,9 @@ register(
             "operation": {"type": "string", "enum": [
                 "overview", "module_context", "relationship_scan",
                 "cyclic_dependencies", "changed_scope", "symbol_search",
-                "lookup", "symbol_context", "process_context", "runtime_metrics",
+                "lookup", "symbol_context", "symbol_ref", "process_context", "runtime_metrics",
             ]},
-            "module": {"type": "string"},
+            "module": {"type": "string", "description": "Module/query, or the exact symbol_id for symbol_ref."},
             "kind": {"type": "string", "enum": ["auto", "symbol", "module", "process"]},
             "limit": {"type": "integer", "minimum": 1, "maximum": 200},
             "refresh": {"type": "boolean"},

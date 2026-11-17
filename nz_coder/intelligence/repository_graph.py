@@ -223,13 +223,14 @@ class RepositoryGraph:
 
     def _resolve_graph(self) -> None:
         names = set(self._records)
+        python_modules = PersistentCodeIndex._module_lookup(names)
         self._importers = {}
         for source, record in self._records.items():
             self._add_importer(source, record.get("imports", []))
         self._graph = {
             module: tuple(sorted({
                 target for raw in record.get("imports", [])
-                for target in [self._resolve_import(module, str(raw), names)]
+                for target in [self._resolve_import(module, str(raw), names, python_modules)]
                 if target and target != module
             }))
             for module, record in self._records.items()
@@ -241,6 +242,8 @@ class RepositoryGraph:
 
     def _resolve_graph_paths(self, sources: set[str]) -> int:
         names = set(self._records)
+        # 映射仅在本次解析内复用，下一次增量操作重新取最新模块集。
+        python_modules = PersistentCodeIndex._module_lookup(names)
         updated = 0
         for source in sorted(sources):
             record = self._records.get(source)
@@ -255,7 +258,7 @@ class RepositoryGraph:
                         self._reverse_graph.pop(target, None)
             targets = tuple(sorted({
                 target for raw in record.get("imports", [])
-                for target in [self._resolve_import(source, str(raw), names)]
+                for target in [self._resolve_import(source, str(raw), names, python_modules)]
                 if target and target != source
             }))
             self._graph[source] = targets
@@ -302,8 +305,15 @@ class RepositoryGraph:
                     self._importers.pop(key, None)
 
     @staticmethod
-    def _resolve_import(source: str, raw: str, modules: set[str]) -> str | None:
+    def _resolve_import(
+        source: str, raw: str, modules: set[str], python_modules: dict[str, tuple[str, ...]],
+    ) -> str | None:
         source_path = Path(source)
+        if source_path.suffix == ".py":
+            targets = PersistentCodeIndex._resolve_import_files(
+                source, raw, modules, python_modules,
+            )
+            return targets[0] if targets else None
         suffixes = (source_path.suffix, ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs")
         if raw.startswith("."):
             base = (source_path.parent / raw).as_posix()

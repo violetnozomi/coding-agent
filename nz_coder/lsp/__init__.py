@@ -1,7 +1,15 @@
 """Language Server Protocol support for semantic code navigation."""
+
 from __future__ import annotations
 
-from .client import LSPClient, LSPError, LSPResponseError, LSPTimeoutError
+from .client import (
+    LSPClient,
+    LSPError,
+    LSPResponseError,
+    LSPTimeoutError,
+    LSPCancelledError,
+)
+from .types import LspOperation, DiagnosticReport
 from .manager import (
     client_startup_error,
     client_status_summary,
@@ -22,6 +30,9 @@ __all__ = [
     "LSPError",
     "LSPResponseError",
     "LSPTimeoutError",
+    "LSPCancelledError",
+    "LspOperation",
+    "DiagnosticReport",
     "ResolvedServer",
     "available_server_summary",
     "client_startup_error",

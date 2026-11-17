@@ -114,7 +114,7 @@ class RunViewReducer:
         if event_type in {"session.run.status", "session.run.settled"}:
             status = str(properties.get("status") or self._state.status)
             self._state.status = status
-            if status in {"completed", "failed", "cancelled"}:
+            if status in {"completed", "failed", "cancelled", "interrupted", "blocked", "error", "max_turns", "completed_unverified"}:
                 self._clear_pending()
                 self._state.terminal = {
                     "status": status,
@@ -124,11 +124,11 @@ class RunViewReducer:
         if event_type in {
             "session.run.completed", "session.run.failed", "session.run.cancelled",
         }:
-            status = {
+            status = str(properties.get("status") or {
                 "session.run.completed": "completed",
                 "session.run.failed": "failed",
                 "session.run.cancelled": "cancelled",
-            }[event_type]
+            }[event_type])
             self._state.status = status
             self._clear_pending()
             self._state.terminal = {"status": status, **copy.deepcopy(properties)}

@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from nz_coder.tool_platform.policies.command_policy import (
-    classify_bash,
-    external_workspace_path,
+    assess_shell_command,
     is_known_read_only_command,
 )
+from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import (
     collect_filesystem_mutation_paths,
@@ -54,6 +54,9 @@ class PermissionChecker:
     ) -> dict:
         """Return a permission decision dict."""
         deny_rule = first_matching_rule(deny_rules, tool_name, tool_input)
+        if (deny_rule is None and tool_name == "process"
+                and str(tool_input.get("operation") or "").strip().lower() == "start"):
+            deny_rule = first_matching_rule(deny_rules, "bash", tool_input)
         if deny_rule is not None:
             detail = f"({deny_rule.content})" if deny_rule.content else ""
             return {
@@ -189,6 +192,17 @@ class PermissionChecker:
             ),
         }
 
+    @staticmethod
+    def _shell_assessment(tool_input: dict):
+        from nz_coder.tools.bash import _resolve_bash_workdir
+        cwd, error = _resolve_bash_workdir(tool_input.get("workdir"))
+        if error:
+            return None, error
+        return assess_shell_command(
+            str(tool_input.get("command") or ""), current_workdir(), command_cwd=cwd,
+            allow_package_installs=current_run_settings().allow_package_installs,
+        ), ""
+
     def _check_bash(
         self,
         tool_input: dict,
@@ -196,19 +210,14 @@ class PermissionChecker:
         ask_rules: list[PermissionRule],
     ) -> dict:
         command = tool_input.get("command", "")
-        escaped = external_workspace_path(command, current_workdir())
-        if escaped is not None:
-            return {
-                "behavior": "deny",
-                "reason": f"Blocked: path outside workspace ({escaped})",
-            }
-        classification = classify_bash(command)
-
-        if classification["dangerous"]:
-            return {"behavior": "deny", "reason": f"Blocked: {classification['reason']}"}
+        assessment, rejection = self._shell_assessment(tool_input)
+        rejection = rejection or assessment.rejection
+        if rejection:
+            return {"behavior": "deny", "reason": f"Blocked: {rejection}"}
+        classification = assessment.classification
 
         if self.mode == "plan":
-            if classification["mutating"] or not is_known_read_only_command(command):
+            if assessment.requires_approval or classification["mutating"] or not is_known_read_only_command(command):
                 return {
                     "behavior": "deny",
                     "reason": f"Plan mode: shell blocked ({classification['reason']})",
@@ -220,7 +229,8 @@ class PermissionChecker:
                 }
             return {"behavior": "allow", "reason": "Plan mode: read-only shell allowed"}
 
-        allow_rule = first_matching_rule(allow_rules, "bash", tool_input)
+        applicable_allows = [rule for rule in allow_rules if not assessment.requires_approval or rule.allows_unknown]
+        allow_rule = first_matching_rule(applicable_allows, "bash", tool_input)
         if allow_rule is not None:
             return {
                 "behavior": "allow",
@@ -238,6 +248,9 @@ class PermissionChecker:
                 "behavior": "ask",
                 "reason": "Untrusted workspace: shell execution needs approval",
             }
+
+        if assessment.requires_approval:
+            return {"behavior": "ask", "reason": f"Shell analysis incomplete: {assessment.paths.reason}"}
 
         if self.mode == "auto":
             return {"behavior": "allow", "reason": "auto mode"}
@@ -268,23 +281,17 @@ class PermissionChecker:
     ) -> dict:
         """Apply Bash-equivalent policy to start and explicit policy to stdin."""
         operation = str(tool_input.get("operation") or "").strip().lower()
+        requires_approval = False
         if operation == "start":
             command = str(tool_input.get("command") or "")
-            escaped = external_workspace_path(command, current_workdir())
-            if escaped is not None:
-                return {
-                    "behavior": "deny",
-                    "reason": f"Blocked: path outside workspace ({escaped})",
-                }
-            classification = classify_bash(command)
-            if classification["dangerous"]:
-                return {
-                    "behavior": "deny",
-                    "reason": f"Blocked: {classification['reason']}",
-                }
+            assessment, rejection = self._shell_assessment(tool_input)
+            rejection = rejection or assessment.rejection
+            if rejection:
+                return {"behavior": "deny", "reason": f"Blocked: {rejection}"}
+            requires_approval = assessment.requires_approval
             if self.mode == "plan":
                 return self._check_bash(
-                    {"command": command},
+                    {**tool_input, "command": command},
                     allow_rules,
                     ask_rules,
                 )
@@ -293,7 +300,8 @@ class PermissionChecker:
                 "behavior": "deny",
                 "reason": "Plan mode: process stdin blocked",
             }
-        allow_rule = first_matching_rule(allow_rules, "process", tool_input)
+        applicable_allows = [rule for rule in allow_rules if not requires_approval or rule.allows_unknown]
+        allow_rule = first_matching_rule(applicable_allows, "process", tool_input)
         if allow_rule is not None:
             return {
                 "behavior": "allow",
@@ -312,7 +320,7 @@ class PermissionChecker:
             }
         if operation == "start":
             return self._check_bash(
-                {"command": str(tool_input.get("command") or "")},
+                {**tool_input, "command": str(tool_input.get("command") or "")},
                 allow_rules,
                 ask_rules,
             )

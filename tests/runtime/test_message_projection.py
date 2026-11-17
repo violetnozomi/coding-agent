@@ -484,3 +484,41 @@ def test_provider_projection_tolerates_corrupt_mutation_generation_metadata():
         "[Successful write result omitted after the model observed it:"
     )
     assert "mutation generation 0" in projected[1]["content"]
+
+
+def _verification_history(failure, *, stage="targeted"):
+    return [
+        _assistant("old"),
+        {"role": "tool", "tool_call_id": "old", "content": failure,
+         "_nz_evidence_kind": "verification", "_nz_resource": stage,
+         "_nz_mutation_generation": 19, "_nz_verification_passed": False},
+        _assistant("new"),
+        {"role": "tool", "tool_call_id": "new", "content": "2 passed",
+         "_nz_evidence_kind": "verification", "_nz_resource": "targeted",
+         "_nz_mutation_generation": 21, "_nz_verification_passed": True},
+    ]
+
+
+def test_provider_projection_keeps_timeout_error_after_later_targeted_pass():
+    error = "Error: timeout must be between 1 and 120 seconds"
+    history = _verification_history(error)
+    before = deepcopy(history)
+    projected = project_provider_messages(history)
+    assert projected[1]["content"] == error
+    assert history == before
+
+
+def test_provider_projection_keeps_failed_verification_after_unrelated_pass():
+    error = "FAILED tests/test_full_project.py: requirements incomplete"
+    assert project_provider_messages(_verification_history(error))[1]["content"] == error
+
+
+def test_file_read_replacement_still_compacts_only_the_changed_file():
+    read = {"role": "tool", "tool_call_id": "read", "content": "old source",
+            "_nz_evidence_kind": "file_read", "_nz_resource": "src/app.py", "_nz_mutation_generation": 1}
+    history = [_assistant("read"), read, _assistant("write"), _write_result("write")]
+    stats = {}
+    projected = project_provider_messages(history, projection_stats=stats)
+    assert projected[1]["content"].startswith("[Earlier read of src/app.py omitted")
+    assert projected[-1]["content"] == "FULL DIFF"
+    assert read["content"] == "old source" and stats["superseded_file_reads"] == 1

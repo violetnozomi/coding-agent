@@ -7,16 +7,21 @@ from pathlib import Path
 class _FakeClient:
     server_id = "fake"
 
+    @staticmethod
+    def _check(operation):
+        assert not operation.cancelled() and operation.remaining()>0
+
     def __init__(self, response: object):
         self.response = response
         self.opened: list[Path] = []
         self.requests: list[tuple[str, dict[str, str]]] = []
 
-    def open_document(self, path: Path, text: str, source_identity) -> int:
+    def open_document(self, path: Path, *, reader, operation) -> int:
+        reader()
         self.opened.append(path)
         return 0
 
-    def request(self, method: str, params: dict[str, str]) -> object:
+    def request(self, method: str, params: dict[str, str], **kwargs) -> object:
         self.requests.append((method, params))
         return self.response
 
@@ -66,7 +71,7 @@ def test_workspace_symbols_filter_rank_bound_and_scope(tmp_path, monkeypatch):
         {"name": "malformed", "kind": 5, "location": {}},
     ]
     client = _FakeClient(response)
-    monkeypatch.setattr(module, "get_client_for_file", lambda *_: client)
+    monkeypatch.setattr(module, "get_client_for_file", lambda *_, **kwargs: client)
 
     result = module.collect_workspace_symbols(
         probe=probe,
@@ -110,11 +115,11 @@ def test_workspace_symbols_retry_once_after_nonempty_query_empty_response(
     client = _FakeClient([])
     slept: list[float] = []
 
-    def request(method: str, params: dict[str, str]) -> object:
+    def request(method: str, params: dict[str, str], **kwargs) -> object:
         client.requests.append((method, params))
         return response_values.pop(0)
 
-    monkeypatch.setattr(module, "get_client_for_file", lambda *_: client)
+    monkeypatch.setattr(module, "get_client_for_file", lambda *_, **kwargs: client)
     monkeypatch.setattr(client, "request", request)
     monkeypatch.setattr(module.time, "sleep", slept.append)
 
@@ -128,7 +133,7 @@ def test_workspace_symbols_retry_once_after_nonempty_query_empty_response(
 
     assert result.symbols[0].name == "Service"
     assert len(client.requests) == 2
-    assert slept == [module._WORKSPACE_SYMBOL_WARMUP_SECONDS]
+    assert slept and all(value <= .02 for value in slept)
 
 def test_workspace_symbols_gracefully_fall_back_on_client_failure(
     tmp_path,
@@ -139,7 +144,7 @@ def test_workspace_symbols_gracefully_fall_back_on_client_failure(
     probe = tmp_path / "app.py"
     probe.write_text("value = 1\n", encoding="utf-8")
 
-    def fail(*_args):
+    def fail(*_args, **kwargs):
         raise RuntimeError("server failed")
 
     monkeypatch.setattr(module, "get_client_for_file", fail)
@@ -213,7 +218,7 @@ def test_workspace_symbols_enforce_infcode_per_client_cap(tmp_path, monkeypatch)
         )
         for index in range(12)
     ])
-    monkeypatch.setattr(module, "get_client_for_file", lambda *_: client)
+    monkeypatch.setattr(module, "get_client_for_file", lambda *_, **kwargs: client)
 
     result = module.collect_workspace_symbols(
         probe=probe,

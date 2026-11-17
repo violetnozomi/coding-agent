@@ -29,6 +29,7 @@ _EVENT_TYPES = {
     "session.run.completed",
     "session.run.failed",
     "session.run.cancelled",
+    "session.run.settled",
     "session.tool.started",
     "session.tool.completed",
     "message.updated",
@@ -56,10 +57,11 @@ _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 class TerminalRunRenderer:
     """Render compact cards while treating SessionEventBus as authoritative."""
 
-    def __init__(self, console, streaming_renderer, detail_provider=None) -> None:  # noqa: ANN001
+    def __init__(self, console, streaming_renderer, detail_provider=None, *, terminal_source="runtime") -> None:  # noqa: ANN001
         self.console = console
         self.streaming_renderer = streaming_renderer
         self.detail_provider = detail_provider or (lambda: "compact")
+        self._terminal_source = terminal_source
         self._subscription: SessionSubscription | None = None
         self._started_at = 0.0
         self._tool_count = 0
@@ -82,6 +84,10 @@ class TerminalRunRenderer:
     def logical_text(self) -> str:
         """Return the renderer's authoritative Message/Part text projection."""
         return self._part_reducer.visible_text
+
+    @property
+    def interaction_run_id(self) -> str:
+        return self._run_reducer.state.interaction_run_id
 
     @property
     def _running_parts(self) -> dict[str, dict]:
@@ -166,6 +172,9 @@ class TerminalRunRenderer:
         if isinstance(event, dict):
             event = SessionEvent.from_dict(event)
         if event is None:
+            return
+        interaction_run_id = self._run_reducer.state.interaction_run_id
+        if interaction_run_id and event.run_id != interaction_run_id:
             return
         if event.event_id:
             if event.event_id in self._seen_event_ids:
@@ -315,7 +324,7 @@ class TerminalRunRenderer:
             self._refresh_status()
             return
         if event.type == "session.tool.completed":
-            call_id = str(properties.get("tool_call_id") or f"index-{properties.get('index')}")
+            call_id = str(properties.get("tool_call_id") or f"index-{properties.get('index', 0)}")
             if call_id in self._rendered_tool_ids:
                 return
             reduced = next((
@@ -330,21 +339,28 @@ class TerminalRunRenderer:
                     else {}
                 ),
                 **properties,
+                "tool_call_id": call_id,
             }
             self._pending_completed[call_id] = merged
             self._refresh_status()
+            return
+        if event.type == "session.run.settled":
+            if self._terminal_source == "settled":
+                self._pending_terminal = (str(properties.get("status") or "unknown"), "")
+            return
+        if self._terminal_source != "runtime":
             return
         if event.type == "session.run.completed":
             self._pending_terminal = (str(properties.get("status") or "completed"), "")
             return
         if event.type == "session.run.failed":
             self._pending_terminal = (
-                "failed",
+                str(properties.get("status") or "failed"),
                 public_error_message(properties.get("error")),
             )
             return
         if event.type == "session.run.cancelled":
-            self._pending_terminal = ("cancelled", "")
+            self._pending_terminal = (str(properties.get("status") or "cancelled"), "")
 
     def _sync_text_projection(self) -> None:
         """Project reducer text without treating an append buffer as truth."""
@@ -435,7 +451,6 @@ class TerminalRunRenderer:
             if call_id in self._rendered_tool_ids:
                 continue
             self._render_tool(properties)
-            self._rendered_tool_ids.add(call_id)
         errors, self._pending_errors = self._pending_errors, {}
         for message_id, error in errors.items():
             if message_id in self._rendered_error_ids:
@@ -517,6 +532,9 @@ class TerminalRunRenderer:
 
     def _render_tool(self, properties: dict) -> None:
         self._tool_count += 1
+        call_id = str(properties.get("tool_call_id") or "")
+        if call_id:
+            self._rendered_tool_ids.add(call_id)
         try:
             detail_mode = str(self.detail_provider())
         except Exception:
@@ -589,6 +607,18 @@ class TerminalRunRenderer:
             )
         )
 
+    def _summary_tool_count(self) -> int:
+        # 卡片进度仍供旧回调排空判断；摘要按调用身份合并，保留已开始的中断调用。
+        tool_ids = set(self._rendered_tool_ids)
+        state = self._run_reducer.state
+        for key, part in state.tool_parts.items():
+            info = state.assistant_messages.get(str(part.get("message_id") or ""), {})
+            owner = str(part.get("interaction_run_id") or info.get("interaction_run_id") or "")
+            if state.interaction_run_id and owner and owner != state.interaction_run_id:
+                continue
+            tool_ids.add(str(part.get("call_id") or part.get("id") or key))
+        return len(tool_ids)
+
     def _render_run_end(self, status: str, detail: str = "") -> None:
         if self._terminal_seen:
             return
@@ -598,13 +628,15 @@ class TerminalRunRenderer:
             printer = self.console.print
         elapsed = max(0.0, time.monotonic() - self._started_at)
         normalized = status.lower()
-        if normalized in {"completed", "completed_unverified"}:
+        if normalized == "completed":
             icon, style = "✓", "success"
+        elif normalized == "completed_unverified":
+            icon, style = "!", "warning"
         elif normalized == "cancelled":
             icon, style = "■", "info"
         else:
             icon, style = "✗", "error"
-        suffix = f" · {self._tool_count} tool(s) · {elapsed:.1f}s"
+        suffix = f" · {self._summary_tool_count()} tool(s) · {elapsed:.1f}s"
         line = f"{icon} Run {normalized.replace('_', ' ')}{suffix}"
         printer(f"[{style}]{line}[/{style}]", highlight=False)
         footer = self._assistant_footer()

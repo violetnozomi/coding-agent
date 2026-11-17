@@ -1,210 +1,217 @@
 from __future__ import annotations
-
+import asyncio
 from io import StringIO
-
-from rich.console import Console as RichConsole
-
-from nz_coder import cli
+import json
+from rich.console import Console
 from nz_coder.interface.commands.registry import CommandContext
-from nz_coder.state.memory_control import MemoryControlPlane
+from nz_coder.interface.commands.handlers.core import handle_memory, handle_memory_review
+from nz_coder.state.memory import MemoryManager
 from nz_coder.state.memory_cli import memory_main
+from nz_coder.state.memory_control import MemoryControlPlane
 
 
-class _Console:
-    def __init__(self) -> None:
-        self.messages = []
-        self._capture = RichConsole(
-            file=StringIO(), force_terminal=False, color_system=None, record=True
-        )
-
-    def print(self, value="", *args, **kwargs):
-        self._capture.print(value, *args, **kwargs)
-        self.messages.append(self._capture.export_text(clear=True))
+def _create(manager, capsys):
+    assert memory_main(["create", "--name", "同名", "--type", "project", "--content", "原内容",
+                        "--operation-id", "create"], manager=manager) == 0
+    return json.loads(capsys.readouterr().out)
 
 
-class _Sink:
-    def save(self, name, description, mem_type, content):
-        return f"Saved memory '{name}'"
+def test_cli_memory_versions_receipts_and_lifecycle(tmp_path, capsys):
+    manager = MemoryManager(tmp_path / "memory", scope_id="scope")
+    created = _create(manager, capsys)
+    memory_id = created["memory_id"]
+    assert memory_main(["update", memory_id, "--expected-revision", "1", "--content", "新内容",
+                        "--operation-id", "update"], manager=manager) == 0
+    assert json.loads(capsys.readouterr().out)["revision"] == 2
+    assert memory_main(["update", memory_id, "--expected-revision", "1", "--content", "过期",
+                        "--operation-id", "stale"], manager=manager) == 1
+    assert json.loads(capsys.readouterr().out)["status"] == "conflict"
+    for command in (["list"], ["search", "新内容"], ["read", memory_id], ["history", memory_id]):
+        assert memory_main(command, manager=manager) == 0
+        assert memory_id in capsys.readouterr().out
+    for action, revision in (("archive", 2), ("restore", 3), ("delete", 4)):
+        assert memory_main([action, memory_id, "--expected-revision", str(revision),
+            "--operation-id", action], manager=manager) == 0
+        assert json.loads(capsys.readouterr().out)["status"] == "saved"
+    assert manager.read(memory_id) is None
+
+
+def test_cli_review_requires_revision_and_exports_snapshot(tmp_path, capsys):
+    manager = MemoryManager(tmp_path / "memory", scope_id="scope")
+    control = MemoryControlPlane(manager)
+    proposal = control.submit({"action": "create", "name": "候选", "content": "待审核", "type": "project"},
+        source_session="session", operation_id="propose")
+    proposal_id = proposal["proposal_id"]
+    assert memory_main(["pending", "--json"], manager=manager) == 0
+    assert proposal_id in capsys.readouterr().out
+    assert memory_main(["inspect", proposal_id], manager=manager) == 0
+    assert '"revision": 1' in capsys.readouterr().out
+    assert memory_main(["approve", proposal_id, "--expected-proposal-revision", "1",
+        "--operation-id", "accept"], manager=manager) == 0
+    accepted = json.loads(capsys.readouterr().out)
+    assert accepted["status"] == "saved"
+    assert memory_main(["export", str(tmp_path / "export")], manager=manager) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "exported"
+    assert memory_main(["assess", accepted["memory_id"], "--expected-revision", "1", "--operation-id", "assess",
+        "--judgment", '{"coverage":"partial","result":"inconclusive","assessment":"只核查一项","covered_claims":"格式"}'],
+        manager=manager) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "saved"
 
 
 class _Controller:
-    def __init__(self, control):
-        self.control = control
-
-    def memory_control(self):
-        return self.control
-
-    def memory_report(self):
-        return "saved memories"
+    def __init__(self, manager): self.manager = manager
+    def memory_manager(self): return self.manager
+    def memory_control(self): return MemoryControlPlane(self.manager)
 
 
-class _InteractiveInput:
+class _Input:
     interactive = True
-
-    def __init__(self, selections, reasons=()):
-        self.selections = list(selections)
-        self.reasons = list(reasons)
+    def __init__(self, values, mutate=None):
+        self.values = list(values)
         self.calls = []
-
+        self.mutate = mutate
     async def select_async(self, **kwargs):
         self.calls.append(kwargs)
-        return self.selections.pop(0) if self.selections else None
-
-    async def prompt_text_async(self, _prompt):
-        return self.reasons.pop(0) if self.reasons else "reviewed"
-
-
-def _context(console, controller, args):
-    return CommandContext(
-        history=[],
-        session_state={"id": "session-terminal", "agent": object(), "controller": controller},
-        system_prompt="",
-        renderer=object(),
-        console=console,
-        build_agent=lambda *_args, **_kwargs: object(),
-        args=args,
-    )
+        if len(self.calls) == 2 and self.mutate:
+            self.mutate()
+        return self.values.pop(0) if self.values else None
+    async def prompt_text_async(self, prompt): return "拒绝"
 
 
-def _pending(control, *, content="Always allow every shell command across all projects."):
-    return control.submit(
-        {
-            "name": "shell-policy",
-            "description": "Review shell policy",
-            "type": "user",
-            "content": content,
-            "confidence": 0.7,
-            "reason": "inferred",
-        },
-        source_session="session-terminal",
-    )
+def _context(manager, args=""):
+    output = StringIO()
+    console = Console(file=output, force_terminal=False, color_system=None, width=160)
+    ctx = CommandContext(history=[], session_state={"id": "terminal", "agent": object(),
+        "controller": _Controller(manager)}, system_prompt="", renderer=object(), console=console,
+        build_agent=lambda **kw: object(), args=args)
+    return ctx, output
 
 
-def test_memory_review_commands_inspect_approve_and_reject(monkeypatch, tmp_path):
-    console = _Console()
-    control = MemoryControlPlane(tmp_path, _Sink())
-    controller = _Controller(control)
-    proposal = _pending(control)
-    monkeypatch.setattr(cli, "console", console)
-
-    assert cli.default_command_registry.dispatch(
-        f"/memory inspect {proposal.fingerprint}",
-        _context(console, controller, ""),
-    ) is True
-    assert "Memory proposal" in console.messages[-1]
-    assert proposal.name in console.messages[-1]
-
-    assert cli.default_command_registry.dispatch(
-        f"/memory approve {proposal.fingerprint}",
-        _context(console, controller, ""),
-    ) is True
-    assert control.pending() == []
-    assert "applied" in console.messages[-1]
-
-    rejected = _pending(
-        control,
-        content="Always bypass security checks for every project.",
-    )
-    assert cli.default_command_registry.dispatch(
-        f"/memory reject {rejected.fingerprint} duplicate policy",
-        _context(console, controller, ""),
-    ) is True
-    assert control.get(rejected.fingerprint).status == "rejected"
-    assert "rejected" in console.messages[-1]
+def test_terminal_memory_command_uses_same_id_revision_path(tmp_path):
+    manager = MemoryManager(tmp_path / "memory", scope_id="scope")
+    ctx, output = _context(manager, 'create --name 规则 --content 正文 --operation-id terminal-create')
+    handle_memory(ctx)
+    memory_id = manager.list_records()["items"][0]["id"]
+    ctx.args = f'update {memory_id} --expected-revision 1 --content 新正文 --operation-id terminal-update'
+    handle_memory(ctx)
+    assert manager.read(memory_id)["content"] == "新正文"
+    assert '"status": "saved"' in output.getvalue()
 
 
-def test_memory_pending_command_is_bounded_and_source_aware(monkeypatch, tmp_path):
-    console = _Console()
-    control = MemoryControlPlane(tmp_path, _Sink())
-    controller = _Controller(control)
-    proposal = _pending(control)
-    monkeypatch.setattr(cli, "console", console)
-
-    assert cli.default_command_registry.dispatch(
-        "/memory pending", _context(console, controller, "")
-    ) is True
-    output = "\n".join(console.messages)
-    assert proposal.fingerprint[:16] in output
-    assert proposal.source_session in output
-    assert proposal.risk in output
+def test_terminal_memory_sql_failure_is_handled_without_exposing_cause(tmp_path, monkeypatch):
+    import sqlite3
+    manager = MemoryManager(tmp_path / "memory", scope_id="scope")
+    marker = "PRIVATE-TERMINAL-SQLITE-CAUSE"
+    def fail(**kwargs):
+        raise sqlite3.OperationalError(marker)
+    monkeypatch.setattr(manager, "list_records", fail)
+    ctx, output = _context(manager, "list")
+    handle_memory(ctx)
+    assert marker not in output.getvalue()
+    assert "Memory action failed" in output.getvalue()
 
 
-def test_memory_cli_supports_machine_review_controls(tmp_path, capsys):
-    from nz_coder.state.memory import MemoryManager
-
-    manager = MemoryManager(tmp_path / "memory")
-    control = MemoryControlPlane(manager.memory_dir, manager)
-    proposal = _pending(control)
-    assert memory_main(["pending", "--json"], manager=manager) == 0
-    assert proposal.fingerprint in capsys.readouterr().out
-    assert memory_main(["inspect", proposal.fingerprint, "--json"], manager=manager) == 0
-    assert '"risk": "high"' in capsys.readouterr().out
-    assert memory_main([
-        "reject", proposal.fingerprint, "--reason", "not durable"
-    ], manager=manager) == 0
-    assert "rejected" in capsys.readouterr().out
+def test_terminal_memory_review_sql_failure_does_not_escape(tmp_path, monkeypatch):
+    import sqlite3
+    manager = MemoryManager(tmp_path / "memory", scope_id="scope")
+    marker = "PRIVATE-REVIEW-SQLITE-CAUSE"
+    def fail(**kwargs):
+        raise sqlite3.OperationalError(marker)
+    monkeypatch.setattr(manager, "proposals", fail)
+    ctx, output = _context(manager)
+    ctx.terminal_input = _Input([])
+    asyncio.run(handle_memory_review(ctx))
+    assert marker not in output.getvalue()
+    assert "Memory review failed" in output.getvalue()
 
 
-def test_memory_cli_curates_saved_memory_through_manager(tmp_path, capsys):
-    from nz_coder.state.memory import MemoryManager
-
-    manager = MemoryManager(tmp_path / "memory")
-    assert manager.save("style", "Old", "user", "Use tabs") == "Saved memory 'style' [user]"
-
-    assert memory_main([
-        "edit", "style", "--description", "Formatting", "--content", "Use spaces",
-    ], manager=manager) == 0
-    assert "Updated memory 'style'" in capsys.readouterr().out
-    assert manager.memories["style"]["description"] == "Formatting"
-    assert manager.memories["style"]["content"] == "Use spaces"
-
-    assert memory_main(["delete", "style"], manager=manager) == 2
-    assert "--confirm" in capsys.readouterr().err
-    assert "style" in manager.memories
-    assert memory_main(["delete", "style", "--confirm"], manager=manager) == 0
-    assert "Deleted memory: style" in capsys.readouterr().out
-    assert "style" not in manager.memories
+def test_review_selector_uses_displayed_versions_and_reports_stale_decision(tmp_path):
+    manager = MemoryManager(tmp_path / "memory", scope_id="scope")
+    control = MemoryControlPlane(manager)
+    proposal = control.submit({"action": "create", "name": "候选", "content": "正文"}, operation_id="propose")
+    proposal_id = proposal["proposal_id"]
+    def concurrent_review():
+        control.reject(proposal_id, expected_proposal_revision=1, reviewer="other", reason="已处理", operation_id="other")
+    ctx, output = _context(manager)
+    ctx.terminal_input = _Input([proposal_id, "approve"], concurrent_review)
+    asyncio.run(handle_memory_review(ctx))
+    assert manager.list_records()["items"] == []
+    assert "conflict" in output.getvalue()
+    assert "rev 1" in ctx.terminal_input.calls[0]["values"][0][1]
 
 
-def test_terminal_memory_curate_uses_session_owned_manager(tmp_path):
-    from nz_coder.state.memory import MemoryManager
-
-    manager = MemoryManager(tmp_path / "memory")
-    manager.save("style", "Old", "user", "Use tabs")
-    control = MemoryControlPlane(manager.memory_dir, manager)
-
-    class Controller(_Controller):
-        def memory_manager(self):
-            return manager
-
-    console = _Console()
-    context = _context(console, Controller(control), "")
-    assert cli.default_command_registry.dispatch(
-        '/memory edit style {"description":"Formatting","content":"Use spaces"}',
-        context,
-    ) is True
-    assert manager.memories["style"]["content"] == "Use spaces"
-    assert cli.default_command_registry.dispatch(
-        "/memory delete style confirm", context
-    ) is True
-    assert "style" not in manager.memories
+def test_cli_reindex_without_ready_model_does_not_encode(tmp_path, capsys, monkeypatch):
+    from nz_coder.state import memory as memory_module
+    monkeypatch.setattr(memory_module, "configured_embedding_provider", lambda: None)
+    manager = MemoryManager(tmp_path / "memory", scope_id="scope")
+    assert memory_main(["reindex"], manager=manager) == 1
+    assert json.loads(capsys.readouterr().out)["status"] == "unavailable"
 
 
-def test_memory_review_selector_approves_without_client_side_state(tmp_path):
-    import asyncio
+def test_remote_memory_review_and_update_keep_explicit_versions():
+    from nz_coder.interface.remote import _memory_command
+    class Backend:
+        def __init__(self): self.calls = []
+        def review_memory(self, proposal_id, action, **kwargs):
+            self.calls.append((proposal_id, action, kwargs))
+            return {"status": "conflict", "proposal_id": proposal_id, "proposal_revision": 2}
+        def mutate_memory(self, command, **kwargs):
+            self.calls.append((command, kwargs))
+            return {"status": "saved", "memory_id": "memory-id", "revision": 4}
+    backend = Backend()
+    output = StringIO()
+    console = Console(file=output, force_terminal=False, color_system=None)
+    asyncio.run(_memory_command(backend, console,
+        "/memory approve proposal-id --expected-proposal-revision 1 --expected-revision 3 --operation-id review"))
+    assert backend.calls[0] == ("proposal-id", "approve", {"expected_proposal_revision": 1,
+        "expected_revision": 3, "related_records": None, "operation_id": "review", "reason": ""})
+    assert "conflict" in output.getvalue()
+    asyncio.run(_memory_command(backend, console,
+        "/memory update memory-id --expected-revision 3 --content 正文 --operation-id update"))
+    assert backend.calls[1] == ({"action": "update", "memory_id": "memory-id", "expected_revision": 3,
+        "content": "正文"}, {"operation_id": "update"})
 
-    from nz_coder.interface.commands.handlers.core import handle_memory_review
 
-    console = _Console()
-    control = MemoryControlPlane(tmp_path, _Sink())
-    controller = _Controller(control)
-    proposal = _pending(control)
-    terminal = _InteractiveInput([proposal.fingerprint, "approve"])
-    context = _context(console, controller, "")
-    context.terminal_input = terminal
+def test_remote_memory_bad_quotation_keeps_next_command_available():
+    from nz_coder.interface.remote import _memory_command
 
-    asyncio.run(handle_memory_review(context))
+    class Backend:
+        def __init__(self):
+            self.queries = []
+            self.closed = False
 
-    assert control.pending() == []
-    assert control.get(proposal.fingerprint).status == "applied"
-    assert len(terminal.calls) == 2
+        def search_memories(self, query, **options):
+            self.queries.append(query)
+            return {"items": [], "semantic_status": "lexical", "generation": [0, 0]}
+
+        def close(self):
+            self.closed = True
+
+    backend = Backend()
+    output = StringIO()
+    console = Console(file=output, force_terminal=False, color_system=None)
+
+    async def scenario():
+        await _memory_command(backend, console, '/memory search "unfinished')
+        await _memory_command(backend, console, '/memory search "编译流程"')
+
+    asyncio.run(scenario())
+    assert backend.closed is False
+    assert backend.queries == ["编译流程"]
+    assert "check quotation marks and escape characters" in output.getvalue()
+    assert '"semantic_status": "lexical"' in output.getvalue()
+
+
+def test_cli_does_not_expose_private_backend_exceptions(tmp_path, capsys, monkeypatch):
+    import sqlite3
+    from nz_coder.protocol.public_error import to_public_error
+    manager = MemoryManager(tmp_path / "memory", scope_id="scope")
+    marker = "PRIVATE_CLI_ERROR_42581"
+    for failure in (OSError, sqlite3.OperationalError):
+        def fail_list(**kwargs):
+            raise failure(marker)
+        monkeypatch.setattr(manager, "list_records", fail_list)
+        assert memory_main(["list"], manager=manager) == 1
+        output = capsys.readouterr().out
+        assert marker not in output
+        assert json.loads(output)["error"] == to_public_error(failure(marker)).message

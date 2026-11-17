@@ -97,6 +97,22 @@ def test_review_feedback_is_not_new_user_authority():
             [("REQUIREMENTS.md", "task_reference", "task_spec")],
         ),
         (
+            "Update app.js and README.md as required by requirements.md",
+            [
+                ("app.js", "mutation", ""),
+                ("README.md", "mutation", ""),
+                ("requirements.md", "task_reference", "task_spec"),
+            ],
+        ),
+        (
+            "Update app.js as required by requirements.md and update requirements.md",
+            [
+                ("app.js", "mutation", ""),
+                ("requirements.md", "task_reference", "task_spec"),
+                ("requirements.md", "mutation", ""),
+            ],
+        ),
+        (
             "According to SPEC.md, change api.py",
             [("SPEC.md", "task_reference", "task_spec"), ("api.py", "mutation", "")],
         ),
@@ -475,7 +491,7 @@ def test_reference_and_mutation_dual_role_preserved(tmp_path):
     )
     assert ref.required and ref.authority == "task_spec"
     contract = derive_task_contract(
-        task, acceptance_command="python -m pytest -q tests", workspace=tmp_path
+        task, acceptance_commands=("python -m pytest -q tests",), workspace=tmp_path
     )
     assert any("SPEC.md" in r.expected_artifacts for r in contract.requirements)
 
@@ -578,7 +594,7 @@ def test_real_sidecar_cache_invalidated_by_reference_identity(tmp_path):
             )
 
     hook = create_sidecar_verifier_hook(
-        SimpleNamespace(),
+        SimpleNamespace(_model_gateway_observer_for_run=lambda: None),
         ResolvedVerifierProvider(
             Provider(), object(), "offline", "offline", "inherit-main"
         ),
@@ -721,3 +737,15 @@ def test_lifecycle_resume_does_not_capture_current_rules(
                 assert refs == []
     finally:
         env.close()
+
+
+def test_read_then_complete_project_captures_readonly_spec(tmp_path):
+    from nz_coder.runtime.verification.reference_evidence import capture_references
+    prompt = "请阅读当前目录 requirements.md，从零完成其中的 TaskBoard Lite 项目。先创建 taskboard/__init__.py，然后创建 taskboard/__main__.py。"
+    text = "# 需求\n实现全部增删改查和持久化。\n"
+    (tmp_path / "requirements.md").write_text(text)
+    references, omitted = capture_references(prompt, tmp_path)
+    assert omitted == 0 and len(references) == 1
+    assert references[0].path == "requirements.md"
+    assert references[0].text == text and references[0].complete
+    assert references[0].content_hash == hashlib.sha256(text.encode()).hexdigest()

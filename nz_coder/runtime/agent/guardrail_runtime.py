@@ -147,6 +147,22 @@ class ProductionGuardrailRuntime:
             elif action == "escalate":
                 raise GuardrailEscalateError(guardrail.name, "tool", verdict["reason"])
 
+        # 必须检查改写后的参数，且早于 auto 分类器和人工审批。
+        function = current.get("function", {})
+        name = str(function.get("name") or "unknown")
+        tool_input = parse_tool_arguments(function.get("arguments", {}))
+        if name == "bash" and tool_input is not None:
+            from nz_coder.runtime.core.run_settings import current_run_settings
+            from nz_coder.tools.bash import validate_bash_timeout
+
+            error = validate_bash_timeout(tool_input.get("timeout"), current_run_settings().bash_timeout)
+            if error:
+                return current, ToolExecutionResult(
+                    name=name, tool_input=tool_input, output=error,
+                    executed=False, dispatch_failed=True, command_failed=False,
+                    is_write=False, permission_denied=False,
+                )
+
         if not _include_auto:
             return current, None
         controller = getattr(host, "auto_mode_controller", None)
@@ -155,11 +171,15 @@ class ProductionGuardrailRuntime:
         if controller is None or context is None:
             return current, None
 
-        function = current.get("function", {})
-        name = str(function.get("name") or "unknown")
-        tool_input = parse_tool_arguments(function.get("arguments", {}))
         if tool_input is None:
             return current, None
+        from nz_coder.tool_platform.permissioning.command_authorization import (
+            command_authorization_identity, record_permission_approval,
+        )
+        try:
+            approval_identity = command_authorization_identity(name, tool_input)
+        except (OSError, ValueError, TypeError, RuntimeError):
+            approval_identity = None
         admission = await controller.admit(
             context,
             name,
@@ -172,7 +192,9 @@ class ProductionGuardrailRuntime:
             return safe_call, ToolExecutionResult(
                 name=name,
                 tool_input={},
-                output="Denied: tool invocation rejected by policy.",
+                output=(admission.reason if admission.source == "interaction_failure" else
+                        "Permission approval rejected; this action was not executed." if admission.source == "human" else
+                        "Denied: tool invocation rejected by policy."),
                 executed=False,
                 dispatch_failed=True,
                 command_failed=False,
@@ -182,10 +204,18 @@ class ProductionGuardrailRuntime:
                     "guardrail": "auto_mode",
                     "agent": host.current_agent_name,
                     "source": admission.source,
+                    "permission_source": (
+                        "interaction_failure" if admission.source == "interaction_failure" else
+                        "approval_reply" if admission.source == "human" else "policy"
+                    ),
+                    "permission_reason": admission.reason_code,
                     "reason_code": admission.reason_code,
                     "action_digest": admission.action_digest,
                 },
             )
+        if admission.source != "disabled" and approval_identity is not None:
+            record_permission_approval(context.permissions, name, tool_input,
+                source=admission.source, expected_identity=approval_identity)
         return current, None
 
     async def before_tool_sync(

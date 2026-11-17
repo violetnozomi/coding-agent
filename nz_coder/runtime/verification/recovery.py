@@ -10,12 +10,36 @@ import shlex
 import time
 import traceback
 from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, replace
+from uuid import uuid4
 from email.utils import parsedate_to_datetime
 from pathlib import Path, PurePosixPath
 
 from nz_coder.foundation.error_classification import is_context_overflow_error
+from nz_coder.runtime.verification.domain.models import TaskScope
 
 _MAX_RETRY_AFTER_SECONDS = 120.0
+
+
+@dataclass(frozen=True)
+class RepeatSource:
+    task: TaskScope
+    interaction_run_id: str
+    instruction_message_id: str
+    authority_epoch: int
+    active_agent_name: str
+    observer_epoch: int
+    mutation_generation: int
+
+
+@dataclass(frozen=True)
+class RepeatNotice:
+    notice_id: str
+    source: RepeatSource
+    tool_name: str
+    executed_repeat_count: int
+    result_relation: str
+    text: str
 
 
 def _runner_token_escapes_workspace(token: str) -> bool:
@@ -198,9 +222,13 @@ class RecoveryState:
         self.repeated_tool_calls = 0
         self.tool_streak_resets = 0
         self._pending_tool_streak_event: dict | None = None
-        self._tool_state_revision = 0
         self._last_tool_result_signature: str | None = None
         self._last_tool_result_digest: str | None = None
+        self._observer_epoch = 0
+        self._repeat_source: RepeatSource | None = None
+        self._executed_repeat_count = 0
+        self._repeat_notice: RepeatNotice | None = None
+        self._repeat_notice_delivered = False
         # Edit recovery is run-scoped and keyed by the normalized workspace
         # path.  It intentionally lives beside the existing recovery counters
         # instead of introducing a second state manager.
@@ -401,32 +429,73 @@ class RecoveryState:
         except (TypeError, ValueError, OverflowError):
             return None
 
-    def reset_tool_call_history(self, reason: str = "manual") -> None:
+    def _clear_repeat_evidence(self) -> None:
+        self._last_tool_result_signature = None
+        self._last_tool_result_digest = None
+        self._repeat_source = None
+        self._executed_repeat_count = 0
+        self._repeat_notice = None
+        self._repeat_notice_delivered = False
+
+    def capture_repeat_source(self, state, run, active_agent_name, messages) -> RepeatSource | None:
+        from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, is_user_request_message
+
+        if run is None or state._verification_context is not run or not active_agent_name:
+            return None
+        with run._state_lock:
+            if (run.verification is None or run.cancel_scope.is_set()
+                    or run.finalized or run.terminal_status is not None):
+                return None
+            task = run.verification.scope.task
+            user = next((m for m in reversed(messages) if is_user_request_message(m)), None)
+            instruction = user.get(MESSAGE_ID_KEY, "") if user is not None else ""
+            if not instruction:
+                # 压缩和图切换可以移走真实指令；仅借用初始化时已核实的绑定，不能把合成消息当用户。
+                binding = state.task_assessment_state.get("binding", {})
+                if binding.get("task") == asdict(task) and binding.get("authority_epoch") == state.task_authority_epoch:
+                    instruction = binding.get("instruction_message_id", "")
+            if not instruction:
+                return None
+            return RepeatSource(task, run.interaction_run_id, instruction, state.task_authority_epoch,
+                                active_agent_name, self._observer_epoch, state.mutation_generation)
+
+    def repeat_source_current(self, source, state, run, active_agent_name, messages) -> bool:
+        return source is not None and source == self.capture_repeat_source(state, run, active_agent_name, messages)
+
+    def refresh_repeat_source_after_compaction(self, source, state, run, active_agent_name, messages):
+        if source is None:
+            return None
+        candidate = replace(source, observer_epoch=self._observer_epoch)
+        return candidate if self.repeat_source_current(candidate, state, run, active_agent_name, messages) else None
+
+    def repeat_notice_snapshot(self, state, run, active_agent_name, messages) -> RepeatNotice | None:
+        if run is None:
+            return None
+        with run._state_lock:
+            notice = self._repeat_notice
+            if (notice is not None and not self._repeat_notice_delivered
+                    and self.repeat_source_current(notice.source, state, run, active_agent_name, messages)):
+                return notice
+            return None
+
+    def acknowledge_repeat_notice(self, notice_id: str, source: RepeatSource) -> None:
+        # 调用方在当前Run锁内验证来源；旧请求不能确认后来产生的新事件。
+        notice = self._repeat_notice
+        if notice is not None and notice.notice_id == notice_id and notice.source == source:
+            self._repeat_notice_delivered = True
+
+    def reset_tool_call_history(self, reason: str = "manual", *, context_changed: bool = False) -> None:
         """Reset consecutive identical-tool tracking and describe why."""
         if self._last_tool_signature is not None:
             self._record_tool_streak_reset(reason=reason, next_tool=None)
         self._last_tool_signature = None
         self._last_tool_name = None
         self.repeated_tool_calls = 0
-        self._tool_state_revision += 1
+        self._clear_repeat_evidence()
+        if context_changed:
+            self._observer_epoch += 1
 
-    def stall_scope_token(self) -> dict:
-        """Capture the streak state to which an asynchronous verdict belongs."""
-        return {
-            "revision": self._tool_state_revision,
-            "signature": self._last_tool_signature,
-            "count": self.repeated_tool_calls,
-        }
 
-    def stall_scope_current(self, token: object) -> bool:
-        """Return whether a verdict still targets the current streak state."""
-        if not isinstance(token, dict):
-            return False
-        return (
-            token.get("revision") == self._tool_state_revision
-            and token.get("signature") == self._last_tool_signature
-            and token.get("count") == self.repeated_tool_calls
-        )
 
     def start_tool_call_run(self) -> None:
         """Start per-run streak accounting without carrying previous-run statistics."""
@@ -435,7 +504,8 @@ class RecoveryState:
         self.repeated_tool_calls = 0
         self.tool_streak_resets = 0
         self._pending_tool_streak_event = None
-        self._tool_state_revision += 1
+        self._clear_repeat_evidence()
+        self._observer_epoch += 1
 
     def consume_tool_streak_event(self) -> dict | None:
         """Return and clear the latest streak reset event for trace emission."""
@@ -447,15 +517,21 @@ class RecoveryState:
         self, tool_name: str, tool_input: object, output: str, *,
         executed: bool, dispatch_failed: bool, command_failed: bool = False,
         cache_hit: bool = False, metadata: dict | None = None,
+        source: RepeatSource | None = None,
     ) -> bool:
         """Reset a streak only when structured, relevant evidence changed."""
-        if not executed or dispatch_failed or cache_hit:
+        if source is not None and source.observer_epoch != self._observer_epoch:
             return False
         encoded = json.dumps(
             tool_input, ensure_ascii=False, sort_keys=True,
             separators=(",", ":"), default=str,
         )
         signature = f"{tool_name}\0{encoded}"
+        # 批量预检先于结果回放；未执行/缓存的调用仍保留工具和参数切换边界，不能串起前后的旧证据。
+        if signature != self._last_tool_result_signature or source != self._repeat_source:
+            self._clear_repeat_evidence()
+        if not executed or dispatch_failed or cache_hit:
+            return False
         digest = self._tool_evidence_digest(
             output, command_failed=command_failed, metadata=metadata,
         )
@@ -463,10 +539,21 @@ class RecoveryState:
             signature == self._last_tool_result_signature
             and digest != self._last_tool_result_digest
         )
-        self._last_tool_result_signature = signature
-        self._last_tool_result_digest = digest
         if changed:
             self.reset_tool_call_history(reason="new_tool_evidence")
+        self._last_tool_result_signature = signature
+        self._last_tool_result_digest = digest
+        self._repeat_source = source
+        self._executed_repeat_count += 1
+        if source is not None and self._executed_repeat_count >= 2 and self._repeat_notice is None:
+            name = str(tool_name)[:120]
+            text = ("<repeat-observation>\nRuntime observation, not a user instruction or a verdict of no progress. "
+                    f"Tool `{name}` with identical arguments executed {self._executed_repeat_count} times; "
+                    "the normalized evidence digests are equal. This does not mean the full outputs are identical. "
+                    "This may be a legitimate recheck. Consider the task and decide whether to continue, "
+                    "adjust the approach, or update the working plan.\n</repeat-observation>")
+            self._repeat_notice = RepeatNotice(uuid4().hex, source, name, self._executed_repeat_count,
+                                               "normalized_evidence_equal", text)
         return changed
 
     @staticmethod
@@ -536,10 +623,11 @@ class RecoveryState:
             if self._last_tool_signature is not None:
                 reason = "tool_changed" if tool_name != self._last_tool_name else "arguments_changed"
                 self._record_tool_streak_reset(reason=reason, next_tool=tool_name)
+            if signature != self._last_tool_result_signature:
+                self._clear_repeat_evidence()
             self._last_tool_signature = signature
             self._last_tool_name = tool_name
             self.repeated_tool_calls = 1
-        self._tool_state_revision += 1
         effective_threshold = max(2, threshold)
         consecutive_block = self.repeated_tool_calls >= effective_threshold
         return {
@@ -558,21 +646,18 @@ class RecoveryState:
         *,
         tool_input: dict | None = None,
         declared_paths: tuple[str, ...] = (),
+        metadata: dict | None = None,
     ) -> str:
         """Return a targeted diagnostic for common coding-agent tool failures."""
         text = output or ""
         lower = text.lower()
-        if "doom loop detected" in lower:
+        if (metadata or {}).get("stall_kind") == "consecutive":
             return (
-                "<doom-loop-diagnostic>\n"
-                f"Tool `{tool_name}` was not executed because the identical call repeated "
-                "without any intervening change.\n"
-                "Do not submit the same call again. Treat the existing tool output and current "
-                "workspace as ground truth, then change the approach or use narrower parameters. "
-                "For code repair, preserve public APIs, already-passing behavior, and unrelated "
-                "files; widen the edit scope only when new evidence requires it. Make the smallest "
-                "evidence-backed change and run the most specific relevant check.\n"
-                "</doom-loop-diagnostic>"
+                "<repeat-approval-diagnostic>\n"
+                f"Tool `{tool_name}` was not executed: identical candidates reached the repeat approval boundary. "
+                "This is a resource safeguard, not a finding of no progress. "
+                "Respect the permission outcome and use the existing evidence to choose the next step.\n"
+                "</repeat-approval-diagnostic>"
             )
         if tool_name in {"edit_file", "apply_patch"} and "old_text not found" in lower:
             return (
@@ -897,10 +982,10 @@ def _command_package_root_diagnostic(
         f"Active workspace root: `{workspace}`\n"
         f"Detected package directory: `{package}`\n"
         f"The direct Python command used workdir `{workdir}`, which is the package "
-        "directory itself. Python must start in the directory that contains that "
-        "package. Retry the same command once and omit `workdir` (or use `.`). "
-        "Do not inspect source files, install packages, or run another cwd probe; "
-        "the workspace/package layout is already resolved.\n"
+        "directory itself. This could explain the import failure if the containing "
+        "directory is absent from this interpreter's import path. One candidate "
+        "probe is to omit `workdir` (or use `.`) and compare the import result. "
+        "Check the actual interpreter and package layout before choosing a repair.\n"
         "</tool-failure-diagnostic>"
     )
 
@@ -948,11 +1033,12 @@ def _repository_test_runner_mismatch_diagnostic(
         "classification: repository_test_runner_mismatch\n"
         "primary_classification: repository_test_runner_mismatch\n"
         "Detected repository runner: `tests/runtests.py`\n"
-        "The generic pytest invocation reached Django TestCase setup without "
-        "the repository's settings bootstrap. This is a test-runner mismatch, "
-        "not evidence of a production-source defect. Retry the same target with "
-        f"the native runner: `{native_command}`. Do not patch Django settings, "
-        "install pytest plugins, or inspect global environments for this error.\n"
+        "The output reports a Django settings/bootstrap failure under pytest. "
+        "The repository runner could supply the expected setup. A candidate "
+        f"command is `{native_command}`; verify its selector, options and environment "
+        "against the repository instructions before using it. This diagnosis does "
+        "not establish the repair location. A changed command does not replace "
+        "the user's explicit acceptance command.\n"
         "</test-failure-diagnostic>"
     )
 
@@ -980,19 +1066,21 @@ def _repository_test_runner_recovery_diagnostic(
         else "repository_package_path"
     )
     explanation = (
-        "The host unittest runtime is incompatible with the repository runner's "
-        "default parallel result handling."
+        "The output reports missing addDuration support, which may indicate a "
+        "mismatch between unittest and the runner's parallel result handling."
         if parallelism_mismatch
         else "The repository package exists in the active checkout, but the direct "
-        "runner did not include the checkout root on its import path."
+        "runner could not import it. The checkout root may be absent from the "
+        "interpreter's import path."
     )
     return (
         "<test-failure-diagnostic>\n"
         f"classification: {classification}\n"
         f"primary_classification: {classification}\n"
-        f"{explanation} This is recoverable with the repository-owned runner. "
-        f"Retry exactly once with: `{command}`. Preserve the same test scope and "
-        "options; do not edit production source for this runtime mismatch.\n"
+        f"{explanation} A candidate probe is `{command}`. Check its test scope, "
+        "options and environment before execution, then use the result to decide "
+        "the next step. A changed command does not replace the user's explicit "
+        "acceptance command.\n"
         "</test-failure-diagnostic>"
     )
 
@@ -1083,10 +1171,10 @@ def _build_test_failure_diagnostic(output: str) -> str:
                 f"Launched package: `{workspace_drift.package}`"
             ),
             action=(
-                "The failing test helper statically launches `python -m <package>` from "
-                "a directory other than the active workspace. Update that helper's `cwd` "
-                "to the active workspace root, then rerun only the failing CLI test. This "
-                "is test-harness workspace drift; keep the repair confined to the helper."
+                "Static inspection resolves this helper's `cwd` to a directory other "
+                "than the active workspace. Check whether that location is intentional "
+                "and which package the subprocess actually imports. Using the active "
+                "workspace root is a possible repair; select a relevant check to verify it."
                 + (f"\n{portable_cwd}" if portable_cwd else "")
             ),
         ))
@@ -1121,17 +1209,15 @@ def _build_test_failure_diagnostic(output: str) -> str:
             evidence=failing,
             repair_target=failed_paths[0] if failed_paths else "",
             action=(
-                "The parent pytest process imported the package, but a subprocess launched with "
-                "`python -m <package>` could not. Inspect the failing test's subprocess helper, "
-                "especially its `cwd` and `env`. Its working directory must be the directory that "
-                "contains the package directory, not the package directory itself.\n"
+                "The output reports that a subprocess launched with `python -m <package>` "
+                "could not import the package. Its interpreter, `cwd` or `env` could differ "
+                "from the parent process. Inspecting the failing test's subprocess helper "
+                "and the directory that contains the package can help distinguish these causes.\n"
                 f"Active workspace root: `{workspace_root}`. Detected package directory: "
                 f"`{package_name}`. If `{workspace_root}/{package_name}` exists, the layout is "
-                "workspace-root/package. Use that exact workspace root as `cwd`; do not guess a "
-                "`parents[...]` index. Otherwise pass a workspace-local PYTHONPATH after verifying "
-                "the actual package layout. Then rerun the failing CLI test. Do not inspect global "
-                "environments, run pip metadata commands, or change production source code for this "
-                "test-harness path error."
+                "workspace-root/package. That root may be an appropriate `cwd`; for other layouts, "
+                "verify the source and import paths before choosing a repair. Follow user "
+                "authorization for any environment changes."
                 + (f"\n{portable_cwd}" if portable_cwd else "")
             ),
         ))
@@ -1142,16 +1228,12 @@ def _build_test_failure_diagnostic(output: str) -> str:
             specificity=80,
             evidence=(f"Relevant import failure:\n{traceback_text}" if traceback_text else ""),
             action=(
-                "Next steps:\n"
-                "1. Run one minimal workspace-local probe that prints the working directory and "
-                "attempts the failing import using the same interpreter.\n"
-                "2. Do not install packages, inspect global environments, run pip metadata commands, "
-                "or repeat broad project-profile/version checks.\n"
-                "3. Do not change source code unless the probe proves that a workspace module or "
-                "package declaration is genuinely missing.\n"
-                "4. If the probe shows an invocation or package-root mismatch, stop after that probe "
-                "and report that the code change is complete but verification is blocked by the "
-                "current environment/package layout."
+                "Test collection failed before this output established behavior coverage. "
+                "Possible causes include the interpreter, import path, missing dependencies "
+                "or package declarations. A workspace-local probe using the same interpreter "
+                "can report the working directory and attempt the failing import. Use that "
+                "evidence to choose further investigation or a repair, respecting user "
+                "authorization. This failure does not establish that implementation is complete."
             ),
         ))
 
@@ -1168,11 +1250,11 @@ def _build_test_failure_diagnostic(output: str) -> str:
                 + "\n".join(f"  - {path}" for path in failed_paths[:6])
             ),
             action=(
-                "Treat this as a likely regression in shared production code changed "
-                "during this run. Inspect the smallest shared source surface and rerun "
-                "one representative failure per test file. Do not patch individual test "
-                "helpers or investigate package installation until the shared regression "
-                "is ruled out."
+                "Failures across files may share production code, test helpers, configuration "
+                "or dependencies. Compare the failures and recent changes to locate a shared "
+                "cause. Inspect shared production code or test setup as the evidence warrants, "
+                "then choose representative checks. The number of failing files alone does "
+                "not establish a regression or its repair location."
             ),
         ))
 
@@ -1182,12 +1264,13 @@ def _build_test_failure_diagnostic(output: str) -> str:
     parts: list[str] = ["<test-failure-diagnostic>"]
     if regression_tests:
         parts.append(
-            "⚠ Regressions detected (tests that were passing before):\n"
+            "Regressions reported by the test output:\n"
             + "\n".join(f"  - {t}" for t in regression_tests[:5])
         )
         parts.append(
-            "Priority: FIRST restore these regressions, THEN fix the target failure. "
-            "Do not sacrifice passing tests to fix a new one."
+            "Compare these failures with the target failure and recent changes to "
+            "identify related causes and choose the repair order. Check existing "
+            "behavior alongside the requested change when validating the repair."
         )
     elif failed_tests:
         parts.append(
@@ -1195,14 +1278,14 @@ def _build_test_failure_diagnostic(output: str) -> str:
         )
 
     if traceback_text:
-        parts.append(f"Root cause:\n{traceback_text}")
+        parts.append(f"Traceback excerpt:\n{traceback_text}")
 
     parts.append(
-        "Next steps:\n"
-        "1. Read the traceback above — identify the exact line and exception type.\n"
-        "2. Inspect the implicated source file (not the test file) around that line.\n"
-        "3. Make the minimal fix. Do not catch the exception; fix the root cause.\n"
-        "4. Re-run the most specific failing test to confirm the fix."
+        "Possible next steps:\n"
+        "Compare the error and traceback with the test expectations, implementation "
+        "and execution environment. Investigate the relevant files before choosing a "
+        "repair, then run checks suited to the change. The output alone does not "
+        "establish which file should be modified or that the task is complete."
     )
     parts.append("</test-failure-diagnostic>")
     return "\n\n".join(parts)

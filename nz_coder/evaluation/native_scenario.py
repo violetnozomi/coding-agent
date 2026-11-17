@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,9 +11,17 @@ from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunOptions, RunRequest
 from nz_coder.runtime.core.run_context import RunContext
 from nz_coder.runtime.core.runner_context import RunnerExecutionContext
+from nz_coder.runtime.conversation.message_projection import project_provider_messages
 from nz_coder.runtime.conversation.model_result import LLMResult
+from nz_coder.runtime.conversation.request_snapshot import FrozenRequestSnapshot, message_version
 from nz_coder.runtime.execution.runner import AgentRunner
-from nz_coder.runtime.session.model import Session
+from nz_coder.runtime.execution.runtime_state import RuntimeState
+from nz_coder.runtime.agent.task_intent import initialize_task_assessment
+from nz_coder.runtime.verification.domain.models import TaskScope, RunScope, WorkspaceVersion
+from nz_coder.runtime.verification.domain.service import VerificationDomain
+from nz_coder.runtime.session.runtime import SessionRuntime
+from nz_coder.runtime.session.store import EphemeralSessionStore
+from nz_coder.runtime.verification.recovery import RecoveryState
 
 
 class _LongModel:
@@ -65,24 +74,14 @@ class _Tools:
         return "continue"
 
 
-class _Sessions:
+class _Sessions(SessionRuntime):
     def __init__(self) -> None:
+        super().__init__(EphemeralSessionStore())
         self.context: RunContext | None = None
 
-    async def open(self, request: RunRequest) -> RunContext:
-        session = Session.create(
-            request.session_id, request.messages, workspace=request.workspace,
-        )
-        session.begin_run()
-        self.context = RunContext(request, session, request.agent.name)
+    async def open(self, request: RunRequest, *, session_lease=None) -> RunContext:
+        self.context = await super().open(request, session_lease=session_lease)
         return self.context
-
-    async def checkpoint(self, _context, _status) -> None:
-        return None
-
-    async def finalize(self, context, status) -> None:
-        context.finish(status)
-        context.finalized = True
 
 
 class _Context:
@@ -180,8 +179,24 @@ async def _value(value):
     return value
 
 
+@dataclass(frozen=True)
+class _ScenarioToolContext:
+    assessment_scope: object | None = None
+    working_plan_scope: object | None = None
+    repeat_source: object | None = None
+
+
 def _execution_context(run_context: RunContext, services: RuntimeServices):
     sequence = 0
+    state = RuntimeState()
+    state._verification_context = run_context
+    run_context.attach_verification(VerificationDomain(
+        lock=run_context._state_lock,
+        scope=RunScope(TaskScope(run_context.session.session_id, "scenario", str(run_context.request.workspace)),
+                       run_context.interaction_run_id, run_context.active_agent),
+        version=WorkspaceVersion(0, 0, 0),
+    ))
+    initialize_task_assessment(state, run_context, run_context.transcript, pure_continuation=False)
 
     def new_message_part(_turn: int) -> dict:
         nonlocal sequence
@@ -199,16 +214,31 @@ def _execution_context(run_context: RunContext, services: RuntimeServices):
     async def finalize(messages, status, *_args, **kwargs):
         return await services.lifecycle.finalize(run_context, messages, status, **kwargs)
 
+    def freeze_request(messages: list) -> FrozenRequestSnapshot:
+        # 受控基准也走真实请求快照和历史投影；这里没有动态指令或工具 schema。
+        return FrozenRequestSnapshot(
+            system=run_context.request.agent.instructions,
+            dynamic="",
+            instruction_reminder="",
+            source_version=message_version(messages),
+            project_history=project_provider_messages,
+            _tools=(),
+        )
+
     return RunnerExecutionContext(
         session_id=run_context.session.session_id,
-        runtime_state=run_context,
+        runtime_state=state,
         execution=SimpleNamespace(
-            context=lambda: object(), model=lambda: object(), tools=lambda: object(),
+            context=lambda: SimpleNamespace(freeze_request=freeze_request),
+            model=lambda: SimpleNamespace(working_memory_allowed=lambda: False),
+            tools=lambda: _ScenarioToolContext(), recovery=RecoveryState(),
         ),
         lifecycle=SimpleNamespace(
             initialize=lambda messages, stream: services.lifecycle.initialize(
                 run_context, messages, stream,
             ), finalize=finalize,
+            settle_session_checkpoints=_none,
+            publish_terminal=lambda _error=None: None,
         ),
         policy=SimpleNamespace(
             run_input_guardrails=lambda _messages: _none(),
@@ -220,15 +250,22 @@ def _execution_context(run_context: RunContext, services: RuntimeServices):
             return_from_as_tool=lambda _messages, _content: {},
             terminal_content=lambda content, _messages: _value(content),
             verify_completion=lambda _messages, status, _content: _value(status),
+            prepare_completion=lambda: None,
+            verification_status=lambda: run_context.verification.snapshot().to_dict(),
+            # 受控情景没有真实交付评审；保留域裁决的未验证状态。
+            settle_completion=lambda _messages, _content, **_kwargs: _value(
+                run_context.verification.snapshot().assess_completion("completed").status),
         ),
-        planning=SimpleNamespace(generate=lambda _messages: _none(), replan=lambda: _none()),
+        planning=SimpleNamespace(generate=lambda _messages: _none()),
         control=SimpleNamespace(
             has_queued_followup=lambda: False,
+            current_agent_name=lambda: run_context.active_agent,
             drain_background_messages=lambda _messages: None,
             has_agent_call_stack=lambda: False,
             notify_agent_switched=lambda _transition: _none(),
             persist_runtime_state=lambda **_kwargs: None,
             stop_hook_reason=lambda: "",
+            structured_output=lambda: None,
         ),
         hooks=SimpleNamespace(
             on_turn_start=lambda _messages: None, on_pre_send=lambda _messages: None,

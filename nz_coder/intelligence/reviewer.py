@@ -57,13 +57,6 @@ def _count(mapping: dict, key: str) -> int:
         return 0
 
 
-def _resolve_task_mode(evidence: dict, runtime: dict, explicit: str | None) -> str:
-    for value in (explicit, evidence.get("task_mode"), runtime.get("task_mode")):
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return "unknown"
-
-
 def _verification_items(evidence: dict) -> list[dict]:
     items: list[dict] = []
     for key in ("verification_results", "build_results"):
@@ -112,7 +105,8 @@ def _coverage_ratio(evidence: dict) -> tuple[int, int, float | None]:
     actual = [str(item) for item in _as_list(evidence, "actual_output_paths") if str(item).strip()]
     if not expected:
         return 0, 0, None
-    actual_set = set(created + actual)
+    modified = [str(item) for item in _as_list(evidence, "modified_files") if str(item).strip()]
+    actual_set = set(created + actual + modified)
     covered = sum(1 for item in expected if item in actual_set)
     return covered, len(expected), round(covered / len(expected), 3)
 
@@ -178,11 +172,11 @@ def _finalize_review(review: dict) -> dict:
     if review["missing_evidence"]:
         score -= 0.1
     if status in {"approved", "approved_with_limitations"} and not review["reasons"]:
-        _add_unique(review["reasons"], "Evidence is sufficient for the current task mode.")
+        _add_unique(review["reasons"], "Recorded evidence is sufficient.")
     if status == "approved":
         guidance = [
             "State what changed or was created.",
-            "Mention the verification that passed.",
+            "Report the verification evidence that was recorded.",
         ]
     elif status == "approved_with_limitations":
         guidance = [
@@ -213,10 +207,10 @@ def _finalize_review(review: dict) -> dict:
     return review
 
 
-def _review_project_creation(evidence: dict, runtime: dict) -> dict:
+def _review_artifacts(evidence: dict, runtime: dict) -> dict:
     review = _base_review()
     created_count = _count(evidence, "created_files")
-    actual_count = _count(evidence, "actual_output_paths")
+    actual_count = _count(evidence, "actual_output_paths") + _count(evidence, "modified_files")
     expected_count = _count(evidence, "expected_files")
     verify = _verification_summary(evidence)
     completeness = _as_dict(evidence.get("completeness_review"))
@@ -229,9 +223,9 @@ def _review_project_creation(evidence: dict, runtime: dict) -> dict:
 
     if not (created_count or actual_count):
         review["review_status"] = "failed"
-        _add_unique(review["reasons"], "No created project files were recorded.")
+        _add_unique(review["reasons"], "No requested output files were recorded.")
         _add_unique(review["missing_evidence"], "created_files")
-        _add_unique(review["required_next_steps"], "Run scaffold_project or write_files_batch.")
+        _add_unique(review["required_next_steps"], "Create the requested output files.")
         return _finalize_review(review)
 
     hard_tool_failures = bool(tool_failures and not _has_only_nonfatal_failures(tool_failures))
@@ -264,13 +258,13 @@ def _review_project_creation(evidence: dict, runtime: dict) -> dict:
         review["review_status"] = "needs_fix"
         _add_unique(review["reasons"], "Project files exist but no build or verification evidence was recorded.")
         _add_unique(review["missing_evidence"], "verification_results")
-        _add_unique(review["required_next_steps"], "Run verify_project_build.")
+        _add_unique(review["required_next_steps"], "Run the relevant build or verification command.")
         return _finalize_review(review)
 
     if verify["failed"]:
         review["review_status"] = "needs_fix"
         _add_unique(review["reasons"], "Verification recorded at least one failing result.")
-        _add_unique(review["required_next_steps"], "Fix the failing verification command and rerun verify_project_build.")
+        _add_unique(review["required_next_steps"], "Fix the failing verification command and rerun the relevant verification command.")
         return _finalize_review(review)
 
     if total:
@@ -292,7 +286,7 @@ def _review_project_creation(evidence: dict, runtime: dict) -> dict:
     if completeness_status in {"missing", "failed"}:
         review["review_status"] = "failed"
         _add_unique(review["reasons"], f"Completeness review reported {completeness_status}.")
-        _add_unique(review["required_next_steps"], "Address the missing core scaffold requirements.")
+        _add_unique(review["required_next_steps"], "Address the missing required outputs.")
         return _finalize_review(review)
 
     if completeness_status == "partial":
@@ -305,7 +299,7 @@ def _review_project_creation(evidence: dict, runtime: dict) -> dict:
         review["review_status"] = "approved_with_limitations"
         _add_unique(review["reasons"], "Project structure is present, but verification depends on local dependencies.")
         _add_unique(review["limitations"], "Install local dependencies and rerun verification to fully confirm the project.")
-        _add_unique(review["required_next_steps"], "Install dependencies and rerun verify_project_build.")
+        _add_unique(review["required_next_steps"], "Install dependencies and rerun the relevant verification command.")
         return _finalize_review(review)
 
     review["review_status"] = "approved_with_limitations" if limitations else "approved"
@@ -318,12 +312,14 @@ def _review_project_creation(evidence: dict, runtime: dict) -> dict:
     return _finalize_review(review)
 
 
-def _review_code_change(evidence: dict, runtime: dict, task_mode: str) -> dict:
+def _review_code_change(evidence: dict, runtime: dict) -> dict:
     review = _base_review()
-    modified_count = _count(evidence, "modified_files")
-    has_diff = bool(_as_dict(runtime).get("has_diff"))
+    modified_count = sum(_count(evidence, key) for key in ("modified_files", "created_files", "actual_output_paths"))
+    has_diff = bool(
+        runtime.get("has_diff") or runtime.get("changed_files")
+        or runtime.get("edits_this_run") or runtime.get("diff_chars")
+    )
     verify = _verification_summary(evidence)
-    impact = _as_dict(evidence.get("impact_review"))
     limitations = [str(item) for item in _as_list(evidence, "limitations")[:4] if str(item).strip()]
     tool_failures = _tool_failures(evidence)
 
@@ -378,32 +374,6 @@ def _review_code_change(evidence: dict, runtime: dict, task_mode: str) -> dict:
     review["review_status"] = "approved"
     _add_unique(review["reasons"], "Code changes and verification evidence are present.")
 
-    diff_chars = 0
-    try:
-        diff_chars = int(_as_dict(runtime).get("diff_chars", 0) or 0)
-    except (TypeError, ValueError):
-        diff_chars = 0
-    task_complexity = str(_as_dict(runtime).get("task_complexity") or "")
-    if not impact and (diff_chars >= 1200 or task_complexity in {"L2", "L3"}):
-        review["review_status"] = "approved_with_limitations"
-        _add_unique(review["limitations"], "Impact review was not recorded for a non-trivial diff.")
-        _add_unique(review["required_next_steps"], "Run analyze_impact for a final risk summary.")
-    elif impact.get("requires_replan") and not _as_dict(runtime).get("patch_risk_reviewed"):
-        review["review_status"] = "approved_with_limitations"
-        categories = [
-            str(item.get("category") or "unknown")
-            for item in impact.get("risk_signals", [])
-            if isinstance(item, dict)
-        ]
-        detail = ", ".join(categories[:4]) or str(impact.get("risk") or "unknown")
-        _add_unique(review["limitations"], f"Patch risk still needs explicit review: {detail}.")
-        _add_unique(
-            review["required_next_steps"],
-            "Re-read the risky declarations and confirm public API or scope changes are required by the task.",
-        )
-    elif impact.get("risk"):
-        _add_unique(review["reasons"], f"Impact review recorded risk={impact.get('risk')}.")
-
     if limitations:
         review["review_status"] = "approved_with_limitations"
     if hard_tool_failures:
@@ -418,9 +388,15 @@ def _review_unknown(evidence: dict) -> dict:
     limitations = [str(item) for item in _as_list(evidence, "limitations")[:4] if str(item).strip()]
     review["limitations"] = limitations[:3]
 
+    if _verification_summary(evidence)["failed"]:
+        review["review_status"] = "needs_fix"
+        _add_unique(review["reasons"], "Verification recorded a failure.")
+        _add_unique(review["required_next_steps"], "Resolve the failing verification before claiming completion.")
+        return _finalize_review(review)
+
     if not any(evidence.values()):
         review["review_status"] = "approved"
-        _add_unique(review["reasons"], "No code-changing evidence required for this task mode.")
+        _add_unique(review["reasons"], "No changed files or expected artifacts were recorded.")
         return _finalize_review(review)
 
     if tool_failures and not _has_only_nonfatal_failures(tool_failures):
@@ -430,23 +406,71 @@ def _review_unknown(evidence: dict) -> dict:
         return _finalize_review(review)
 
     review["review_status"] = "approved_with_limitations" if limitations else "approved"
-    _add_unique(review["reasons"], "No blocking evidence was recorded for this task mode.")
+    _add_unique(review["reasons"], "No blocking evidence was recorded.")
     return _finalize_review(review)
 
-def review_run_evidence(evidence: dict, runtime: dict | None = None, task_mode: str | None = None) -> dict:
+def _add_impact_findings(review: dict, evidence: dict, runtime: dict) -> None:
+    """Keep observed patch risk visible even when the current run is read-only."""
+    impact = _as_dict(evidence.get("impact_review"))
+    diff_chars = 0
+    try:
+        diff_chars = int(_as_dict(runtime).get("diff_chars", 0) or 0)
+    except (TypeError, ValueError):
+        diff_chars = 0
+    if not impact and diff_chars >= 1200:
+        if review["review_status"] == "approved":
+            review["review_status"] = "approved_with_limitations"
+        _add_unique(review["limitations"], "Impact review was not recorded for a non-trivial diff.")
+        _add_unique(review["required_next_steps"], "Run analyze_impact for a final risk summary.")
+    elif impact.get("requires_replan"):
+        if review["review_status"] == "approved":
+            review["review_status"] = "approved_with_limitations"
+        categories = [
+            str(item.get("category") or "unknown")
+            for item in impact.get("risk_signals", [])
+            if isinstance(item, dict)
+        ]
+        detail = ", ".join(categories[:4]) or str(impact.get("risk") or "unknown")
+        # 静态信号保留为限制；生成新路线不是风险已解决的证据，也不产生新验收义务。
+        _add_unique(review["limitations"], f"Static patch risk signal: {detail}; this alone does not establish a defect.")
+    elif impact.get("risk"):
+        _add_unique(review["reasons"], f"Impact review recorded risk={impact.get('risk')}.")
+
+
+def review_run_evidence(evidence: dict, runtime: dict | None = None) -> dict:
+    """Review recorded outputs and user obligations independently of assessment labels."""
     evidence = evidence if isinstance(evidence, dict) else {}
     runtime = runtime if isinstance(runtime, dict) else {}
-    resolved_mode = _resolve_task_mode(evidence, runtime, task_mode)
+    reviews: list[dict] = []
+    artifact_facts = any(
+        _count(evidence, key)
+        for key in ("created_files", "expected_files")
+    ) or bool(evidence.get("completeness_review"))
+    change_facts = any(
+        _count(evidence, key)
+        for key in ("modified_files", "created_files", "actual_output_paths")
+    ) or any(runtime.get(key) for key in (
+        "has_diff", "changed_files", "edits_this_run", "diff_chars", "wants_tests",
+    ))
+    if artifact_facts:
+        reviews.append(_review_artifacts(evidence, runtime))
+    if change_facts:
+        reviews.append(_review_code_change(evidence, runtime))
+    if not reviews:
+        reviews.append(_review_unknown(evidence))
 
-    if resolved_mode == "project_creation":
-        review = _review_project_creation(evidence, runtime)
-    elif resolved_mode in {"bugfix", "feature", "refactor"}:
-        review = _review_code_change(evidence, runtime, resolved_mode)
-    else:
-        review = _review_unknown(evidence)
-
-    review["task_mode"] = resolved_mode
-    return review
+    # 混合任务同时保留产物覆盖率和补丁风险；较轻的一项不能覆盖另一项的缺口。
+    result = _base_review()
+    severity = {"approved": 0, "approved_with_limitations": 1, "needs_fix": 2, "failed": 3}
+    result["review_status"] = max(
+        (review["review_status"] for review in reviews), key=severity.__getitem__,
+    )
+    for review in reviews:
+        for key in ("reasons", "missing_evidence", "limitations", "required_next_steps"):
+            for item in review[key]:
+                _add_unique(result[key], item)
+    _add_impact_findings(result, evidence, runtime)
+    return _finalize_review(result)
 
 def review_run_evidence_tool() -> str:
     """Model-facing review has no authority-bearing arguments.

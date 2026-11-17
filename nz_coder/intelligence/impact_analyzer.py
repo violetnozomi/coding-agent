@@ -12,7 +12,8 @@ from pathlib import Path
 
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.intelligence.project_profile import build_project_profile
-from nz_coder.runtime.agent.task_policy import is_source_file, is_test_file, language_for_path
+from nz_coder.foundation.file_kinds import is_source_file, language_for_path
+from nz_coder.runtime.agent.task_policy import is_test_file
 from nz_coder.tools import register
 from nz_coder.intelligence.verification_planner import plan_verification_commands
 
@@ -299,7 +300,6 @@ def analyze_patch_impact(
     tests_modified: bool | None = None,
     diff_chars: int | None = None,
     requested_paths: list[str] | None = None,
-    task_mode: str | None = None,
     deleted_files: list[str] | None = None,
     structural_scope: dict | None = None,
 ) -> dict:
@@ -335,12 +335,11 @@ def analyze_patch_impact(
     if len(source_files) > 4:
         risk_score += 2
         reasons.append("more than 4 source files changed")
-        if task_mode != "project_creation":
-            risk_signals.append({
-                "category": "broad_scope_expansion",
-                "severity": "replan",
-                "detail": f"{len(source_files)} source files changed",
-            })
+        risk_signals.append({
+            "category": "broad_scope_expansion",
+            "severity": "replan",
+            "detail": f"{len(source_files)} source files changed",
+        })
     if diff_size >= 6000:
         risk_score += 1
         reasons.append(f"large diff ({diff_size} chars)")
@@ -380,12 +379,11 @@ def analyze_patch_impact(
         risk_score += 1
         detail = _format_symbol_map(changed_signatures)
         reasons.append(f"public-looking API signature changed ({detail})")
-        if task_mode != "project_creation":
-            risk_signals.append({
-                "category": "public_signature_change",
-                "severity": "replan",
-                "detail": detail,
-            })
+        risk_signals.append({
+            "category": "public_signature_change",
+            "severity": "replan",
+            "detail": detail,
+        })
     elif _public_api_touched(changed, diff):
         risk_score += 1
         reasons.append("public-looking API surface file changed")
@@ -404,7 +402,7 @@ def analyze_patch_impact(
         path for path in source_files
         if requested and not _matches_requested_path(path, requested)
     ]
-    if outside_scope and task_mode != "project_creation":
+    if outside_scope:
         risk_score += 1
         detail = ", ".join(outside_scope[:8])
         reasons.append(f"source changes extend beyond user-named paths ({detail})")

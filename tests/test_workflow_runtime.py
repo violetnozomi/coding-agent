@@ -655,3 +655,192 @@ def test_artifact_log_cost_report_and_terminal_run_record(tmp_path, monkeypatch)
     events = manager.events().metadata["workflow_events"]
     assert sum(event["type"] == "artifact_written" for event in events) == 1
     assert sum(event["type"] == "workflow_log" for event in events) == 1
+
+
+def test_structural_failure_stops_active_sibling_before_executor_join(tmp_path):
+    import threading
+    from types import SimpleNamespace
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime, WorkflowLimitError
+    started, stopped, release, finished = (threading.Event() for _ in range(4))
+    errors = []
+    class Manager:
+        _workflow = SimpleNamespace(root=tmp_path / 'workflow')
+        concurrency_cap = 2
+        def workflow_run_stopped(self, run_id): return False
+        def stop(self, ids, *, reason, timeout_ms):
+            assert ids == ['child']
+            stopped.set()
+            release.set()
+    runtime = WorkflowRuntime(Manager(), run_id='run')
+    def sibling():
+        runtime._track('child', True)
+        started.set()
+        try:
+            assert release.wait(3)
+        finally:
+            runtime._track('child', False)
+    def failure():
+        assert started.wait(3)
+        raise WorkflowLimitError('structural failure')
+    def run():
+        try:
+            runtime.parallel([sibling, failure])
+        except WorkflowLimitError as exc:
+            errors.append(str(exc))
+        finally:
+            finished.set()
+    owner = threading.Thread(target=run)
+    owner.start()
+    try:
+        assert stopped.wait(0.3), 'stop must precede waiting for sibling'
+        assert finished.wait(3)
+        assert errors == ['structural failure']
+    finally:
+        release.set()
+        owner.join(3)
+        assert not owner.is_alive()
+
+
+def test_structural_failure_prevents_queued_spawn_after_capacity_frees(tmp_path):
+    import threading
+    import pytest
+    from types import SimpleNamespace
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime, WorkflowLimitError
+    sibling_started, release = threading.Event(), threading.Event()
+    spawned = []
+    class Manager:
+        _workflow = SimpleNamespace(root=tmp_path / 'workflow')
+        concurrency_cap = 2
+        def workflow_run_stopped(self, run_id): return False
+        def stop(self, ids, *, reason, timeout_ms): release.set()
+    runtime = WorkflowRuntime(Manager(), run_id='run')
+    def sibling():
+        runtime._track('child', True)
+        sibling_started.set()
+        try:
+            assert release.wait(3)
+        finally:
+            runtime._track('child', False)
+    def fail():
+        assert sibling_started.wait(3)
+        raise WorkflowLimitError('structural failure')
+    try:
+        with pytest.raises(WorkflowLimitError, match='structural failure'):
+            runtime.parallel([sibling, fail, lambda: spawned.append(True)])
+        assert spawned == []
+    finally:
+        release.set()
+
+
+def test_ordinary_child_exception_remains_null_without_stopping_siblings(tmp_path):
+    from types import SimpleNamespace
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime
+    stops = []
+    class Manager:
+        _workflow = SimpleNamespace(root=tmp_path / 'workflow')
+        concurrency_cap = 2
+        def workflow_run_stopped(self, run_id): return False
+        def stop(self, ids, *, reason, timeout_ms): stops.append(ids)
+    runtime = WorkflowRuntime(Manager(), run_id='run')
+    def fail(): raise ValueError('ordinary child failure')
+    assert runtime.parallel([fail, lambda: 'sibling result']) == [None, 'sibling result']
+    assert stops == []
+
+
+def test_structural_failure_remains_original_when_queued_abort_finishes_first(tmp_path, monkeypatch):
+    import threading
+    import time
+    import pytest
+    from types import SimpleNamespace
+    import nz_coder.runtime.workflows.workflow_runtime as module
+    release, started = threading.Event(), threading.Event()
+    class Manager:
+        _workflow = SimpleNamespace(root=tmp_path / 'workflow')
+        concurrency_cap = 2
+        def workflow_run_stopped(self, run_id): return False
+        def stop(self, ids, *, reason, timeout_ms): release.set()
+    runtime = module.WorkflowRuntime(Manager(), run_id='run')
+    def sibling():
+        runtime._track('child', True)
+        started.set()
+        try:
+            assert release.wait(3)
+        finally:
+            runtime._track('child', False)
+    def fail():
+        assert started.wait(2)
+        raise module.WorkflowLimitError('original structural failure')
+    def queued_first(pending):
+        futures = list(pending)
+        deadline = time.monotonic() + 2
+        while not futures[2].done():
+            assert time.monotonic() < deadline
+            time.sleep(.001)
+        yield futures[2]
+        yield futures[1]
+        yield futures[0]
+    monkeypatch.setattr(module, 'as_completed', queued_first)
+    try:
+        with pytest.raises(module.WorkflowLimitError, match='original structural failure'):
+            runtime.parallel([sibling, fail, lambda: 'must not run'])
+    finally:
+        release.set()
+
+
+def test_nested_parallel_propagates_original_structural_failure(tmp_path):
+    import pytest
+    from types import SimpleNamespace
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime, WorkflowLimitError
+    manager = SimpleNamespace(_workflow=SimpleNamespace(root=tmp_path / 'workflow'),
+                              concurrency_cap=2, workflow_run_stopped=lambda run_id: False)
+    runtime = WorkflowRuntime(manager, run_id='run')
+    def fail(): raise WorkflowLimitError('nested structural failure')
+    with pytest.raises(WorkflowLimitError, match='nested structural failure'):
+        runtime.parallel([lambda: runtime.parallel([fail])])
+
+
+def test_paused_spawn_gate_exits_on_sibling_structural_failure_without_resume(tmp_path):
+    import threading
+    from types import MethodType, SimpleNamespace
+    from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    from nz_coder.runtime.workflows.workflow_runtime import WorkflowRuntime, WorkflowLimitError
+    entered, finished = threading.Event(), threading.Event()
+    run = SimpleNamespace(status='paused', condition=threading.Condition())
+    manager = SimpleNamespace(_workflow=SimpleNamespace(root=tmp_path / 'workflow'),
+        concurrency_cap=2, _lock=threading.RLock(), _managed_runs={'run': run})
+    manager.workflow_run_stopped = MethodType(BackgroundAgentManager.workflow_run_stopped, manager)
+    gate = MethodType(BackgroundAgentManager.wait_workflow_spawn_gate, manager)
+    def wait_gate(run_id, cancel):
+        entered.set()
+        return gate(run_id, cancel)
+    manager.wait_workflow_spawn_gate = wait_gate
+    runtime = WorkflowRuntime(manager, run_id='run')
+    runtime._managed_started = True
+    spawned, errors = [], []
+    def waiting():
+        runtime._before_spawn()
+        spawned.append(True)
+    def fail():
+        assert entered.wait(2)
+        raise WorkflowLimitError('original structural failure')
+    def caller():
+        try:
+            runtime.parallel([waiting, fail])
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            finished.set()
+    owner = threading.Thread(target=caller)
+    owner.start()
+    try:
+        assert entered.wait(2)
+        assert finished.wait(1), 'paused gate must observe structural stop without resume'
+        assert len(errors) == 1 and isinstance(errors[0], WorkflowLimitError)
+        assert str(errors[0]) == 'original structural failure'
+        assert spawned == []
+    finally:
+        with run.condition:
+            run.status = 'running'
+            run.condition.notify_all()
+        owner.join(3)
+        assert not owner.is_alive()

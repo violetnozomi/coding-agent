@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from nz_coder.state.context import PromptBudget
+from nz_coder.runtime.conversation.request_snapshot import FrozenRequestSnapshot
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,7 @@ class ContextExecutionContext:
     compact: Callable[[list[dict]], list[dict]]
     stamp_auto_compaction: Callable[[list[dict]], None]
     trace: Callable[..., None]
+    freeze_request: Callable[[list], FrozenRequestSnapshot]
     report_pressure: Callable[[dict], None] = lambda _payload: None
     projected_replay_tokens: Callable[[list[dict]], int] | None = None
     cancel_compaction: Callable[[], object] | None = None
@@ -32,6 +34,7 @@ class ContextExecutionContext:
             "compact",
             "stamp_auto_compaction",
             "trace",
+            "freeze_request",
             "report_pressure",
         ):
             if not callable(getattr(self, name)):

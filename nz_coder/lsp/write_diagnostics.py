@@ -1,9 +1,13 @@
 """Best-effort LSP diagnostics for files changed by a committed write batch."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import cast
+import time
+
+from .types import DiagnosticReport, LspOperation
 
 from nz_coder.runtime.core.run_settings import current_run_settings
 
@@ -26,7 +30,11 @@ def _safe_targets(paths: Iterable[str], workspace: Path) -> list[tuple[str, Path
         if not value:
             continue
         candidate = Path(value)
-        target = candidate.resolve() if candidate.is_absolute() else (root / candidate).resolve()
+        target = (
+            candidate.resolve()
+            if candidate.is_absolute()
+            else (root / candidate).resolve()
+        )
         try:
             relative = target.relative_to(root)
         except ValueError:
@@ -68,55 +76,118 @@ def _format_diagnostic(path: str, item: Mapping[str, object]) -> str:
     return f"- {path}:{line}:{character} [{severity}] {message}{suffix}"
 
 
-def collect_write_diagnostics(paths: Iterable[str], workspace: Path) -> str:
-    """Synchronize committed changes and return a compact diagnostic block.
-
-    Missing servers, unsupported files, protocol errors, and diagnostics timeouts
-    are ignored so an optional LSP can never fail a file write.
-    """
+def collect_write_diagnostics(
+    paths: Iterable[str], workspace: Path, *, operation: LspOperation | None = None
+) -> dict:
+    """一个总期限收集已提交文件；未观察与空诊断明确区分。"""
     settings = current_run_settings()
-    if not settings.lsp_enabled or not settings.lsp_write_diagnostics_enabled:
-        return ""
-
+    enabled = settings.lsp_enabled and settings.lsp_write_diagnostics_enabled
+    batch = {"enabled": enabled, "reports": [], "skipped": 0}
+    if not enabled:
+        return batch
+    operation = operation or LspOperation(
+        None, time.monotonic() + settings.lsp_diagnostic_wait
+    )
     targets = _safe_targets(paths, workspace)
-    max_files = settings.lsp_write_diagnostic_max_files
-    omitted = max(0, len(targets) - max_files)
-    targets = targets[:max_files]
-    rows: list[str] = []
+    batch["skipped"] = max(0, len(targets) - settings.lsp_write_diagnostic_max_files)
+    targets = targets[: settings.lsp_write_diagnostic_max_files]
+    from nz_coder.foundation.workspace_file_access import (
+        WorkspaceFileAccess,
+        WorkspaceFileIdentity,
+    )
+    from .client import LSPCancelledError, LSPTimeoutError
 
-    for relative, target in targets:
+    access = WorkspaceFileAccess(workspace)
+    for index, (relative, target) in enumerate(targets):
+        if operation.cancelled() or operation.remaining() <= 0:
+            batch["skipped"] += len(targets) - index
+            break
         try:
-            from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
-
-            client = get_client_for_file(target, workspace)
+            client = get_client_for_file(target, workspace, operation=operation)
             if client is None:
-                continue
-            if not target.is_file():
-                client.close_document(target)
-                continue
-            text, identity = WorkspaceFileAccess(workspace).read_text_with_identity(
-                relative, errors="replace",
+                result = DiagnosticReport(
+                    relative,
+                    "unavailable",
+                    "not_observed",
+                    reason_code="lsp_unavailable",
+                )
+            else:
+                try:
+                    result = client.diagnostics(
+                        target,
+                        reader=lambda name=relative: access.read_text_with_identity(
+                            name, errors="replace"
+                        ),
+                        operation=operation,
+                    )
+                except FileNotFoundError:
+                    client.close_document(target, operation=operation)
+                    result = DiagnosticReport(
+                        relative,
+                        "unavailable",
+                        "not_observed",
+                        source_identity=WorkspaceFileIdentity.missing(),
+                        reason_code="source_deleted",
+                    )
+        except LSPCancelledError:
+            result = DiagnosticReport(
+                relative, "cancelled", "not_observed", reason_code="cancelled"
             )
-            diagnostics = client.diagnostics(target, text, identity)
+        except LSPTimeoutError:
+            result = DiagnosticReport(
+                relative,
+                "timeout",
+                "not_observed",
+                reason_code="initializing_or_deadline",
+            )
         except Exception:
-            continue
-        for item in diagnostics:
-            rows.append(_format_diagnostic(relative, item))
+            result = DiagnosticReport(
+                relative, "unavailable", "not_observed", reason_code="lsp_unavailable"
+            )
+        item = result.to_dict()
+        item["path"] = relative
+        batch["reports"].append(item)
+    return batch
 
+
+def format_write_diagnostics(batch: dict) -> str:
+    if not batch["enabled"]:
+        return ""
+    rows = []
+    for report in batch["reports"]:
+        path = report["path"]
+        rows.append(
+            f"- {path}: {report['status']}/{report['freshness']} "
+            f"(analysis_environment={report['analysis_environment']})"
+        )
+        for item in report["items"]:
+            rows.append(_format_diagnostic(path, item))
+        if report["reason_code"]:
+            rows.append(f"  reason: {report['reason_code']}")
+        if report["truncated"]:
+            rows.append("  diagnostics truncated; omitted items may contain errors")
+    if batch["skipped"]:
+        rows.append(f"- skipped diagnostics for {batch['skipped']} changed file(s)")
     if not rows:
         return ""
-    if omitted:
-        rows.append(f"- ... skipped diagnostics for {omitted} additional changed file(s)")
-
-    heading = (
-        "<lsp-diagnostics>\n"
-        "Diagnostics reported after the write transaction committed:\n"
-    )
+    heading = "<lsp-diagnostics>\nObservations after the write transaction committed:\n"
     closing = "\n</lsp-diagnostics>"
-    body = "\n".join(rows)
-    limit = max(500, settings.lsp_max_output_chars)
-    available = max(0, limit - len(heading) - len(closing))
-    if len(body) > available:
-        marker = "\n... [LSP diagnostics truncated]"
-        body = body[:max(0, available - len(marker))] + marker
-    return heading + body + closing
+    limit = max(
+        len(heading) + len(closing) + 90, current_run_settings().lsp_max_output_chars
+    )
+    selected = []
+    for row in rows:
+        if (
+            len(heading)
+            + len(closing)
+            + sum(len(value) + 1 for value in selected)
+            + len(row)
+            + 90
+            > limit
+        ):
+            selected.append(
+                "- output truncated; this is not a complete diagnostic check"
+            )
+            break
+        selected.append(row)
+    return heading + "\n".join(selected) + closing

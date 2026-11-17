@@ -11,6 +11,7 @@ import tempfile
 import uuid
 from typing import TYPE_CHECKING
 
+from nz_coder.foundation.user_paths import prepare_user_storage
 from nz_coder.state.workdir import current_workdir
 
 if TYPE_CHECKING:
@@ -50,6 +51,7 @@ class MutationReceipt:
     applied: bool = False
     identity: tuple[int, int] | None = None
     published_version: WorkspaceFileIdentity | None = None
+    published_mode: int | None = None
 
     def capture(self, descriptor: int, *, content: bytes | None = None) -> None:
         """Capture the opened object's identity without reopening its path."""
@@ -69,6 +71,7 @@ class MutationReceipt:
                 True, *self.identity, len(content), int(info.st_mtime_ns),
                 hashlib.sha256(content).hexdigest(),
             )
+            self.published_mode = stat.S_IMODE(info.st_mode)
 
 
 @dataclass
@@ -137,10 +140,13 @@ class TransactionManager:
         """Start a transaction; nested callers share the active transaction."""
         if self._active:
             return
+        # 恢复备份属于宿主状态，不能随工作区 TMPDIR 进入用户变更核对。
+        storage = prepare_user_storage(current_workdir())
+        backup_dir = Path(tempfile.mkdtemp(prefix="nzcoder_txn_", dir=storage.workspace_state))
         self._active = True
         self._state = "active"
         self._backups = {}
-        self._backup_dir = Path(tempfile.mkdtemp(prefix="nzcoder_txn_"))
+        self._backup_dir = backup_dir
 
     def track(self, file_path: str | os.PathLike[str]) -> MutationReceipt | None:
         """Snapshot a target through handles anchored at the workspace root."""
@@ -737,6 +743,8 @@ class TransactionManager:
 
     @staticmethod
     def _verify_recovery_version(record: _Backup, parent: _RecoveryParent) -> None:
+        if record.mutation.published_version is None:
+            raise ValueError("Transaction mutation content identity is unknown")
         if os.name == "nt":
             from nz_coder.foundation.project_control import _windows_close, _windows_open, _windows_handle_info
 
@@ -761,14 +769,20 @@ class TransactionManager:
         if published is not None and published.expected_exists:
             from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 
-            _data, current = WorkspaceFileAccess(current_workdir()).read_bytes_with_identity(
-                record.relative, maximum=published.size,
-            )
+            access = WorkspaceFileAccess(current_workdir())
+            if os.name == "nt":
+                _data, current, current_mode = access._read_windows_with_identity_and_mode(
+                    Path(record.relative), maximum=published.size,
+                )
+            else:
+                current, current_mode = access._identity_at_posix(parent.fd, record.target.name)
             if (
                 (current.device, current.inode) != record.mutation.identity
                 or current.content_hash != published.content_hash
+                or record.mutation.published_mode is None
+                or stat.S_IMODE(current_mode) != record.mutation.published_mode
             ):
-                raise ValueError("Transaction mutation target content changed")
+                raise ValueError("Transaction mutation target content or mode changed")
 
     def _open_recovery_parent_posix(
         self,

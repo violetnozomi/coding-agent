@@ -1,5 +1,7 @@
 # NZ-Coder 核心系统架构
 
+> 2026-11-08 更新：第10项停滞恢复已收敛为本地事实观察。`RecoveryState` 唯一持有瞬态重复证据；`FrozenRequestSnapshot.repeat_notice` 仅携带不可变请求快照。提醒进入下一次正常编码请求，不写入历史、工作记忆或验收账本。主模型判断是否调整路线；相同候选达到 `NZ_DOOM_LOOP_THRESHOLD`（默认3）仍需真实授权，这个次数不证明没有进展。独立 stall 模型、检测窗口和专用线程已删除，完成验证器与普通 Provider 的取消/关闭不变。压缩和图切换使旧观察失效，流式工具已提交后即确认送达，尾流失败不重放工具。历史 `stall_sidecar` 用途账目可以继续读取。
+
 > 范围说明：这份文档讲 NZ-Coder 主干 Agent；历史 Dodo/PySide 平行产品已在 A034 收敛删除，不再构成第二套架构。
 > 目标是帮助你从“代码能跑”提升到“我知道它为什么这么设计、每层怎么协作、以后该怎么改”。
 
@@ -226,10 +228,10 @@ CLI 启动后会做几件事：
 主流程可以简化为：
 
 1. `_init_run()`
-   重置 verification / scratchpad / runtime_state / evidence，记录 `run_start`
+   按生命周期初始化或恢复 runtime_state、验证域和 evidence；按真实用户消息绑定 scratchpad，同一消息内部恢复复用已有笔记。
 
 2. `_maybe_generate_plan()`
-   如果任务复杂，先让模型生成 plan，并写进 scratchpad
+   先独立建立用户合同；显式开启专门规划时，让模型只生成阶段路线并存入 `plan_text`，不生成另一份验收合同或写入 scratchpad。
 
 3. 每轮循环：
    - `_compact_if_needed()`：必要时做 micro compact 或 auto compact
@@ -239,7 +241,7 @@ CLI 启动后会做几件事：
      - `_check_verification_gate()` 看能不能结束
    - 如果模型调了工具：
      - `_execute_tools()` 执行工具
-     - `_maybe_replan()` 必要时重规划
+     - 主模型可调用 `update_working_plan` 替换阶段路线，运行时核对请求来源和提交版本后保存；不额外调用重规划模型
 
 4. `_finalize()`
    记录状态、写 trace、保存 learnings、返回结果
@@ -250,13 +252,14 @@ CLI 启动后会做几件事：
 
 #### A. “计划”不是硬编码必选项
 
-系统会根据任务模式和复杂度决定要不要先规划。
-复杂任务先生成 `## Plan`，简单任务直接做。
+`NZ_PLANNING_ENABLED` 默认关闭；开启后在严格模式、恢复和已有计划等既有边界允许时执行专门规划，不按任务类型或文字复杂度再筛选。
+阶段路线只是建议，失败不清空用户合同；真实验收仍由验证域持有。普通自主执行不要求每一步先提交 handoff。
 
-这是平衡：
+主模型可在需要时用 `update_working_plan(plan, expected_revision)` 更新唯一的 `RuntimeState.plan_text`；不依赖初次规划开关，也不要求按轮次更新。下一请求从动态尾部取得当前路线和提交版本。版本与最近回执保护迟到、重复和并发提交，不能代表代码进展；计划文字也不能充当验证证据或用户授权。普通路线不主动创建 todo，todo 仅服务明确的用户清单需求。
 
-- 不让所有任务都被 planning 拖慢
-- 也不让复杂任务完全裸奔
+运行中按未编辑轮数、失败或风险自动另调模型的 replan 已移除，`NZ_REPLAN_IDLE_TURNS` 和 `NZ_REPLAN_MAX_ATTEMPTS` 不再生效。初次格式恢复仍最多补一次；既有错误、补丁风险、防循环、总预算及终结验证保留。计划更新不接替旧 replan 的推理档位升级触发。
+
+同分支正常恢复和历史压缩保留当前路线；fork 新会话从空路线开始。撤销和重做先使内存及本会话检查点中的路线失效，再转换历史/文件；失效保存失败就拒绝转换，后续转换失败允许路线保持为空。第一版不向子 Agent 暴露父方路线更新工具，也不实现逐消息计划时点恢复。
 
 #### B. 上下文不是每轮全量拼接
 
@@ -269,14 +272,14 @@ CLI 启动后会做几件事：
 见：
 
 - `_build_api_messages()`
-- `_build_context_layers()`（`runtime/execution/loop.py` 里的模块级 helper）
-- `_inject_dynamic_context()`（`runtime/execution/loop.py` 里的模块级 helper）
+- `ProductionPromptBuilder.freeze()` 与 `build_context_layers()`（`runtime/conversation/prompt_builder.py`）
+- `inject_dynamic_context()`（`runtime/conversation/prompt_builder.py`）
 
 核心思想是：
 
 - **让系统 prompt 尽量稳定**
 - 把高变化、高噪音内容放在动态注入层
-- 超预算时先截断 memory/scratchpad/state，而不是破坏核心 system prompt
+- 展示软预算优先裁可选背景和状态；全部工作记忆摘要及必要事实保留，再由完整请求硬预算检查，不机械截掉高成本笔记
 
 #### C. completion 不是“模型说结束就结束”
 
@@ -361,31 +364,18 @@ CLI 启动后会做几件事：
 
 ### 5.4 Scratchpad：工作记忆
 
-`tools/scratchpad.py` 是第一层记忆，也就是**session 内 working memory**。
+`tools/scratchpad.py` 持有**当前真实用户消息的工作记忆**，按 session/message 身份保存本地文件。同一消息内部恢复复用笔记；新真实用户消息绑定新文件，旧笔记不自动继承。
 
-特点：
+四区由模型主动写入，现有步数或压力提醒可触发模型整理：
 
-- 纯内存，不持久化
-- agent 主动写入
-- 每条 entry 有 `category`
-  - `hypothesis`
-  - `attempt`
-  - `failure`
-  - `finding`
-  - `plan`
-- 自动限制条数和总长度
-- 每轮自动注入 prompt
+- `focus`：调查问题、阻塞、依据和适用条件。
+- `findings`：高成本结论或假设，以及模型 certainty 标签与真实 basis。
+- `decisions`：选择、理由、取舍及重新考虑条件。
+- `lessons`：失败路线、观察到的原因和适用边界。
 
-它解决的是：
+全部 summary 自动进入后续请求；长推理、复现与来源细节可通过 `read_scratchpad` 读取。没有最低条数或每区配额，不按年龄机械删信息。整理按需读取已有当前事实投影作为参照，输出仍只能更新四区；它不能改用户合同、验证结论或正式动作。
 
-- 失败尝试别反复重复
-- 计划和已知事实别丢
-- auto compact 后 agent 仍保有一小块“当前工作笔记”
-
-RuntimeState 和 Scratchpad 的区别非常关键：
-
-- `RuntimeState` = 系统维护的客观事实
-- `Scratchpad` = agent 维护的主观工作笔记
+职责分开：用户合同定义明确要求，验证域保存真实证据；`plan_text` 保存阶段路线，`execution_handoff` 保存已接受当前动作。工作记忆补充调查结论与理由，不重复维护这些资源的当前状态。`confirmed` 是模型标签，`performed` 只证明动作发生，都不表示验收通过。
 
 ---
 
@@ -636,7 +626,7 @@ shell 不是直接裸放开的。
 - `smart_search`：针对 issue/traceback 做 grep-first 的候选文件排序
 - `read_symbol`：AST 级别读取 Python symbol
 - `find_symbol_callers`：AST 级别找引用
-- `verify_changed_files`：针对改动文件跑低噪音验证
+- `verify_changed_files`：在当前进程解析改动 Python 源码的语法；其他语言只给出尚未执行的检查建议，由模型通过已有 bash/process 工具申请并执行，不生成已执行命令的回执
 
 这部分是 NZ-Coder 面向 SWE-bench 和真实修 bug 场景优化最多的地方之一。
 

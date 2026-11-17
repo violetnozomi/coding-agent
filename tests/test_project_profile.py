@@ -171,3 +171,18 @@ def test_project_execution_facts_detect_single_nested_python_project(
         "package_path": "cron_engine",
         "module_cwd": str(tmp_path.resolve()),
     }]
+
+
+def test_profile_save_rejects_redirected_control_parent(tmp_path, monkeypatch):
+    import pytest
+    from nz_coder.foundation import config
+    from nz_coder.intelligence.project_profile import build_project_profile
+    workspace = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    workspace.mkdir()
+    outside.mkdir()
+    (workspace / ".nz-coder").symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(config, "WORKDIR", workspace)
+    with pytest.raises((OSError, ValueError)):
+        build_project_profile(save=True)
+    assert not (outside / "project_profile.json").exists()

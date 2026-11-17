@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
 from nz_coder.interface import cli
 from nz_coder.providers.models import ModelSelection
 from nz_coder.tool_platform.permissions import PermissionRule
@@ -89,11 +91,13 @@ class FakePermissions:
 class FakeAgent:
     def __init__(self, session_id: str = "session-1", mode: str = "default") -> None:
         self.session_id = session_id
+        self.agent_id = f"agent-{session_id}"
         self.permissions = FakePermissions(mode=mode)
         self.change_tracker = None
         self.cleared = False
         self.closed = False
         self.compact_focus = None
+        self.has_pending_settlement = False
 
     def clear_scratchpad(self) -> None:
         self.cleared = True
@@ -101,7 +105,13 @@ class FakeAgent:
     def close(self) -> None:
         self.closed = True
 
-    def _compact_messages(self, messages, focus=None):
+    def _cancel_compaction(self):
+        pass
+
+    def _attempt_run_control_cleanup(self, resources, phase):
+        resources.close()
+
+    def _compact_messages(self, messages, focus=None, *, model_runtime=None):
         self.compact_focus = focus
         return [{"role": "user", "content": "compacted"}]
 
@@ -167,8 +177,7 @@ def test_run_cli_renders_failure_and_closes_current_agent(monkeypatch):
             return None
 
     monkeypatch.setattr(cli.config, "API_KEY", "test")
-    monkeypatch.setattr(cli.memory_mgr, "load_all", lambda: None)
-    monkeypatch.setattr(cli.memory_mgr, "build_prompt_block", lambda **_kwargs: "")
+    monkeypatch.setattr(cli, "current_memory_manager", lambda: SimpleNamespace(load_all=lambda: None))
     monkeypatch.setattr(cli.skill_loader, "descriptions", lambda: "")
     monkeypatch.setattr(cli, "build", lambda **_kwargs: "system")
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
@@ -212,8 +221,7 @@ def test_run_cli_cancelled_turn_returns_to_same_repl(monkeypatch):
             return None
 
     monkeypatch.setattr(cli.config, "API_KEY", "test")
-    monkeypatch.setattr(cli.memory_mgr, "load_all", lambda: None)
-    monkeypatch.setattr(cli.memory_mgr, "build_prompt_block", lambda **_kwargs: "")
+    monkeypatch.setattr(cli, "current_memory_manager", lambda: SimpleNamespace(load_all=lambda: None))
     monkeypatch.setattr(cli.skill_loader, "descriptions", lambda: "")
     monkeypatch.setattr(cli, "build", lambda **_kwargs: "system")
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
@@ -221,7 +229,6 @@ def test_run_cli_cancelled_turn_returns_to_same_repl(monkeypatch):
     monkeypatch.setattr(cli, "activate_session", lambda value: value)
     monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: agent)
     monkeypatch.setattr(cli, "print_banner", lambda *_args: None)
-    monkeypatch.setattr(cli, "save_session", lambda *_args, **_kwargs: None)
     inputs = iter(("first", "second", "exit"))
     monkeypatch.setattr(cli, "read_user_query", lambda: next(inputs))
 
@@ -241,6 +248,7 @@ def test_typed_cancelled_turn_does_not_append_memory_reminder(monkeypatch):
     agent.used_save_memory = False
 
     async def run(_messages, **_kwargs):
+        saved.append(_messages)
         return {"status": "cancelled"}
 
     agent.run = run
@@ -262,8 +270,7 @@ def test_typed_cancelled_turn_does_not_append_memory_reminder(monkeypatch):
 
     saved = []
     monkeypatch.setattr(cli.config, "API_KEY", "test")
-    monkeypatch.setattr(cli.memory_mgr, "load_all", lambda: None)
-    monkeypatch.setattr(cli.memory_mgr, "build_prompt_block", lambda **_kwargs: "")
+    monkeypatch.setattr(cli, "current_memory_manager", lambda: SimpleNamespace(load_all=lambda: None))
     monkeypatch.setattr(cli.skill_loader, "descriptions", lambda: "")
     monkeypatch.setattr(cli, "build", lambda **_kwargs: "system")
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
@@ -271,11 +278,6 @@ def test_typed_cancelled_turn_does_not_append_memory_reminder(monkeypatch):
     monkeypatch.setattr(cli, "activate_session", lambda value: value)
     monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: agent)
     monkeypatch.setattr(cli, "print_banner", lambda *_args: None)
-    monkeypatch.setattr(
-        cli,
-        "save_session",
-        lambda messages, **_kwargs: saved.append([dict(item) for item in messages]),
-    )
     inputs = iter(("cancel me", "exit"))
     monkeypatch.setattr(cli, "read_user_query", lambda: next(inputs))
 
@@ -325,8 +327,7 @@ def test_first_ctrl_c_while_editing_prompts_before_exit(monkeypatch):
             return None
 
     monkeypatch.setattr(cli.config, "API_KEY", "test")
-    monkeypatch.setattr(cli.memory_mgr, "load_all", lambda: None)
-    monkeypatch.setattr(cli.memory_mgr, "build_prompt_block", lambda **_kwargs: "")
+    monkeypatch.setattr(cli, "current_memory_manager", lambda: SimpleNamespace(load_all=lambda: None))
     monkeypatch.setattr(cli.skill_loader, "descriptions", lambda: "")
     monkeypatch.setattr(cli, "build", lambda **_kwargs: "system")
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
@@ -373,8 +374,7 @@ def test_second_ctrl_c_while_editing_exits_fallback_repl(monkeypatch):
             return None
 
     monkeypatch.setattr(cli.config, "API_KEY", "test")
-    monkeypatch.setattr(cli.memory_mgr, "load_all", lambda: None)
-    monkeypatch.setattr(cli.memory_mgr, "build_prompt_block", lambda **_kwargs: "")
+    monkeypatch.setattr(cli, "current_memory_manager", lambda: SimpleNamespace(load_all=lambda: None))
     monkeypatch.setattr(cli.skill_loader, "descriptions", lambda: "")
     monkeypatch.setattr(cli, "build", lambda **_kwargs: "system")
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
@@ -416,8 +416,7 @@ def test_cancelled_async_command_returns_to_same_repl(monkeypatch):
             return None
 
     monkeypatch.setattr(cli.config, "API_KEY", "test")
-    monkeypatch.setattr(cli.memory_mgr, "load_all", lambda: None)
-    monkeypatch.setattr(cli.memory_mgr, "build_prompt_block", lambda **_kwargs: "")
+    monkeypatch.setattr(cli, "current_memory_manager", lambda: SimpleNamespace(load_all=lambda: None))
     monkeypatch.setattr(cli.skill_loader, "descriptions", lambda: "")
     monkeypatch.setattr(cli, "build", lambda **_kwargs: "system")
     monkeypatch.setattr(cli, "StreamingRenderer", Renderer)
@@ -598,7 +597,8 @@ def test_handle_command_permission_rules_lists_rule_groups(monkeypatch):
     assert "write_file -> ask" in output
 
 
-def test_handle_command_new_session_rebuilds_agent_and_clears_history(monkeypatch):
+@pytest.mark.parametrize("command", ["/new-session", "/clear"])
+def test_handle_command_new_session_rebuilds_agent_and_clears_history(monkeypatch, command):
     fake_console = FakeConsole()
     monkeypatch.setattr(cli, "console", fake_console)
     history = [{"role": "user", "content": "old"}]
@@ -611,11 +611,11 @@ def test_handle_command_new_session_rebuilds_agent_and_clears_history(monkeypatc
         lambda: "session-2",
     )
     monkeypatch.setattr(
-        "nz_coder.interface.commands.handlers.core.activate_session",
+        "nz_coder.state.sessions.activate_session",
         lambda session_id: session_id,
     )
 
-    def fake_build_agent(system_prompt, renderer, session_id, permission_mode=None):
+    def fake_build_agent(system_prompt, renderer, session_id, permission_mode=None, *, activate_session_on_build=True):
         created["system_prompt"] = system_prompt
         created["renderer"] = renderer
         created["session_id"] = session_id
@@ -624,7 +624,7 @@ def test_handle_command_new_session_rebuilds_agent_and_clears_history(monkeypatc
 
     monkeypatch.setattr(cli, "_build_agent", fake_build_agent)
 
-    handled = cli.handle_command("/new-session", history, session_state, "sys", object())
+    handled = cli.handle_command(command, history, session_state, "sys", object())
 
     assert handled is True
     assert history == []
@@ -652,11 +652,11 @@ def test_handle_command_resume_restores_accept_edits_mode(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        "nz_coder.interface.commands.handlers.core.activate_session",
+        "nz_coder.state.sessions.activate_session",
         lambda session_id: session_id,
     )
 
-    def fake_build_agent(system_prompt, renderer, session_id, permission_mode=None):
+    def fake_build_agent(system_prompt, renderer, session_id, permission_mode=None, *, activate_session_on_build=True):
         created["session_id"] = session_id
         created["permission_mode"] = permission_mode
         return FakeAgent(session_id=session_id, mode=permission_mode or "default")
@@ -682,6 +682,7 @@ def test_session_picker_resumes_selected_session(monkeypatch):
         "session_options",
         lambda limit=100: [SimpleNamespace(
             session_id="saved-2",
+            unavailable="",
             active=False,
             message_count=2,
             model="model-test",
@@ -698,7 +699,7 @@ def test_session_picker_resumes_selected_session(monkeypatch):
             "messages": [{"role": "user", "content": "restored"}],
         },
     )
-    monkeypatch.setattr(core, "activate_session", lambda value: value)
+    monkeypatch.setattr("nz_coder.state.sessions.activate_session", lambda value: value)
     old_agent = FakeAgent()
     new_agent = FakeAgent(session_id="saved-2", mode="plan")
     monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: new_agent)
@@ -727,6 +728,7 @@ def test_session_picker_keeps_unsaved_active_session(monkeypatch):
         "session_options",
         lambda limit=100: [SimpleNamespace(
             session_id="active-new",
+            unavailable="",
             active=True,
             message_count=0,
             model="model-test",
@@ -895,38 +897,26 @@ def test_fork_picker_forks_selected_completed_turn(monkeypatch):
     assert state == {"id": "fork-2", "agent": new_agent}
 
 
-def test_handle_command_clear_clears_history_and_scratchpad(monkeypatch):
-    fake_console = FakeConsole()
-    monkeypatch.setattr(cli, "console", fake_console)
-    history = [{"role": "user", "content": "x"}]
+def test_handle_command_compact_uses_current_agent_snapshot(monkeypatch, tmp_path):
+    from nz_coder.interface.session_controller import TerminalSessionController
+    from nz_coder.runtime.session.runtime import SessionRuntime
+    from nz_coder.runtime.session.store import EphemeralSessionStore
+    from nz_coder.runtime.session.model import SessionIdentity
+    from nz_coder.protocol.message_schema import legacy_messages
+    from tests.runtime.test_native_product_runtime import _install_runtime
+    _install_runtime(monkeypatch, object())
     agent = FakeAgent()
-    session_state = {"id": "session-1", "agent": agent}
-
-    handled = cli.handle_command("/clear", history, session_state, "sys", object())
-
-    assert handled is True
-    assert history == []
-    assert agent.cleared is True
-
-
-def test_handle_command_compact_uses_current_agent_snapshot(monkeypatch):
-    fake_console = FakeConsole()
-    monkeypatch.setattr(cli, "console", fake_console)
-    agent = FakeAgent()
+    agent.workdir = tmp_path
+    agent.runtime_services = SimpleNamespace(session_runtime=SessionRuntime(EphemeralSessionStore()))
     history = [{"role": "user", "content": "long history"}]
-    session_state = {"id": "session-1", "agent": agent}
-
-    handled = cli.handle_command(
-        "/compact keep decisions",
-        history,
-        session_state,
-        "sys",
-        object(),
-    )
-
+    state = {"id": "session-1", "agent": agent, "controller": TerminalSessionController(agent)}
+    handled = asyncio.run(cli.handle_command_async("/compact keep decisions", history, state,
+                                                   "sys", object(), FakeTerminalInput(None)))
     assert handled is True
-    assert history == [{"role": "user", "content": "compacted"}]
+    assert legacy_messages(history) == [{"role": "user", "content": "compacted"}]
     assert agent.compact_focus == "keep decisions"
+    stored = asyncio.run(agent.runtime_services.session_runtime.store.load(SessionIdentity('session-1'), tmp_path))
+    assert stored.transcript == history
 
 
 def test_handle_command_unknown_command_returns_false(monkeypatch):
@@ -963,7 +953,7 @@ def test_handle_command_model_switch_rebuilds_agent_in_same_session(monkeypatch)
     session_state = {"id": "session-1", "agent": old_agent}
     built = []
 
-    def build_agent(system_prompt, renderer, session_id, permission_mode=None):
+    def build_agent(system_prompt, renderer, session_id, permission_mode=None, *, activate_session_on_build=True):
         built.append((system_prompt, renderer, session_id, permission_mode))
         return new_agent
 
@@ -1053,10 +1043,12 @@ def test_handle_command_fork_copies_complete_turn_and_replaces_agent(monkeypatch
     assert session_state == {"id": "fork-1", "agent": new_agent}
     assert old_agent.closed is True
     assert saved[0][1]["session_id"] == "session-1"
-    assert saved[-1][1]["session_id"] == "fork-1"
-    assert saved[-1][1]["title"] == "Parser repair (fork #1)"
-    assert saved[-1][1]["parent_session_id"] == "session-1"
-    assert saved[-1][1]["model"] is None
+    from nz_coder.state.sessions import load_session
+    canonical = load_session('fork-1')
+    assert canonical['session_id'] == 'fork-1'
+    assert canonical['title'] == 'Parser repair (fork #1)'
+    assert canonical['parent_session_id'] == 'session-1'
+    assert canonical['messages'] == history
     assert "Workspace files were not changed" in fake_console.messages[-1]
 
 
@@ -1071,7 +1063,7 @@ def test_handle_command_fork_build_failure_restores_original_session(monkeypatch
     activated = []
     monkeypatch.setattr(core, "save_session", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(core, "create_session_id", lambda prefix="session": "fork-1")
-    monkeypatch.setattr(core, "activate_session", lambda value: activated.append(value) or value)
+    monkeypatch.setattr("nz_coder.state.sessions.activate_session", lambda value: activated.append(value) or value)
 
     def fail_build(*_args, **_kwargs):
         raise RuntimeError("cannot initialize")
@@ -1084,7 +1076,7 @@ def test_handle_command_fork_build_failure_restores_original_session(monkeypatch
     assert history == [{"role": "user", "content": "first"}]
     assert session_state == {"id": "session-1", "agent": old_agent}
     assert old_agent.closed is False
-    assert activated == ["session-1"]
+    assert activated == []
     assert "cannot initialize" in fake_console.messages[-1]
 
 
@@ -1102,7 +1094,7 @@ def test_handle_command_fork_child_clone_failure_closes_new_agent_and_restores(m
     monkeypatch.setattr(core, "save_session", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(core, "load_session", lambda _session_id: {"title": "First"})
     monkeypatch.setattr(core, "create_session_id", lambda prefix="session": "fork-1")
-    monkeypatch.setattr(core, "activate_session", lambda value: activated.append(value) or value)
+    monkeypatch.setattr("nz_coder.state.sessions.activate_session", lambda value: activated.append(value) or value)
     monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: new_agent)
 
     def fail_clone(*_args, **_kwargs):
@@ -1116,52 +1108,80 @@ def test_handle_command_fork_child_clone_failure_closes_new_agent_and_restores(m
     assert session_state == {"id": "session-1", "agent": old_agent}
     assert new_agent.closed is True
     assert old_agent.closed is False
-    assert activated == ["session-1"]
+    assert activated == []
     assert "child clone failed" in fake_console.messages[-1]
 
 
-def test_handle_command_undo_alias_and_redo_sync_history(monkeypatch):
+def test_handle_command_undo_alias_and_redo_sync_history(monkeypatch, tmp_path):
+    from tests.runtime.test_session_interface_transitions import _native
+    from tests.test_session_revert import _history
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import save_session, load_session
+    _, request, agent, controller, ctx, _ = _native(monkeypatch, tmp_path)
+    _, app, history = _history(tmp_path, store=agent.session_reverter.store, session_id=request.session_id)
+    ctx.history[:] = history
+    try:
+        with scoped_workdir(tmp_path):
+            save_session(history, session_id=request.session_id, activate=False)
+            assert cli.handle_command('/revert-last', ctx.history, ctx.session_state, 'sys', object())
+            assert ctx.history == []
+            assert load_session(request.session_id)['messages'] == []
+            assert app.read_text() == 'before\n'
+            assert cli.handle_command('/redo', ctx.history, ctx.session_state, 'sys', object())
+            assert ctx.history == history
+            assert load_session(request.session_id)['messages'] == history
+            assert app.read_text() == 'after\n'
+    finally:
+        agent.close()
+
+
+def test_cli_fork_copies_inherited_snapshot(tmp_path, monkeypatch):
     from nz_coder.interface.commands.handlers import core
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
+    from nz_coder.state.sessions import session_snapshot_dir, delete_session
+    from tests.test_http_service import _fork_history_with_snapshots
 
-    fake_console = FakeConsole()
-    monkeypatch.setattr(cli, "console", fake_console)
-    saved = []
-    monkeypatch.setattr(
-        core,
-        "save_session",
-        lambda history, **kwargs: saved.append(list(history)),
-    )
+    monkeypatch.setattr(cli, "console", FakeConsole())
+    monkeypatch.setattr(core, "create_session_id", lambda prefix="session": "fork-cli")
+    old_agent = FakeAgent(session_id="session-1")
+    new_agent = FakeAgent(session_id="fork-cli")
+    monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: new_agent)
+    store, app, history, snapshots = _fork_history_with_snapshots(tmp_path, "session-1")
+    expected = store.diff_full(*snapshots[0])
+    state = {"id": "session-1", "agent": old_agent}
+    with scoped_workdir(tmp_path):
+        assert cli.handle_command("/fork 1", history, state, "system", object())
+        assert state["id"] == "fork-cli"
+        assert delete_session("session-1")
+        child = WorkspaceSnapshotStore(tmp_path, session_snapshot_dir("fork-cli"))
+        assert child.diff_full(*snapshots[0]) == expected
+    assert app.read_text(encoding="utf-8") == "version 3\n"
 
-    class Tracker:
-        def undo(self, history):
-            history.clear()
-            return "Undid agent changes:\n- restored app.py"
 
-        def redo(self, history):
-            history.append({"role": "user", "content": "restored"})
-            return "Redid agent changes:\n- restored app.py"
+def test_cli_fork_missing_snapshot_keeps_original_owner_and_history(tmp_path, monkeypatch):
+    import copy
+    from nz_coder.interface.commands.handlers import core
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import load_session
+    from tests.test_http_service import _fork_history_with_snapshots
 
-    agent = FakeAgent()
-    agent.change_tracker = Tracker()
-    history = [{"role": "user", "content": "edit"}]
-    session_state = {"id": "session-1", "agent": agent}
-
-    assert cli.handle_command(
-        "/revert-last",
-        history,
-        session_state,
-        "sys",
-        object(),
-    )
-    assert history == []
-    assert saved[-1] == []
-
-    assert cli.handle_command(
-        "/redo",
-        history,
-        session_state,
-        "sys",
-        object(),
-    )
-    assert history == [{"role": "user", "content": "restored"}]
-    assert saved[-1] == history
+    console = FakeConsole()
+    monkeypatch.setattr(cli, "console", console)
+    monkeypatch.setattr(core, "create_session_id", lambda prefix="session": "fork-cli-bad")
+    old_agent = FakeAgent(session_id="session-1")
+    new_agent = FakeAgent(session_id="fork-cli-bad")
+    monkeypatch.setattr(cli, "_build_agent", lambda *_args, **_kwargs: new_agent)
+    store, app, history, snapshots = _fork_history_with_snapshots(tmp_path, "session-1")
+    digest = next(iter(store._load(snapshots[0][0])["files"].values()))["blob"]
+    (store.root / "blobs" / digest[:2] / digest[2:]).unlink()
+    original = copy.deepcopy(history)
+    state = {"id": "session-1", "agent": old_agent}
+    with scoped_workdir(tmp_path):
+        assert cli.handle_command("/fork 1", history, state, "system", object())
+        assert state == {"id": "session-1", "agent": old_agent}
+        assert history == original
+        assert load_session("fork-cli-bad") == {}
+    assert not old_agent.closed
+    assert "could not fork" in str(console.messages[-1])
+    assert app.read_text(encoding="utf-8") == "version 3\n"

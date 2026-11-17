@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import queue
 import threading
@@ -24,7 +25,6 @@ from nz_coder.http_service import (
 from nz_coder.http_service.manager import build_http_agent
 from nz_coder.protocol.message_schema import SESSION_SUMMARY_KEY
 from nz_coder.state.memory import MemoryManager, current_memory_manager
-from nz_coder.state.memory_control import MemoryControlPlane
 from nz_coder.runtime.process.workdir import current_workdir, scoped_workdir
 from nz_coder.runtime.process.process_service import workspace_process_service
 from nz_coder.state.sessions import load_session, save_session, session_runtime_dir
@@ -105,6 +105,158 @@ def _persistent_fake_factory(session_id: str, permission_mode: str) -> FakeAgent
         journal_path=session_runtime_dir(session_id) / "events.jsonl",
     )
     return agent
+
+
+def test_manager_close_continues_other_sessions_and_retries_failed_cleanup(tmp_path, monkeypatch):
+    """一个资源关闭失败时，其他会话仍须清理，失败会话可以重试。"""
+    manager = SessionManager(
+        agent_factory=_fake_factory, workspace_roots=[tmp_path], restore_saved=False,
+    )
+    first = manager.get(manager.create()["id"])
+    second = manager.get(manager.create()["id"])
+    close_first = first.agent.close
+    blocked = True
+
+    def flaky_close():
+        if blocked:
+            raise RuntimeError("injected close failure")
+        close_first()
+
+    monkeypatch.setattr(first.agent, "close", flaky_close)
+    try:
+        with pytest.raises(RuntimeError):
+            manager.close(timeout=0.03)
+        assert second.event_bus._closed is True
+        assert first._disposed is False
+        assert manager.get(first.session_id) is first
+        with pytest.raises(LookupError):
+            first.start_run("closed sessions must reject new work")
+        blocked = False
+        manager.close(timeout=0.03)
+        assert first.event_bus._closed is True
+        assert manager.list()["sessions"] == []
+    finally:
+        blocked = False
+        close_first()
+        second.agent.close()
+
+
+def test_manager_close_retains_unsettled_run_until_it_can_be_disposed(tmp_path):
+    """取消不合作时保留执行及其事件资源，待工作线程退出后再释放。"""
+    from nz_coder.http_service.manager import SessionBusyError
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    class SlowAgent(FakeAgent):
+        async def run(self, messages, **kwargs):
+            entered.set()
+            while not release.is_set():
+                try:
+                    await asyncio.sleep(0.01)
+                except asyncio.CancelledError:
+                    continue
+            return {"status": "completed"}
+
+    manager = SessionManager(
+        agent_factory=SlowAgent, workspace_roots=[tmp_path], restore_saved=False,
+    )
+    session = manager.get(manager.create()["id"])
+    error = None
+    try:
+        session.start_run("offline run")
+        assert entered.wait(2)
+        try:
+            manager.close(timeout=0.02)
+        except SessionBusyError as exc:
+            error = exc
+        assert session._disposed is False
+        assert session.event_bus._closed is False
+        assert manager.get(session.session_id) is session
+        assert isinstance(error, SessionBusyError)
+        with pytest.raises(LookupError):
+            session.start_run("shutdown already requested")
+    finally:
+        release.set()
+        assert session.wait(timeout=2)
+        manager.close(timeout=0.1)
+        session.agent.close()
+    assert session._disposed is True
+    assert session.event_bus._closed is True
+
+
+def test_http_service_close_can_retry_failed_session_cleanup(tmp_path, monkeypatch):
+    manager = SessionManager(
+        agent_factory=_fake_factory, workspace_roots=[tmp_path], restore_saved=False,
+    )
+    session = manager.get(manager.create()["id"])
+    close_agent = session.agent.close
+    blocked = True
+
+    def flaky_close():
+        if blocked:
+            raise RuntimeError("injected close failure")
+        close_agent()
+
+    monkeypatch.setattr(session.agent, "close", flaky_close)
+    service = SessionHTTPService(port=0, manager=manager)
+    try:
+        with pytest.raises(RuntimeError):
+            service.close_after_serve()
+        blocked = False
+        service.close_after_serve()
+        assert session.event_bus._closed is True
+        assert manager.list()["sessions"] == []
+    finally:
+        blocked = False
+        service.close_after_serve()
+        close_agent()
+
+
+def test_manager_retains_agent_with_reported_cleanup_failure(tmp_path):
+    """真实 Agent.close 只记录失败时，管理器也必须保留资源所有权。"""
+    from nz_coder.http_service.manager import SessionBusyError
+    from nz_coder.runtime.execution.loop import AgentLoop
+
+    class Resource:
+        blocked = True
+        closed = False
+
+        def close(self):
+            if self.blocked:
+                raise RuntimeError("injected MCP cleanup failure")
+            self.closed = True
+
+    resource = Resource()
+
+    def factory(session_id, permission_mode):
+        return AgentLoop(
+            "offline cleanup", permission_mode=permission_mode,
+            client=SimpleNamespace(), trace_enabled=False, sidecar_verifier=False,
+            session_id=session_id, event_bus=SessionEventBus(session_id=session_id),
+        )
+
+    manager = SessionManager(
+        agent_factory=factory, workspace_roots=[tmp_path], restore_saved=False,
+    )
+    session = manager.get(manager.create()["id"])
+    session.agent._mcp_runtime = resource
+    try:
+        with pytest.raises(SessionBusyError):
+            manager.close(timeout=0.03)
+        assert session.agent.environment_cleanup_failures == {"mcp": "RuntimeError"}
+        assert session._disposed is False
+        assert manager.get(session.session_id) is session
+        assert resource.closed is False
+        resource.blocked = False
+        manager.close(timeout=0.03)
+        assert session.agent.environment_cleanup_complete is True
+        assert resource.closed is True
+        assert manager.list()["sessions"] == []
+    finally:
+        resource.blocked = False
+        manager.close(timeout=0.1)
+        session.agent.close()
 
 
 def _wait_for_status(client: NZCoderClient, session_id: str, expected: str) -> dict:
@@ -201,7 +353,7 @@ def test_http_session_run_messages_and_sse_replay(local_service):
     ]
     events.close()
 
-    assert [item["id"] for item in client.list_sessions()] == [session_id]
+    assert [item["id"] for item in client.list_sessions()["sessions"]] == [session_id]
     assert client.delete_session(session_id) is True
     assert not persisted.exists()
     assert not artifacts.exists()
@@ -209,6 +361,263 @@ def test_http_session_run_messages_and_sse_replay(local_service):
         client.get_session(session_id)
     assert exc_info.value.status == 404
     assert exc_info.value.code == "session_not_found"
+
+
+def test_http_default_native_run_commits_result_history_and_settled_state(monkeypatch, tmp_path):
+    from nz_coder.providers.capabilities import ModelCapabilities
+    from nz_coder.runtime.execution import native_sdk
+    from nz_coder.runtime.model_gateway import ResolvedModelRuntime
+    from nz_coder.sdk import AgentClient
+
+    class Provider:
+        name = "offline"
+
+        def create_completion(self, _client, **_kwargs):
+            return SimpleNamespace(
+                choices=[SimpleNamespace(
+                    message=SimpleNamespace(content="OFFLINE_DONE", tool_calls=[]),
+                    finish_reason="stop",
+                )],
+                usage=None,
+            )
+
+    runtime = ResolvedModelRuntime(
+        provider_id="offline", model_id="offline-model",
+        request_model_id="offline-model", variant=None,
+        provider=Provider(), client=object(), owns_client=False,
+        capabilities=ModelCapabilities(
+            provider="offline", model_id="offline-model", supports_streaming=False,
+        ),
+    )
+    monkeypatch.setattr(native_sdk, "resolve_model_runtime", lambda _: runtime)
+    monkeypatch.setattr("nz_coder.runtime.execution.loop.resolve_model_runtime", lambda _: runtime)
+    manager = SessionManager(workspace_roots=[tmp_path], restore_saved=False)
+    service = SessionHTTPService(port=0, manager=manager, token="test-token-1234567890")
+    thread = threading.Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = NZCoderClient(service.base_url, service.token, timeout=5)
+        workspace_id = next(
+            item["id"] for item in manager.list_workspaces()
+            if item["path"] == str(tmp_path)
+        )
+        session_id = client.create_session("auto", workspace_id=workspace_id)["id"]
+        session = manager.get(session_id)
+        assert session.agent is None
+        assert isinstance(session.client, AgentClient)
+        client.run(session_id, "Reply with OFFLINE_DONE.", model="offline/offline-model")
+        assert session.wait(timeout=10)
+
+        info = client.get_session(session_id)
+        assert info["status"] == "completed_unverified", info
+        assert info["running"] is False
+        assert info["last_error"] == ""
+        assert info["last_result"]["status"] == "completed_unverified"
+        answer = (
+            "本次执行已结束，验证尚未确认。\n\n**运行时验证记录**（来源：VerificationDomain）\n"
+            "- 未评估：本次没有已采信的验证执行。\n\n模型交付说明（未经独立确认）：\nOFFLINE_DONE"
+        )
+        assert info["last_result"]["answer"] == answer
+        expected = [("user", "Reply with OFFLINE_DONE."), ("assistant", answer)]
+        assert [(item["role"], item["content"]) for item in session.history] == expected
+        assert [(item["role"], item["content"]) for item in client.messages(session_id)] == expected
+        with scoped_workdir(tmp_path):
+            persisted = load_session(session_id)
+        assert persisted["run_status"] == "completed_unverified"
+        assert [(item["role"], item["content"]) for item in persisted["messages"]] == expected
+        snapshot = session.attach_snapshot()
+        assert snapshot["settled"] is True
+        assert snapshot["session"]["last_result"] == info["last_result"]
+        events = session.event_bus.recent(100)
+        event_types = [event.type for event in events]
+        assert "session.run.failed" not in event_types
+        completed = next(event for event in events if event.type == "session.run.completed")
+        settled = next(event for event in events if event.type == "session.run.settled")
+        assert completed.sequence < settled.sequence
+        assert settled.properties == {"status": "completed_unverified", "persisted": True}
+        assert completed.session_id == settled.session_id == session_id
+        assert completed.run_id == settled.run_id == snapshot["active_interaction_run_id"]
+        assert session.event_bus.publish("caller.after_run", {}).sequence > settled.sequence
+    finally:
+        service.shutdown()
+        thread.join(timeout=2)
+        assert not thread.is_alive()
+
+
+def test_http_cancelled_requirement_stops_followup_at_completion_guidance_budget(monkeypatch, tmp_path):
+    from nz_coder.providers.capabilities import ModelCapabilities
+    from nz_coder.runtime.execution import native_sdk
+    from nz_coder.runtime.model_gateway import ResolvedModelRuntime
+    from nz_coder.state.sessions import session_runtime_state_path
+
+    class Provider:
+        name = "offline"
+
+        def __init__(self):
+            self.followup = False
+            self.followup_calls = 0
+            self.guidance_counts = []
+            self.allowed_followup_calls = 3
+
+        def create_completion(self, _client, **kwargs):
+            if not self.followup:
+                message = SimpleNamespace(content="", tool_calls=[SimpleNamespace(
+                    id="cancelled-write", type="function", function=SimpleNamespace(
+                        name="write_file",
+                        arguments=json.dumps({"path": "never-created.txt", "content": "CANCEL_ME"}),
+                    ),
+                )])
+                finish = "tool_calls"
+            else:
+                self.followup_calls += 1
+                self.guidance_counts.append(sum(
+                    "<stop-hook-guidance>" in str(item.get("content", ""))
+                    for item in kwargs["messages"]
+                ))
+                # 旧实现继续循环时立即报错，离线红灯不能依赖大轮数兜底。
+                assert self.followup_calls <= self.allowed_followup_calls, "completion gate requested a fourth natural answer"
+                message = SimpleNamespace(content="AFTER_CANCEL_OK", tool_calls=[])
+                finish = "stop"
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=message, finish_reason=finish)], usage=None,
+            )
+
+    provider = Provider()
+    runtime = ResolvedModelRuntime(
+        provider_id="offline", model_id="offline-model",
+        request_model_id="offline-model", variant=None,
+        provider=provider, client=object(), owns_client=False,
+        capabilities=ModelCapabilities(
+            provider="offline", model_id="offline-model", supports_streaming=False,
+        ),
+    )
+    from dataclasses import replace
+    monkeypatch.setattr(native_sdk, "resolve_model_runtime", lambda _: replace(runtime))
+    monkeypatch.setattr("nz_coder.runtime.execution.loop.resolve_model_runtime", lambda _: replace(runtime))
+    manager = SessionManager(workspace_roots=[tmp_path], restore_saved=False)
+    service = SessionHTTPService(port=0, manager=manager, token="test-token-1234567890")
+    thread = threading.Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = NZCoderClient(service.base_url, service.token, timeout=5)
+        workspace_id = next(
+            item["id"] for item in manager.list_workspaces() if item["path"] == str(tmp_path)
+        )
+        session_id = client.create_session("default", workspace_id=workspace_id)["id"]
+        session = manager.get(session_id)
+        client.run(
+            session_id,
+            "Create never-created.txt containing CANCEL_ME using write_file. Do not use bash or any other tool.",
+            model="offline/offline-model",
+        )
+        pending = _wait_for_pending(lambda: client.pending_permissions(session_id))
+        assert pending[0]["tool_input"]["path"] == "never-created.txt"
+        assert client.abort(session_id) == {"aborted": True}
+        assert session.wait(timeout=10)
+        cancelled = client.attach_snapshot(session_id)
+        assert cancelled["settled"] is True
+        assert cancelled["session"]["status"] == "cancelled"
+        assert client.pending_permissions(session_id) == []
+        assert not (tmp_path / "never-created.txt").exists()
+        with scoped_workdir(tmp_path):
+            before = json.loads(session_runtime_state_path(session_id).read_text())
+        assert before["completion_gate_prompts"] == 0
+
+        provider.followup = True
+        client.run(
+            session_id, "Do not call any tool. Reply with exactly AFTER_CANCEL_OK.",
+            model="offline/offline-model",
+        )
+        assert session.wait(timeout=10)
+        assert provider.followup_calls == 3
+        assert provider.guidance_counts == [0, 1, 2]
+        snapshot = client.attach_snapshot(session_id)
+        info = client.get_session(session_id)
+        assert snapshot["settled"] is True
+        assert info["status"] == info["last_result"]["status"] == "blocked"
+        assert info["running"] is False
+        assert info["last_error"] == ""
+        assert info["pending_interaction_count"] == 0
+        assert client.pending_permissions(session_id) == []
+        assert client.pending_questions(session_id) == []
+        summary = info["last_result"]["answer"]
+        assert "completion feedback" in summary.lower() and "exhausted" in summary.lower()
+        assert "R1" in summary
+        assert "AFTER_CANCEL_OK" not in summary
+        assert info["last_result"]["metadata"]["authored_content"] == "AFTER_CANCEL_OK"
+        assert session.history[-1]["content"] == client.messages(session_id)[-1]["content"] == summary
+        with scoped_workdir(tmp_path):
+            persisted = load_session(session_id)
+            state = json.loads(session_runtime_state_path(session_id).read_text())
+        assert persisted["run_status"] == "blocked"
+        assert persisted["messages"][-1]["content"] == summary
+        assert state["completion_gate_prompts"] == 0
+        assert sum('<stop-hook-guidance>' in str(m.get('content', ''))
+                   for m in persisted['messages'] if m.get('_nz_synthetic')) == 2
+        assert state["requested_paths"] == ["never-created.txt"]
+        from nz_coder.runtime.verification.domain.checkpoint import restore_domain
+        from nz_coder.runtime.verification.domain.models import RunScope, TaskScope, WorkspaceVersion
+        checkpoint = state["verification_domain"]
+        restored_domain = restore_domain(checkpoint, lock=threading.RLock(),
+            scope=RunScope(TaskScope(**checkpoint["scope"]["task"]), "check-recovery", "test"),
+            version=WorkspaceVersion(**checkpoint["version"]))
+        assert [(item.requirement.id, item.status) for item in restored_domain.snapshot().requirements] == [("R1", "pending")]
+        assert not (tmp_path / "never-created.txt").exists()
+        settled = [event for event in session.event_bus.recent(100) if event.type == "session.run.settled"]
+        assert [event.properties for event in settled] == [
+            {"status": "cancelled", "persisted": True},
+            {"status": "blocked", "persisted": True},
+        ]
+        assert settled[-1].run_id == snapshot["active_interaction_run_id"]
+        assert snapshot["session"]["last_result"] == info["last_result"]
+        assert persisted["messages"][-1]["_nz_end_state"]["reason"] == "errored"
+        assert state["active"] is True
+
+        from nz_coder.protocol.message_part_reducer import MessagePartReducer
+
+        live = MessagePartReducer()
+        for event in session.event_bus.recent(1000):
+            if event.run_id == snapshot["active_interaction_run_id"]:
+                live.apply_event(event.to_dict())
+        last_message_id = persisted["messages"][-1]["_nz_message_id"]
+        assert "".join(
+            part.get("text", "") for part in live.parts(last_message_id)
+            if part.get("type") == "text"
+        ) == summary
+
+        # 重建管理器只恢复已结清结果，不能自动开启新的模型运行。
+        restored_manager = SessionManager(workspace_roots=[tmp_path])
+        try:
+            lazy = next(item for item in restored_manager.list()["sessions"] if item["id"] == session_id)
+            assert lazy["status"] == "blocked"
+            recovered = restored_manager.get(session_id).info()
+            assert recovered["status"] == recovered["last_result"]["status"] == "blocked"
+            assert recovered["last_result"]["answer"] == summary
+            assert recovered["running"] is False
+            assert provider.followup_calls == 3
+        finally:
+            restored_manager.close()
+
+        # 显式继续开启新的补救额度，旧累计调用与未满足需求保持。
+        provider.allowed_followup_calls = 6
+        client.run(session_id, "go on", model="offline/offline-model")
+        assert session.wait(timeout=10)
+        assert provider.followup_calls == 6
+        assert provider.guidance_counts == [0, 1, 2, 0, 1, 2]
+        continued = client.get_session(session_id)
+        assert continued["status"] == "blocked"
+        assert continued["running"] is False
+        with scoped_workdir(tmp_path):
+            continued_state = json.loads(session_runtime_state_path(session_id).read_text())
+        assert continued_state["completion_gate_prompts"] == 0
+        assert provider.guidance_counts[-3:] == [0, 1, 2]
+        assert continued_state["turn_count"] == 3
+        assert continued_state["requested_paths"] == ["never-created.txt"]
+        assert continued_state["verification_domain"]["definition"]["contract"] == state["verification_domain"]["definition"]["contract"]
+    finally:
+        service.shutdown()
+        thread.join(timeout=2)
+        assert not thread.is_alive()
 
 
 def test_http_projects_agents_and_controls_runtime_owned_workflow(local_service):
@@ -324,26 +733,186 @@ def test_http_remote_memory_review_uses_session_owned_control_plane(local_servic
     created = client.create_session("default")
     session = local_service.manager.get(created["id"])
     session.agent._mm = manager
-    control = MemoryControlPlane(manager.memory_dir, manager)
-    proposal = control.submit({
-        "name": "style",
-        "description": "Formatting",
-        "type": "user",
-        "content": "Use spaces",
-        "confidence": 0.9,
-        "reason": "explicit preference",
-    }, source_session=session.session_id)
-
+    control = session.memory_control()
+    receipt = control.submit({"action": "create", "name": "style", "description": "Formatting",
+        "type": "user", "content": "Use spaces"}, operation_id="propose")
+    proposal_id = receipt["proposal_id"]
     status = client.memory_status(session.session_id)
-    assert status["pending"][0]["fingerprint"] == proposal.fingerprint
-    assert client.get_memory_proposal(
-        session.session_id, proposal.fingerprint
-    )["source_session"] == session.session_id
-    reviewed = client.review_memory(
-        session.session_id, proposal.fingerprint, "approve"
-    )
-    assert reviewed["status"] == "applied"
+    assert status["pending"][0]["id"] == proposal_id
+    inspected = client.get_memory_proposal(session.session_id, proposal_id)
+    assert inspected["context"]["session_id"] == session.session_id
+    assert inspected["proposal_revision"] == 1
+    reviewed = client.review_memory(session.session_id, proposal_id, "approve",
+        expected_proposal_revision=1, operation_id="approve")
+    assert reviewed["status"] == "saved"
+    assert manager.read(reviewed["memory_id"])["content"] == "Use spaces"
     assert client.memory_status(session.session_id)["pending"] == []
+
+
+def test_http_memory_records_versions_and_operation_receipts(local_service, tmp_path):
+    client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
+    session_id = client.create_session("default")["id"]
+    session = local_service.manager.get(session_id)
+    session.agent._mm = MemoryManager(tmp_path / "memory")
+    command = {"action": "create", "name": "规则", "type": "project", "content": "使用中文注释"}
+    created = client.mutate_memory(session_id, command, operation_id="create")
+    assert created["status"] == "saved"
+    memory_id = created["memory_id"]
+    assert client.mutate_memory(session_id, command, operation_id="create") == created
+    assert client.mutate_memory(session_id, {**command, "content": "另一内容"},
+                                operation_id="create")["status"] == "operation_conflict"
+    assert client.list_memories(session_id)["items"][0]["id"] == memory_id
+    search_result = client.search_memories(session_id, "中文")
+    assert search_result["items"][0]["id"] == memory_id
+    assert "semantic_status" in search_result
+    assert tuple(search_result["generation"]) == session.agent._mm.generation()
+    assert client.read_memory(session_id, memory_id)["revision"] == 1
+    updated = client.mutate_memory(session_id, {"action": "update", "memory_id": memory_id,
+        "expected_revision": 1, "content": "只改相关文件"}, operation_id="update")
+    assert updated["revision"] == 2
+    stale = client.mutate_memory(session_id, {"action": "archive", "memory_id": memory_id,
+        "expected_revision": 1}, operation_id="stale")
+    assert stale["status"] == "conflict"
+    assert client.read_memory(session_id, memory_id, revision=1)["content"] == command["content"]
+    assert [item["revision"] for item in client.memory_history(session_id, memory_id)] == [1, 2]
+    assert client.mutate_memory(session_id, {"action": "assess", "memory_id": memory_id,
+        "expected_revision": 2, "judgment": {"coverage": "partial", "result": "inconclusive",
+        "assessment": "只检查注释", "covered_claims": "注释语言"}}, operation_id="assess")["status"] == "saved"
+
+
+def test_cli_http_and_model_memory_search_keep_semantics_and_session_settings(local_service, tmp_path, monkeypatch, capsys):
+    from nz_coder.runtime.core.run_settings import RunSettings, current_run_settings, scoped_run_settings
+    from nz_coder.state import memory as memory_module
+    from nz_coder.state.memory_cli import memory_main
+    from nz_coder.state.memory_retrieval import reindex_memory
+
+    class Encoder:
+        identity = "product-test-deterministic-v1"
+        available = True
+
+        def embed(self, texts):
+            return [[1.0, 0.0] for _ in texts]
+
+    monkeypatch.setenv("NZ_MEMORY_RETRIEVAL_MODE", "hybrid")
+    monkeypatch.setenv("NZ_MEMORY_EMBEDDING_MODEL", "/offline-product-fixture")
+    client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
+    session_id = client.create_session("default")["id"]
+    session = local_service.manager.get(session_id)
+    manager = MemoryManager(tmp_path / "memory")
+    session.agent._mm = manager
+    encoder = Encoder()
+    factory_settings = []
+
+    def configured_encoder():
+        settings = current_run_settings()
+        factory_settings.append(settings)
+        assert settings.snapshot is session.config_snapshot
+        assert settings.memory_retrieval_mode == "hybrid"
+        assert settings.memory_embedding_model == "/offline-product-fixture"
+        return None if encoder.available is None else encoder
+
+    monkeypatch.setattr(memory_module, "configured_embedding_provider", configured_encoder)
+    receipt = client.mutate_memory(session_id, {"action": "create", "name": "Build guide",
+        "description": "Local build", "content": "Compile the package using local toolchain"},
+        operation_id="create-english")
+    memory_id = receipt["memory_id"]
+    assert reindex_memory(manager.store, encoder)["status"] == "ready"
+    query = "编译流程"
+    assert manager.store.search(query) == []
+    settings = RunSettings.from_snapshot(session.config_snapshot)
+    for available, expected_status in ((True, "ready"), (False, "unavailable"), (None, "unavailable")):
+        encoder.available = available
+        with scoped_run_settings(settings), memory_module.bind_memory_manager(manager):
+            assert memory_main(["search", query], manager=manager) == 0
+            cli_result = json.loads(capsys.readouterr().out)
+            model_result = json.loads(memory_module._recall_memory(query=query))
+        http_result = client.search_memories(session_id, query)
+        for result in (cli_result, http_result, model_result):
+            assert result["semantic_status"] == expected_status
+            assert tuple(result["generation"]) == manager.generation()
+            assert [item["id"] for item in result["items"]] == ([memory_id] if available else [])
+            if available:
+                assert result["items"][0]["retrieval_sources"] == ["semantic"]
+    assert len(factory_settings) >= 6
+
+
+def test_http_legacy_memory_reads_keep_explicit_migration_diagnostic(local_service, tmp_path):
+    client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
+    session_id = client.create_session("default")["id"]
+    session = local_service.manager.get(session_id)
+    memory_dir = tmp_path / "legacy-memory"
+    memory_dir.mkdir()
+    legacy = memory_dir / "note.md"
+    original = b"---\nname: legacy\ntype: project\n---\nKeep this original.\n"
+    legacy.write_bytes(original)
+    session.agent._mm = MemoryManager(memory_dir)
+
+    for path in ("", "/records", "/search?q=legacy", "/proposals/missing"):
+        with pytest.raises(NZCoderHTTPError) as error:
+            client._request("GET", f"/session/{session_id}/memory{path}")
+        assert error.value.code == "memory_unavailable"
+        assert "nz-coder memory migrate" in error.value.message
+    assert legacy.read_bytes() == original
+    assert not (memory_dir / "memory.sqlite3").exists()
+
+
+def test_http_memory_rejects_unknown_identity_and_missing_versions(local_service, tmp_path):
+    client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
+    session_id = client.create_session("default")["id"]
+    session = local_service.manager.get(session_id)
+    session.agent._mm = MemoryManager(tmp_path / "memory")
+    route = f"/session/{session_id}/memory/mutate"
+    invalid = [
+        {"command": {"action": "create", "name": "test", "content": "body"}, "operation_id": "x", "scope_id": "forged"},
+        {"command": {"action": "create", "name": "test", "content": "body", "capability": "manage"}, "operation_id": "x"},
+        {"command": {"action": "update", "memory_id": "x", "content": "body"}, "operation_id": "x"},
+        {"command": {"action": "apply_proposal", "proposal_id": "x", "expected_proposal_revision": 1,
+                     "expected_revision": True}, "operation_id": "x"},
+        {"command": {"action": "create", "name": "test", "content": "body"}},
+    ]
+    for body in invalid:
+        with pytest.raises(NZCoderHTTPError) as error:
+            client._request("POST", route, body)
+        assert error.value.status == 400
+    with pytest.raises(NZCoderHTTPError) as error:
+        client._request("POST", f"/session/{session_id}/memory/proposals/unknown/approve", {
+            "expected_proposal_revision": 1, "operation_id": "approve",
+            "related_records": [{"memory_id": "other", "expected_revision": 1, "scope_id": "forged"}],
+        })
+    assert error.value.status == 400
+    assert session.agent._mm.list_records()["items"] == []
+
+
+def test_http_native_memory_before_first_run_and_after_restore(tmp_path):
+    session_id = None
+    memory_id = None
+    for restored in (False, True):
+        with scoped_workdir(tmp_path):
+            manager = SessionManager(workspace_roots=[tmp_path], restore_saved=restored)
+            service = SessionHTTPService(port=0, token="test-token-1234567890", manager=manager)
+            thread = threading.Thread(target=service.serve_forever, daemon=True)
+            thread.start()
+            try:
+                client = NZCoderClient(service.base_url, service.token, timeout=2)
+                if not restored:
+                    workspace_id = next(item["id"] for item in client.list_workspaces() if item["path"] == str(tmp_path))
+                    session_id = client.create_session("default", workspace_id=workspace_id)["id"]
+                session = manager.get(session_id)
+                assert session.agent is None
+                if not restored:
+                    created = client.mutate_memory(session_id, {"action": "create", "name": "无需模型",
+                        "content": "第一次运行前保存"}, operation_id="native-create")
+                    assert created["status"] == "saved"
+                    memory_id = created["memory_id"]
+                    assert client.mutate_memory(session_id, {"action": "update", "memory_id": memory_id,
+                        "expected_revision": 1, "content": "已更新"}, operation_id="native-update")["revision"] == 2
+                assert client.read_memory(session_id, memory_id)["content"] == "已更新"
+                assert client.memory_history(session_id, memory_id)[0]["content"] == "第一次运行前保存"
+                assert client.list_memories(session_id)["items"][0]["id"] == memory_id
+                assert session.agent is None
+            finally:
+                service.shutdown()
+                thread.join(timeout=2)
 
 
 def test_http_run_builds_file_parts_in_authoritative_daemon_workspace(local_service):
@@ -1008,20 +1577,19 @@ def test_http_session_busy_abort_and_delete_boundary(local_service):
 
 def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch):
     from nz_coder.foundation import config
-    from nz_coder.runtime.execution.loop import AgentLoop
 
     first_delta = threading.Event()
     release_stream = threading.Event()
     provider_exited = threading.Event()
     calls = 0
 
-    def chunk(text):
+    def chunk(text, finish_reason=None):
         return SimpleNamespace(
             choices=[SimpleNamespace(delta=SimpleNamespace(
                 content=text,
                 tool_calls=None,
                 reasoning_content=None,
-            ))],
+            ), finish_reason=finish_reason)],
         )
 
     class Completions:
@@ -1039,6 +1607,7 @@ def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch
                         yield chunk("late")
                     else:
                         yield chunk("fresh")
+                        yield chunk("", finish_reason="stop")
                 finally:
                     if call_number == 1:
                         provider_exited.set()
@@ -1047,24 +1616,19 @@ def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch
 
     completions = Completions()
 
-    def factory(session_id: str, _permission_mode: str):
-        return AgentLoop(
-            "test",
-            permission_mode="auto",
-            client=SimpleNamespace(
-                chat=SimpleNamespace(completions=completions),
-            ),
-            trace_enabled=False,
-            session_id=session_id,
-            event_bus=SessionEventBus(session_id=session_id),
-        )
-
+    from dataclasses import replace
+    from tests.runtime.test_native_product_runtime import _install_runtime
+    class Provider:
+        name = 'offline'
+        def create_completion(self, _client, **kwargs):
+            return completions.create(**kwargs)
+    runtime = _install_runtime(monkeypatch, Provider())
+    runtime = replace(runtime, capabilities=replace(runtime.capabilities, supports_streaming=True))
+    for name in ('nz_coder.runtime.execution.native_sdk.resolve_model_runtime',
+                 'nz_coder.runtime.execution.loop.resolve_model_runtime'):
+        monkeypatch.setattr(name, lambda _: replace(runtime))
     monkeypatch.setattr(config, "PLANNING_ENABLED", False)
-    manager = SessionManager(
-        agent_factory=factory,
-        workspace_roots=[tmp_path],
-        restore_saved=False,
-    )
+    manager = SessionManager(workspace_roots=[tmp_path], restore_saved=False)
     service = SessionHTTPService(
         port=0,
         token="test-token-1234567890",
@@ -1081,8 +1645,8 @@ def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch
         )
         session_id = client.create_session("auto", workspace_id)["id"]
 
-        client.run(session_id, "first")
-        assert first_delta.wait(timeout=2)
+        client.run(session_id, "first", model="offline/offline-model")
+        assert first_delta.wait(timeout=2), manager.get(session_id).info()
         assert client.abort(session_id) == {"aborted": True}
         assert client.abort(session_id) == {"aborted": False}
 
@@ -1116,8 +1680,8 @@ def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch
             for part in cancelled_assistant.get("_nz_parts", [])
         )
 
-        client.run(session_id, "second")
-        _wait_for_status(client, session_id, "completed")
+        client.run(session_id, "second", model="offline/offline-model")
+        _wait_for_status(client, session_id, "completed_unverified")
         assert calls == 2
     finally:
         release_stream.set()
@@ -1220,7 +1784,7 @@ def test_http_run_rejects_and_rolls_back_when_acceptance_cannot_persist(
     )
     try:
         restored_info = next(
-            item for item in restored_manager.list() if item["id"] == session_id
+            item for item in restored_manager.list()["sessions"] if item["id"] == session_id
         )
         assert restored_info["status"] == "failed"
         assert restored_info["runtime_status"] == "failed"
@@ -1238,14 +1802,15 @@ def test_http_session_commit_does_not_depend_on_latest_alias(tmp_path, monkeypat
 
     workspace = tmp_path / "project"
     workspace.mkdir()
-    original_write = sessions_module._write_json
+    original_write = sessions_module._publish_session_json
 
-    def fail_latest_alias(path, payload):
+    def fail_latest_alias(prepared, path):
+        json.loads(prepared.read_text(encoding="utf-8"))
         if path.name == "latest.json":
             raise OSError("alias unavailable")
-        return original_write(path, payload)
+        return original_write(prepared, path)
 
-    monkeypatch.setattr(sessions_module, "_write_json", fail_latest_alias)
+    monkeypatch.setattr(sessions_module, "_publish_session_json", fail_latest_alias)
     manager = SessionManager(
         agent_factory=_fake_factory,
         workspace_roots=[workspace],
@@ -1331,7 +1896,7 @@ def test_http_terminal_persistence_failure_restores_as_interrupted(
     )
     try:
         restored = next(
-            item for item in restored_manager.list() if item["id"] == session_id
+            item for item in restored_manager.list()["sessions"] if item["id"] == session_id
         )
         assert restored["status"] == "interrupted"
         assert restored["message_count"] == 1
@@ -1562,11 +2127,14 @@ def test_remote_child_status_reads_existing_subagent_registry(local_service):
     state.update({
         "status": "completed",
         "model_id": "provider/model",
-        "messages": [{"role": "assistant", "content": "done"}],
         "changed_files": ["src/app.py"],
         "verification_status": "passed",
     })
     subagent_module._save_subagent_state(parent["id"], state, workspace)
+    from nz_coder.runtime.session.model import Session
+    from nz_coder.runtime.session.store import LegacyJsonSessionStore
+    LegacyJsonSessionStore().save_session(Session.create(state['session_id'],
+        [{'role': 'assistant', 'content': 'done'}], workspace=workspace, parent_session_id=parent['id']))
 
     reattached = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
     children = reattached.list_children(parent["id"])
@@ -1651,11 +2219,11 @@ def test_remote_child_running_disconnect_then_completed_reconnect(
         allow_completion.set()
         worker.join(timeout=5)
         assert not worker.is_alive()
-        assert "[Subagent status: completed]" in result["value"]
+        assert "[Subagent status: completed_unverified]" in result["value"]
 
         reattached = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
         completed = reattached.get_child(parent["id"], child_id)
-        assert completed["status"] == "completed"
+        assert completed["status"] == "completed_unverified"
         assert completed["changed_files"] == []
         assert completed["parent_session_id"] == parent["id"]
     finally:
@@ -1798,7 +2366,7 @@ def test_question_tool_and_http_broker_share_request_identity():
     broker.close()
 
 
-def test_http_permission_timeout_rejects_and_releases_the_run():
+def test_http_permission_timeout_reports_failure_and_releases_the_run():
     manager = SessionManager(
         agent_factory=_fake_factory,
         interaction_timeout_seconds=0.05,
@@ -1816,8 +2384,9 @@ def test_http_permission_timeout_rejects_and_releases_the_run():
     try:
         session_id = client.create_session("default")["id"]
         client.run(session_id, "permission")
-        _wait_for_status(client, session_id, "completed")
-        assert client.messages(session_id)[-1]["content"] == "permission:reject"
+        info = _wait_for_status(client, session_id, "failed")
+        assert "timed out" in info["last_error"]
+        assert not any(message.get("content") == "permission:reject" for message in client.messages(session_id))
         assert client.pending_permissions(session_id) == []
 
         events = client.events(session_id, replay=10)
@@ -2240,10 +2809,10 @@ def test_http_restart_discovers_and_lazily_restores_session(tmp_path):
     )
     try:
         dormant = next(
-            item for item in second_manager.list() if item["id"] == session_id
+            item for item in second_manager.list()["sessions"] if item["id"] == session_id
         )
         assert dormant["status"] == "dormant"
-        assert dormant["restored"] is True
+        assert second_manager.info(session_id)["restored"] is True
         assert dormant["workspace_id"] == workspace_id
         assert dormant["message_count"] == 2
         assert session_id not in second_manager._sessions
@@ -2287,11 +2856,11 @@ def test_http_restore_marks_an_unsettled_accepted_run_as_interrupted(tmp_path):
     )
     try:
         discovered = next(
-            item for item in manager.list() if item["id"] == "interrupted-session"
+            item for item in manager.list()["sessions"] if item["id"] == "interrupted-session"
         )
         assert discovered["status"] == "interrupted"
         assert discovered["running"] is False
-        assert "before the accepted run settled" in discovered["last_error"]
+        assert "before the accepted run settled" in manager.info("interrupted-session")["last_error"]
 
         restored = manager.get("interrupted-session")
         assert restored.info()["status"] == "interrupted"
@@ -2545,7 +3114,7 @@ def test_http_restore_skips_corrupt_or_cross_workspace_metadata(tmp_path):
         restore_saved=True,
     )
     try:
-        restored_ids = {item["id"] for item in manager.list()}
+        restored_ids = {item["id"] for item in manager.list()["sessions"]}
         assert "cross-workspace" not in restored_ids
         assert "corrupt-session" not in restored_ids
         assert "missing-workspace" not in restored_ids
@@ -2582,7 +3151,6 @@ def test_workspace_registry_rejects_invalid_roots(tmp_path):
 
 
 def test_http_restore_skips_oversized_session_file(tmp_path, monkeypatch):
-    from nz_coder.http_service import manager as manager_module
 
     workspace = tmp_path / "project"
     workspace.mkdir()
@@ -2593,7 +3161,8 @@ def test_http_restore_skips_oversized_session_file(tmp_path, monkeypatch):
             session_id="oversized-session",
             activate=False,
         )
-    monkeypatch.setattr(manager_module, "_MAX_SAVED_SESSION_BYTES", 1)
+    from nz_coder.state import sessions as sessions_module
+    monkeypatch.setattr(sessions_module, "_session_byte_limit", lambda: 1)
 
     manager = SessionManager(
         agent_factory=_fake_factory,
@@ -2601,9 +3170,9 @@ def test_http_restore_skips_oversized_session_file(tmp_path, monkeypatch):
         restore_saved=True,
     )
     try:
-        assert "oversized-session" not in {
-            item["id"] for item in manager.list()
-        }
+        result = manager.list()
+        assert "oversized-session" not in {item["id"] for item in result["sessions"]}
+        assert result["unavailable"][0]["code"] == "resource_limit"
     finally:
         manager.close()
 
@@ -2728,3 +3297,320 @@ def test_serve_main_passes_interaction_timeout_and_closes(monkeypatch):
     assert captured["interaction_timeout_seconds"] == 12.5
     assert captured["workspace_roots"] == ["/tmp/project-a", "/tmp/project-b"]
     assert captured["closed"] is True
+
+
+def test_http_close_process_phase_uses_shared_absolute_deadline(tmp_path, monkeypatch):
+    from nz_coder.http_service.manager import SessionBusyError
+    from nz_coder.runtime.process import process_service as processes
+    from tests.fixtures.process_lifecycle import ControlledBackend
+
+    backends = [ControlledBackend(), ControlledBackend(), ControlledBackend()]
+    iterator = iter(backends)
+    monkeypatch.setattr(
+        processes, "create_process_backend", lambda *a, **kw: next(iterator)
+    )
+    manager = SessionManager(
+        agent_factory=_fake_factory, workspace_roots=[tmp_path], restore_saved=False
+    )
+    sessions = [manager.get(manager.create()["id"]) for _ in backends]
+    services = []
+    records = []
+    for session in sessions:
+        service = workspace_process_service(session.workspace)
+        service._kill_grace_override = 0
+        handle = service.start(
+            "owned", cwd=session.workspace, owner_session_id=session.session_id
+        )
+        services.append(service)
+        records.append(service._records[handle.process_id])
+    deadlines = []
+    original = processes.ProcessService.kill_session
+
+    def kill_session(service, session_id, *, deadline=None):
+        deadlines.append(deadline)
+        return original(service, session_id, deadline=deadline)
+
+    monkeypatch.setattr(processes.ProcessService, "kill_session", kill_session)
+    before = time.monotonic()
+    try:
+        with pytest.raises(SessionBusyError):
+            manager.close(timeout=0.04)
+        assert len(deadlines) == 3
+        assert all(
+            deadline == deadlines[0] and deadline is not None for deadline in deadlines
+        )
+        assert time.monotonic() - before < 0.4
+        assert all(record.requested_terminal is not None for record in records)
+        for session in sessions:
+            assert manager.get(session.session_id) is session
+            assert "processes" not in session._dispose_completed
+            assert not session._disposed
+    finally:
+        for backend in backends:
+            backend.recover()
+        manager.close(timeout=2)
+        for service in set(services):
+            processes.close_workspace_process_service(service.workspace)
+
+
+@pytest.mark.parametrize("failure", ["reader", "close"])
+def test_http_process_dispose_retries_after_reader_or_close_recovers(
+    tmp_path, monkeypatch, failure
+):
+    from nz_coder.http_service.manager import SessionBusyError
+    from nz_coder.runtime.process import process_service as processes
+    from tests.fixtures.process_lifecycle import ControlledBackend
+
+    backend = ControlledBackend()
+    if failure == "close":
+        backend.eof.set()
+        backend.close_fault.set()
+    monkeypatch.setattr(processes, "create_process_backend", lambda *a, **kw: backend)
+    manager = SessionManager(
+        agent_factory=_fake_factory, workspace_roots=[tmp_path], restore_saved=False
+    )
+    session = manager.get(manager.create()["id"])
+    service = workspace_process_service(session.workspace)
+    service._kill_grace_override = 0
+    handle = service.start(
+        "owned", cwd=session.workspace, owner_session_id=session.session_id
+    )
+    record = service._records[handle.process_id]
+    backend.body_exit.set()
+    try:
+        with pytest.raises(SessionBusyError):
+            manager.close(timeout=0.02)
+        assert not session._disposed
+        assert manager.get(session.session_id) is session
+        assert not record.cleanup_done.is_set()
+        assert "processes" not in session._dispose_completed
+        backend.recover()
+        manager.close(timeout=2)
+        assert session._disposed
+        assert manager.list()["sessions"] == []
+    finally:
+        backend.recover()
+        manager.close(timeout=2)
+        processes.close_workspace_process_service(session.workspace)
+
+
+def test_discovery_isolates_bad_utf8_and_malformed_parts(tmp_path):
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    with scoped_workdir(workspace):
+        good = save_session([{"role": "user", "content": "safe"}], mode="default",
+                            session_id="good-session", activate=False)
+    payload = json.loads(good.read_text(encoding="utf-8"))
+    payload["session_id"] = "bad-parts"
+    payload["run_status"] = "running"
+    payload["messages"] = [{"role": "assistant", "content": "", "_nz_parts": None}]
+    (good.parent / "bad-parts.json").write_text(json.dumps(payload), encoding="utf-8")
+    (good.parent / "bad-utf8.json").write_bytes(b"\xff")
+    manager = SessionManager(agent_factory=_fake_factory, workspace_roots=[workspace], restore_saved=True)
+    try:
+        ids = {item["id"] for item in manager.list()["sessions"]}
+        assert "good-session" in ids
+        assert "bad-parts" not in ids
+        assert "bad-utf8" not in ids
+    finally:
+        manager.close()
+
+
+def test_discovery_bounded_read_and_deep_file_isolation(tmp_path, monkeypatch):
+    import nz_coder.state.sessions as sessions
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    with scoped_workdir(workspace):
+        good = save_session([{"role": "user", "content": "safe"}], mode="default",
+                            session_id="good-deep", activate=False)
+    (good.parent / "deep-invalid.json").write_text('{"x":' * 1200 + '0' + '}' * 1200, encoding="utf-8")
+    oversized = good.parent / "oversized.json"
+    oversized.write_bytes(b"x" * 101)
+    reads = []
+    original_read = sessions.os.read
+    def counted_read(fd, count):
+        data = original_read(fd, count)
+        reads.append((count, len(data)))
+        return data
+    monkeypatch.setattr(sessions.os, "read", counted_read)
+    with pytest.raises(ValueError):
+        sessions._read_session_payload(oversized, maximum_bytes=10)
+    assert reads == [(11, 11)]
+    monkeypatch.setattr(sessions.os, "read", original_read)
+    manager = SessionManager(agent_factory=_fake_factory, workspace_roots=[workspace], restore_saved=True)
+    try:
+        ids = {item["id"] for item in manager.list()["sessions"]}
+        assert "good-deep" in ids
+        assert "deep-invalid" not in ids
+    finally:
+        manager.close()
+
+
+def test_discovery_rejects_invalid_part_shapes_with_diagnostic(tmp_path, caplog):
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    with scoped_workdir(workspace):
+        good = save_session([{"role": "user", "content": "safe"}], mode="default", session_id="good-parts", activate=False)
+    payload = json.loads(good.read_text(encoding="utf-8"))
+    bad_parts = [
+        [{"id": "part-bad", "message_id": "msg-bad", "type": "tool", "state": {"status": []}}],
+        1,
+        [1],
+        [{"id": "part-bad", "message_id": "msg-other", "type": "text", "text": "x"}],
+    ]
+    originals = {}
+    for index, parts in enumerate(bad_parts):
+        name = f"bad-shape-{index}"
+        item = dict(payload, session_id=name, run_status="running", messages=[{"role": "assistant", "content": "", "_nz_message_id": "msg-bad", "_nz_parts": parts}])
+        path = good.parent / (name + ".json")
+        path.write_text(json.dumps(item), encoding="utf-8")
+        originals[path] = path.read_bytes()
+    manager = SessionManager(agent_factory=_fake_factory, workspace_roots=[workspace], restore_saved=True)
+    try:
+        ids = {item["id"] for item in manager.list()["sessions"]}
+        assert "good-parts" in ids
+        assert not any(f"bad-shape-{index}" in ids for index in range(len(bad_parts)))
+        for path, original in originals.items():
+            assert path.read_bytes() == original
+            assert path.stem in caplog.text
+    finally:
+        manager.close()
+
+
+def _fork_history_with_snapshots(workspace, session_id):
+    from nz_coder.protocol.message_schema import attach_message_identity
+    from nz_coder.runtime.execution.loop import AgentLoop
+    from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
+    from nz_coder.runtime.session.session_processor import SessionProcessor
+    from nz_coder.state.sessions import session_snapshot_dir
+
+    with scoped_workdir(workspace):
+        store = WorkspaceSnapshotStore(workspace, session_snapshot_dir(session_id))
+    app = workspace / "app.py"
+    app.write_text("initial\n", encoding="utf-8")
+    history, snapshots = [], []
+    for index in range(1, 4):
+        user = {"role": "user", "content": f"change {index}"}
+        assistant = {"role": "assistant", "content": f"done {index}"}
+        attach_message_identity(user, f"msg-user-{index}", session_id=session_id)
+        attach_message_identity(assistant, f"msg-assistant-{index}", session_id=session_id)
+        history.extend([user, assistant])
+        processor = SessionProcessor(assistant)
+        start = store.track()
+        processor.start_step(start)
+        app.write_text(f"version {index}\n", encoding="utf-8")
+        finish = store.track()
+        processor.add_patch(start, ["app.py"])
+        processor.finish_step("stop", snapshot=finish)
+        loop = AgentLoop.__new__(AgentLoop)
+        loop.workspace_snapshots = store
+        loop._refresh_snapshot_summaries(history, assistant["_nz_message_id"], finish)
+        snapshots.append((start, finish))
+    return store, app, history, snapshots
+
+
+def test_forked_session_can_restore_inherited_snapshot_after_parent_removal(tmp_path):
+    from nz_coder.protocol.message_schema import SUMMARY_KEY, SESSION_SUMMARY_KEY
+    from nz_coder.runtime.process.workspace_snapshot import SnapshotError, WorkspaceSnapshotStore
+    from nz_coder.state.sessions import session_snapshot_dir
+
+    manager = SessionManager(agent_factory=_fake_factory, workspace_roots=[tmp_path], restore_saved=False)
+    try:
+        workspace_id = manager.workspaces.id_for(tmp_path)
+        parent_id = manager.create(workspace_id=workspace_id)["id"]
+        parent = manager.get(parent_id)
+        assert parent.workspace == tmp_path
+        parent_store, app, history, snapshots = _fork_history_with_snapshots(tmp_path, parent_id)
+        parent.history[:] = history
+        expected = [parent_store.diff_full(start, finish) for start, finish in snapshots]
+        children = [manager.fork(parent_id, turn)["id"] for turn in (1, 2, 3)]
+        assert manager.remove(parent_id)
+        for turn, child_id in enumerate(children, 1):
+            child = manager.get(child_id)
+            with scoped_workdir(tmp_path):
+                store = WorkspaceSnapshotStore(tmp_path, session_snapshot_dir(child_id))
+            for index, (start, finish) in enumerate(snapshots[:turn]):
+                assert store.diff_full(start, finish) == expected[index]
+                assert child.history[2 * index][SUMMARY_KEY] == history[2 * index][SUMMARY_KEY]
+                assert child.history[2 * index + 1][SESSION_SUMMARY_KEY] == history[2 * index + 1][SESSION_SUMMARY_KEY]
+            if turn < 3:
+                with pytest.raises(SnapshotError):
+                    store._load(snapshots[turn][1])
+        last = manager.get(children[-1])
+        last.undo()
+        assert app.read_text(encoding="utf-8") == "version 2\n"
+        last.redo()
+        assert app.read_text(encoding="utf-8") == "version 3\n"
+        from nz_coder.runtime.execution.loop import AgentLoop
+        from nz_coder.protocol.message_schema import attach_message_identity
+        from nz_coder.runtime.session.session_processor import SessionProcessor
+        loop = AgentLoop.__new__(AgentLoop)
+        with scoped_workdir(tmp_path):
+            loop.workspace_snapshots = WorkspaceSnapshotStore(tmp_path, session_snapshot_dir(children[-1]))
+        loop.tracer = SimpleNamespace(log=lambda *args, **kwargs: None)
+        user = {"role": "user", "content": "next step"}
+        assistant = {"role": "assistant", "content": "done"}
+        attach_message_identity(user, "msg-next-user", session_id=children[-1])
+        attach_message_identity(assistant, "msg-next-assistant", session_id=children[-1])
+        last.history.extend([user, assistant])
+        processor = SessionProcessor(assistant)
+        processor.start_step(snapshots[-1][1])
+        app.write_text("version 4\n", encoding="utf-8")
+        finish = loop.workspace_snapshots.track()
+        processor.finish_step("stop", snapshot=finish)
+        loop._record_step_patch(last.history, processor, finish)
+        assert "version 4" in assistant[SESSION_SUMMARY_KEY]["diffs"][0]["patch"]
+        assert user[SUMMARY_KEY]["diffs"][0]["file"] == "app.py"
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt"])
+def test_fork_snapshot_copy_failure_does_not_publish_child(tmp_path, monkeypatch, damage):
+    from nz_coder.http_service import manager as manager_module
+    from nz_coder.runtime.process.workspace_snapshot import SnapshotError
+    manager = SessionManager(agent_factory=_fake_factory, workspace_roots=[tmp_path], restore_saved=False)
+    try:
+        workspace_id = manager.workspaces.id_for(tmp_path)
+        parent_id = manager.create(workspace_id=workspace_id)["id"]
+        parent = manager.get(parent_id)
+        store, app, history, snapshots = _fork_history_with_snapshots(tmp_path, parent_id)
+        parent.history[:] = history
+        manifest = store._load(snapshots[0][0])
+        digest = next(iter(manifest["files"].values()))["blob"]
+        blob = store.root / "blobs" / digest[:2] / digest[2:]
+        if damage == "missing":
+            blob.unlink()
+        else:
+            blob.write_bytes(b"corrupt")
+        monkeypatch.setattr(manager_module, "create_session_id", lambda prefix: "fork-copy-failure")
+        original_history = copy.deepcopy(parent.history)
+        with pytest.raises(SnapshotError):
+            manager.fork(parent_id, 1)
+        assert {info["id"] for info in manager.list()["sessions"]} == {parent_id}
+        with scoped_workdir(tmp_path):
+            assert load_session("fork-copy-failure") == {}
+        assert parent.history == original_history
+        assert app.read_text(encoding="utf-8") == "version 3\n"
+    finally:
+        manager.close()
+
+
+def test_fork_copies_patch_only_snapshot_reference(tmp_path):
+    from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
+    from nz_coder.state.sessions import session_snapshot_dir
+    manager = SessionManager(agent_factory=_fake_factory, workspace_roots=[tmp_path], restore_saved=False)
+    try:
+        parent_id = manager.create(workspace_id=manager.workspaces.id_for(tmp_path))["id"]
+        parent = manager.get(parent_id)
+        store, _, history, snapshots = _fork_history_with_snapshots(tmp_path, parent_id)
+        assistant = history[1]
+        assistant["_nz_parts"] = [part for part in assistant["_nz_parts"] if part.get("type") == "patch"]
+        parent.history[:] = history
+        child_id = manager.fork(parent_id, 1)["id"]
+        assert manager.remove(parent_id)
+        with scoped_workdir(tmp_path):
+            child = WorkspaceSnapshotStore(tmp_path, session_snapshot_dir(child_id))
+        assert child._load(snapshots[0][0])["snapshot"] == snapshots[0][0]
+    finally:
+        manager.close()

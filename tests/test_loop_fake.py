@@ -6,10 +6,13 @@ import json
 import os
 import shutil
 import tempfile
+import threading
 import time
 from pathlib import Path
 
 import pytest
+
+from nz_coder.runtime.agent.planning_runtime import LegacyPlanningRuntime
 
 
 _trust_env_stack: dict[str, str | None] = {}
@@ -85,6 +88,34 @@ class FakeClient:
         self.chat = FakeChat(FakeCompletions(items))
 
 
+
+def _prepare_manual_run(agent, *, initialize=True):
+    from nz_coder.runtime.core import MAIN_PROFILE
+    from nz_coder.runtime.core.request import RunRequest, AgentDefinition
+    from nz_coder.runtime.core.run_context import RunContext
+    from nz_coder.runtime.session.model import Session
+    from nz_coder.runtime.adapters.verification_runtime import VerificationRuntime
+    request = RunRequest(agent=AgentDefinition(name="test", instructions="test"), profile=MAIN_PROFILE,
+        workspace=agent.workdir, session_id=agent.session_id, messages=())
+    context = RunContext(request, Session.create(agent.session_id, [], workspace=agent.workdir), "test")
+    agent.runtime_state.bind_run_context(context)
+    agent.verification_runtime = VerificationRuntime(agent, context)
+    if initialize:
+        agent.verification_runtime.initialize(restored=False)
+    return agent.verification_runtime
+
+
+def _unit_bash_result(agent, command, output, *, exit_code):
+    from nz_coder.runtime.adapters.verification_facts import command_receipt
+    from nz_coder.tool_platform.execution import ToolExecutionResult
+    start = agent.verification_runtime.begin_tool({"function": {"name": "bash", "arguments": {"command": command}}})
+    receipt = command_receipt("bash", command, str(agent.workdir), outcome="failed" if exit_code else "succeeded", exit_code=exit_code, output=output)
+    result = ToolExecutionResult("bash", {"command": command}, output, True, False, bool(exit_code), False,
+        metadata={"exit": exit_code}, execution_facts=(receipt,), execution_id=start.execution_id)
+    agent.verification_runtime.record_result(result)
+    agent._record_tool_result(result)
+    return result
+
 def test_parallel_tool_diagnostic_is_appended_after_every_tool_result():
     from nz_coder.loop import AgentLoop
     from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
@@ -137,6 +168,9 @@ def test_parallel_tool_diagnostic_is_appended_after_every_tool_result():
         trace_enabled=False,
     )
 
+    _prepare_manual_run(agent)
+    for _index, call, result in dispatched:
+        result.execution_id = agent.verification_runtime.begin_tool(call).execution_id
     agent._consume_dispatched_tools(dispatched, messages)
 
     assert [message["role"] for message in messages] == [
@@ -447,6 +481,9 @@ def test_strict_successful_changed_file_verification_ends_without_another_model_
         subprocess.run(["git", "add", "app.py"], cwd=tmp, check=True)
         subprocess.run(["git", "commit", "--quiet", "-m", "base"], cwd=tmp, check=True)
 
+        (tmp / "test_app.py").write_text("import unittest\nfrom app import value\nclass T(unittest.TestCase):\n def test_value(self): self.assertEqual(value, 2)\n")
+        subprocess.run(["git", "add", "test_app.py"], cwd=tmp, check=True)
+        subprocess.run(["git", "commit", "--quiet", "-m", "behavior fixture"], cwd=tmp, check=True)
         fake = FakeClient([
             FakeResponse(FakeMessage(tool_calls=[
                 FakeToolCall(
@@ -461,6 +498,7 @@ def test_strict_successful_changed_file_verification_ends_without_another_model_
             FakeResponse(FakeMessage(tool_calls=[
                 FakeToolCall("verify_changed_files", {}, call_id="verify"),
             ])),
+            FakeResponse(FakeMessage(tool_calls=[FakeToolCall("bash", {"command": "python -m pytest -q test_app.py"}, call_id="behavior")])),
             FakeResponse(FakeMessage(tool_calls=[
                 FakeToolCall("read_file", {"path": "app.py"}, call_id="extra-read"),
             ])),
@@ -472,7 +510,7 @@ def test_strict_successful_changed_file_verification_ends_without_another_model_
             status = _run_agent(agent, messages, stream=False)
 
         assert status["status"] == "completed"
-        assert fake.chat.completions.calls == 3
+        assert fake.chat.completions.calls == 4
         assert not any(message.get("tool_call_id") == "extra-read" for message in messages)
     finally:
         _restore_workdir(old, tmp)
@@ -494,6 +532,9 @@ def test_strict_verify_before_diff_ends_without_another_model_turn():
         subprocess.run(["git", "add", "app.py"], cwd=tmp, check=True)
         subprocess.run(["git", "commit", "--quiet", "-m", "base"], cwd=tmp, check=True)
 
+        (tmp / "test_app.py").write_text("import unittest\nfrom app import value\nclass T(unittest.TestCase):\n def test_value(self): self.assertEqual(value, 2)\n")
+        subprocess.run(["git", "add", "test_app.py"], cwd=tmp, check=True)
+        subprocess.run(["git", "commit", "--quiet", "-m", "behavior fixture"], cwd=tmp, check=True)
         fake = FakeClient([
             FakeResponse(FakeMessage(tool_calls=[FakeToolCall(
                 "edit_file",
@@ -506,6 +547,7 @@ def test_strict_verify_before_diff_ends_without_another_model_turn():
             FakeResponse(FakeMessage(tool_calls=[
                 FakeToolCall("diff_status", {}, call_id="diff"),
             ])),
+            FakeResponse(FakeMessage(tool_calls=[FakeToolCall("bash", {"command": "python -m pytest -q test_app.py"}, call_id="behavior")])),
             FakeResponse(FakeMessage(tool_calls=[
                 FakeToolCall("read_file", {"path": "app.py"}, call_id="extra-read"),
             ])),
@@ -517,7 +559,7 @@ def test_strict_verify_before_diff_ends_without_another_model_turn():
             status = _run_agent(agent, messages, stream=False)
 
         assert status["status"] == "completed"
-        assert fake.chat.completions.calls == 3
+        assert fake.chat.completions.calls == 4
         assert not any(message.get("tool_call_id") == "extra-read" for message in messages)
     finally:
         _restore_workdir(old, tmp)
@@ -548,6 +590,7 @@ def test_verification_terminal_requires_strict_successful_source_diff():
                 is_write=False,
             )
 
+        _prepare_manual_run(agent)
         agent.runtime_state.has_diff = True
         agent.runtime_state.source_only = False
         with scoped_runtime_overrides(strict_local_tools=True):
@@ -561,94 +604,45 @@ def test_verification_terminal_requires_strict_successful_source_diff():
 
         agent.runtime_state.mutation_generation = 1
         agent.runtime_state.diff_generation = 1
-        agent.runtime_state.verification_generation = 1
-        agent.vm._needed = True
-        agent.vm._state = __import__(
-            "nz_coder.runtime.verification.evidence", fromlist=["VerificationState"]
-        ).VerificationState.BLOCKED_ENVIRONMENT
+        from nz_coder.runtime.verification.domain.models import WorkspaceObservation
+        agent.verification_runtime.domain.observe_workspace(WorkspaceObservation(agent.verification_runtime.version()))
+        _unit_bash_result(agent, "ruff check app.py", "ruff missing", exit_code=127)
         with scoped_runtime_overrides(strict_local_tools=True):
             assert agent._strict_verification_completed([(0, {}, result("OK: passed"))]) is False
     finally:
         _restore_workdir(old, tmp)
 
 
-def test_loop_forwards_model_acceptance_contract_to_verification_manager():
+def test_loop_model_acceptance_result_enters_the_single_domain(tmp_path):
     from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
-
-    agent = AgentLoop(
-        "test",
-        permission_mode="auto",
-        client=FakeClient([]),
-        trace_enabled=False,
-    )
-    agent.runtime_state.set_acceptance_criteria_from_text(
-        "完成后运行 python -m pytest -q cron_engine/tests。"
-    )
-    agent.runtime_state.observe_tool(
-        "edit_file", {"path": "cron_engine/parser.py"}, "Done"
-    )
-    agent.runtime_state.has_diff = True
-    observed = []
-    agent.vm.observe_acceptance_contract = (
-        lambda command, output, *, passed: observed.append(
-            (command, output, passed)
-        )
-    )
-
-    agent._observe_runtime_tool(ToolExecutionResult(
-        name="bash",
-        tool_input={"command": "python -m pytest -q cron_engine/tests"},
-        output="59 passed",
-        executed=True,
-        dispatch_failed=False,
-        command_failed=False,
-        is_write=False,
-    ))
-
-    assert observed == [
-        ("python -m pytest -q cron_engine/tests", "59 passed", True)
-    ]
-
-
-def test_loop_forwards_trusted_bash_exit_code_to_verification_manager():
-    from nz_coder.loop import AgentLoop
-    from nz_coder.runtime.execution.tool_executor import ToolExecutionResult
-
-    agent = AgentLoop(
-        "test",
-        permission_mode="auto",
-        client=FakeClient([]),
-        trace_enabled=False,
-    )
-    observed = []
-    agent.vm.observe_bash = (
-        lambda tool_input, output, dispatch_failed, command_failed, *, exit_code:
-        observed.append((tool_input, output, dispatch_failed, command_failed, exit_code))
-    )
-    result = ToolExecutionResult(
-        name="bash",
-        tool_input={"command": "pytest tests/test_api.py::test_retry"},
-        output="Command exited with code 1\n1 failed",
-        executed=True,
-        dispatch_failed=False,
-        command_failed=True,
-        is_write=False,
-        metadata={"exit": 1},
-    )
-
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    with scoped_workdir(tmp_path):
+        agent = AgentLoop("test", permission_mode="auto", client=FakeClient([]), trace_enabled=False)
     try:
-        agent._observe_verification_tool(result)
+        _prepare_manual_run(agent)
+        agent.runtime_state.set_acceptance_criteria_from_text("完成后运行 python -m pytest -q cron_engine/tests。")
+        _unit_bash_result(agent, "python -m pytest -q cron_engine/tests", "59 passed", exit_code=0)
+        assert agent.runtime_state.verification_contract["passed"] is True
+        assert agent.runtime_state.verification_contract["attempts"] == 1
+        assert agent.verification_runtime.domain.snapshot().execution_ready
     finally:
         agent.close()
 
-    assert observed == [(
-        {"command": "pytest tests/test_api.py::test_retry"},
-        "Command exited with code 1\n1 failed",
-        False,
-        True,
-        1,
-    )]
+
+def test_loop_retains_trusted_exit_as_domain_failure(tmp_path):
+    from nz_coder.loop import AgentLoop
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    with scoped_workdir(tmp_path):
+        agent = AgentLoop("test", permission_mode="auto", client=FakeClient([]), trace_enabled=False)
+    try:
+        _prepare_manual_run(agent)
+        _unit_bash_result(agent, "pytest tests/test_api.py::test_retry", "quiet failure", exit_code=7)
+        snapshot = agent.verification_runtime.domain.snapshot()
+        assert not snapshot.execution_ready
+        assert snapshot.executions[-1].exit_code == 7
+        assert any(item.status == "failed" for item in snapshot.checks)
+    finally:
+        agent.close()
 
 
 def test_queued_followup_stops_before_next_provider_step():
@@ -751,7 +745,7 @@ def test_output_limit_reasoning_only_persists_warning_and_usage():
         )
         finish = next(part for part in assistant["_nz_parts"] if part["type"] == "step-finish")
         assert result["status"] == "completed"
-        assert result["content"] == "final visible answer"
+        assert result["content"].startswith('final visible answer')
         assert warning["text"] == REASONING_LENGTH_WARNING
         assert finish["reason"] == "length"
         assert finish["tokens"] == {
@@ -1306,9 +1300,9 @@ def test_loop_reports_failed_verification_without_reopening_completion():
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
         status = _run_agent(agent, messages, stream=False)
 
-        assert status["status"] == "completed"
+        assert status["status"] == "completed_unverified"
         assert status["verification_needed"] is True
-        assert fake.chat.completions.calls == 2
+        assert fake.chat.completions.calls == 4
         assert not any(
             m.get("role") == "user" and "<verification-required>" in m.get("content", "")
             for m in messages
@@ -1322,7 +1316,7 @@ def test_loop_reports_failed_verification_without_reopening_completion():
         _restore_workdir(old, tmp)
 
 
-def test_loop_runs_required_static_and_targeted_stages_before_completion():
+def test_loop_runs_required_static_and_targeted_stages_before_completion(monkeypatch):
     """模型静态检查后提前结束会被 gate 拉回，目标测试通过后才能完成。"""
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
@@ -1366,33 +1360,35 @@ def test_loop_runs_required_static_and_targeted_stages_before_completion():
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
         from nz_coder.runtime.verification.hooks import verification_gate_hook
         agent.hooks.register_before_no_tool_response(verification_gate_hook)
-        agent.vm._plan_builder = lambda _changed_files: {
-            "recommended": [],
-            "fallback": [],
-            "notes": [],
-            "stages": [
-                {
-                    "name": "static",
-                    "required": True,
-                    "commands": [{
-                        "command": "python -m py_compile app.py",
-                        "reason": "changed source",
-                        "required": True,
-                    }],
-                },
-                {
-                    "name": "targeted",
-                    "required": True,
-                    "commands": [{
-                        "command": "pytest tests/test_app.py::test_run",
-                        "reason": "exact target",
-                        "required": True,
-                    }],
-                },
-                {"name": "regression", "required": False, "commands": []},
-            ],
-        }
+        def plan(_changed_files):
+            return {
+                    "recommended": [],
+                    "fallback": [],
+                    "notes": [],
+                    "stages": [
+                        {
+                            "name": "static",
+                            "required": True,
+                            "commands": [{
+                                "command": "python -m py_compile app.py",
+                                "reason": "changed source",
+                                "required": True,
+                            }],
+                        },
+                        {
+                            "name": "targeted",
+                            "required": True,
+                            "commands": [{
+                                "command": "pytest tests/test_app.py::test_run",
+                                "reason": "exact target",
+                                "required": True,
+                            }],
+                        },
+                        {"name": "regression", "required": False, "commands": []},
+                    ],
+                }
 
+        monkeypatch.setattr("nz_coder.intelligence.verification_planner.plan_verification_commands", lambda **kwargs: plan(kwargs.get("changed_files", [])))
         status = _run_agent(agent, messages, stream=False)
 
         assert status["status"] == "completed"
@@ -1400,7 +1396,7 @@ def test_loop_runs_required_static_and_targeted_stages_before_completion():
         assert fake.chat.completions.calls == 5
         assert any(
             message.get("role") == "user"
-            and "<verification-pipeline>" in message.get("content", "")
+            and "Verification remains unconfirmed" in message.get("content", "")
             and "tests/test_app.py::test_run" in message.get("content", "")
             for message in messages
         )
@@ -1426,10 +1422,13 @@ def test_loop_reflection_reopens_incomplete_completion(monkeypatch):
             FakeResponse(FakeMessage(tool_calls=[
                 FakeToolCall("write_file", {"path": "app.py", "content": "def run():\n    return 'ok'\n"}),
             ])),
+            FakeResponse(FakeMessage(tool_calls=[FakeToolCall("bash", {"command": "python -m py_compile app.py"}, call_id="syntax")])),
             FakeResponse(FakeMessage("done without tests")),
             FakeResponse(FakeMessage(tool_calls=[
                 FakeToolCall("write_file", {"path": "test_app.py", "content": "from app import run\n\n\ndef test_run():\n    assert run() == 'ok'\n"}),
             ])),
+            FakeResponse(FakeMessage(tool_calls=[FakeToolCall("bash", {"command": "python -m py_compile app.py"}, call_id="syntax-after-test-write")])),
+            FakeResponse(FakeMessage(tool_calls=[FakeToolCall("bash", {"command": "python -m pytest -q test_app.py"}, call_id="test")])),
             FakeResponse(FakeMessage("done with tests")),
         ])
         reviews = iter([
@@ -1448,16 +1447,15 @@ def test_loop_reflection_reopens_incomplete_completion(monkeypatch):
                 "required_next_steps": [],
             },
         ])
-        messages = [{"role": "user", "content": "Implement app.py and add tests."}]
+        messages = [{"role": "user", "content": "Implement run."}]
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
         from nz_coder.runtime.verification.hooks import reflection_gate_hook
         agent.hooks.register_before_no_tool_response(reflection_gate_hook)
-        monkeypatch.setattr(agent.vm, "should_gate", lambda: False)
         monkeypatch.setattr(agent, "_run_reflection_review", lambda content_text: next(reviews))
         status = _run_agent(agent, messages, stream=False)
 
         assert status["status"] == "completed"
-        assert fake.chat.completions.calls == 4
+        assert fake.chat.completions.calls == 7
         assert (tmp / "app.py").exists()
         assert (tmp / "test_app.py").exists()
         assert any(
@@ -1490,13 +1488,13 @@ def test_loop_streaming_emits_only_accepted_final_answer(monkeypatch):
         messages = [{"role": "user", "content": "fix the bug"}]
 
         monkeypatch.setattr(agent, "_call_llm", lambda *args, **kwargs: next(results))
-        monkeypatch.setattr(agent.vm, "should_gate", lambda: False)
         monkeypatch.setattr(agent, "_check_reflection_gate", lambda messages, status, content_text: next(statuses))
 
         status = _run_agent(agent, messages, stream=True, on_token=tokens.append)
 
         assert status["status"] == "completed"
-        assert tokens == ["accepted answer", None]
+        assert len(tokens) == 2 and tokens[-1] is None
+        assert tokens[0].startswith("accepted answer") and "draft answer" not in tokens[0]
     finally:
         _restore_workdir(old, tmp)
 
@@ -1509,7 +1507,6 @@ def test_loop_reflection_parses_subagent_output(monkeypatch):
     try:
         agent = AgentLoop("test", permission_mode="auto", client=FakeClient([]), trace_enabled=False)
         agent.runtime_state.initial_task_text = "Implement pkg/app.py and add tests."
-        agent.runtime_state.task_mode = "feature"
         agent.runtime_state.acceptance_criteria = ["Implement pkg/app.py", "Add tests"]
         agent.runtime_state.requested_paths = ["pkg/app.py", "tests/test_app.py"]
         agent.runtime_state.edits_this_run = 1
@@ -1754,7 +1751,7 @@ def test_loop_retries_transient_api_errors():
         _run_agent(agent, messages, stream=False)
 
         assert fake.chat.completions.calls == 3
-        assert messages[-1]["content"] == "recovered"
+        assert messages[-1]["content"].startswith('recovered')
         retries = [
             part for part in messages[-1]["_nz_parts"]
             if part["type"] == "retry"
@@ -1797,7 +1794,7 @@ def test_loop_writes_trace_events():
         fake = FakeClient([
             FakeResponse(FakeMessage("done")),
         ])
-        tracer = TraceRecorder(trace_dir=tmp / "traces", enabled=True)
+        tracer = TraceRecorder(trace_dir=tmp.parent / (tmp.name + "-traces"), enabled=True)
         messages = [{"role": "user", "content": "hello"}]
         agent = AgentLoop("test", permission_mode="auto", client=fake, tracer=tracer)
         _run_agent(agent, messages, stream=False)
@@ -1818,14 +1815,17 @@ def test_loop_writes_trace_events():
         _restore_workdir(old, tmp)
 
 
-def test_runtime_summary_exposes_generation_terminal_evidence():
+def test_runtime_summary_exposes_generation_terminal_evidence(tmp_path):
     """Catches final-risk filtering silently falling back to all generations."""
     from nz_coder.loop import AgentLoop
 
-    agent = AgentLoop("test", permission_mode="auto", client=FakeClient([]), trace_enabled=False)
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    with scoped_workdir(tmp_path):
+        agent = AgentLoop("test", permission_mode="auto", client=FakeClient([]), trace_enabled=False)
     agent.runtime_state.mutation_generation = 3
     agent.runtime_state.diff_generation = 3
-    agent.runtime_state.verification_generation = 3
+    _prepare_manual_run(agent)
+    _unit_bash_result(agent, "pytest tests/test_app.py", "1 passed", exit_code=0)
 
     runtime = agent._runtime_summary()
 
@@ -1958,6 +1958,11 @@ def test_loop_can_complete_hard_refactor_with_structural_edit():
                     "calls": [{"caller": "UserManager.create_user", "callee": "validate_email"}],
                 }, call_id="call_2"),
             ])),
+            FakeResponse(FakeMessage(tool_calls=[FakeToolCall("bash", {"command": "python -m py_compile user_manager.py"}, call_id="compile-after-structural")])),
+            FakeResponse(FakeMessage(tool_calls=[FakeToolCall("python_symbol_check", {
+                "path": "user_manager.py", "symbols": ["validate_email", "UserManager", "UserManager.create_user"],
+                "calls": [{"caller": "UserManager.create_user", "callee": "validate_email"}],
+            }, call_id="fresh-symbol-check")])),
             FakeResponse(FakeMessage("done")),
         ])
         messages = [{"role": "user", "content": "refactor user_manager.py"}]
@@ -1970,7 +1975,7 @@ def test_loop_can_complete_hard_refactor_with_structural_edit():
         UserManager = namespace["UserManager"]
 
         assert status["status"] == "completed"
-        assert fake.chat.completions.calls == 3
+        assert fake.chat.completions.calls == 5
         assert validate_email("a@b.c") is True
         assert validate_email("") is False
         assert validate_email("noat") is False
@@ -2191,6 +2196,7 @@ def test_402_balance_error_aborts_after_one_provider_request():
 def test_context_overflow_recovery_does_not_require_http_transport_library():
     """Provider context rejection follows processor compact instead of 400 repair."""
     from nz_coder.loop import AgentLoop
+    from tests.fixtures.compaction_summary import summary_json
 
     class FakeContextOverflow(Exception):
         status_code = 400
@@ -2204,17 +2210,18 @@ def test_context_overflow_recovery_does_not_require_http_transport_library():
         )
         fake = FakeClient([
             overflow,
-            FakeResponse(FakeMessage("## Goal\n- finish the task")),
+            FakeResponse(FakeMessage(summary_json("finish the task")), finish_reason="stop"),
             FakeResponse(FakeMessage("resumed answer")),
         ])
-        messages = [{"role": "user", "content": "test overflow recovery"}]
+        messages = [{"role": "user", "content": "test overflow recovery"},
+                    {"role": "assistant", "content": "old observations " * 5000}]
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
 
         status = _run_agent(agent, messages, stream=False)
 
         assert status["status"] == "completed"
         assert fake.chat.completions.calls == 3
-        assert messages[-1]["content"] == "resumed answer"
+        assert messages[-1]["content"].startswith('resumed answer')
         assert any(
             isinstance(message.get("_nz_compaction"), dict)
             and message["_nz_compaction"].get("overflow") is True
@@ -2235,6 +2242,46 @@ def test_openai_client_error_classification_is_transport_neutral():
         status_code = 400
 
     assert _is_client_error(FakeClientError("bad request")) is True
+
+
+def test_productive_run_recovers_from_four_separate_overflows(monkeypatch):
+    """Runner must reset recovery only after accepting a normal coding response."""
+    from nz_coder.loop import AgentLoop, LLMResult
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+
+    old, tmp = _tmp_workdir()
+    try:
+        (tmp / "facts.txt").write_text("confirmed observation\n" * 300)
+        outcomes = []
+        for index in range(4):
+            outcomes.extend([
+                LLMResult(needs_compaction=True, compaction_error="context_length_exceeded"),
+                LLMResult(tool_calls=[{
+                    "id": f"read-{index}", "type": "function",
+                    "function": {"name": "read_file", "arguments": '{"path":"facts.txt"}'},
+                }]),
+            ])
+        outcomes.append(LLMResult(content="Finished the observations."))
+        pending = iter(outcomes)
+        agent = AgentLoop("test", permission_mode="auto", client=FakeClient([]), trace_enabled=False)
+        monkeypatch.setattr(agent, "_call_llm", lambda *_a, **_k: next(pending))
+        compactions = []
+
+        def compact(_messages, *, overflow=False):
+            compactions.append(overflow)
+            return [{"role": "user", "content": "Resume observations.",
+                     "_nz_compaction": {"created_at": time.time()}}]
+
+        monkeypatch.setattr(agent, "_compact_messages", compact)
+        messages = [{"role": "user", "content": "Gather observations. " + "background " * 400}]
+        with scoped_runtime_overrides(max_agent_turns=12):
+            status = _run_agent(agent, messages, stream=False)
+
+        assert status["status"] == "completed"
+        assert compactions == [True, True, True, True]
+        assert messages[-1]["content"].startswith('Finished the observations.')
+    finally:
+        _restore_workdir(old, tmp)
 
 
 def test_context_overflow_stops_after_three_compaction_attempts(monkeypatch):
@@ -2259,12 +2306,13 @@ def test_context_overflow_stops_after_three_compaction_attempts(monkeypatch):
             compact_calls.append(overflow)
             return [{
                 "role": "user",
-                "content": "<session-summary>bounded</session-summary>",
+                "content": "<session-summary>" + "state " * (1000 - 250 * len(compact_calls)) + "</session-summary>",
                 "_nz_compaction": {"overflow": overflow},
             }]
 
         monkeypatch.setattr(agent, "_compact_messages", fake_compact)
-        messages = [{"role": "user", "content": "large request"}]
+        messages = [{"role": "user", "content": "large request"},
+                    {"role": "assistant", "content": "old observations " * 1000}]
 
         with scoped_runtime_overrides(max_agent_turns=5):
             status = _run_agent(agent, messages, stream=False)
@@ -2295,7 +2343,7 @@ def test_pre_send_and_reactive_compactions_share_one_three_attempt_owner(monkeyp
         model_calls = []
         compact_calls = []
         monkeypatch.setattr(agent, "_prompt_budget", lambda: prompt_budget(10_000, 2_000))
-        monkeypatch.setattr(agent, "_projected_request_tokens", lambda _messages: 9_000)
+        monkeypatch.setattr(agent, "_active_tool_specs", lambda: [])
         monkeypatch.setattr(
             agent,
             "_call_llm",
@@ -2309,19 +2357,20 @@ def test_pre_send_and_reactive_compactions_share_one_three_attempt_owner(monkeyp
             compact_calls.append(overflow)
             return [{
                 "role": "user",
-                "content": "<session-summary>bounded</session-summary>",
+                "content": "<session-summary>" + "state " * (2000 - 500 * len(compact_calls)) + "</session-summary>",
                 "_nz_compaction": {"auto": True, "created_at": time.time()},
             }]
 
         monkeypatch.setattr(agent, "_compact_messages", fake_compact)
-        messages = [{"role": "user", "content": "large request"}]
+        messages = [{"role": "user", "content": "large request"},
+                    {"role": "assistant", "content": "old observations " * 3000}]
 
         with scoped_runtime_overrides(max_agent_turns=5):
             status = _run_agent(agent, messages, stream=False)
 
         assert status["status"] == "error"
-        assert compact_calls == [False, True, False]
-        assert len(model_calls) == 2
+        assert compact_calls == [False, True, True]
+        assert len(model_calls) == 3
         assert any(
             "Compaction exhausted" in str(message.get("_nz_error") or "")
             for message in messages
@@ -2338,19 +2387,19 @@ def test_pre_send_compaction_failure_is_checkpointed_without_provider_call(monke
     old, tmp = _tmp_workdir()
     try:
         agent = AgentLoop(
-            "test",
+            "Fixed instructions.",
             permission_mode="auto",
             client=FakeClient([]),
             trace_enabled=False,
         )
         monkeypatch.setattr(agent, "_prompt_budget", lambda: prompt_budget(10_000, 2_000))
-        monkeypatch.setattr(agent, "_projected_request_tokens", lambda _messages: 9_000)
         monkeypatch.setattr(
             agent,
             "_compact_messages",
             lambda _messages: (_ for _ in ()).throw(RuntimeError("summary unavailable")),
         )
-        messages = [{"role": "user", "content": "large request"}]
+        messages = [{"role": "user", "content": "large request"},
+                    {"role": "assistant", "content": "historical observation " * 3000}]
 
         status = _run_agent(agent, messages, stream=False)
         persisted = load_session(agent.session_id)
@@ -2383,16 +2432,16 @@ def test_context_layers_keep_dynamic_state_out_of_system_prompt():
     injected = _inject_dynamic_context(messages, dynamic)
 
     assert stable == "SYSTEM\n"
-    assert "MEMORY" in injected[0]["content"]
+    assert "MEMORY" in injected[-1]["content"]
     assert "system-reminder" not in stable
     assert "Working Memory" not in stable
-    assert injected[0]["role"] == "user"
-    assert "<context-injection>" in injected[0]["content"]
-    assert injected[0]["content"].endswith("fix the bug")
+    assert injected[:-1] == messages
+    assert injected[-1]["role"] == "user"
+    assert "<context-injection>" in injected[-1]["content"]
     assert stats["before_total_tokens"] == stats["after_total_tokens"]
 
 
-def test_instruction_reminder_precedes_dynamic_context_on_first_user():
+def test_instruction_reminder_stays_with_task_before_trailing_dynamic_context():
     from nz_coder.loop import _inject_dynamic_context, _inject_instruction_reminder
 
     messages = [{"role": "user", "content": "fix the bug"}]
@@ -2404,7 +2453,12 @@ def test_instruction_reminder_precedes_dynamic_context_on_first_user():
 
     content = injected[0]["content"]
     assert content.startswith("<system-reminder>rules</system-reminder>")
-    assert content.index("<context-injection>") < content.index("fix the bug")
+    assert content.endswith("fix the bug")
+    assert "<context-injection>" not in content
+    assert injected[-1] == {
+        "role": "user",
+        "content": "<context-injection>memory</context-injection>",
+    }
 
 
 def test_instruction_reminder_falls_back_to_system_without_user_message():
@@ -2454,39 +2508,18 @@ def test_context_layer_budget_truncates_memory_and_scratch():
     assert "truncated by context budget" in stable or "truncated by context budget" in dynamic
 
 
-def _set_planning_config(config, enabled=True, max_replans=2, idle_turns=5):
-    env_keys = (
-        "NZ_PLANNING_ENABLED", "NZ_REPLAN_MAX_ATTEMPTS",
-        "NZ_REPLAN_IDLE_TURNS", "NZ_PLANNING_MAX_TOKENS",
-    )
-    old_env = {key: os.environ.get(key) for key in env_keys}
-    old = (
-        config.PLANNING_ENABLED,
-        config.REPLAN_MAX_ATTEMPTS,
-        config.REPLAN_IDLE_TURNS,
-        config.PLANNING_MAX_TOKENS,
-    )
-    config.PLANNING_ENABLED = enabled
-    config.REPLAN_MAX_ATTEMPTS = max_replans
-    config.REPLAN_IDLE_TURNS = idle_turns
-    config.PLANNING_MAX_TOKENS = 200
-    os.environ.update({
-        "NZ_PLANNING_ENABLED": "1" if enabled else "0",
-        "NZ_REPLAN_MAX_ATTEMPTS": str(max_replans),
-        "NZ_REPLAN_IDLE_TURNS": str(idle_turns),
-        "NZ_PLANNING_MAX_TOKENS": "200",
-    })
+def _set_planning_config(config, enabled=True):
+    keys = ("NZ_PLANNING_ENABLED", "NZ_PLANNING_MAX_TOKENS")
+    old_env = {key: os.environ.get(key) for key in keys}
+    old = (config.PLANNING_ENABLED, config.PLANNING_MAX_TOKENS)
+    config.PLANNING_ENABLED, config.PLANNING_MAX_TOKENS = enabled, 200
+    os.environ.update({"NZ_PLANNING_ENABLED": "1" if enabled else "0", "NZ_PLANNING_MAX_TOKENS": "200"})
     return (*old, old_env)
 
 
 def _restore_planning_config(config, old):
-    (
-        config.PLANNING_ENABLED,
-        config.REPLAN_MAX_ATTEMPTS,
-        config.REPLAN_IDLE_TURNS,
-        config.PLANNING_MAX_TOKENS,
-    ) = old[:4]
-    for key, value in old[4].items():
+    config.PLANNING_ENABLED, config.PLANNING_MAX_TOKENS = old[:2]
+    for key, value in old[2].items():
         if value is None:
             os.environ.pop(key, None)
         else:
@@ -2512,14 +2545,13 @@ def test_planning_disabled_keeps_llm_call_count_unchanged():
         }]
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
         agent.runtime_state.initial_task_text = messages[0]["content"]
-        agent.runtime_state.task_mode = "test"
-        agent.runtime_state.verification_contract = {
+        agent.runtime_state.verification_definition = {
             "command": "pytest -q tests/test_users.py",
         }
-        asyncio.run(agent._maybe_generate_plan(messages))
+        asyncio.run(LegacyPlanningRuntime(agent).generate(messages))
 
         assert fake.chat.completions.calls == 0
-        assert not any(e["category"] == "plan" for e in scratchpad.entries)
+        assert not scratchpad.memory["focus"]
         assert agent.runtime_state.task_contract["requirements"]
         assert agent.runtime_state.requirement_ledger["items"]
     finally:
@@ -2553,7 +2585,7 @@ def test_runtime_bootstrap_does_not_bind_traceback_path_as_artifact():
         agent.runtime_state.initial_task_text = task
         agent.runtime_state.set_acceptance_criteria_from_text(task)
 
-        asyncio.run(agent._maybe_generate_plan([{
+        asyncio.run(LegacyPlanningRuntime(agent).generate([{
             "role": "user",
             "content": task,
         }]))
@@ -2587,11 +2619,10 @@ def test_invalid_planner_json_retains_runtime_bootstrap_contract():
         }]
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
         agent.runtime_state.initial_task_text = messages[0]["content"]
-        agent.runtime_state.task_mode = "test"
-        agent.runtime_state.verification_contract = {
+        agent.runtime_state.verification_definition = {
             "command": "pytest -q cron_engine/tests",
         }
-        asyncio.run(agent._maybe_generate_plan(messages))
+        asyncio.run(LegacyPlanningRuntime(agent).generate(messages))
 
         assert fake.chat.completions.calls == 1
         assert agent.runtime_state.task_contract["requirements"]
@@ -2626,6 +2657,7 @@ def test_gateway_observer_adds_control_usage_once_but_not_coding_usage():
         )
         context = UsageContext()
         agent.active_run_context = context
+        agent._begin_session_checkpoints(context)
         usage = {
             "input": 100,
             "output": 20,
@@ -2701,6 +2733,7 @@ def test_gateway_observer_accounts_auto_mode_usage_exactly_once():
         )
         context = UsageContext()
         agent.active_run_context = context
+        agent._begin_session_checkpoints(context)
         agent._model_gateway_observer("model_call_finish", {
             "purpose": "auto_mode",
             "provider_id": "fake",
@@ -2736,6 +2769,10 @@ def test_gateway_observer_sanitizes_auto_provider_errors_before_trace():
 
     events = []
     agent = AgentLoop.__new__(AgentLoop)
+    agent._session_checkpoint_lock = threading.RLock()
+    agent._session_checkpoint_writer = None
+    agent._session_checkpoint_retired = False
+    agent.provider_id = "fake"
     agent.tracer = type(
         "TracerSpy",
         (),
@@ -2825,7 +2862,7 @@ def test_terminal_auto_bash_classifier_accounts_once_end_to_end():
                 },
             ),
         ])
-        tracer = TraceRecorder(trace_dir=tmp / "traces", enabled=True)
+        tracer = TraceRecorder(trace_dir=tmp.parent / (tmp.name + "-traces"), enabled=True)
         agent = AgentLoop(
             "test",
             permission_mode="auto",
@@ -2855,7 +2892,7 @@ def test_terminal_auto_bash_classifier_accounts_once_end_to_end():
         ]
 
         assert result["status"] == "completed"
-        assert result["content"] == "done"
+        assert result["content"].startswith('done')
         assert approvals == []
         assert len(requests) == 3
         assert classifier_request.get("tools", []) == []
@@ -2929,7 +2966,7 @@ def test_runtime_summary_exposes_complete_provider_accounting():
         _restore_workdir(old, tmp)
 
 
-def test_planning_enabled_generates_plan_for_feature_task():
+def test_invalid_planning_recovers_once_then_continues_without_a_plan():
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
     from nz_coder.tools.scratchpad import scratchpad
@@ -2940,6 +2977,7 @@ def test_planning_enabled_generates_plan_for_feature_task():
     try:
         fake = FakeClient([
             FakeResponse(FakeMessage("## Plan\n1. Implement endpoint - app.py - verify_changed_files")),
+            FakeResponse(FakeMessage("")),
             FakeResponse(FakeMessage("done")),
         ])
         messages = [{"role": "user", "content": "Add a REST endpoint for users"}]
@@ -2947,19 +2985,20 @@ def test_planning_enabled_generates_plan_for_feature_task():
         status = _run_agent(agent, messages, stream=False)
 
         assert status["status"] == "completed"
-        assert fake.chat.completions.calls == 2
+        assert fake.chat.completions.calls == 3
         assert "tools" not in fake.chat.completions.requests[0]
-        assert fake.chat.completions.requests[1].get("tools")
-        assert any(e["category"] == "plan" for e in scratchpad.entries)
-        assert agent.runtime_state.plan_generated is True
-        assert "## Plan" in agent.runtime_state.plan_text
+        assert "tools" not in fake.chat.completions.requests[1]
+        assert fake.chat.completions.requests[2].get("tools")
+        assert not scratchpad.memory["focus"]  # 自动规划保留在运行状态，工作记忆由模型维护。
+        assert agent.runtime_state.plan_generated is False
+        assert agent.runtime_state.plan_text == ""
     finally:
         scratchpad.clear()
         _restore_planning_config(config, old_planning)
         _restore_workdir(old, tmp)
 
 
-def test_planning_call_returns_task_contract_without_extra_model_call():
+def test_planning_suggestions_do_not_create_host_requirements_without_extra_model_call():
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
     from nz_coder.tools.scratchpad import scratchpad
@@ -3001,11 +3040,9 @@ def test_planning_call_returns_task_contract_without_extra_model_call():
 
         assert status["status"] == "completed"
         assert fake.chat.completions.calls == 3
-        assert agent.runtime_state.task_contract["objective"] == (
-            "Create the requested artifact"
-        )
-        ledger = agent.runtime_state.requirement_ledger_snapshot()
-        assert ledger.status("R1") == "satisfied"
+        assert agent.runtime_state.task_contract["objective"] == messages[0]["content"]
+        assert agent.runtime_state.task_contract["requirements"] == []
+        assert not agent.runtime_state.requirement_ledger_snapshot().items
         assert "## Plan" in agent.runtime_state.plan_text
     finally:
         scratchpad.clear()
@@ -3013,20 +3050,31 @@ def test_planning_call_returns_task_contract_without_extra_model_call():
         _restore_workdir(old, tmp)
 
 
-def test_planning_enabled_skips_simple_bugfix_task():
+def test_explicit_planning_runs_for_simple_bugfix_task():
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
     old_planning = _set_planning_config(config, enabled=True)
     try:
-        fake = FakeClient([FakeResponse(FakeMessage("done"))])
+        planner = json.dumps({
+            "objective": "Repair the reported failure",
+            "plan": [{"title": "Inspect the failure", "target": "need to search", "verification": "focused reproduction"}],
+            "requirements": [{"id": "R1", "description": "Repair the reported failure", "kind": "behavior"}],
+        })
+        fake = FakeClient([
+            FakeResponse(FakeMessage(planner)),
+            FakeResponse(FakeMessage("done")),
+        ])
         messages = [{"role": "user", "content": "fix bug"}]
         agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
         _run_agent(agent, messages, stream=False)
 
-        assert fake.chat.completions.calls == 1
-        assert agent.runtime_state.plan_generated is False
+        assert fake.chat.completions.calls == 2
+        assert "tools" not in fake.chat.completions.requests[0]
+        assert fake.chat.completions.requests[1].get("tools")
+        assert agent.runtime_state.plan_generated is True
+        assert "Inspect the failure" in agent.runtime_state.plan_text
     finally:
         _restore_planning_config(config, old_planning)
         _restore_workdir(old, tmp)
@@ -3055,7 +3103,7 @@ def test_planning_restore_hydrates_plan_without_new_planning_call():
                 "plan_generated": True,
                 "plan_text": "## Plan\n1. Existing plan",
                 "replan_count": 1,
-                "task_mode": "feature",
+                "task_assessment_state": {},
                 "initial_task_text": "Add a REST endpoint",
             }),
             encoding="utf-8",
@@ -3072,15 +3120,15 @@ def test_planning_restore_hydrates_plan_without_new_planning_call():
         _run_agent(agent, messages, stream=False)
 
         assert fake.chat.completions.calls == 1
-        assert any(e["category"] == "plan" and "Existing plan" in e["content"] for e in scratchpad.entries)
-        assert agent._replan_count == 1
+        assert not scratchpad.memory["focus"]
+        assert "Existing plan" in agent.runtime_state.plan_text
     finally:
         scratchpad.clear()
         _restore_planning_config(config, old_planning)
         _restore_workdir(old, tmp)
 
 
-def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget():
+def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget(monkeypatch):
     """A resumable activation preserves task facts without reusing spent turns."""
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
@@ -3089,14 +3137,15 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget():
 
     old, tmp = _tmp_workdir()
     old_planning = _set_planning_config(config, enabled=False)
-    old_max_turns = config.MAX_AGENT_TURNS
-    config.MAX_AGENT_TURNS = 20
+    # 正式运行读取配置快照；修改旧模块常量不能限制这次模型调用。
+    monkeypatch.setenv("MAX_AGENT_TURNS", "2")
+    agent = None
     try:
         original_task = (
             "Fix parser.py and run python -m pytest -q tests/test_parser.py"
         )
         state = RuntimeState()
-        state.reset(max_turns=20)
+        state.reset(max_turns=2)
         state.initial_task_text = original_task
         state.set_acceptance_criteria_from_text(original_task)
         state.turn_count = 200
@@ -3127,10 +3176,11 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget():
             session_id=session_id,
         )
 
-        _run_agent(agent, messages, stream=False)
+        result = _run_agent(agent, messages, stream=False)
 
-        assert fake.chat.completions.calls > 0
-        assert agent.runtime_state.turn_count > 0
+        assert result["status"] == "max_turns"
+        assert fake.chat.completions.calls == 2
+        assert agent.runtime_state.turn_count == 2
         assert agent.runtime_state.initial_task_text == original_task
         assert agent.runtime_state.verification_contract["command"] == (
             "python -m pytest -q tests/test_parser.py"
@@ -3139,7 +3189,8 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget():
             "parser.py", "tests/test_parser.py",
         ]
     finally:
-        config.MAX_AGENT_TURNS = old_max_turns
+        if agent is not None:
+            agent.close()
         _restore_planning_config(config, old_planning)
         _restore_workdir(old, tmp)
 
@@ -3194,6 +3245,7 @@ def test_substantive_continuation_overlays_current_round_constraints(monkeypatch
             session_id=session_id,
         )
 
+        _prepare_manual_run(agent, initialize=False)
         agent._init_run(messages, stream=False)
 
         assert agent.runtime_state.initial_task_text == original_task
@@ -3223,100 +3275,10 @@ def test_substantive_continuation_overlays_current_round_constraints(monkeypatch
         _restore_workdir(old, tmp)
 
 
-def test_replan_respects_max_attempts():
-    from nz_coder.foundation import config
-    from nz_coder.loop import AgentLoop
-
-    old, tmp = _tmp_workdir()
-    old_planning = _set_planning_config(config, enabled=True, max_replans=1, idle_turns=5)
-    try:
-        fake = FakeClient([FakeResponse(FakeMessage("## Plan\n1. Revised"))])
-        agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=True)
-        rs = agent.runtime_state
-        rs.plan_generated = True
-        rs.plan_text = "## Plan\n1. Original"
-        rs.task_mode = "feature"
-        rs.turn_count = 5
-        rs.max_turns = 10
-        rs.last_edit_turn = 0
-        rs.initial_task_text = "Add a REST endpoint"
-        rs.initial_plan_complexity = "moderate"
-
-        assert agent._should_replan() is True
-        asyncio.run(agent._maybe_replan())
-        assert agent.runtime_state.replan_count == 1
-        assert agent._should_replan() is False
-    finally:
-        _restore_planning_config(config, old_planning)
-        _restore_workdir(old, tmp)
 
 
-def test_replan_verification_guard_requires_diff():
-    from nz_coder.foundation import config
-    from nz_coder.loop import AgentLoop
-
-    old, tmp = _tmp_workdir()
-    old_planning = _set_planning_config(config, enabled=True)
-    try:
-        agent = AgentLoop("test", permission_mode="auto", client=FakeClient([]), trace_enabled=False)
-        rs = agent.runtime_state
-        rs.plan_generated = True
-        rs.plan_text = "## Plan\n1. Original"
-        rs.task_mode = "feature"
-        rs.turn_count = 1
-        rs.last_edit_turn = 1
-        rs.has_diff = False
-        rs.changed_files_verified = False
-        rs.verification_attempts = 2
-
-        assert agent._should_replan() is False
-    finally:
-        _restore_planning_config(config, old_planning)
-        _restore_workdir(old, tmp)
 
 
-def test_patch_risk_triggers_one_replan_and_enters_replan_prompt():
-    from nz_coder.foundation import config
-    from nz_coder.loop import AgentLoop
-
-    old, tmp = _tmp_workdir()
-    old_planning = _set_planning_config(config, enabled=True)
-    try:
-        fake = FakeClient([FakeResponse(FakeMessage("## Plan\n1. Preserve API"))])
-        agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
-        rs = agent.runtime_state
-        rs.plan_generated = True
-        rs.plan_text = "## Plan\n1. Original"
-        rs.task_mode = "bugfix"
-        rs.turn_count = 1
-        rs.last_edit_turn = 1
-        rs.patch_risk = {
-            "risk": "high",
-            "fingerprint": "risk-123",
-            "requires_replan": True,
-            "risk_signals": [{
-                "category": "deleted_public_symbols",
-                "severity": "replan",
-                "detail": "pkg/api.py: public_api",
-            }],
-            "reasons": ["public-looking symbols deleted"],
-            "affected_files": ["pkg/api.py"],
-            "likely_tests": [],
-            "suggested_verification": [],
-            "review_notes": [],
-        }
-
-        assert agent._should_replan() is True
-        asyncio.run(agent._maybe_replan())
-
-        request_text = fake.chat.completions.requests[0]["messages"][1]["content"]
-        assert "Current patch risk summary" in request_text
-        assert "deleted_public_symbols" in request_text
-        assert rs.risk_replan_fingerprint == "risk-123"
-        assert agent._should_replan() is False
-    finally:
-        _restore_planning_config(config, old_planning)
-        _restore_workdir(old, tmp)
 
 
 def test_patch_risk_refresh_uses_change_tracker_without_git(monkeypatch):
@@ -3335,7 +3297,6 @@ def test_patch_risk_refresh_uses_change_tracker_without_git(monkeypatch):
         target = tmp / "api.py"
         target.write_text("def public_api(value):\n    return value\n", encoding="utf-8")
         agent = AgentLoop("test", permission_mode="auto", client=FakeClient([]), trace_enabled=False)
-        agent.runtime_state.task_mode = "bugfix"
         agent.runtime_state.requested_paths = ["api.py"]
         with bind_tool_state(txn=agent.txn, change_tracker=agent.change_tracker):
             result = dispatch("write_file", {"path": "api.py", "content": "VALUE = 1\n"})
@@ -3427,7 +3388,7 @@ def test_planning_failure_does_not_block_react_loop():
         assert status["status"] == "completed"
         assert fake.chat.completions.calls == 2
         assert agent.runtime_state.plan_generated is False
-        assert messages[-1]["content"] == "done"
+        assert messages[-1]["content"].startswith('done')
         assert '"event": "planning_failed"' in trace_text
         assert '"error_type": "RuntimeError"' in trace_text
         assert '"client_error": false' in trace_text
@@ -3436,38 +3397,6 @@ def test_planning_failure_does_not_block_react_loop():
         _restore_workdir(old, tmp)
 
 
-def test_replan_failure_does_not_raise_or_increment_count():
-    from nz_coder.foundation import config
-    from nz_coder.loop import AgentLoop
-
-    old, tmp = _tmp_workdir()
-    old_planning = _set_planning_config(config, enabled=True, max_replans=2, idle_turns=5)
-    try:
-        fake = FakeClient([RuntimeError("replan down")])
-        agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=True)
-        rs = agent.runtime_state
-        rs.plan_generated = True
-        rs.plan_text = "## Plan\n1. Original"
-        rs.task_mode = "feature"
-        rs.turn_count = 5
-        rs.max_turns = 10
-        rs.last_edit_turn = 0
-        rs.initial_task_text = "Add a REST endpoint"
-        rs.initial_plan_complexity = "moderate"
-
-        asyncio.run(agent._maybe_replan())
-        trace_text = agent.tracer.path.read_text(encoding="utf-8")
-
-        assert fake.chat.completions.calls == 1
-        assert '"event": "replan_failed"' in trace_text
-        assert '"error_type": "RuntimeError"' in trace_text
-        assert '"client_error": false' in trace_text
-        assert agent._replan_count == 0
-        assert agent.runtime_state.replan_count == 0
-        assert agent.runtime_state.plan_text == "## Plan\n1. Original"
-    finally:
-        _restore_planning_config(config, old_planning)
-        _restore_workdir(old, tmp)
 
 class FakeDeltaFunction:
     def __init__(self, name: str = "", arguments: str = ""):
@@ -3585,7 +3514,7 @@ def test_streaming_final_turn_emits_content_once_after_stream_end():
 
         assert seen == []
         assert result.tool_calls == []
-        assert assistant["content"] == "hello world"
+        assert assistant["content"].startswith('hello world')
     finally:
         _restore_workdir(old, tmp)
 
@@ -3635,15 +3564,19 @@ def test_committed_write_batch_attaches_lsp_diagnostics_after_commit(monkeypatch
         )
         observed = {}
 
-        def fake_collect(paths, workspace):
+        def fake_collect(paths, workspace, *, operation):
+            from nz_coder.lsp.types import DiagnosticReport
+
             assert agent.txn.active is False
+            assert operation.remaining() > 0
             observed["paths"] = list(paths)
             observed["workspace"] = workspace
-            return (
-                "<lsp-diagnostics>\n"
-                "- other.py:1:1 [error] broken\n"
-                "</lsp-diagnostics>"
-            )
+            return {"enabled": True, "skipped": 0, "reports": [DiagnosticReport(
+                "other.py", "ready", "current_push", items_json=json.dumps([{
+                    "range": {"start": {"line": 0, "character": 0}},
+                    "severity": 1, "message": "broken",
+                }]),
+            ).to_dict()]}
 
         monkeypatch.setattr(loop_mod, "collect_write_diagnostics", fake_collect)
         _run_agent(agent, messages, stream=False)
@@ -3692,7 +3625,8 @@ def test_rolled_back_write_batch_never_publishes_lsp_state(monkeypatch):
         monkeypatch.setattr(
             loop_mod,
             "collect_write_diagnostics",
-            lambda paths, workspace: calls.append((paths, workspace)) or "",
+            lambda paths, workspace, *, operation: calls.append((paths, workspace))
+            or {"enabled": True, "reports": [], "skipped": 0},
         )
 
         _run_agent(agent, messages, stream=False)
@@ -3718,34 +3652,27 @@ def test_agent_run_preserves_session_scratchpad():
         fake = FakeClient([FakeResponse(FakeMessage("done"))])
         agent = AgentLoop("test", permission_mode="default", client=fake, trace_enabled=False)
         scratchpad.clear()
-        assert not scratchpad.update("plan", "keep this session fact").startswith("Error:")
+        assert not scratchpad.update_section('focus', [{"summary": "keep this session fact", "details": ""}]).startswith("Error:")
         messages = [{"role": "user", "content": "continue"}]
         _run_agent(agent, messages, stream=False)
-        assert any(entry["content"] == "keep this session fact" for entry in scratchpad.entries)
+        assert any(entry["summary"].startswith('keep this session fact') for entry in scratchpad.memory["focus"])
     finally:
         scratchpad.clear()
         _restore_planning_config(config, old_planning)
         _restore_workdir(old, tmp)
 
 
-def test_auto_compaction_resets_stall_sidecar_history():
-    """Catches carrying pre-compaction repeats into the summarized context."""
+def test_auto_compaction_resets_repeat_evidence():
     from nz_coder.loop import AgentLoop
-
-    class Sidecar:
-        reset_count = 0
-
-        def reset(self):
-            self.reset_count += 1
-
+    from nz_coder.runtime.verification.recovery import RecoveryState
     agent = AgentLoop.__new__(AgentLoop)
     agent.session_id = "session-test"
-    agent.stall_orchestrator = Sidecar()
-    messages = [{"role": "user", "content": "summary", "_nz_compaction": {}}]
-
-    agent._stamp_auto_compaction(messages)
-
-    assert agent.stall_orchestrator.reset_count == 1
+    agent.recovery = RecoveryState()
+    agent.recovery.record_tool_result_evidence("list_directory", {}, "old", executed=True, dispatch_failed=False)
+    before = agent.recovery._observer_epoch
+    agent._stamp_auto_compaction([{"role": "user", "content": "summary", "_nz_compaction": {}}])
+    assert agent.recovery._last_tool_result_digest is None
+    assert agent.recovery._observer_epoch > before
 
 
 def test_approved_plan_exit_is_terminal_without_another_model_call(tmp_path):
@@ -3776,7 +3703,8 @@ def test_approved_plan_exit_is_terminal_without_another_model_call(tmp_path):
         status = _run_agent(agent, messages, stream=False)
         agent.close()
 
-    assert status["status"] == "completed"
+    # 审批计划结束当前执行；没有独立验证时如实标记未验证。
+    assert status["status"] == "completed_unverified"
     assert "Parser update" in status["content"]
     assert "Change parser" in status["content"]
     assert fake.chat.completions.calls == 1
@@ -3814,34 +3742,11 @@ def test_plan_exit_can_resume_build_in_same_run(tmp_path):
         )
         agent.close()
 
-    assert status["status"] == "completed"
-    assert status["content"] == "Implementation phase complete."
+    assert status["status"] == "completed_unverified"
+    assert 'Implementation phase complete.' in status["content"]
     assert fake.chat.completions.calls == 2
 
 
-def test_agent_close_cancels_and_settles_stall_sidecar():
-    """Explicit disposal must retire Provider work owned by the old Session."""
-    from nz_coder.loop import AgentLoop
-
-    class Sidecar:
-        calls: list[float] = []
-
-        def cancel_and_settle(self, timeout=0):
-            self.calls.append(timeout)
-            return True
-
-    agent = AgentLoop(
-        "test",
-        permission_mode="auto",
-        client=FakeClient([]),
-        trace_enabled=False,
-    )
-    sidecar = Sidecar()
-    agent.stall_orchestrator = sidecar
-
-    agent.close()
-
-    assert sidecar.calls == [0.5]
 
 
 def test_identical_third_tool_call_is_blocked_before_dispatch():
@@ -3868,7 +3773,6 @@ def test_identical_third_tool_call_is_blocked_before_dispatch():
         messages = [{"role": "user", "content": "inspect the workspace"}]
         agent = AgentLoop(
             "test", permission_mode="auto", client=fake, trace_enabled=False,
-            stall_sidecar=lambda _prompt: {"is_stuck": False},
         )
 
         status = _run_agent(agent, messages, stream=False)
@@ -3881,12 +3785,12 @@ def test_identical_third_tool_call_is_blocked_before_dispatch():
         assert status["status"] == "blocked"
         assert fake.chat.completions.calls == 3
         assert agent.tool_calls_this_run == 2
-        assert "Doom loop detected" not in tool_messages["c1"]
-        assert "Doom loop detected" not in tool_messages["c2"]
-        assert "Doom loop detected" in tool_messages["c3"]
+        assert "Repeated execution approval required" not in tool_messages["c1"]
+        assert "Repeated execution approval required" not in tool_messages["c2"]
+        assert "Permission approval interface is not available" in tool_messages["c3"]
         assert any(
             message.get("role") == "user"
-            and "<doom-loop-diagnostic>" in message.get("content", "")
+            and "<repeat-approval-diagnostic>" in message.get("content", "")
             for message in messages
         )
     finally:
@@ -3894,156 +3798,15 @@ def test_identical_third_tool_call_is_blocked_before_dispatch():
         _restore_workdir(old, tmp)
 
 
-def test_interleaved_stall_sidecar_nudge_blocks_only_the_following_call():
-    from nz_coder.foundation import config
-    from nz_coder.loop import AgentLoop
-
-    old, tmp = _tmp_workdir()
-    old_threshold = config.DOOM_LOOP_THRESHOLD
-    config.DOOM_LOOP_THRESHOLD = 3
-    try:
-        repeated = {"path": ".", "depth": 1}
-        fake = FakeClient([
-            FakeResponse(FakeMessage(tool_calls=[
-                FakeToolCall("list_directory", repeated, call_id="c1"),
-            ])),
-            FakeResponse(FakeMessage(tool_calls=[
-                FakeToolCall("list_directory", repeated, call_id="c2"),
-            ])),
-            FakeResponse(FakeMessage(tool_calls=[
-                FakeToolCall("list_directory", {"path": ".", "depth": 2}, call_id="c3"),
-            ])),
-            FakeResponse(FakeMessage(tool_calls=[
-                FakeToolCall("list_directory", repeated, call_id="c4"),
-            ])),
-            FakeResponse(FakeMessage(tool_calls=[
-                FakeToolCall("list_directory", {"path": ".", "depth": 9}, call_id="c5"),
-            ])),
-            FakeResponse(FakeMessage("done")),
-        ])
-        messages = [{"role": "user", "content": "inspect with a refined query"}]
-        agent = AgentLoop(
-            "test", permission_mode="auto", client=fake, trace_enabled=False,
-            stall_sidecar=lambda _signal: {"is_stuck": True, "nudge": "Change approach."},
-        )
-
-        status = _run_agent(agent, messages, stream=False)
-
-        assert status["status"] == "completed"
-        assert agent.tool_calls_this_run == 4
-        tool_messages = {
-            message["tool_call_id"]: message["content"]
-            for message in messages
-            if message.get("role") == "tool"
-        }
-        assert "Doom loop detected" not in tool_messages["c4"]
-        assert "Change approach." in tool_messages["c5"]
-        assert any(
-            "Change approach." in message.get("content", "")
-            for message in messages
-            if message.get("role") == "tool"
-        )
-    finally:
-        config.DOOM_LOOP_THRESHOLD = old_threshold
-        _restore_workdir(old, tmp)
 
 
-def test_provider_stall_sidecar_coerces_infcodex_camel_case_string_boolean():
-    """Catches dropping a semantically valid L2 verdict due to JSON quirks."""
-    from nz_coder.loop import AgentLoop
-
-    fake = FakeClient([
-        FakeResponse(FakeMessage(
-            '{"isStuck":"true","reason":"same result","nudge":"Use grep_search."}'
-        )),
-    ])
-    agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
-
-    verdict = agent._provider_stall_sidecar("signal plus transcript")
-
-    assert verdict == {
-        "is_stuck": True,
-        "reason": "same result",
-        "nudge": "Use grep_search.",
-        "trace": "coerced_string_bool",
-    }
 
 
-def test_provider_stall_sidecar_forces_structured_report_tool():
-    """DeepSeek may put reasoning outside content; the report call is authoritative."""
-    from nz_coder.loop import AgentLoop
-
-    fake = FakeClient([
-        FakeResponse(FakeMessage(
-            reasoning_content="The repeated verification is legitimate.",
-            tool_calls=[FakeToolCall(
-                "report_stall_judgment",
-                {
-                    "isStuck": False,
-                    "reason": "workspace evidence changed",
-                    "suggestedTool": "",
-                    "nudge": "",
-                },
-            )],
-        )),
-    ])
-    agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
-
-    verdict = agent._provider_stall_sidecar("signal plus transcript")
-
-    assert verdict == {
-        "is_stuck": False,
-        "reason": "workspace evidence changed",
-        "nudge": "",
-        "trace": "sidecar_ok",
-    }
-    request = fake.chat.completions.requests[0]
-    assert request["tool_choice"] == {
-        "type": "function",
-        "function": {"name": "report_stall_judgment"},
-    }
-    assert request["tools"][0]["function"]["name"] == "report_stall_judgment"
 
 
-def test_provider_stall_sidecar_cancel_retires_gateway_poll():
-    """Terminal settlement must not leave L2 usage for the next run."""
-    import threading
-
-    from nz_coder.loop import AgentLoop
-
-    started = threading.Event()
-    release = threading.Event()
-    fake = FakeClient([])
-
-    def blocking_create(**_kwargs):
-        started.set()
-        release.wait(timeout=2)
-        return FakeResponse(FakeMessage("late"))
-
-    fake.chat.completions.create = blocking_create
-    agent = AgentLoop("test", permission_mode="auto", client=fake, trace_enabled=False)
-    cancel_event = threading.Event()
-    outcome = {}
-    worker = threading.Thread(
-        target=lambda: outcome.setdefault(
-            "verdict",
-            agent._provider_stall_sidecar("signal", cancel_event),
-        )
-    )
-    worker.start()
-    assert started.wait(timeout=1)
-    cancel_event.set()
-    worker.join(timeout=1)
-    release.set()
-
-    assert not worker.is_alive()
-    assert outcome["verdict"]["trace"] == "cancelled"
-    assert agent.runtime_state.provider_calls_by_purpose == {
-        "stall_sidecar": 1,
-    }
 
 
-def test_real_agent_awaits_async_stop_hook_revise_then_accept():
+def test_real_agent_awaits_async_stop_hook_revise_then_accept(tmp_path):
     """Catches the production natural-stop path using only synchronous hooks."""
     from nz_coder.loop import AgentLoop
     from nz_coder.runtime.verification.hooks import AgentHooks, StopHookDecision
@@ -4063,7 +3826,9 @@ def test_real_agent_awaits_async_stop_hook_revise_then_accept():
         FakeResponse(FakeMessage("Corrected answer")),
     ])
     messages = [{"role": "user", "content": "Fix the import"}]
-    agent = AgentLoop(
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    with scoped_workdir(tmp_path):
+        agent = AgentLoop(
         "test",
         permission_mode="auto",
         client=fake,
@@ -4076,7 +3841,7 @@ def test_real_agent_awaits_async_stop_hook_revise_then_accept():
     assert status["status"] == "completed"
     assert fake.chat.completions.calls == 2
     assert len(seen) == 2
-    assert seen[0].transcript[-1]["content"] == "First answer"
+    assert seen[0].transcript[-1]["content"].startswith('First answer')
     assert any(
         message.get("_nz_stop_hook") is True
         and "Correct the missing import." in message.get("content", "")
@@ -4203,7 +3968,7 @@ def test_production_sidecar_runs_isolated_request_after_real_agent_stop(tmp_path
             ))
 
     provider = Provider()
-    tracer = TraceRecorder(trace_dir=tmp_path / "traces", enabled=True)
+    tracer = TraceRecorder(trace_dir=tmp_path.parent / (tmp_path.name + "-traces"), enabled=True)
     messages = [{"role": "user", "content": "Explain the parser behavior in detail"}]
     with scoped_workdir(tmp_path):
         agent = AgentLoop(

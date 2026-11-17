@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import threading
 import json
+import signal
 from dataclasses import dataclass
 from pathlib import Path
 import time
@@ -25,6 +26,7 @@ from nz_coder.http_service.daemon import daemon_paths, daemon_status
 from nz_coder.interface.backend import RemoteTerminalBackend
 from nz_coder.interface.cli import StreamingRenderer
 from nz_coder.interface.interactions import TerminalInteractionBridge
+from nz_coder.interface.selector import SelectorActionResult
 from nz_coder.interface.run_renderer import TerminalRunRenderer
 from nz_coder.interface.remote_mailbox import (
     RemoteEventMailbox,
@@ -66,15 +68,18 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
     if health.get("status") != "ok":
         raise RuntimeError("remote runtime health check failed")
     sessions = await asyncio.to_thread(client.list_sessions)
-    if args.new or not sessions:
+    if args.new:
         info = await asyncio.to_thread(client.create_session, None, args.workspace_id)
     elif args.session_id:
         info = await asyncio.to_thread(client.get_session, args.session_id)
+    elif sessions["sessions"]:
+        selected = max(sessions["sessions"], key=lambda item: float(item.get("updated_at") or item.get("created_at") or 0))
+        info = await asyncio.to_thread(client.get_session, selected["id"])
+    elif sessions["unavailable"]:
+        _render_sessions(console, sessions)
+        raise RuntimeError("Saved sessions are unavailable")
     else:
-        info = max(
-            sessions,
-            key=lambda item: float(item.get("updated_at") or item.get("created_at") or 0),
-        )
+        info = await asyncio.to_thread(client.create_session, None, args.workspace_id)
     backend = RemoteTerminalBackend(client, str(info["id"]))
     console.print(
         f"[info]Attached[/info] session={backend.session_id} "
@@ -152,6 +157,9 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                 target = text.split(maxsplit=1)[1].strip()
                 info = await asyncio.to_thread(backend.select_session, target)
                 _render_session_info(console, info)
+                if info.get("status") == "running":
+                    await _follow_run(backend, console)
+                    info = await asyncio.to_thread(backend.info)
                 continue
             if text.startswith("/rename "):
                 info = await asyncio.to_thread(backend.rename, text.split(maxsplit=1)[1])
@@ -228,8 +236,8 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                 child_ids = list(current.get("children") or [])
                 if child_ids:
                     sessions = await asyncio.to_thread(backend.sessions)
-                    rows = [item for item in sessions if item.get("id") in child_ids]
-                    _render_sessions(console, rows)
+                    rows = [item for item in sessions["sessions"] if item.get("id") in child_ids]
+                    _render_sessions(console, {"sessions": rows, "unavailable": sessions["unavailable"]})
                 else:
                     console.print("[info]This Session has no fork children.[/info]")
                 continue
@@ -241,6 +249,9 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                 continue
             if text.startswith("/workflow"):
                 await _workflow_command(backend, console, terminal_input, text)
+                continue
+            if text == '/lsp' or text.startswith('/lsp '):
+                await _lsp_command(backend,console,text)
                 continue
             if text.startswith("/memory"):
                 await _memory_command(backend, console, text)
@@ -339,9 +350,10 @@ class _RemotePumpExit(str, Enum):
 class _RemoteStreamPump:
     """Own one SSE iterator, its thread, and its close lifecycle."""
 
-    def __init__(self, stream: Any, transport: RemoteTransportBridge) -> None:
+    def __init__(self, stream: Any, transport: RemoteTransportBridge, *, interaction_run_id: str = "") -> None:
         self.stream = stream
         self.transport = transport
+        self.interaction_run_id = interaction_run_id
         self._stop = threading.Event()
         self._done = threading.Event()
         self.exit_reason: _RemotePumpExit | None = None
@@ -372,6 +384,7 @@ class _RemoteStreamPump:
                 self.stream,
                 self.transport,
                 stop_requested=self._stop,
+                interaction_run_id=self.interaction_run_id,
             )
         finally:
             self._done.set()
@@ -382,6 +395,7 @@ def _pump_remote_stream(
     transport: RemoteTransportBridge,
     *,
     stop_requested: threading.Event | None = None,
+    interaction_run_id: str = "",
 ) -> _RemotePumpExit:
     """Copy one SSE stream; only this iterator owner may close it."""
     stop = stop_requested or threading.Event()
@@ -391,6 +405,10 @@ def _pump_remote_stream(
             if stop.is_set():
                 reason = _RemotePumpExit.STOP_REQUESTED
                 break
+            meta = payload.get("meta") or {}
+            owner = str(meta.get("interaction_run_id") or meta.get("run_id") or "")
+            if interaction_run_id and owner and owner != interaction_run_id:
+                continue
             accepted = transport.offer(payload)
             if not accepted:
                 if stop.is_set():
@@ -472,19 +490,24 @@ async def _rebase_remote_stream(
     bridge: TerminalInteractionBridge,
     interaction_tasks: "_InteractionTaskRegistry",
     loop: asyncio.AbstractEventLoop,
+    work: "_RemoteFollowWork",
 ) -> _ReconnectedRemoteStream:
     """Retire one reader and resume from one authoritative snapshot."""
     try:
         pump.request_stop()
-        stopped = await asyncio.to_thread(pump.wait, 5.0)
-        if not stopped:
+        stop_deadline = time.monotonic() + 5.0
+        while not pump.wait(0) and time.monotonic() < stop_deadline:
+            await asyncio.sleep(work.poll_interval())
+        if not pump.wait(0):
             raise PublicRuntimeError(PublicError(
                 "remote_stream_shutdown_timeout",
                 "The previous remote event stream did not stop safely.",
                 retryable=True,
             ))
         try:
-            latest = await asyncio.to_thread(backend.attach_snapshot)
+            latest = await work.call(backend.attach_snapshot)
+        except PublicRuntimeError:
+            raise
         except Exception as exc:
             raise PublicRuntimeError(PublicError(
                 "remote_stream_ended",
@@ -529,10 +552,12 @@ async def _rebase_remote_stream(
             capacity=getattr(config, "REMOTE_EVENT_QUEUE_SIZE", 512),
             critical_reserve=16,
         )
+        work.check_deadline()
         replacement_stream = backend.events(last_event_id=cursor)
         replacement_pump = _RemoteStreamPump(
             replacement_stream,
             replacement,
+            interaction_run_id=run_view.interaction_run_id,
         ).start()
         return _ReconnectedRemoteStream(
             pump=replacement_pump,
@@ -547,14 +572,88 @@ async def _rebase_remote_stream(
         raise PublicRuntimeError(to_public_error(exc)) from exc
 
 
+class _RemoteFollowWork:
+    """本次跟随持有所有 HTTP worker；取消 await 不能丢弃同步请求。"""
+
+    def __init__(self, backend, console) -> None:
+        self.backend = backend
+        self.console = console
+        self.tasks: set[asyncio.Task] = set()
+        self.deadline: float | None = None
+        self.expired = False
+
+    def check_deadline(self) -> None:
+        if self.deadline is not None and time.monotonic() >= self.deadline:
+            if not self.expired:
+                self.expired = True
+                self.console.print(Text(
+                    f"取消结果尚未确认，任务可能仍在运行。Session ID: {self.backend.session_id}。"
+                    "正在清理已有连接和请求；同步 HTTP 结束前无法退出。",
+                    style="warning",
+                ))
+            raise PublicRuntimeError(PublicError(
+                "remote_cancel_unconfirmed",
+                f"Cancellation is unconfirmed for Session {self.backend.session_id}.",
+                retryable=True,
+            ))
+
+    def poll_interval(self) -> float:
+        self.check_deadline()
+        if self.deadline is None:
+            return 0.05
+        return min(0.05, max(0.001, self.deadline - time.monotonic()))
+
+    def start(self, callback, *args) -> asyncio.Task:
+        self.check_deadline()
+        task = asyncio.create_task(asyncio.to_thread(callback, *args))
+        self.tasks.add(task)
+        return task
+
+    async def call(self, callback, *args):
+        task = self.start(callback, *args)
+        while not task.done():
+            await asyncio.wait({task}, timeout=self.poll_interval())
+        self.check_deadline()
+        return task.result()
+
+    async def wait_all(self) -> None:
+        pending = {task for task in self.tasks if not task.done()}
+        while pending:
+            _done, pending = await asyncio.wait(pending, timeout=self.poll_interval())
+        self.check_deadline()
+
+    async def close(self) -> None:
+        # shield 的外层取消不代表 worker 退出；清理 Task 由调用方继续持有。
+        if self.tasks:
+            results = await asyncio.gather(*self.tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException):
+                    self.console.print(Text(f"Remote request ended: {result}", style="warning"))
+
+
+class _RemoteInteractionBridge(TerminalInteractionBridge):
+    """Remote 独有的取消动作，保留本地 selector 的拒绝语义。"""
+
+    async def _select(self, **kwargs):
+        kwargs["actions"] = (*kwargs.get("actions", ()),
+                             ("c-c", "run_cancel", "Cancel run"),
+                             ("<sigint>", "run_cancel", "Cancel run"))
+        result = await super()._select(**kwargs)
+        if isinstance(result, SelectorActionResult) and result.action == "run_cancel":
+            self.request_cancel()
+            # 直接结束交互协程，禁止把取消 Run 转换成普通拒绝回复。
+            raise asyncio.CancelledError
+        return result
+
+
 async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
-    baseline = await asyncio.to_thread(backend.attach_snapshot)
-    cursor = str((baseline.get("cursor") or {}).get("event_id") or "") or None
+    loop = asyncio.get_running_loop()
+    work = _RemoteFollowWork(backend, console)
     renderer = StreamingRenderer(console)
     renderer.start()
-    run_view = TerminalRunRenderer(console, renderer)
+    run_view = TerminalRunRenderer(console, renderer, terminal_source="settled")
     run_view.begin_remote(SimpleNamespace(model_id="remote"))
-    bridge = TerminalInteractionBridge(
+    bridge = _RemoteInteractionBridge(
         TerminalInput(
             console=console,
             registry=_remote_command_registry(),
@@ -562,30 +661,51 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
             interactive=None,
         ),
         renderer,
-        asyncio.get_running_loop(),
+        loop,
     )
     interaction_input = bridge.terminal_input
-    loop = asyncio.get_running_loop()
     transport = RemoteTransportBridge(
         loop,
         capacity=getattr(config, "REMOTE_EVENT_QUEUE_SIZE", 512),
         critical_reserve=16,
     )
     pump = None
-
-    terminal_status = str((baseline.get("session") or {}).get("status") or "unknown")
+    terminal_status = "unknown"
+    authoritative_settled = False
     reconnecting = False
     interaction_tasks = _InteractionTaskRegistry(
         on_error=lambda exc: transport.fail_closed(
-            to_public_error(exc),
-            reconnect_required=False,
+            to_public_error(exc), reconnect_required=False,
         ),
+        work=work,
     )
     reader_done = False
     transport_reconnects = 0
+    accepting_cancel = True
+
+    def request_cancel() -> None:
+        if work.deadline is not None or not accepting_cancel:
+            console.print("[info]正在等待当前任务和连接清理完成。[/info]")
+            return
+        # 先封闭注册，随后积压 SSE、快照和重连都不能重新打开审批。
+        interaction_tasks.seal()
+        work.deadline = time.monotonic() + backend.client.timeout
+        work.start(backend.abort)
+        console.print("[info]已请求取消，正在等待服务端提交结果。[/info]")
+
+    bridge.request_cancel = request_cancel
+    original_sigint = None
+    owns_sigint = threading.current_thread() is threading.main_thread()
+    if owns_sigint:
+        original_sigint = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, lambda *_args: loop.call_soon_threadsafe(request_cancel))
     try:
+        baseline = await work.call(backend.attach_snapshot)
+        cursor = str((baseline.get("cursor") or {}).get("event_id") or "") or None
+        terminal_status = str((baseline.get("session") or {}).get("status") or "unknown")
+        authoritative_settled = bool(baseline.get("settled"))
         _feed_snapshot_events(run_view, baseline)
-        if not bool((baseline.get("session") or {}).get("running")):
+        if authoritative_settled:
             _register_pending_interactions(
                 backend,
                 baseline.get("pending") or {},
@@ -593,9 +713,10 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                 interaction_tasks,
             )
             await interaction_tasks.wait()
+            await work.wait_all()
             return
         stream = backend.events(last_event_id=cursor)
-        pump = _RemoteStreamPump(stream, transport).start()
+        pump = _RemoteStreamPump(stream, transport, interaction_run_id=run_view.interaction_run_id).start()
         _register_pending_interactions(
             backend,
             baseline.get("pending") or {},
@@ -603,17 +724,15 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
             interaction_tasks,
         )
         while not reader_done or transport.buffered_count:
+            work.check_deadline()
             try:
-                payload = await transport.get(timeout=0.25)
+                payload = await transport.get(timeout=work.poll_interval())
             except asyncio.TimeoutError:
                 interaction_tasks.raise_if_failed()
                 continue
             if payload.get("_transport_done"):
                 exit_reason = str(payload.get("_exit_reason") or "clean_eof")
                 if exit_reason == _RemotePumpExit.SETTLED.value:
-                    reader_done = True
-                    continue
-                if exit_reason == _RemotePumpExit.STOP_REQUESTED.value:
                     reader_done = True
                     continue
                 if transport_reconnects >= 3:
@@ -633,12 +752,14 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                     bridge=bridge,
                     interaction_tasks=interaction_tasks,
                     loop=loop,
+                    work=work,
                 )
                 pump = replacement.pump
                 transport = replacement.transport
                 cursor = replacement.cursor
                 terminal_status = replacement.terminal_status
                 if replacement.settled:
+                    authoritative_settled = True
                     reader_done = True
                     break
                 reader_done = False
@@ -659,12 +780,14 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                         bridge=bridge,
                         interaction_tasks=interaction_tasks,
                         loop=loop,
+                        work=work,
                     )
                     pump = replacement.pump
                     transport = replacement.transport
                     cursor = replacement.cursor
                     terminal_status = replacement.terminal_status
                     if replacement.settled:
+                        authoritative_settled = True
                         reader_done = True
                         break
                     reader_done = False
@@ -683,6 +806,11 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                     interaction_tasks,
                 )
                 transport.clear_gap()
+                if latest.get("settled"):
+                    authoritative_settled = True
+                    terminal_status = str((latest.get("session") or {}).get("status") or terminal_status)
+                    reader_done = True
+                    break
                 if reconnecting:
                     console.print("[success]Reconnected[/success]")
                     reconnecting = False
@@ -706,12 +834,14 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                         bridge=bridge,
                         interaction_tasks=interaction_tasks,
                         loop=loop,
+                        work=work,
                     )
                     pump = replacement.pump
                     transport = replacement.transport
                     cursor = replacement.cursor
                     terminal_status = replacement.terminal_status
                     if replacement.settled:
+                        authoritative_settled = True
                         reader_done = True
                         break
                     reader_done = False
@@ -738,29 +868,66 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                     (event.get("properties") or {}).get("status") or terminal_status
                 )
                 if event_type == "session.run.settled":
+                    authoritative_settled = True
                     reader_done = True
                 interaction_tasks.cancel()
-    finally:
-        interaction_tasks.cancel()
-        await interaction_tasks.wait(return_exceptions=True)
+        if not authoritative_settled:
+            raise PublicRuntimeError(PublicError(
+                "remote_stream_ended", "Remote run ended without a settled result.", retryable=True,
+            ))
         if pump is not None:
             pump.request_stop()
-            await asyncio.to_thread(pump.wait, 5.0)
-        try:
-            final_snapshot = await asyncio.to_thread(backend.attach_snapshot)
-            _feed_snapshot_events(run_view, final_snapshot)
-        except Exception:
-            # Final reconciliation is best effort; cleanup and the original
-            # stream outcome are more authoritative than a second HTTP error.
-            pass
-        try:
-            renderer.finish()
-        finally:
+            while not pump.wait(0):
+                await asyncio.sleep(work.poll_interval())
+        await work.wait_all()
+    except BaseException:
+        if not authoritative_settled:
+            terminal_status = "unknown"
+        raise
+    finally:
+        accepting_cancel = False
+        interaction_tasks.seal()
+
+        async def cleanup() -> None:
+            await interaction_tasks.wait(return_exceptions=True)
+            if pump is not None:
+                pump.request_stop()
+            notice_at = time.monotonic() + 5.0
+            while ((pump is not None and not pump.wait(0))
+                   or any(not task.done() for task in work.tasks)):
+                if work.deadline is not None and not work.expired:
+                    try:
+                        work.check_deadline()
+                    except PublicRuntimeError:
+                        pass
+                if time.monotonic() >= notice_at:
+                    console.print("[info]连接或请求尚未退出，正在等待实际清理完成。[/info]")
+                    notice_at = time.monotonic() + 5.0
+                await asyncio.sleep(0.05)
+            await work.close()
             try:
-                run_view.finish({"status": terminal_status})
+                renderer.finish()
             finally:
-                run_view.close()
-                await interaction_input.close_async()
+                try:
+                    run_view.finish({"status": terminal_status})
+                finally:
+                    run_view.close()
+                    await interaction_input.close_async()
+
+        cleanup_task = asyncio.create_task(cleanup())
+        cancelled_during_cleanup = False
+        try:
+            while not cleanup_task.done():
+                try:
+                    await asyncio.shield(cleanup_task)
+                except asyncio.CancelledError:
+                    cancelled_during_cleanup = True
+            cleanup_task.result()
+        finally:
+            if owns_sigint:
+                signal.signal(signal.SIGINT, original_sigint)
+        if cancelled_during_cleanup:
+            raise asyncio.CancelledError
 
 
 def _offer_remote_payload(
@@ -811,15 +978,17 @@ def _offer_remote_payload(
 class _InteractionTaskRegistry:
     """Deduplicate pending permission/question prompts by request identity."""
 
-    def __init__(self, on_error=None) -> None:  # noqa: ANN001
+    def __init__(self, on_error=None, *, work=None) -> None:  # noqa: ANN001
         self._tasks: dict[tuple[str, str], asyncio.Task] = {}
         self._resolved: set[tuple[str, str]] = set()
         self._failures: list[BaseException] = []
         self._on_error = on_error
+        self._sealed = False
+        self.work = work
 
     def register(self, kind: str, request_id: str, factory) -> asyncio.Task | None:  # noqa: ANN001
         key = (str(kind), str(request_id))
-        if not key[1] or key in self._resolved:
+        if self._sealed or not key[1] or key in self._resolved:
             return None
         existing = self._tasks.get(key)
         if existing is not None and not existing.done():
@@ -841,6 +1010,10 @@ class _InteractionTaskRegistry:
 
         task.add_done_callback(settled)
         return task
+
+    def seal(self) -> None:
+        self._sealed = True
+        self.cancel()
 
     def cancel(self) -> None:
         for task in tuple(self._tasks.values()):
@@ -876,7 +1049,7 @@ def _register_interaction_payload(
     return registry.register(
         kind,
         request_id,
-        lambda: _resolve_remote_interaction(backend, bridge, payload),
+        lambda: _resolve_remote_interaction(backend, bridge, payload, work=registry.work),
     )
 
 
@@ -912,6 +1085,8 @@ async def _resolve_remote_interaction(
     backend: RemoteTerminalBackend,
     bridge: TerminalInteractionBridge,
     payload: dict,
+    *,
+    work: _RemoteFollowWork | None = None,
 ) -> None:
     """Collect user input without pausing the SSE reducer consumer."""
     event_type = str(payload.get("type") or "")
@@ -930,13 +1105,13 @@ async def _resolve_remote_interaction(
             if isinstance(props.get("tool_input"), dict)
             else {},
         )
-        await _reply_once(backend.reply_permission, request_id, reply)
+        await _reply_once(backend.reply_permission, request_id, reply, work=work)
         return
     result = await bridge._ask_questions(props.get("questions", []))
     if result is None:
-        await _reply_once(backend.reject_question, request_id)
+        await _reply_once(backend.reject_question, request_id, work=work)
     else:
-        await _reply_once(backend.reply_question, request_id, result)
+        await _reply_once(backend.reply_question, request_id, result, work=work)
 
 
 def _feed_snapshot_events(run_view: TerminalRunRenderer, snapshot: dict[str, Any]) -> None:
@@ -999,9 +1174,11 @@ async def _resolve_pending(
             await _reply_once(backend.reply_question, request_id, answers)
 
 
-async def _reply_once(callback, *args) -> bool:  # noqa: ANN001
+async def _reply_once(callback, *args, work: _RemoteFollowWork | None = None) -> bool:  # noqa: ANN001
     """First valid interaction response wins across attached clients."""
     try:
+        if work is not None:
+            return bool(await work.call(callback, *args))
         return bool(await asyncio.to_thread(callback, *args))
     except NZCoderHTTPError as exc:
         if exc.code == "interaction_not_found":
@@ -1028,24 +1205,24 @@ def _render_session_info(console: Console, info: dict[str, Any]) -> None:
     ))
 
 
-def _render_sessions(console: Console, sessions: list[dict[str, Any]]) -> None:
+def _render_sessions(console: Console, result: dict[str, Any]) -> None:
     table = Table(title="Remote sessions", expand=True)
     table.add_column("Session", style="cyan")
     table.add_column("Status")
     table.add_column("Title")
     table.add_column("Workspace")
-    table.add_column("Model")
     table.add_column("Parent")
-    for item in sessions:
+    for item in result["sessions"]:
         table.add_row(
             str(item.get("id") or ""),
             str(item.get("runtime_status") or item.get("status") or "").upper(),
             str(item.get("title") or ""),
-            str(item.get("workspace") or ""),
-            str(item.get("model") or "unknown"),
+            str(item.get("workspace_id") or ""),
             str(item.get("parent_session_id") or "-"),
         )
     console.print(table)
+    for item in result["unavailable"]:
+        console.print(f"Unavailable: {item['candidate_id']} ({item['code']})")
 
 
 def _render_subagents(console: Console, children: list[dict[str, Any]]) -> None:
@@ -1165,54 +1342,61 @@ async def _workflow_command(
     )
 
 
-async def _memory_command(
-    backend: RemoteTerminalBackend,
-    console: Console,
-    text: str,
-) -> None:
-    parts = text.split(maxsplit=3)
-    action = parts[1].lower() if len(parts) > 1 else "pending"
+async def _lsp_command(backend: RemoteTerminalBackend, console: Console, text: str) -> None:
+    parts = text.split()[1:]
+    if not parts or parts == ['status']:
+        payload = await asyncio.to_thread(backend.lsp_status)
+    elif len(parts)==2 and parts[0] in {'trust','untrust','restart'}:
+        payload = await asyncio.to_thread(backend.lsp_control,parts[1],parts[0])
+    else:
+        console.print('[error]Usage: /lsp [status | trust|untrust|restart ENTRY_ID][/error]')
+        return
+    console.print(Text(json.dumps(payload,ensure_ascii=False,indent=2)))
+
+
+async def _memory_command(backend: RemoteTerminalBackend, console: Console, text: str) -> None:
+    from contextlib import redirect_stderr, redirect_stdout
+    from io import StringIO
+    import shlex
+    from nz_coder.state.memory_cli import build_parser, mutation_command
+
+    diagnostics = StringIO()
+    try:
+        with redirect_stdout(diagnostics), redirect_stderr(diagnostics):
+            tokens = shlex.split(text)[1:]
+            args = build_parser().parse_args(tokens or ["pending"])
+    except SystemExit:
+        console.print(Text(diagnostics.getvalue()))
+        return
+    except ValueError:
+        console.print(Text("Memory command input is invalid: check quotation marks and escape characters.", style="error"))
+        return
+    action = args.command
+    if action in {"migrate", "export", "reindex"}:
+        console.print("[error]Run this command on the daemon host with nz-coder memory.[/error]")
+        return
     if action in {"pending", "ledger"}:
         payload = await asyncio.to_thread(backend.memory)
-        if action == "ledger":
-            console.print_json(json.dumps(payload.get("ledger") or [], ensure_ascii=False))
-            return
-        rows = list(payload.get("pending") or [])
-        table = Table(title="Memory review inbox", expand=True)
-        for heading in ("Fingerprint", "Name", "Risk", "Confidence", "Source"):
-            table.add_column(heading)
-        for item in rows:
-            table.add_row(
-                str(item.get("fingerprint") or "")[:16],
-                str(item.get("name") or ""),
-                str(item.get("risk") or ""),
-                str(item.get("confidence") or ""),
-                str(item.get("source_session") or "-"),
-            )
-        console.print(table if rows else "[info]No memory proposals are pending review.[/info]")
-        return
-    if action == "inspect" and len(parts) >= 3:
-        console.print_json(json.dumps(
-            await asyncio.to_thread(backend.memory_proposal, parts[2]),
-            ensure_ascii=False,
-        ))
-        return
-    if action in {"approve", "reject"} and len(parts) >= 3:
-        result = await asyncio.to_thread(
-            backend.review_memory,
-            parts[2],
-            action,
-            reason=parts[3] if len(parts) > 3 else "",
-        )
-        console.print(
-            f"[success]Memory proposal {str(result.get('fingerprint') or '')[:16]} "
-            f"is {result.get('status', 'unknown')}.[/success]"
-        )
-        return
-    console.print(
-        "[error]Usage: /memory [pending|inspect FINGERPRINT|approve FINGERPRINT|"
-        "reject FINGERPRINT [REASON]|ledger][/error]"
-    )
+        result = list(payload.get(action) or [])[:args.limit]
+    elif action == "list":
+        result = await asyncio.to_thread(backend.list_memories, type=args.type, status=args.status,
+                                         limit=args.limit, cursor=args.cursor)
+    elif action == "search":
+        result = await asyncio.to_thread(backend.search_memories, args.query, limit=args.limit)
+    elif action == "read":
+        result = await asyncio.to_thread(backend.read_memory, args.id, revision=args.revision)
+    elif action == "history":
+        result = await asyncio.to_thread(backend.memory_history, args.id)
+    elif action == "inspect":
+        result = await asyncio.to_thread(backend.memory_proposal, args.id)
+    elif action in {"approve", "reject"}:
+        result = await asyncio.to_thread(backend.review_memory, args.id, action,
+            expected_proposal_revision=args.expected_proposal_revision, operation_id=args.operation_id,
+            expected_revision=getattr(args, "expected_revision", None),
+            related_records=getattr(args, "related_records", None), reason=getattr(args, "reason", ""))
+    else:
+        result = await asyncio.to_thread(backend.mutate_memory, mutation_command(args), operation_id=args.operation_id)
+    console.print_json(json.dumps(result, ensure_ascii=False))
 
 
 def _remote_command_registry(custom_commands=()) -> CommandRegistry:  # noqa: ANN001
@@ -1249,7 +1433,7 @@ def _remote_command_registry(custom_commands=()) -> CommandRegistry:  # noqa: AN
         (
             "memory",
             "Review daemon Session memory proposals",
-            "/memory [pending|inspect FINGERPRINT|approve FINGERPRINT|reject FINGERPRINT [REASON]|ledger]",
+            "/memory [list|search QUERY|read ID|pending|inspect PROPOSAL_ID|approve PROPOSAL_ID --expected-proposal-revision N --operation-id ID|ledger]",
             ("memory-review",),
         ),
         ("child", "Inspect one child Agent", "/child ID", ()),
@@ -1262,6 +1446,7 @@ def _remote_command_registry(custom_commands=()) -> CommandRegistry:  # noqa: AN
         ),
         ("extensions", "Inspect daemon workspace extensions", "/extensions", ()),
         ("skills", "Inspect daemon workspace skills", "/skills", ()),
+        ('lsp','Manage language services in the daemon owner','/lsp [status | trust|untrust|restart ENTRY_ID]',()),
         ("mcps", "Inspect daemon workspace MCP servers", "/mcps", ("mcp",)),
         ("exit", "Detach this terminal", "/exit", ("quit",)),
     ):

@@ -1,6 +1,8 @@
 """Focused Runner orchestration context tests."""
 from __future__ import annotations
 
+import threading
+
 from pathlib import Path
 
 from nz_coder.runtime.adapters.runner import runner_context_from_legacy_host
@@ -30,6 +32,14 @@ class _Hooks:
 
 
 class _Host:
+    _session_checkpoint_lock = threading.RLock()
+
+    def _begin_session_checkpoints(self, run_context):
+        return run_context
+
+    def _retire_session_checkpoints(self, writer):
+        return None
+
     session_id = "session-runner"
     runtime_state = object()
     hooks = _Hooks()

@@ -89,13 +89,13 @@ class RunSettings:
     system_context_budget_tokens: int
     planning_enabled: bool
     planning_max_tokens: int
-    replan_idle_turns: int
-    replan_max_attempts: int
+    working_memory_reminder_steps: int
     reflection_enabled: bool
     reflection_max_attempts: int
     max_verification_gate_prompts: int
     project_verify_timeout: int
     lsp_enabled: bool
+    lsp_servers_json: str = field(repr=False)
     lsp_initialize_timeout: float
     lsp_request_timeout: float
     lsp_diagnostic_wait: float
@@ -117,14 +117,9 @@ class RunSettings:
     subagent_background_max_concurrent: int
     subagent_process_isolation_enabled: bool
     subagent_process_stop_grace: float
+    memory_retrieval_mode: str
+    memory_embedding_model: str
     memory_llm_rerank: bool
-    memory_llm_extract: bool
-    memory_async_write: bool
-    memory_auto_extract: bool
-    memory_auto_dream: bool
-    memory_auto_dream_min_hours: int
-    memory_auto_dream_min_new_sessions: int
-    memory_cleanup_days: int
     runtime_state_persist: bool
     trace_enabled: bool
     image_provider: str
@@ -143,6 +138,7 @@ class RunSettings:
     def __post_init__(self) -> None:
         """Keep credential text usable while making dataclass projections safe."""
         object.__setattr__(self, "image_api_key", secret_str(self.image_api_key))
+        object.__setattr__(self, "lsp_servers_json", secret_str(self.lsp_servers_json))
 
     @classmethod
     def from_snapshot(cls, snapshot: ConfigSnapshot) -> "RunSettings":
@@ -197,14 +193,14 @@ class RunSettings:
             context_replay_compaction_tokens=max(0, integer("NZ_CONTEXT_REPLAY_COMPACTION_TOKENS", 0)),
             system_context_budget_tokens=max(1, integer("SYSTEM_CONTEXT_BUDGET_TOKENS", 6_000)),
             planning_enabled=boolean("NZ_PLANNING_ENABLED", False),
-            planning_max_tokens=max(1, integer("NZ_PLANNING_MAX_TOKENS", 1_500)),
-            replan_idle_turns=max(1, integer("NZ_REPLAN_IDLE_TURNS", 5)),
-            replan_max_attempts=max(0, integer("NZ_REPLAN_MAX_ATTEMPTS", 2)),
+            planning_max_tokens=max(1, integer("NZ_PLANNING_MAX_TOKENS", 8_192)),
+            working_memory_reminder_steps=max(0, integer("NZ_WORKING_MEMORY_REMINDER_STEPS", 25)),
             reflection_enabled=boolean("NZ_REFLECTION_ENABLED", False),
             reflection_max_attempts=max(0, integer("NZ_REFLECTION_MAX_ATTEMPTS", 2)),
             max_verification_gate_prompts=max(0, integer("MAX_VERIFICATION_GATE_PROMPTS", 2)),
             project_verify_timeout=max(1, integer("NZ_PROJECT_VERIFY_TIMEOUT_SECONDS", 60)),
             lsp_enabled=boolean("NZ_LSP_ENABLED", True),
+            lsp_servers_json=text("NZ_LSP_SERVERS_JSON", "{}"),
             lsp_initialize_timeout=max(0.001, number("NZ_LSP_INITIALIZE_TIMEOUT_SECONDS", 20.0)),
             lsp_request_timeout=max(0.001, number("NZ_LSP_REQUEST_TIMEOUT_SECONDS", 10.0)),
             lsp_diagnostic_wait=max(0.0, number("NZ_LSP_DIAGNOSTIC_WAIT_SECONDS", 2.0)),
@@ -226,14 +222,9 @@ class RunSettings:
             subagent_background_max_concurrent=max(1, integer("SUBAGENT_BACKGROUND_MAX_CONCURRENT", 4)),
             subagent_process_isolation_enabled=boolean("NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED", True),
             subagent_process_stop_grace=max(0.0, number("NZ_SUBAGENT_PROCESS_STOP_GRACE_SECONDS", 0.5)),
+            memory_retrieval_mode=text("NZ_MEMORY_RETRIEVAL_MODE", "lexical"),
+            memory_embedding_model=text("NZ_MEMORY_EMBEDDING_MODEL", ""),
             memory_llm_rerank=boolean("MEMORY_LLM_RERANK", False),
-            memory_llm_extract=boolean("MEMORY_LLM_EXTRACT", False),
-            memory_async_write=boolean("MEMORY_ASYNC_WRITE", False),
-            memory_auto_extract=boolean("MEMORY_AUTO_EXTRACT", True),
-            memory_auto_dream=boolean("MEMORY_AUTO_DREAM", True),
-            memory_auto_dream_min_hours=max(0, integer("MEMORY_AUTO_DREAM_MIN_HOURS", 24)),
-            memory_auto_dream_min_new_sessions=max(0, integer("MEMORY_AUTO_DREAM_MIN_NEW_SESSIONS", 5)),
-            memory_cleanup_days=max(0, integer("MEMORY_CLEANUP_DAYS", 30)),
             runtime_state_persist=boolean("RUNTIME_STATE_PERSIST", True),
             trace_enabled=boolean("TRACE_ENABLED", True),
             image_provider=text("NZ_IMAGE_DESCRIBE_PROVIDER", text("MODEL_PROVIDER", "openai-compatible")),

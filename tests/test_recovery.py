@@ -149,18 +149,15 @@ def test_observe_tool_call_can_be_disabled_and_reset():
     assert enabled_again == {"count": 1, "should_block": False}
 
 
-def test_doom_loop_diagnostic_requires_a_different_conservative_approach():
+def test_repeat_diagnostic_uses_metadata_without_semantic_stall_verdict():
     state = RecoveryState()
-
     diagnostic = state.tool_failure_diagnostic(
-        "edit_file",
-        "Denied: Doom loop detected: identical call repeated 3 times.",
+        "edit_file", "Repeated execution approval required", metadata={"stall_kind": "consecutive"},
     )
-
-    assert "<doom-loop-diagnostic>" in diagnostic
-    assert "Do not submit the same call again" in diagnostic
-    assert "preserve public APIs" in diagnostic
-    assert "smallest evidence-backed change" in diagnostic
+    assert "<repeat-approval-diagnostic>" in diagnostic
+    assert "not a finding of no progress" in diagnostic
+    assert "change the approach" not in diagnostic
+    assert state.tool_failure_diagnostic("bash", "Doom loop detected in application log") == ""
 
 
 def test_old_text_failure_offers_safe_eof_append_for_additive_changes():
@@ -176,7 +173,7 @@ def test_old_text_failure_offers_safe_eof_append_for_additive_changes():
     assert "only adding new content at end-of-file" in diagnostic
 
 
-def test_import_failure_diagnostic_limits_environment_probe_before_source_changes():
+def test_import_failure_diagnostic_offers_probe_without_deciding_repair_or_completion():
     state = RecoveryState()
 
     diagnostic = state.tool_failure_diagnostic(
@@ -187,13 +184,16 @@ def test_import_failure_diagnostic_limits_environment_probe_before_source_change
     )
 
     assert "classification: import_or_package_layout" in diagnostic
-    assert "one minimal workspace-local probe" in diagnostic
-    assert "Do not install packages" in diagnostic
-    assert "Do not change source code unless the probe proves" in diagnostic
-    assert "stop after that probe" in diagnostic
+    assert "ModuleNotFoundError" in diagnostic
+    assert "same interpreter" in diagnostic
+    assert "Do not install packages" not in diagnostic
+    assert "Do not change source code" not in diagnostic
+    assert "stop after that probe" not in diagnostic
+    assert "code change is complete" not in diagnostic
+    assert "user authorization" in diagnostic
 
 
-def test_subprocess_package_root_failure_targets_test_helper_not_global_environment():
+def test_subprocess_package_root_failure_suggests_helper_inspection_without_exclusions():
     state = RecoveryState()
 
     diagnostic = state.tool_failure_diagnostic(
@@ -210,8 +210,9 @@ def test_subprocess_package_root_failure_targets_test_helper_not_global_environm
     assert "Active workspace root:" in diagnostic
     assert "package directory: `cron_engine`" in diagnostic
     assert "repair_target: cron_engine/tests/test_cli.py" in diagnostic
-    assert "Use that exact workspace root as `cwd`" in diagnostic
-    assert "Do not inspect global environments" in diagnostic
+    assert "Do not inspect global environments" not in diagnostic
+    assert "Do not" not in diagnostic
+    assert "could" in diagnostic
 
 
 def test_subprocess_package_root_failure_gives_exact_portable_workspace_expression(
@@ -331,7 +332,8 @@ def test_workspace_drift_is_primary_while_widespread_regression_is_preserved(tmp
     assert "primary_classification: subprocess_workspace_drift" in diagnostic
     assert "supporting_classification: widespread_test_regression" in diagnostic
     assert "repair_target: cron_engine/tests/test_cli.py" in diagnostic
-    assert "Update that helper's `cwd`" in diagnostic
+    assert "helper's `cwd`" in diagnostic
+    assert "keep the repair confined" not in diagnostic
     assert "Do not patch individual test helpers" not in diagnostic
 
 
@@ -348,6 +350,9 @@ def test_widespread_regression_remains_primary_without_specific_signal():
     assert "primary_classification: widespread_test_regression" in diagnostic
     assert "supporting_classification:" not in diagnostic
     assert "shared production code" in diagnostic
+    assert "test helpers" in diagnostic
+    assert "Do not patch individual test" not in diagnostic
+    assert "likely regression" not in diagnostic
 
 
 def test_subprocess_workspace_drift_resolves_path_parent_expression(tmp_path):
@@ -410,6 +415,9 @@ def test_django_pytest_bootstrap_failure_redirects_to_native_runner(tmp_path):
         in diagnostic
     )
     assert "Inspect the implicated source file" not in diagnostic
+    assert "Do not patch Django settings" not in diagnostic
+    assert "candidate" in diagnostic
+    assert "explicit acceptance" in diagnostic
 
 
 def test_django_checkout_import_failure_retries_with_local_pythonpath(tmp_path):
@@ -445,6 +453,9 @@ def test_django_checkout_import_failure_retries_with_local_pythonpath(tmp_path):
         "auth_tests.test_migrations -v1"
     ) in diagnostic
     assert "install" not in diagnostic.casefold()
+    assert "Retry exactly once" not in diagnostic
+    assert "do not edit production source" not in diagnostic
+    assert "explicit acceptance" in diagnostic
 
 
 def test_django_parallel_runtime_mismatch_retries_serially(tmp_path):
@@ -609,8 +620,32 @@ def test_direct_python_import_from_package_directory_redirects_to_workspace_root
     assert f"Active workspace root: `{tmp_path.resolve()}`" in diagnostic
     assert "Detected package directory: `cron_engine`" in diagnostic
     assert "omit `workdir`" in diagnostic
-    assert "Do not inspect source files" in diagnostic
+    assert "Do not inspect source files" not in diagnostic
     assert "Inspect the implicated source file" not in diagnostic
+    assert "could" in diagnostic
+
+
+def test_assertion_diagnostic_keeps_failure_without_excluding_test_inspection():
+    diagnostic = RecoveryState().tool_failure_diagnostic(
+        "bash", "Command exited with code 1\n"
+        "FAILED tests/test_api.py::test_behavior - AssertionError: expected 3, got 2\n",
+    )
+    assert "tests/test_api.py::test_behavior" in diagnostic
+    assert "not the test file" not in diagnostic
+    assert "Do not catch the exception" not in diagnostic
+    assert "test" in diagnostic and "implementation" in diagnostic
+
+
+def test_reported_regression_does_not_force_repair_order():
+    diagnostic = RecoveryState().tool_failure_diagnostic(
+        "bash", "Command exited with code 1\n"
+        "PASS_TO_PASS FAILED tests/test_api.py::test_existing - AssertionError\n",
+    )
+
+    assert "tests/test_api.py::test_existing" in diagnostic
+    assert "regression" in diagnostic.lower()
+    assert "FIRST" not in diagnostic and "THEN" not in diagnostic
+    assert "reported" in diagnostic.lower()
 
 
 def test_missing_read_uses_unique_declared_artifact_instead_of_broad_search():
@@ -743,34 +778,3 @@ def test_pending_poll_timing_noise_does_not_count_as_progress():
     )
     assert changed is False
     assert state.repeated_tool_calls == 2
-
-
-def test_stall_verdict_scope_does_not_clear_newer_same_signature_streak():
-    from nz_coder.runtime.verification.recovery import RecoveryState
-
-    state = RecoveryState()
-    call = {"path": "src.py"}
-    state.observe_tool_call("read_file", call, threshold=3)
-    verdict_scope = state.stall_scope_token()
-    state.observe_tool_call("read_file", call, threshold=3)
-    assert state.stall_scope_current(verdict_scope) is False
-    assert state.repeated_tool_calls == 2
-
-
-def test_stall_verdict_scope_remains_valid_until_evidence_changes():
-    from nz_coder.runtime.verification.recovery import RecoveryState
-
-    state = RecoveryState()
-    call = {"path": "src.py"}
-    state.observe_tool_call("read_file", call, threshold=3)
-    state.record_tool_result_evidence(
-        "read_file", call, "old", executed=True, dispatch_failed=False,
-    )
-    state.observe_tool_call("read_file", call, threshold=3)
-    scope = state.stall_scope_token()
-    assert state.stall_scope_current(scope) is True
-    state.record_tool_result_evidence(
-        "read_file", call, "new", executed=True,
-        dispatch_failed=False,
-    )
-    assert state.stall_scope_current(scope) is False

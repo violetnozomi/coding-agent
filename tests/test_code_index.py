@@ -69,7 +69,7 @@ def test_truncated_scan_does_not_delete_unvisited_cached_files(tmp_path):
     assert paths == ["a.py", "b.py"]
 
 
-def test_index_rejects_workspace_state_symlink_escape(tmp_path):
+def test_index_ignores_legacy_workspace_state_symlink(tmp_path):
     from nz_coder.intelligence.code_index import PersistentCodeIndex
 
     workspace = tmp_path / "workspace"
@@ -78,12 +78,12 @@ def test_index_rejects_workspace_state_symlink_escape(tmp_path):
     outside.mkdir()
     (workspace / ".nz-coder").symlink_to(outside, target_is_directory=True)
 
-    try:
-        PersistentCodeIndex(workspace)
-    except ValueError as exc:
-        assert "escapes workspace" in str(exc)
-    else:
-        raise AssertionError("state-directory symlink escape was not rejected")
+    from nz_coder.foundation.user_paths import prepare_user_storage
+
+    index = PersistentCodeIndex(workspace)
+    assert index.database_path == (
+        prepare_user_storage(workspace).workspace_cache / "indexes" / "code-index.sqlite3"
+    )
     assert not (outside / "index").exists()
 
 

@@ -24,14 +24,17 @@ def test_command_replacement_updates_terminal_controller():
     from nz_coder.interface.commands import CommandContext
 
     class Controller:
+        def ensure_environment_replaceable(self):
+            pass
         def __init__(self):
             self.environment = None
 
         def replace_environment(self, environment):
             self.environment = environment
 
-    old = object()
-    new = object()
+    from types import SimpleNamespace
+    old = SimpleNamespace(has_pending_settlement=False, close=lambda: None)
+    new = SimpleNamespace(has_pending_settlement=False, close=lambda: None)
     controller = Controller()
     context = CommandContext(
         history=[],
@@ -48,8 +51,9 @@ def test_command_replacement_updates_terminal_controller():
 def test_command_replacement_resets_product_session_title_when_surface_tracks_it():
     from nz_coder.interface.commands import CommandContext
 
-    old = object()
-    new = object()
+    from types import SimpleNamespace
+    old = SimpleNamespace(has_pending_settlement=False, close=lambda: None)
+    new = SimpleNamespace(has_pending_settlement=False, close=lambda: None)
     state = {"id": "old", "agent": old, "session_title": "Old title"}
     context = CommandContext(
         history=[],

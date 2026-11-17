@@ -317,12 +317,12 @@ def test_daemon_restart_preserves_workspace_sessions_and_rotates_token(tmp_path:
         assert new_token != old_token
         new_client = NZCoderClient(restarted["endpoint"], new_token, timeout=2)
         restored = next(
-            item for item in new_client.list_sessions() if item["id"] == session["id"]
+            item for item in new_client.list_sessions()["sessions"] if item["id"] == session["id"]
         )
         assert restored["title"] == "Restart survivor"
         assert restored["status"] == "idle"
         completed = next(
-            item for item in new_client.list_sessions() if item["id"] == completed_id
+            item for item in new_client.list_sessions()["sessions"] if item["id"] == completed_id
         )
         assert completed["title"] == "Completed survivor"
         assert completed["status"] == "completed"

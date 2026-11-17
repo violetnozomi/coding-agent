@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.protocol.attachments import attachment_base64, normalize_attachments
-from nz_coder.providers.http import NativeClient, UrllibTransport
+from nz_coder.providers.http import NativeClient, OwnedStream, UrllibTransport
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
     configured_model_capabilities,
@@ -321,12 +321,53 @@ class GeminiProvider:
 
     @classmethod
     def _normalize_stream(cls, events: Iterable[dict]) -> Iterator:
+        return OwnedStream(
+            cls._iter_normalized_stream(events),
+            close_owner=getattr(events, "close", lambda: None),
+        )
+
+    @classmethod
+    def _iter_normalized_stream(cls, events: Iterable[dict]) -> Iterator:
+        calls_by_id: dict[str, tuple[int, str, str]] = {}
+        extra_by_id: dict[str, dict] = {}
+        next_index = 0
         for event in events:
-            text, reasoning, tool_calls = cls._normalize_parts(cls._parts(event))
+            parts = cls._parts(event)
+            text, reasoning, tool_calls = cls._normalize_parts(parts)
+            normalized_calls = []
+            call_parts = [part for part in parts if part.get("functionCall")]
+            for call, part in zip(tool_calls, call_parts):
+                call_id = str(part["functionCall"].get("id") or "")
+                if call_id and call_id in calls_by_id:
+                    index, name, arguments = calls_by_id[call_id]
+                    if (call.function.name, call.function.arguments) != (name, arguments):
+                        raise ValueError("Gemini repeated tool call changed its snapshot")
+                    previous_extra = extra_by_id[call_id]
+                    new_extra = {
+                        key: value for key, value in call.provider_extra.items()
+                        if previous_extra.get(key) != value
+                    }
+                    if new_extra:
+                        previous_extra.update(new_extra)
+                        normalized_calls.append(NormalizedToolCall(
+                            index=index, provider_extra=new_extra,
+                        ))
+                    continue
+                call.index = next_index
+                if not call_id:
+                    call.id = f"gemini-call-{next_index}"
+                else:
+                    calls_by_id[call_id] = (
+                        next_index, call.function.name, call.function.arguments
+                    )
+                    extra_by_id[call_id] = dict(call.provider_extra)
+                next_index += 1
+                normalized_calls.append(call)
+            tool_calls = normalized_calls
             candidate = next(iter(event.get("candidates") or []), {})
             finish_reason = _gemini_finish_reason(
                 candidate.get("finishReason"),
-                has_tools=bool(tool_calls),
+                has_tools=bool(next_index),
             ) if candidate.get("finishReason") else ""
             usage = _gemini_usage(event.get("usageMetadata"))
             if text or reasoning or tool_calls or finish_reason or any(usage.values()):
@@ -353,7 +394,9 @@ def _gemini_finish_reason(value: Any, *, has_tools: bool = False) -> str:
 def _gemini_usage(value: Any) -> dict[str, int]:
     source = value if isinstance(value, dict) else {}
     input_tokens = _usage_token(source.get("promptTokenCount"))
-    output_tokens = _usage_token(source.get("candidatesTokenCount"))
+    reasoning_tokens = _usage_token(source.get("thoughtsTokenCount"))
+    # 统一归一化把原始 output 视为含思考的输出，Gemini 的候选输出则独立报告。
+    output_tokens = _usage_token(source.get("candidatesTokenCount")) + reasoning_tokens
     total_tokens = max(
         input_tokens + output_tokens,
         _usage_token(source.get("totalTokenCount")),
@@ -368,7 +411,6 @@ def _gemini_usage(value: Any) -> dict[str, int]:
         "output_tokens": output_tokens,
         "total_tokens": total_tokens,
     }
-    reasoning_tokens = _usage_token(source.get("thoughtsTokenCount"))
     if reasoning_tokens:
         result["reasoning_tokens"] = reasoning_tokens
     if cache_read:

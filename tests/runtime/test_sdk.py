@@ -28,6 +28,7 @@ class FakeProductionAgent:
         })
         return {
             "status": "completed",
+            "content": "sdk complete",
             "runtime": {"active_agent": "sdk", "turn_count": 1},
         }
 
@@ -294,7 +295,8 @@ def test_default_sdk_completes_offline_model_tool_model(monkeypatch, tmp_path):
     result = asyncio.run(AgentClient().run(request, on_event=events.append))
 
     assert result.status is RunStatus.COMPLETED
-    assert result.final_text == "workspace inspected"
+    assert result.final_text.startswith("workspace inspected\n\n")
+    assert "未评估" in result.final_text
     assert provider.calls == 2
     assert [event.name.value for event in events] == [
         "session.created",

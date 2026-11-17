@@ -157,7 +157,7 @@ def test_declared_agent_surfaces_valid_structured_output(tmp_path):
         "lens": "correctness",
         "findings": [{"path": "app.py"}],
     }
-    assert result["status"] == "completed"
+    assert result["status"] == "completed_unverified"
     assert result["structured"] == expected
     assert result["runtime"]["structured_output"]["ok"] is True
     assistant = next(item for item in messages if item.get("role") == "assistant")
@@ -273,7 +273,7 @@ def test_invalid_terminal_signal_repairs_before_settling(tmp_path):
         config.WORKDIR = old_workdir
 
     assert fake.chat.completions.calls == 2
-    assert result["status"] == "completed"
+    assert result["status"] == "completed_unverified"
     assert result["structured"] == {"lens": "correctness", "findings": []}
     assert not any(entry["type"] == "terminal" for entry in agent.lineage.entries())
 
@@ -326,7 +326,7 @@ def test_as_tool_result_carries_validated_structured_payload_to_caller(tmp_path)
     returned = next(
         item for item in messages if item.get("_nz_agent_result") is True
     )
-    assert result["status"] == "completed"
+    assert result["status"] == "completed_unverified"
     assert returned[STRUCTURED_OUTPUT_KEY] == {
         "lens": "security",
         "findings": [{"path": "app.py"}],
@@ -338,3 +338,16 @@ def test_as_tool_result_carries_validated_structured_payload_to_caller(tmp_path)
         "lens": "security",
         "findings": [{"path": "app.py"}],
     }
+
+
+@pytest.mark.parametrize("schema,value", [
+    ({"type": "object", "additionalProperties": False}, {"unexpected": 1}),
+    ({"type": "object", "properties": {}, "additionalProperties": False}, {"unexpected": 1}),
+    ({"type": "object", "properties": {"child": {"type": "object", "additionalProperties": False}}}, {"child": {"unexpected": 1}}),
+    ({"type": "array", "items": {"type": "object", "additionalProperties": False}}, [{"unexpected": 1}]),
+])
+def test_closed_object_without_properties_rejects_any_key(schema, value):
+    from nz_coder.runtime.conversation.structured_output import validate_against_schema
+
+    assert validate_against_schema(value, schema)
+    assert not validate_against_schema({}, {"type": "object", "additionalProperties": False})

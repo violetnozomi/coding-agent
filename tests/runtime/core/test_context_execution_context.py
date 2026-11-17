@@ -8,6 +8,13 @@ from nz_coder.runtime.core.context import ContextExecutionContext
 from nz_coder.state.context import prompt_budget
 
 
+
+
+def _freeze_request(messages):
+    from nz_coder.runtime.conversation.request_snapshot import FrozenRequestSnapshot, message_version
+    from nz_coder.runtime.conversation.message_projection import project_provider_messages
+    return FrozenRequestSnapshot("", "", "", message_version(messages), project_provider_messages, ())
+
 class _Tracer:
     def __init__(self) -> None:
         self.events: list[tuple[str, dict]] = []
@@ -22,6 +29,9 @@ class _LegacyHost:
         self.tracer = _Tracer()
         self.compacted: list[list[dict]] = []
         self.stamped: list[list[dict]] = []
+
+    def _freeze_api_request(self, messages):
+        return _freeze_request(messages)
 
     def _prompt_budget(self):
         return prompt_budget(32_000, 4_000)
@@ -63,6 +73,7 @@ def test_context_execution_context_resolves_workspace_and_rejects_bad_callbacks(
 ) -> None:
     """An invalid capability must fail at composition instead of mid-run."""
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path / ".." / tmp_path.name,
         budget=prompt_budget(16_000, 2_000),
         projected_tokens=lambda _messages: 0,
@@ -74,6 +85,7 @@ def test_context_execution_context_resolves_workspace_and_rejects_bad_callbacks(
 
     try:
         ContextExecutionContext(
+            freeze_request=_freeze_request,
             workspace=tmp_path,
             budget=prompt_budget(16_000, 2_000),
             projected_tokens=None,  # type: ignore[arg-type]

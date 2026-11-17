@@ -629,8 +629,9 @@ def _snapshot_instruction_sources(
             warnings.append(warning)
         rule_prefix = ".nz-coder/rules/" if project_layout else "rules/"
         rules = sorted(
-            item for item in snapshot.files.values()
-            if item.kind == "rule" and item.relative_path.startswith(rule_prefix)
+            (item for item in snapshot.files.values()
+             if item.kind == "rule" and item.relative_path.startswith(rule_prefix)),
+            key=lambda item: item.relative_path,
         )
         for index, item in enumerate(rules):
             path = root / item.relative_path

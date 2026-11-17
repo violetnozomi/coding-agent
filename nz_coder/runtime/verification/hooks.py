@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.runtime.agent.task_intent import current_task_assessment
 from nz_coder.protocol.message_schema import is_synthetic_user_message, stamp_user_message
 from nz_coder.runtime.agent.task_policy import is_test_file, normalize_path as _policy_normalize_path
 from nz_coder.tools.todo import get_reminder
@@ -190,7 +191,7 @@ class HookContext:
     trace_id: str = ""
     turn_count: int = 0
     message_count: int = 0
-    task_mode: str = ""
+    task_assessment: dict | None = None
     initial_task: str = ""
     last_user_message: str = ""
     last_assistant_message: str = ""
@@ -246,8 +247,6 @@ class HookContext:
             return str(self.turn_count)
         if name == "message_count":
             return str(self.message_count)
-        if name == "task_mode":
-            return self.task_mode
         if name == "initial_task":
             return self.initial_task
         if name == "last_user_message":
@@ -337,7 +336,6 @@ class HookContext:
             "$TRACE_ID": self.trace_id,
             "$TURN_COUNT": str(self.turn_count),
             "$MESSAGE_COUNT": str(self.message_count),
-            "$TASK_MODE": self.task_mode,
             "$INITIAL_TASK": self.initial_task,
             "$LAST_USER_MESSAGE": self.last_user_message,
             "$LAST_ASSISTANT_MESSAGE": self.last_assistant_message,
@@ -394,6 +392,7 @@ class AgentHooks:
     after_tool_result_hooks: list[ToolResultHook] = field(default_factory=list)
     after_tool_batch_hooks: list[ToolBatchHook] = field(default_factory=list)
     configured_hooks: list[ConfiguredHook] = field(default_factory=list)
+    completion_review_hooks: list[StopHook] = field(default_factory=list)
     _prompt_messages: list[str] = field(default_factory=list)
     _stop_hook_reanimate_count: int = 0
     _stop_hook_reason: str = ""
@@ -409,6 +408,19 @@ class AgentHooks:
         """Reset counters that must not leak across independent Agent runs."""
         self._stop_hook_reanimate_count = 0
         self._stop_hook_reason = ""
+
+    def observe_model_tool_result(self, loop: Any, result: Any) -> None:
+        """普通模型拿到工具结果后重开反馈机会，不据此判断进展或测试通过。"""
+        previous = self._stop_hook_reanimate_count
+        if not previous:
+            return
+        self._stop_hook_reanimate_count = 0
+        self._stop_hook_reason = ""
+        tracer = getattr(loop, "tracer", None)
+        if tracer is not None:
+            tracer.log("stop_hook_feedback_reset", previous_count=previous,
+                counter_scope="consecutive_without_model_tool_result", source="model",
+                tool=result.name, execution_id=result.execution_id)
 
     @property
     def stop_hook_reason(self) -> str:
@@ -441,6 +453,13 @@ class AgentHooks:
                 return "continue"
         if ctx.status not in {"completed", "completed_unverified"}:
             return ctx.status
+        review_status = self._run_stop_hooks(
+            loop, messages, message=message, hooks=self.completion_review_hooks,
+        )
+        if review_status == "completed_unverified":
+            ctx.status = review_status
+        elif review_status is not None:
+            return review_status
         decision = self._run_configured_event(
             self._base_context(loop, messages, "no_tool_response", message=message, status=ctx.status)
         )
@@ -458,7 +477,14 @@ class AgentHooks:
         *,
         message: str = "",
     ) -> str:
-        """Async natural-stop path that can await LLM-judged consumers."""
+        """完整自然停止入口；Runner分别结算审查与最终规则。"""
+        status = await self.handle_completion_review_async(loop, messages, message=message)
+        if status not in {"completed", "completed_unverified"}:
+            return status
+        return await self.handle_terminal_rules_async(loop, messages, message=message, status=status)
+
+    async def handle_completion_review_async(self, loop: Any, messages: list, *, message: str = "") -> str:
+        """语义审查可按证据和预算推迟，不持有用户最终停止规则。"""
         ctx = NoToolResponseContext(
             loop=loop,
             messages=messages,
@@ -473,13 +499,22 @@ class AgentHooks:
                 return "continue"
         if ctx.status not in {"completed", "completed_unverified"}:
             return ctx.status
+        reviewed = await self._run_stop_hooks_async(
+            loop, messages, message=message, hooks=self.completion_review_hooks,
+        )
+        return reviewed if reviewed is not None else ctx.status
+
+    async def handle_terminal_rules_async(
+        self, loop: Any, messages: list, *, message: str = "", status: str = "completed",
+    ) -> str:
+        """冻结前只结算配置及用户停止规则，不启动生产语义审查。"""
         decision = self._run_configured_event(
             self._base_context(
                 loop,
                 messages,
                 "no_tool_response",
                 message=message,
-                status=ctx.status,
+                status=status,
             )
         )
         if decision is not None and decision.continue_run:
@@ -491,7 +526,40 @@ class AgentHooks:
         )
         if stop_status is not None:
             return stop_status
-        return ctx.status
+        return status
+
+    async def handle_delivery_boundary_async(
+        self, loop: Any, messages: list, *, message: str, review: bool, guidance: str = "",
+    ) -> str:
+        """普通收尾先收齐用户决定，再将所有补救合为一次额度消费。"""
+        pending: list[StopHookDecision] = []
+        queued = len(self._prompt_messages)
+        configured = self._run_configured_event(self._base_context(
+            loop, messages, "no_tool_response", message=message, status="completed"))
+        if configured is not None and (configured.rejected or configured.continue_run):
+            del self._prompt_messages[queued:]
+            pending.append(StopHookDecision("abort" if configured.rejected else "reanimate",
+                configured.message or "User-configured completion rule requires attention.", "configured"))
+        await self._run_stop_hooks_async(loop, messages, message=message, pending=pending)
+        # 用户已要求停止或继续时，当前候选不再值得额外付费审查。
+        if review and not any(item.action in {"abort", "reanimate"} for item in pending):
+            await self._run_stop_hooks_async(loop, messages, message=message,
+                hooks=self.completion_review_hooks, pending=pending)
+        if guidance:
+            pending.append(StopHookDecision("reanimate", guidance, "explicit-requirements"))
+        abort = next((item for item in pending if item.action == "abort"), None)
+        corrections = [item for item in pending if item.action == "reanimate" and item.message.strip()]
+        if abort is not None:
+            decision = abort
+        elif corrections:
+            decision = StopHookDecision("reanimate", "\n\n".join(dict.fromkeys(item.message for item in corrections)),
+                "sidecar-verifier" if any(item.source == "sidecar-verifier" for item in corrections) else "completion")
+        elif any(item.action == "complete_unverified" for item in pending):
+            decision = StopHookDecision("complete_unverified")
+        else:
+            decision = StopHookDecision()
+        return self._apply_stop_hook_decision(loop, messages, decision,
+            budget=max(0, int(self.stop_hook_reanimate_budget))) or "completed"
 
     async def _run_stop_hooks_async(
         self,
@@ -499,13 +567,16 @@ class AgentHooks:
         messages: list,
         *,
         message: str,
+        hooks: list[StopHook] | None = None,
+        pending: list[StopHookDecision] | None = None,
     ) -> str | None:
         """Await async hooks while preserving ordered fail-open composition."""
-        if not self.stop_hooks:
+        selected = self.stop_hooks if hooks is None else hooks
+        if not selected:
             return None
         budget = max(0, int(self.stop_hook_reanimate_budget))
         context = self._build_stop_hook_context(loop, messages, message, budget)
-        for hook in self.stop_hooks:
+        for hook in selected:
             try:
                 raw_decision = hook(context)
                 if inspect.isawaitable(raw_decision):
@@ -519,6 +590,15 @@ class AgentHooks:
                         error=str(exc),
                         error_type=type(exc).__name__,
                     )
+                from nz_coder.runtime.verification.sidecar_verifier import SidecarVerifierHook
+                if isinstance(hook, SidecarVerifierHook):
+                    if pending is not None:
+                        pending.append(StopHookDecision("complete_unverified", source="sidecar-verifier"))
+                        continue
+                    return "completed_unverified"
+                continue
+            if pending is not None:
+                pending.append(decision)
                 continue
             status = self._apply_stop_hook_decision(
                 loop, messages, decision, budget=budget
@@ -527,13 +607,15 @@ class AgentHooks:
                 return status
         return None
 
-    def _run_stop_hooks(self, loop: Any, messages: list, *, message: str) -> str | None:
+    def _run_stop_hooks(self, loop: Any, messages: list, *, message: str,
+                        hooks: list[StopHook] | None = None) -> str | None:
         """Run stop hooks with the same bounded reanimation contract as InfCodeX."""
-        if not self.stop_hooks:
+        selected = self.stop_hooks if hooks is None else hooks
+        if not selected:
             return None
         budget = max(0, int(self.stop_hook_reanimate_budget))
         context = self._build_stop_hook_context(loop, messages, message, budget)
-        for hook in self.stop_hooks:
+        for hook in selected:
             try:
                 raw_decision = hook(context)
                 if inspect.isawaitable(raw_decision):
@@ -606,10 +688,13 @@ class AgentHooks:
                     reason=self._stop_hook_reason,
                     source=decision.source,
                 )
-            return "stopped_by_hook"
+            return "completed_unverified" if decision.source == "verification-evidence" else "blocked"
         if self._stop_hook_reanimate_count >= budget:
+            from nz_coder.runtime.core.execution_context import strict_local_tools
+
+            limit = "Stop-hook reanimate budget" if strict_local_tools() else "Consecutive completion feedback"
             self._stop_hook_reason = (
-                f"Stop-hook reanimate budget exhausted ({budget}/{budget})."
+                f"{limit} exhausted ({budget}/{budget}). {decision.message}".strip()
             )
             if tracer is not None:
                 tracer.log(
@@ -617,8 +702,9 @@ class AgentHooks:
                     count=self._stop_hook_reanimate_count,
                     budget=budget,
                     source=decision.source,
+                    counter_scope=self._feedback_counter_scope(),
                 )
-            return "stopped_by_hook"
+            return "blocked"
         prompt = decision.message.strip()
         if not prompt:
             return None
@@ -648,8 +734,15 @@ class AgentHooks:
                 count=self._stop_hook_reanimate_count,
                 budget=budget,
                 source=decision.source,
+                counter_scope=self._feedback_counter_scope(),
             )
         return "continue"
+
+    @staticmethod
+    def _feedback_counter_scope() -> str:
+        from nz_coder.runtime.core.execution_context import strict_local_tools
+
+        return "run_total" if strict_local_tools() else "consecutive_without_model_tool_result"
 
     @staticmethod
     def _normalize_stop_hook_decision(value: Any) -> StopHookDecision:
@@ -850,7 +943,7 @@ class AgentHooks:
                 status=ctx.status,
                 turn_count=ctx.turn_count,
                 message_count=ctx.message_count,
-                task_mode=ctx.task_mode,
+                task_assessment=copy.deepcopy(ctx.task_assessment),
                 wants_tests=ctx.wants_tests,
                 tests_modified=ctx.tests_modified,
                 missing_requested_paths_count=len(ctx.missing_requested_paths),
@@ -889,7 +982,7 @@ class AgentHooks:
                 conflicting_requested_path=ctx.conflicting_requested_path,
                 turn_count=ctx.turn_count,
                 message_count=ctx.message_count,
-                task_mode=ctx.task_mode,
+                task_assessment=copy.deepcopy(ctx.task_assessment),
                 wants_tests=ctx.wants_tests,
                 tests_modified=ctx.tests_modified,
                 missing_requested_paths_count=len(ctx.missing_requested_paths),
@@ -935,7 +1028,7 @@ class AgentHooks:
             trace_id=str(getattr(loop, "trace_id", "") or ""),
             turn_count=int(getattr(runtime_state, "turn_count", 0) or 0),
             message_count=len(messages),
-            task_mode=str(getattr(runtime_state, "task_mode", "") or ""),
+            task_assessment=(current_task_assessment(runtime_state) if runtime_state is not None else None),
             initial_task=str(getattr(runtime_state, "initial_task_text", "") or ""),
             last_user_message=_last_message_text(messages, "user"),
             last_assistant_message=_last_message_text(messages, "assistant"),
@@ -1097,23 +1190,22 @@ def strict_generation_stop_hook(context: StopHookContext) -> StopHookDecision:
 def verification_gate_hook(ctx: NoToolResponseContext) -> str:
     loop = ctx.loop
     messages = ctx.messages
-    if loop.vm.should_gate() and _is_keep_going(messages):
-        loop.vm.reset()
+    if loop.verification_runtime.should_gate() and _is_keep_going(messages):
         loop.tracer.log("verification_gate_bypassed", reason="keep_going")
 
-    if not loop.vm.should_gate():
+    if not loop.verification_runtime.should_gate():
         return "completed"
 
-    if loop.vm.increment_gate_prompt() <= current_run_settings().max_verification_gate_prompts:
+    if loop.verification_runtime.increment_gate_prompt() <= current_run_settings().max_verification_gate_prompts:
         messages.append(stamp_user_message({
             "role": "user",
-            "content": loop.vm.make_gate_message(),
+            "content": loop.verification_runtime.make_gate_message(),
             "_nz_synthetic": True,
         }))
         loop.tracer.log(
             "verification_gate",
-            prompts=loop.vm.gate_prompts,
-            **loop.vm.status(),
+            prompts=loop.verification_runtime.gate_prompts,
+            **loop.verification_runtime.status(),
         )
         return "continue"
     return "completed_unverified"
@@ -1126,12 +1218,10 @@ def reflection_gate_hook(ctx: NoToolResponseContext) -> str:
 
 def _tool_failure_diagnostic_skip_reason(result: Any, output: str) -> str:
     """Return why an already-actionable policy failure needs no second prompt."""
-    if "doom loop detected" in str(output or "").casefold():
-        # Recovery adds a specific change-of-approach contract for this case;
-        # it is materially stronger than the short admission result.
-        return ""
     metadata = getattr(result, "metadata", None)
     metadata = metadata if isinstance(metadata, dict) else {}
+    if metadata.get("stall_kind") == "consecutive":
+        return ""
     if (
         bool(getattr(result, "permission_denied", False))
         or str(output or "").startswith("Denied")
@@ -1140,7 +1230,6 @@ def _tool_failure_diagnostic_skip_reason(result: Any, output: str) -> str:
             for key in (
                 "guardrail",
                 "invariant",
-                "stall_nudge",
             )
         )
     ):
@@ -1149,7 +1238,6 @@ def _tool_failure_diagnostic_skip_reason(result: Any, output: str) -> str:
     text = str(output or "")
     actionable_policy_markers = (
         "in SWE-bench strict mode",
-        "Error: sed -i is blocked.",
         "Error: Dangerous command blocked",
         "Error: Package install blocked.",
         "Error: Broad test runner blocked.",
@@ -1285,6 +1373,8 @@ def tool_failure_diagnostic_hook(ctx: ToolResultContext) -> None:
         if str(path).strip()
     )) if isinstance(contract, dict) else ()
     kwargs = {}
+    if (getattr(ctx.result, "metadata", None) or {}).get("stall_kind") == "consecutive":
+        kwargs["metadata"] = ctx.result.metadata
     if isinstance(tool_input, dict):
         kwargs["tool_input"] = tool_input
     if declared_paths:
@@ -1417,6 +1507,9 @@ def _configured_hooks_from_payload(
             raise HookConfigError(f"Hook settings at {label}: 'hooks' must be a list")
         log.warning("Ignoring hook settings at %s: 'hooks' must be a list", label)
         return []
+    # 已移除的语义入口必须显式报错，不能被非严格模式吞掉后跳过策略。
+    for index, entry in enumerate(raw_hooks):
+        _reject_removed_task_mode_config(entry, _identify_hook(entry, index))
     try:
         return parse_configured_hooks(raw_hooks)
     except HookConfigError as exc:
@@ -1426,10 +1519,43 @@ def _configured_hooks_from_payload(
         return []
 
 
+def _reject_removed_task_mode_config(entry: object, label: str) -> None:
+    if not isinstance(entry, dict):
+        return
+    when = entry.get("when")
+    if "when.task_mode" in entry or isinstance(when, dict) and "task_mode" in when:
+        raise HookConfigError(
+            f"{label}: when.task_mode was removed; use explicit event or file conditions"
+        )
+    for name in ("if", "when"):
+        condition = entry.get(name)
+        if isinstance(condition, str) and re.search(
+            r"(?:^|&&|\|\|)\s*(?:when\.)?task_mode\s*(?:==|!=|=~|~=)", condition
+        ):
+            raise HookConfigError(
+                f"{label}: {name}.task_mode was removed; use explicit event or file conditions"
+            )
+
+    def has_old_placeholder(value: object) -> bool:
+        if isinstance(value, str):
+            return "$TASK_MODE" in value
+        if isinstance(value, dict):
+            return any(has_old_placeholder(item) for item in value.values())
+        if isinstance(value, list):
+            return any(has_old_placeholder(item) for item in value)
+        return False
+
+    if has_old_placeholder(entry):
+        raise HookConfigError(
+            f"{label}: $TASK_MODE was removed; use explicit event or file context"
+        )
+
+
 def parse_configured_hooks(raw_hooks: list[dict]) -> list[ConfiguredHook]:
     hooks: list[ConfiguredHook] = []
     for index, entry in enumerate(raw_hooks):
         label = _identify_hook(entry, index)
+        _reject_removed_task_mode_config(entry, label)
         if not isinstance(entry, dict):
             raise HookConfigError(f"{label}: must be an object")
         event = str(entry.get("event") or "").strip()
@@ -1512,6 +1638,10 @@ def _parse_single_condition(expr: str) -> HookCondition:
         if index == -1:
             continue
         field_name = text[:index].strip()
+        if field_name in {"task_mode", "when.task_mode"}:
+            raise HookConditionParseError(
+                f"{field_name} was removed; use explicit event or file conditions"
+            )
         value = text[index + len(operator):].strip()
         if value.startswith('"') and value.endswith('"'):
             value = value[1:-1]
@@ -1556,7 +1686,10 @@ def _last_message_text(messages: list, role: str) -> str:
 
 
 def _normalize_path_value(path: str) -> str:
-    return _policy_normalize_path(str(path or "")).strip().lstrip("./")
+    normalized = _policy_normalize_path(str(path or "")).strip()
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
 
 
 def _unique_normalized_paths(values: list[str]) -> list[str]:

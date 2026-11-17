@@ -10,7 +10,8 @@ import pytest
 from nz_coder.runtime.conversation.message_projection import project_provider_messages
 
 
-def test_boundary_uses_runtime_task_instead_of_compaction_summary():
+@pytest.mark.parametrize("status", ["max_turns", "blocked"])
+def test_boundary_uses_runtime_task_instead_of_compaction_summary(status):
     """Derived compaction state must not become the next run's user task."""
     from nz_coder.runtime.conversation.continuation_context import build_continuation_boundary
 
@@ -21,8 +22,8 @@ def test_boundary_uses_runtime_task_instead_of_compaction_summary():
             "content": "<session-summary>\n## Goal\n- stale wrapper\n</session-summary>",
             "_nz_compaction": {"auto": True},
         }],
-        status="max_turns",
-        runtime_state=SimpleNamespace(initial_task_text=task),
+        status=status,
+        runtime_state={"initial_task_text": task},
         created_at=1.0,
     )
 
@@ -46,6 +47,24 @@ def test_boundary_repairs_invalid_created_at_for_durable_json(created_at):
     assert boundary is not None
     assert boundary["created_at"] >= 0
     json.dumps(boundary, allow_nan=False)
+
+
+def test_continuation_preserves_diagnostic_paths_as_candidates():
+    """恢复提示保留低成本线索，但不把诊断猜测升级为已确认的修改位置。"""
+    from nz_coder.runtime.conversation.continuation_context import build_continuation_boundary
+
+    boundary = build_continuation_boundary(
+        [{"role": "user", "content": "Fix the subprocess import failure"}],
+        status="interrupted",
+        runtime_state={"recovery_repair_targets": ["tests/helpers.py"]},
+    )
+
+    assert boundary is not None
+    summary = boundary["summary"]
+    assert "tests/helpers.py" in summary
+    assert "Known Repair Targets" not in summary
+    assert "Candidate Investigation Paths" in summary
+    assert "not confirmed repair locations" in summary
 
 
 def test_projection_replaces_unfinished_run_prefix_with_bounded_context():
@@ -93,7 +112,7 @@ def test_projection_replaces_unfinished_run_prefix_with_bounded_context():
     assert "<continuation-context>" in content
     assert "finish parser compatibility" in content
     assert "Continue and run the exact tests." in content
-    assert "x" * 1_000 not in content
+    assert messages[0]["content"] in content
     assert "y" * 1_000 not in content
 
 
@@ -187,3 +206,17 @@ def test_agent_projection_traces_token_boundary_only_once():
             "summary_chars": 23,
         },
     )]
+
+
+def test_new_user_after_completed_continuation_replaces_current_authority():
+    from nz_coder.runtime.conversation.continuation_context import is_pure_continuation_activation, continuation_task_text
+    messages = [
+        {"role": "user", "content": "old task"},
+        {"role": "assistant", "content": "stopped", "_nz_continuation": {
+            "status": "max_turns", "summary": "## Latest User Instruction\nold task"}},
+        {"role": "user", "content": "continue"},
+        {"role": "assistant", "content": "done"},
+        {"role": "user", "content": "audit renderer"},
+    ]
+    assert not is_pure_continuation_activation(messages)
+    assert continuation_task_text(messages, canonical_task="old task") == "audit renderer"

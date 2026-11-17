@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 from nz_coder.permissions import PermissionManager
 from nz_coder.tool_platform.permissions import PermissionRule
 from nz_coder.tool_platform.permissioning.auto_router import (
@@ -10,7 +12,7 @@ from nz_coder.tool_platform.permissioning.auto_router import (
     canonical_action_digest,
     route_auto_action,
 )
-from nz_coder.tools import scoped_dynamic_tools
+from nz_coder.tools import dispatch, scoped_dynamic_tools
 
 
 def _route(
@@ -167,13 +169,14 @@ def test_session_approval_is_exact_to_action_and_workspace(tmp_path) -> None:
     assert other_workspace.kind is AutoRouteKind.CLASSIFY
 
 
-def test_mcp_session_approval_is_exact_to_binding_generation(tmp_path) -> None:
+@pytest.mark.parametrize("tool_name", ["mcp_generation_status", "mcp_generation_Status"])
+def test_mcp_session_approval_is_exact_to_binding_generation(tmp_path, tool_name) -> None:
     """A replacement MCP implementation cannot inherit an old approval."""
     action = {"query": "status"}
 
     def definition(identity: str) -> dict:
         return {
-            "name": "mcp_generation_status",
+            "name": tool_name,
             "description": "status",
             "parameters": {"type": "object", "properties": {}},
             "handler": lambda **_kwargs: "ok",
@@ -184,26 +187,26 @@ def test_mcp_session_approval_is_exact_to_binding_generation(tmp_path) -> None:
 
     with scoped_dynamic_tools([definition("a" * 64)]):
         approved_digest = canonical_action_digest(
-            "mcp_generation_status",
+            tool_name,
             action,
             tmp_path,
         )
         exact = _route(
             tmp_path,
-            "mcp_generation_status",
+            tool_name,
             action,
             approved={approved_digest},
         )
 
     with scoped_dynamic_tools([definition("b" * 64)]):
         replacement_digest = canonical_action_digest(
-            "mcp_generation_status",
+            tool_name,
             action,
             tmp_path,
         )
         replacement = _route(
             tmp_path,
-            "mcp_generation_status",
+            tool_name,
             action,
             approved={approved_digest},
         )
@@ -254,3 +257,21 @@ def test_router_rejects_symlink_windows_drive_and_unc_escape(tmp_path) -> None:
     routes = [_route(tmp_path, "write_file", item) for item in inputs]
 
     assert all(route.kind is AutoRouteKind.HARD_DENY for route in routes)
+
+
+def test_case_distinct_tool_names_do_not_share_approval(tmp_path) -> None:
+    action = {"query": "status"}
+    definitions = [
+        {"name": name, "description": name,
+         "parameters": {"type": "object", "properties": {}},
+         "handler": lambda marker=marker, **kwargs: marker,
+         "execution": "read", "side_effect": "reads-network",
+         "binding_identity": marker * 64}
+        for name, marker in (("CaseTool", "a"), ("casetool", "b"))
+    ]
+    with scoped_dynamic_tools(definitions):
+        assert dispatch("CaseTool", {}) == "a"
+        assert dispatch("casetool", {}) == "b"
+        approved = canonical_action_digest("CaseTool", action, tmp_path)
+        assert _route(tmp_path, "CaseTool", action, approved={approved}).reason_code == "session_approval"
+        assert _route(tmp_path, "casetool", action, approved={approved}).reason_code != "session_approval"

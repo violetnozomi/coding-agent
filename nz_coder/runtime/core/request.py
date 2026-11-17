@@ -77,6 +77,7 @@ class RunOptions:
     workflow_approval_asker: Callable[..., object] | None = None
     event_bus: object | None = None
     config_snapshot: object | None = None
+    session_lease: object | None = None
 
     def __post_init__(self) -> None:
         if self.stream is not None and not isinstance(self.stream, bool):

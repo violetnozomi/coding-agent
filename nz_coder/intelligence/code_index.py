@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import subprocess
 import threading
 import time
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Protocol
 
 from nz_coder.foundation import config
+from nz_coder.foundation.user_paths import prepare_user_storage, _secure_directory, _is_alias
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.intelligence.analyzers import (
@@ -42,7 +44,11 @@ def is_excluded_directory(name: str) -> bool:
     return name in EXCLUDED_DIRS
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
+_SYMBOL_COLUMNS = (
+    "symbols.*, files.language, files.content_hash, "
+    "(SELECT CAST(value AS INTEGER) FROM metadata WHERE key = 'generation') AS index_generation"
+)
 # Compatibility hook: analyzers share this stdlib module object and historical
 # tests/extensions patch ``code_index.ast.parse`` to observe AST cache reuse.
 ast = _ast
@@ -122,6 +128,7 @@ class SymbolEntry:
     source: str = ""
     capability_tier: str = CapabilityTier.LEXICAL_FALLBACK.value
     source_start_line: int | None = None
+    selection: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -211,6 +218,7 @@ class CallEdge:
     qualifier: str = ""
     resolution_kind: str = "unresolved"
     usage_role: str = "unknown"
+    selection: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -291,6 +299,8 @@ class CallResolutionRequest:
     raw_name: str
     qualifier: str
     caller_symbol_id: str
+    selection: dict | None = None
+    content_hash: str = ""
 
 
 @dataclass(frozen=True)
@@ -333,28 +343,34 @@ class PersistentCodeIndex:
                  stop_event: threading.Event | None = None):
         self.workspace = Path(workspace).resolve()
         self._stop_event = stop_event
-        state_dir = self.workspace / ".nz-coder"
-        if state_dir.exists():
-            try:
-                state_dir.resolve().relative_to(self.workspace)
-            except ValueError as exc:
-                raise ValueError("Code index path escapes workspace") from exc
-        state_dir.mkdir(parents=False, exist_ok=True)
-        index_dir = state_dir / "index"
-        index_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            index_dir.resolve().relative_to(self.workspace)
-        except ValueError as exc:
-            raise ValueError("Code index path escapes workspace") from exc
-        self.database_path = index_dir.resolve() / "code-index.sqlite3"
+        self._cache_root = prepare_user_storage(self.workspace).workspace_cache
+        self.database_path = self._cache_root / "indexes" / "code-index.sqlite3"
+        self._validate_cache_paths()
         self._lock = _database_lock(self.database_path)
         self.analyzers = analyzers or AnalyzerRegistry()
         self._module_boundaries = discover_module_boundaries(self.workspace)
         with self._connect() as connection:
             self._create_schema(connection)
 
+    def _validate_cache_paths(self) -> None:
+        # 每次打开都复核私有目录及 SQLite 辅助文件，拒绝链接而不触碰其目标。
+        _secure_directory(self._cache_root)
+        index_dir = self._cache_root / "indexes"
+        _secure_directory(index_dir)
+        if index_dir.resolve(strict=True) != self._cache_root / "indexes":
+            raise ValueError("Code index cache directory changed ownership")
+        for suffix in ("", "-wal", "-shm", "-journal"):
+            candidate = Path(str(self.database_path) + suffix)
+            try:
+                info = candidate.lstat()
+            except FileNotFoundError:
+                continue
+            if _is_alias(info) or not stat.S_ISREG(info.st_mode):
+                raise ValueError("Code index cache file must be a regular file without aliases")
+
     def _connect(self) -> sqlite3.Connection:
         self._check_cancelled()
+        self._validate_cache_paths()
         connection = sqlite3.connect(str(self.database_path), timeout=5.0)
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA busy_timeout = 5000")
@@ -409,7 +425,8 @@ class PersistentCodeIndex:
                 confidence REAL NOT NULL,
                 source TEXT NOT NULL,
                 capability_tier TEXT NOT NULL,
-                source_start_line INTEGER
+                source_start_line INTEGER,
+                selection_json TEXT
             );
             CREATE TABLE IF NOT EXISTS refs (
                 id INTEGER PRIMARY KEY,
@@ -452,7 +469,8 @@ class PersistentCodeIndex:
                 source TEXT NOT NULL,
                 lexical_binding_json TEXT,
                 candidates_json TEXT NOT NULL DEFAULT '[]',
-                usage_role TEXT NOT NULL DEFAULT 'unknown'
+                usage_role TEXT NOT NULL DEFAULT 'unknown',
+                selection_json TEXT
             );
             CREATE TABLE IF NOT EXISTS metadata (
                 key TEXT PRIMARY KEY,
@@ -572,6 +590,7 @@ class PersistentCodeIndex:
             record.end_line, record.signature, record.symbol_id, record.file_path,
             record.module_id, record.language, record.exported, record.confidence,
             record.source, record.capability_tier, record.source_start_line,
+            record.selection,
         )
 
     @staticmethod
@@ -595,13 +614,14 @@ class PersistentCodeIndex:
             ),
         )
         connection.executemany(
-            "INSERT INTO symbols VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO symbols VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     item.symbol_id, item.file_path, item.module_id, item.kind, item.name,
                     item.qualified_name, item.line, item.end_line, item.signature,
                     None if item.exported is None else int(item.exported),
                     item.confidence, item.source, item.capability_tier, item.source_start_line,
+                    json.dumps(item.selection),
                 )
                 for item in analysis.symbols
             ],
@@ -632,13 +652,14 @@ class PersistentCodeIndex:
         )
         connection.executemany(
             "INSERT INTO calls(path, caller_symbol_id, caller_name, raw_name, qualifier, "
-            "callee_symbol_id, line, resolution_kind, confidence, source, candidates_json, usage_role, lexical_binding_json) "
-            "VALUES (?, ?, ?, ?, ?, NULL, ?, 'unresolved', ?, ?, '[]', ?, ?)",
+            "callee_symbol_id, line, resolution_kind, confidence, source, candidates_json, usage_role, lexical_binding_json, selection_json) "
+            "VALUES (?, ?, ?, ?, ?, NULL, ?, 'unresolved', ?, ?, '[]', ?, ?, ?)",
             [
                 (
                     item.call_site_file, item.caller_symbol_id, item.caller_name,
                     item.raw_name, item.qualifier, item.line, item.confidence, item.source,
                     item.usage_role, json.dumps(item.lexical_binding),
+                    json.dumps(item.selection),
                 )
                 for item in analysis.calls
             ],
@@ -794,7 +815,7 @@ class PersistentCodeIndex:
         truncated = False
         with self._lock, self._connect() as connection:
             query = (
-                "SELECT id, path, line, raw_name, qualifier, caller_symbol_id, lexical_binding_json FROM calls "
+                "SELECT calls.*, files.content_hash FROM calls JOIN files ON files.path = calls.path "
                 "WHERE callee_symbol_id IS NULL AND resolution_kind != 'lexical-shadowing'"
             )
             params: list[object] = []
@@ -802,9 +823,9 @@ class PersistentCodeIndex:
                 str(item).replace("\\", "/").lstrip("./") for item in (paths or ())
             ))
             if normalized_paths:
-                query += " AND path IN (" + ",".join("?" for _ in normalized_paths) + ")"
+                query += " AND calls.path IN (" + ",".join("?" for _ in normalized_paths) + ")"
                 params.extend(normalized_paths)
-            query += " ORDER BY path, line, id LIMIT ?"
+            query += " ORDER BY calls.path, calls.line, calls.id LIMIT ?"
             params.append(max(1, int(max_calls)) + 1)
             rows = list(connection.execute(query, params))
             if len(rows) > max(1, int(max_calls)):
@@ -819,6 +840,7 @@ class PersistentCodeIndex:
                     int(row["id"]), str(row["path"]), int(row["line"]),
                     str(row["raw_name"]), str(row["qualifier"] or ""),
                     str(row["caller_symbol_id"]),
+                    json.loads(row["selection_json"] or "null"), str(row["content_hash"]),
                 )
                 try:
                     location = resolver.resolve(request)
@@ -1210,7 +1232,7 @@ class PersistentCodeIndex:
             symbols = tuple(
                 PersistentCodeIndex._row_symbol(item)
                 for item in connection.execute(
-                    "SELECT symbols.*, files.language FROM symbols JOIN files "
+                    f"SELECT {_SYMBOL_COLUMNS} FROM symbols JOIN files "
                     "ON files.path = symbols.path WHERE symbols.path = ? "
                     "ORDER BY line, symbol_id", (path,),
                 )
@@ -1240,6 +1262,7 @@ class PersistentCodeIndex:
             row["module_id"], row["language"] if "language" in row.keys() else "",
             None if exported is None else bool(exported), float(row["confidence"]),
             row["source"], row["capability_tier"], row["source_start_line"],
+            json.loads(row["selection_json"] or "null"),
         )
 
     @staticmethod
@@ -1256,6 +1279,7 @@ class PersistentCodeIndex:
             row["caller_symbol_id"], row["callee_symbol_id"], unresolved,
             row["qualifier"], row["resolution_kind"],
             row["usage_role"],
+            json.loads(row["selection_json"] or "null"),
         )
 
     @staticmethod
@@ -1372,7 +1396,7 @@ class PersistentCodeIndex:
         if not ids:
             return ()
         rows = connection.execute(
-            "SELECT symbols.*, files.language FROM symbols JOIN files "
+            f"SELECT {_SYMBOL_COLUMNS} FROM symbols JOIN files "
             "ON files.path = symbols.path WHERE symbols.symbol_id IN ("
             + ",".join("?" for _ in ids) + ") ORDER BY symbols.path, symbols.line",
             ids,
@@ -1417,7 +1441,7 @@ class PersistentCodeIndex:
         relative = self._relative((self.workspace / path).resolve())
         with self._lock, self._connect() as connection:
             rows = connection.execute(
-                "SELECT symbols.*, files.language FROM symbols JOIN files ON files.path = symbols.path "
+                f"SELECT {_SYMBOL_COLUMNS} FROM symbols JOIN files ON files.path = symbols.path "
                 "WHERE symbols.path = ? ORDER BY line, symbol_id LIMIT ?",
                 (relative, max(1, limit)),
             )
@@ -1442,6 +1466,28 @@ class PersistentCodeIndex:
             return [self._row_edge(row) for row in rows]
 
     @staticmethod
+    def _symbol_ref_dict(row: sqlite3.Row) -> dict | None:
+        selection = json.loads(row["selection_json"] or "null")
+        if selection is None or not row["content_hash"]:
+            return None
+        return {
+            "symbol_id": row["symbol_id"], "file_path": row["path"],
+            "content_hash": row["content_hash"], "selection": selection,
+            "index_generation": int(row["index_generation"]),
+        }
+
+    def symbol_ref(self, symbol_id: str) -> dict | None:
+        """一次 SQL snapshot 读取名称范围、源码摘要和索引代次；只接受确切 ID。"""
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT symbols.*, files.content_hash, "
+                "(SELECT CAST(value AS INTEGER) FROM metadata WHERE key = 'generation') AS index_generation "
+                "FROM symbols JOIN files ON files.path = symbols.path WHERE symbol_id = ?",
+                (symbol_id,),
+            ).fetchone()
+            return self._symbol_ref_dict(row) if row is not None else None
+
+    @staticmethod
     def _symbol_dict(row: sqlite3.Row) -> dict:
         exported = row["exported"]
         return {
@@ -1455,6 +1501,10 @@ class PersistentCodeIndex:
             "exported": None if exported is None else bool(exported),
             "confidence": float(row["confidence"]), "source": row["source"],
             "capability_tier": row["capability_tier"],
+            "content_hash": row["content_hash"],
+            "selection": json.loads(row["selection_json"] or "null"),
+            "index_generation": int(row["index_generation"]),
+            "symbol_ref": PersistentCodeIndex._symbol_ref_dict(row),
         }
 
     @staticmethod
@@ -1476,6 +1526,7 @@ class PersistentCodeIndex:
             "resolution_kind": edge.resolution_kind,
             "confidence": edge.confidence, "source": edge.source,
             "usage_role": edge.usage_role,
+            "selection": edge.selection,
         }
 
     def symbol_context(
@@ -1485,7 +1536,7 @@ class PersistentCodeIndex:
             ids = self._symbol_ids(connection, identifier)
             if ids:
                 rows = list(connection.execute(
-                    "SELECT symbols.*, files.language FROM symbols JOIN files "
+                    f"SELECT {_SYMBOL_COLUMNS} FROM symbols JOIN files "
                     "ON files.path = symbols.path WHERE symbols.symbol_id IN ("
                     + ",".join("?" for _ in ids) + ") ORDER BY symbols.path, line LIMIT ?",
                     (*ids, max(1, limit)),
@@ -1493,8 +1544,8 @@ class PersistentCodeIndex:
             else:
                 rows = []
         definitions = [self._symbol_dict(row) for row in rows]
-        ambiguous = len(definitions) > 1
-        definition = definitions[0] if len(definitions) == 1 else None
+        ambiguous = len(ids) > 1
+        definition = definitions[0] if len(ids) == 1 and definitions else None
         if ambiguous:
             references: list[ReferenceEntry] = []
             callers: list[dict] = []
@@ -1620,7 +1671,7 @@ class PersistentCodeIndex:
     ) -> list[dict]:
         with self._lock, self._connect() as connection:
             query = (
-                "SELECT symbols.*, files.language FROM symbols JOIN files "
+                f"SELECT {_SYMBOL_COLUMNS} FROM symbols JOIN files "
                 "ON files.path = symbols.path"
             )
             params: tuple[object, ...] = ()
@@ -1665,7 +1716,7 @@ class PersistentCodeIndex:
         """Rank module symbols using one aggregate query."""
         with self._lock, self._connect() as connection:
             rows = list(connection.execute(
-                "SELECT symbols.*, files.language, "
+                f"SELECT {_SYMBOL_COLUMNS}, "
                 "COALESCE(ref_counts.count, 0) AS refs_count, "
                 "COALESCE(call_counts.count, 0) AS callers_count "
                 "FROM symbols JOIN files ON files.path = symbols.path "
@@ -1700,7 +1751,7 @@ class PersistentCodeIndex:
             return []
         with self._lock, self._connect() as connection:
             rows = list(connection.execute(
-                "SELECT symbols.*, files.language, "
+                f"SELECT {_SYMBOL_COLUMNS}, "
                 "COALESCE(ref_counts.count, 0) AS refs_count, "
                 "COALESCE(call_counts.count, 0) AS callers_count "
                 "FROM symbols JOIN files ON files.path = symbols.path "

@@ -35,13 +35,33 @@ from nz_coder.runtime.core.tool_context import ToolProjectionContext
 from nz_coder.runtime.tool_runtime.result_projection import ProductionToolResultProjector
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.runtime.verification.recovery import RecoveryState
-from nz_coder.intelligence.verification import VerificationManager
-from nz_coder.state.trace import TraceRecorder
+from tests.verification_scenarios import VerificationScenario
+from tests.test_runtime_state import _verification_state, _observe, _execute_requirement, _review_requirement
 from nz_coder.permissions import PermissionManager
 from nz_coder.state.context import PromptBudget
 from nz_coder.providers.capabilities import resolve_model_capabilities
 from nz_coder.tools import bash as _bash_registration  # noqa: F401
 from nz_coder.tools import files as _file_registration  # noqa: F401
+
+
+
+
+def _freeze_request(messages):
+    from nz_coder.runtime.conversation.request_snapshot import FrozenRequestSnapshot, message_version
+    from nz_coder.runtime.conversation.message_projection import project_provider_messages
+    return FrozenRequestSnapshot("", "", "", message_version(messages), project_provider_messages, ())
+
+def _mutate_requirements(state, paths):
+    state._scenario.mutate(state.mutation_generation, list(paths))
+
+
+def _define_verification(state, contract):
+    from nz_coder.runtime.verification.domain.models import WorkspaceObservation
+    state.verification_definition = {"command": contract.command, "targets": list(contract.targets)}
+    state._scenario.domain.observe_workspace(WorkspaceObservation(state._scenario.runtime.version()))
+    state._scenario.runtime.synchronize_task()
+    if contract.passed is not None:
+        _execute_requirement(state, contract.command, passed=contract.passed, acceptance=True)
 
 
 class _Model:
@@ -319,20 +339,9 @@ class _RealWorkspaceTools:
             for index, call in enumerate(calls):
                 result = self.executor.execute_one(call, index)
                 if self.verification is not None:
-                    if result.name == "bash":
-                        self.verification.observe_bash(
-                            result.tool_input,
-                            result.output,
-                            result.dispatch_failed,
-                            result.command_failed,
-                            exit_code=(result.metadata or {}).get("exit"),
-                        )
-                    elif result.is_write and result.executed and not result.dispatch_failed:
-                        self.verification.mark_write(
-                            result.name,
-                            result.tool_input,
-                            output=result.output,
-                        )
+                    start = self.verification.runtime.begin_tool(call)
+                    result.execution_id = start.execution_id
+                    self.verification.runtime.record_result(result)
                 dispatched.append((
                     index,
                     call,
@@ -342,7 +351,7 @@ class _RealWorkspaceTools:
                 signal_from_metadata=lambda _metadata: None,
                 record_result=lambda _result: False,
                 trace_result=lambda *_args, **_kwargs: None,
-                stall_orchestrator=None,
+
                 after_result=lambda _messages, _result, _output: None,
             )
             self.projector.consume(
@@ -370,6 +379,8 @@ class _VerificationTools:
             name = call["function"]["name"]
             self.names.append(name)
             output = "1 passed" if name == "bash" else "42"
+            if name == "bash" and hasattr(self, "state"):
+                _observe(self.state, name, json.loads(call["function"]["arguments"]), output, succeeded=True)
             processor.complete_tool(call_id, output)
             messages.append({
                 "role": "tool",
@@ -399,7 +410,7 @@ class _Sessions:
         self.context: RunContext | None = None
         self.final_statuses: list[RunStatus] = []
 
-    async def open(self, request: RunRequest) -> RunContext:
+    async def open(self, request: RunRequest, *, session_lease=None) -> RunContext:
         session = Session.create(
             request.session_id,
             request.messages,
@@ -408,6 +419,9 @@ class _Sessions:
         session.begin_run()
         self.context = RunContext(request, session, request.agent.name)
         return self.context
+
+    def abandon(self, context):
+        pass
 
     async def checkpoint(self, _context, _status) -> None:
         return None
@@ -538,13 +552,9 @@ class _OneTurnLifecycle(_Lifecycle):
 
 class _ScopeMutatingLifecycle(_Lifecycle):
     def initialize(self, _context, _messages, _stream):
-        from nz_coder.runtime.core.execution_context import (
-            set_broad_tests_blocked,
-            set_declared_test_scopes,
-        )
-
-        set_broad_tests_blocked(True)
-        set_declared_test_scopes(("inner/tests",))
+        from dataclasses import replace
+        from nz_coder.runtime.core import execution_context as context
+        context._RUNTIME_OVERRIDES.set(replace(context._RUNTIME_OVERRIDES.get(), strict_local_tools=True))
         return 1, 0
 
 
@@ -593,8 +603,9 @@ class _TerminalBoundaryTools:
             self.names.append(name)
             arguments = json.loads(call["function"].get("arguments") or "{}")
             if name == "edit_file":
+                (self.state._scenario.root / "app.py").write_text("value = 2\n")
                 output = "Updated app.py"
-                self.state.observe_tool(name, arguments, output, succeeded=True)
+                _observe(self.state, name, arguments, output, succeeded=True)
                 self.state.has_diff = True
                 self.state.changed_files = ["app.py"]
                 self.state.diff_generation = self.state.mutation_generation
@@ -604,12 +615,10 @@ class _TerminalBoundaryTools:
                     if self.acceptance_passed
                     else "Command exited with code 1\n1 failed"
                 )
+            if name == "bash":
+                _observe(self.state, name, arguments, output, succeeded=self.acceptance_passed)
             processor.complete_tool(call_id, output)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": call_id,
-                "content": output,
-            })
+            messages.append({"role": "tool", "tool_call_id": call_id, "content": output})
         processor.finish_step("tool-calls")
         return "continue"
 
@@ -687,11 +696,14 @@ def _execution_context(run_context: RunContext, services: RuntimeServices):
         session_id=run_context.session.session_id,
         runtime_state=run_context,
         execution=SimpleNamespace(
-            context=lambda: object(),
-            model=lambda: object(),
+            recovery=RecoveryState(),
+            context=lambda: SimpleNamespace(freeze_request=_freeze_request),
+            model=lambda: SimpleNamespace(working_memory_allowed=lambda: False),
             tools=lambda: object(),
         ),
         lifecycle=SimpleNamespace(
+            settle_session_checkpoints=_async_none,
+            publish_terminal=lambda _error=None: None,
             initialize=lambda messages, stream: services.lifecycle.initialize(
                 run_context, messages, stream,
             ),
@@ -707,12 +719,13 @@ def _execution_context(run_context: RunContext, services: RuntimeServices):
             return_from_as_tool=lambda _messages, _content: {},
             terminal_content=lambda content, _messages: _async_value(content),
             verify_completion=lambda _messages, status, _content: _async_value(status),
+            check_terminal_rules=lambda _messages, status, _content: _async_value(status),
         ),
         planning=SimpleNamespace(
             generate=lambda _messages: _async_none(),
-            replan=lambda: _async_none(),
         ),
         control=SimpleNamespace(
+            current_agent_name=lambda: run_context.active_agent,
             has_queued_followup=lambda: False,
             drain_background_messages=lambda _messages: None,
             has_agent_call_stack=lambda: False,
@@ -875,8 +888,7 @@ def test_native_runner_uses_real_failure_evidence_to_fix_and_retest(tmp_path: Pa
 
     model = RepairModel()
     sessions = _Sessions()
-    verification = VerificationManager(RecoveryState(), TraceRecorder())
-    verification.reset()
+    verification = VerificationScenario(workspace=tmp_path, plan={"stages": []})
     services = RuntimeServices(
         model=model,
         tools=_RealWorkspaceTools(tmp_path, verification),
@@ -934,7 +946,7 @@ def test_native_runner_uses_real_failure_evidence_to_fix_and_retest(tmp_path: Pa
     assert any("1 passed" in message["content"] for message in second_pass)
     assert (tmp_path / "app.py").read_text(encoding="utf-8").endswith("return 2 # touched\n")
     assert result.final_text == "Tests pass after fresh verification."
-    assert verification.status()["verification_state"] == "passed"
+    assert verification.runtime.status()["verification_state"] == "passed"
 
 
 def test_native_runner_sanitizes_invalid_model_metrics_without_losing_answer(
@@ -1144,11 +1156,15 @@ def test_output_guardrail_applies_to_length_result(tmp_path: Path):
             observed.append(content)
             return content.replace("length-secret", "length-safe")
 
-        return replace(context, policy=SimpleNamespace(
+        from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+        # 完成调度读取真实运行状态；护栏夹具不再用 RunContext 冒充它。
+        return replace(context, runtime_state=RuntimeState(), policy=SimpleNamespace(
             **{
                 **vars(context.policy),
                 "has_output_guardrail": lambda: True,
                 "run_output_guardrail": guard,
+                "verification_status": lambda: {},
             }
         ))
 
@@ -1553,6 +1569,15 @@ def test_native_runner_attributes_each_main_provider_turn(tmp_path: Path):
     }
 
 
+def _shorten_user_history(messages, **_kwargs):
+    shortened = copy.deepcopy(messages)
+    for message in shortened:
+        if message.get("role") == "user" and isinstance(message.get("content"), str):
+            message["content"] = message["content"][:max(1, len(message["content"]) // 2)]
+            break
+    return shortened
+
+
 def _production_budget_context(
     *,
     budget: PromptBudget,
@@ -1591,11 +1616,14 @@ async def _run_production_budget_case_async(
     usable_input_tokens: int = 500,
     cancel_compaction=None,
     tools=None,
+    fail_compacted_checkpoint=False,
 ):
     events: list[tuple[str, dict]] = []
     sessions = _Sessions()
 
     async def checkpoint(context, status):
+        if fail_compacted_checkpoint and any(m.get("content") == "compact" for m in context.transcript):
+            raise OSError("compacted checkpoint failed")
         events.append(("checkpoint", {
             "status": status,
             "messages": copy.deepcopy(context.transcript),
@@ -1647,6 +1675,7 @@ async def _run_production_budget_case_async(
         base = _execution_context(run_context, runtime_services)
         base.execution.model = lambda: model_context
         context_runtime = ContextExecutionContext(
+            freeze_request=_freeze_request,
             workspace=tmp_path,
             budget=budget,
             projected_tokens=lambda _messages: 0,
@@ -1693,6 +1722,7 @@ def test_native_runner_recovers_local_budget_without_consuming_model_turn(tmp_pa
     result, _sessions, events = _run_production_budget_case(
         tmp_path,
         provider_call=provider_call,
+        usable_input_tokens=200,
         compact_messages=lambda _messages, **_kwargs: [
             {"role": "user", "content": "compact"}
         ],
@@ -1702,20 +1732,41 @@ def test_native_runner_recovers_local_budget_without_consuming_model_turn(tmp_pa
     assert len(calls) == 1
     assert [payload["turn"] for name, payload in events if name == "provider_turn_started"] == [1]
     assert not any(name == "provider_turn_started" and payload.get("source") == "local" for name, payload in events)
-    assert any(
-        name == "context_overflow" and payload["source"] == "local_request_budget"
-        for name, payload in events
-    )
-    assert any(
-        name == "compact" and payload["trigger"] == "local_request_budget"
-        for name, payload in events
-    )
+    assert any(name == "compact" and payload.get("trigger") == "request_estimate"
+               for name, payload in events)
+
+    assert sum(name == "compaction_candidate_installed" for name, _payload in events) == 1
     _assert_no_empty_recovery(events)
     assert [
         payload["content"]
         for name, payload in events
         if name == "model_result_materialized"
     ] == ["finished"]
+
+
+def test_native_runner_checkpoints_installed_candidate_before_provider(tmp_path: Path):
+    result, _sessions, events = _run_production_budget_case(
+        tmp_path, usable_input_tokens=200,
+        provider_call=lambda _messages: LLMResult(content="done", finish_reason="stop"),
+        compact_messages=lambda _messages: [{"role": "user", "content": "compact"}],
+    )
+    assert result.status is RunStatus.COMPLETED
+    installed = next(i for i, (name, _) in enumerate(events) if name == "compaction_candidate_installed")
+    started = next(i for i, (name, _) in enumerate(events) if name == "provider_turn_started")
+    assert any(name == "checkpoint" and any(m.get("content") == "compact" for m in payload["messages"])
+               for name, payload in events[installed + 1:started])
+
+
+def test_native_runner_checkpoint_failure_prevents_provider_call(tmp_path: Path):
+    calls = []
+    with pytest.raises(OSError, match="compacted checkpoint failed"):
+        _run_production_budget_case(
+            tmp_path, usable_input_tokens=200,
+            provider_call=lambda messages: calls.append(messages) or LLMResult(content="done", finish_reason="stop"),
+            compact_messages=lambda _messages: [{"role": "user", "content": "compact"}],
+            fail_compacted_checkpoint=True,
+        )
+    assert calls == []
 
 
 def test_native_runner_bounds_unrecoverable_local_budget(tmp_path: Path):
@@ -1728,6 +1779,7 @@ def test_native_runner_bounds_unrecoverable_local_budget(tmp_path: Path):
     result, sessions, events = _run_production_budget_case(
         tmp_path,
         provider_call=provider_call,
+        usable_input_tokens=200,
         compact_messages=lambda messages, **_kwargs: list(messages),
     )
 
@@ -1739,7 +1791,8 @@ def test_native_runner_bounds_unrecoverable_local_budget(tmp_path: Path):
         if name == "context_overflow"
         and payload["source"] == "local_request_budget"
     ]
-    assert len(local_overflows) == 4
+    assert local_overflows == []
+    assert sum(name == "context_compaction_failed" for name, _ in events) == 1
 
 
 @pytest.mark.parametrize("overflow_count", [1, 2])
@@ -1761,9 +1814,7 @@ def test_native_runner_distinguishes_provider_context_overflow(
     result, sessions, events = _run_production_budget_case(
         tmp_path,
         provider_call=provider_call,
-        compact_messages=lambda _messages, **_kwargs: [
-            {"role": "user", "content": "compact"}
-        ],
+        compact_messages=_shorten_user_history,
         max_turns=overflow_count + 1,
         usable_input_tokens=1_000,
     )
@@ -1815,7 +1866,7 @@ def test_native_runner_empty_recovery_only_follows_genuine_empty_result(tmp_path
     result, sessions, events = _run_production_budget_case(
         tmp_path,
         provider_call=provider_call,
-        compact_messages=lambda messages: list(messages),
+        compact_messages=_shorten_user_history,
         max_turns=3,
         usable_input_tokens=10_000,
     )
@@ -1823,8 +1874,8 @@ def test_native_runner_empty_recovery_only_follows_genuine_empty_result(tmp_path
     assert result.status is RunStatus.COMPLETED
     assert sessions.context.turn_count == 3
     assert len(calls) == 3
-    assert not any(message.get("_nz_empty_completion_retry") for message in calls[1])
-    assert sum(bool(message.get("_nz_empty_completion_retry")) for message in calls[2]) == 1
+    assert not any("no visible text and no tool calls" in str(message.get("content") or "") for message in calls[1])
+    assert sum(bool("no visible text and no tool calls" in str(message.get("content") or "")) for message in calls[2]) == 1
     assert [payload["count"] for name, payload in events if name == "empty_assistant_completion_retry"] == [1]
     assert [payload["turn"] for name, payload in events if name == "model_result_observed"] == [2, 3]
     assert [name for name, _payload in events if name in {
@@ -1897,7 +1948,7 @@ def test_native_runner_provider_overflow_exhaustion_is_bounded(tmp_path: Path):
     result, sessions, events = _run_production_budget_case(
         tmp_path,
         provider_call=provider_call,
-        compact_messages=lambda messages: list(messages),
+        compact_messages=_shorten_user_history,
         max_turns=6,
         usable_input_tokens=10_000,
     )
@@ -2008,7 +2059,7 @@ def test_native_runner_provider_overflow_does_not_replay_completed_tool(
     result, _sessions, events = _run_production_budget_case(
         tmp_path,
         provider_call=provider_call,
-        compact_messages=lambda messages: list(messages),
+        compact_messages=_shorten_user_history,
         max_turns=3,
         usable_input_tokens=10_000,
         tools=WritingTools(),
@@ -2272,12 +2323,7 @@ def test_native_runner_restores_run_scoped_verification_context_after_error(
     tmp_path: Path,
 ):
     """A failed run cannot leak its verification policy into its caller."""
-    from nz_coder.runtime.core.execution_context import (
-        broad_tests_blocked,
-        declared_test_scopes,
-        scoped_broad_test_guard,
-        scoped_declared_test_scopes,
-    )
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides, strict_local_tools
 
     sessions = _Sessions()
     services = RuntimeServices(
@@ -2305,16 +2351,14 @@ def test_native_runner_restores_run_scoped_verification_context_after_error(
 
     async def exercise_same_task() -> None:
         with (
-            scoped_broad_test_guard(False),
-            scoped_declared_test_scopes(("outer/tests",)),
+            scoped_runtime_overrides(strict_local_tools=False),
         ):
             with pytest.raises(RuntimeError, match="provider exploded"):
                 await AgentRunner(
                     services,
                     execution_context_factory=_execution_context,
                 ).run(request, options=request_contracts.RunOptions(stream=False))
-            assert broad_tests_blocked() is False
-            assert declared_test_scopes() == ("outer/tests",)
+            assert strict_local_tools() is False
 
     asyncio.run(exercise_same_task())
 
@@ -2412,13 +2456,13 @@ def test_native_runner_executes_explicit_verification_contract_at_completion_bou
     """A changed generation receives exact acceptance once at natural completion."""
     model = _BudgetModel()
     tools = _VerificationTools()
-    runtime_state = RuntimeState()
+    runtime_state = _verification_state(workspace=tmp_path)
     runtime_state.has_diff = True
     runtime_state.mutation_generation = 1
-    runtime_state.verification_contract = VerificationContract(
+    _define_verification(runtime_state, VerificationContract(
         command="python -m pytest -q tests/runtime/test_native_runner.py",
         targets=("tests/runtime/test_native_runner.py",),
-    ).to_dict()
+    ))
     services = RuntimeServices(
         model=model,
         tools=tools,
@@ -2449,6 +2493,7 @@ def test_native_runner_executes_explicit_verification_contract_at_completion_bou
     )
 
     def execution_context(run_context, runtime_services):
+        runtime_services.tools.state = runtime_state
         return replace(
             _execution_context(run_context, runtime_services),
             runtime_state=runtime_state,
@@ -2484,18 +2529,18 @@ def test_native_runner_does_not_repeat_acceptance_after_docs_only_edit(
     """A later docs mutation keeps already-passed code acceptance current."""
     model = _BudgetModel()
     tools = _VerificationTools()
-    runtime_state = RuntimeState()
+    runtime_state = _verification_state(workspace=tmp_path)
     runtime_state.has_diff = True
     runtime_state.mutation_generation = 2
     runtime_state.acceptance_mutation_generation = 1
-    runtime_state.verification_contract = VerificationContract(
+    _define_verification(runtime_state, VerificationContract(
         command="python -m pytest -q tests/runtime/test_native_runner.py",
         targets=("tests/runtime/test_native_runner.py",),
         attempted_generation=1,
         attempts=1,
         passed=True,
         output="1 passed",
-    ).to_dict()
+    ))
     services = RuntimeServices(
         model=model,
         tools=tools,
@@ -2520,6 +2565,7 @@ def test_native_runner_does_not_repeat_acceptance_after_docs_only_edit(
     )
 
     def execution_context(run_context, runtime_services):
+        runtime_services.tools.state = runtime_state
         return replace(
             _execution_context(run_context, runtime_services),
             runtime_state=runtime_state,
@@ -2537,12 +2583,16 @@ def test_native_runner_does_not_repeat_acceptance_after_docs_only_edit(
     assert contract.attempted_generation == 1
 
 
-def test_native_runner_closes_early_tool_boundary_after_current_acceptance(
-    tmp_path: Path,
+@pytest.mark.parametrize("strict", [False, True])
+def test_tool_only_runner_keeps_early_completion_exclusive_to_strict_mode(
+    tmp_path: Path, strict: bool,
 ):
-    """Current exact evidence plus semantic acceptance needs no summary-only call."""
-    from nz_coder.runtime.agent.task_contract import Requirement, TaskContract
+    """普通模型未提出交付时继续到真实上限，严格评测保留提前收尾。"""
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.core.tool_context import ToolExecutionContext
+    from nz_coder.runtime.verification.domain.requirements import Requirement, TaskContract
 
+    (tmp_path / "target.py").write_text("VALUE = 1\n")
     class OneVerificationModel:
         def __init__(self) -> None:
             self.calls = 0
@@ -2575,16 +2625,7 @@ def test_native_runner_closes_early_tool_boundary_after_current_acceptance(
             contract = VerificationContract.from_dict(
                 runtime_state.verification_contract
             )
-            contract.record_attempt(
-                runtime_state.mutation_generation,
-                passed=True,
-                output="1 passed",
-                source="agent",
-                zone="tool",
-            )
-            runtime_state.verification_contract = contract.to_dict()
-            runtime_state.verification_generation = runtime_state.mutation_generation
-            runtime_state.observe_requirement_verification(
+            _execute_requirement(runtime_state,
                 contract.command,
                 passed=True,
                 acceptance=True,
@@ -2600,15 +2641,19 @@ def test_native_runner_closes_early_tool_boundary_after_current_acceptance(
             return "continue"
 
     model = OneVerificationModel()
-    runtime_state = RuntimeState()
+    runtime_state = _verification_state(workspace=tmp_path)
+    from nz_coder.runtime.agent.task_intent import initialize_task_assessment
+    initialize_task_assessment(runtime_state, runtime_state._scenario.context, [], pure_continuation=False)
     runtime_state.has_diff = True
     runtime_state.changed_files = ["target.py"]
     runtime_state.mutation_generation = 1
-    runtime_state.verification_contract = VerificationContract(
+    _define_verification(runtime_state, VerificationContract(
         command="python -m pytest -q tests/test_target.py",
         targets=("tests/test_target.py",),
-    ).to_dict()
-    runtime_state.set_task_contract(TaskContract(requirements=(Requirement(
+    ))
+    runtime_state.set_task_contract(TaskContract(acceptance_commands=(
+        "python -m pytest -q tests/test_target.py",
+    ), requirements=(Requirement(
         id="R1",
         description="preserve target behavior",
         kind="compatibility",
@@ -2616,9 +2661,8 @@ def test_native_runner_closes_early_tool_boundary_after_current_acceptance(
         satisfaction_mode="mixed",
         required_evidence=("semantic_review",),
     ),)))
-    ledger = runtime_state.requirement_ledger_snapshot()
-    ledger.observe_mutation(1, ["target.py"])
-    runtime_state.requirement_ledger = ledger.to_dict()
+    runtime_state.requirement_ledger_snapshot()
+    _mutate_requirements(runtime_state, ["target.py"])
     services = RuntimeServices(
         model=model,
         tools=ContractPassingTools(),
@@ -2645,9 +2689,11 @@ def test_native_runner_closes_early_tool_boundary_after_current_acceptance(
 
     def execution_context(run_context, runtime_services):
         base = _execution_context(run_context, runtime_services)
+        # 此工具替身只消费调用参数；仍使用真实的按轮替换上下文接口。
+        base.execution.tools = lambda: ToolExecutionContext(run_context, None, None, None)
 
         async def accept_semantics(_messages, status, _content):
-            runtime_state.observe_requirement_semantic_review(
+            _review_requirement(runtime_state,
                 accepted=True,
                 fingerprint="independent-review",
             )
@@ -2656,14 +2702,15 @@ def test_native_runner_closes_early_tool_boundary_after_current_acceptance(
         base.policy.verify_completion = accept_semantics
         return replace(base, runtime_state=runtime_state, policy=base.policy)
 
-    result = asyncio.run(AgentRunner(
-        services,
-        execution_context_factory=execution_context,
-    ).run_result(request, options=request_contracts.RunOptions(stream=False)))
+    with scoped_runtime_overrides(strict_local_tools=strict):
+        result = asyncio.run(AgentRunner(
+            services,
+            execution_context_factory=execution_context,
+        ).run_result(request, options=request_contracts.RunOptions(stream=False)))
 
-    assert result.status is RunStatus.COMPLETED
-    assert model.calls == 1
-    assert runtime_state.requirement_ledger_snapshot().unresolved() == ()
+    assert result.status is (RunStatus.COMPLETED if strict else RunStatus.MAX_TURNS)
+    assert model.calls == (1 if strict else 4)
+    assert bool(runtime_state.requirement_ledger_snapshot().unresolved()) is (not strict)
 
 
 def test_native_runner_does_not_schedule_exact_contract_in_yellow_zone(
@@ -2672,14 +2719,14 @@ def test_native_runner_does_not_schedule_exact_contract_in_yellow_zone(
     model = _BudgetModel()
     tools = _VerificationTools()
     trace_events = []
-    runtime_state = RuntimeState()
+    runtime_state = _verification_state(workspace=tmp_path)
     runtime_state.has_diff = True
     runtime_state.mutation_generation = 1
     runtime_state.open_todo_items = 1
-    runtime_state.verification_contract = VerificationContract(
+    _define_verification(runtime_state, VerificationContract(
         command="python -m pytest -q tests/runtime/test_native_runner.py",
         targets=("tests/runtime/test_native_runner.py",),
-    ).to_dict()
+    ))
     services = RuntimeServices(
         model=model,
         tools=tools,
@@ -2704,6 +2751,7 @@ def test_native_runner_does_not_schedule_exact_contract_in_yellow_zone(
     )
 
     def execution_context(run_context, runtime_services):
+        runtime_services.tools.state = runtime_state
         native_context = _execution_context(run_context, runtime_services)
         hooks = SimpleNamespace(
             on_turn_start=lambda _messages: None,
@@ -2742,13 +2790,13 @@ def test_native_runner_executes_contract_before_an_early_natural_completion(
     model = _EarlyStopModel()
     tools = _VerificationTools()
     accepted_contracts = []
-    runtime_state = RuntimeState()
+    runtime_state = _verification_state(workspace=tmp_path)
     runtime_state.has_diff = True
     runtime_state.mutation_generation = 1
-    runtime_state.verification_contract = VerificationContract(
+    _define_verification(runtime_state, VerificationContract(
         command="pytest -q tests/test_small.py",
         targets=("tests/test_small.py",),
-    ).to_dict()
+    ))
     services = RuntimeServices(
         model=model,
         tools=tools,
@@ -2773,6 +2821,7 @@ def test_native_runner_executes_contract_before_an_early_natural_completion(
     )
 
     def execution_context(run_context, runtime_services):
+        runtime_services.tools.state = runtime_state
         native_context = _execution_context(run_context, runtime_services)
         native_context.policy.observe_verification_contract = (
             lambda command, output, passed: accepted_contracts.append(
@@ -2796,7 +2845,9 @@ def test_native_runner_executes_contract_before_an_early_natural_completion(
         message.get("role") == "tool" and message.get("content") == "1 passed"
         for message in result.messages
     )
-    assert accepted_contracts == [("pytest -q tests/test_small.py", "1 passed", True)]
+    assert runtime_state.verification_contract["passed"] is True
+    assert runtime_state.verification_contract["attempts"] == 1
+    assert accepted_contracts == []  # 不再调用第二个可写结论回调。
 
 
 def test_native_runner_exact_acceptance_unlocks_bootstrap_requirement_gate(
@@ -2808,19 +2859,19 @@ def test_native_runner_exact_acceptance_unlocks_bootstrap_requirement_gate(
     command = "pytest -q tests/test_small.py"
     model = _EarlyStopModel()
     tools = _VerificationTools()
-    runtime_state = RuntimeState()
+    runtime_state = _verification_state(workspace=tmp_path)
     runtime_state.has_diff = True
     runtime_state.mutation_generation = 1
-    runtime_state.verification_contract = VerificationContract(
+    _define_verification(runtime_state, VerificationContract(
         command=command,
         targets=("tests/test_small.py",),
-    ).to_dict()
+    ))
     runtime_state.set_task_contract(derive_task_contract(
         "Implement the requested behavior and tests, then run pytest -q tests/test_small.py",
-        acceptance_command=command,
+        acceptance_commands=(command,),
         workspace=tmp_path,
     ))
-    runtime_state._observe_requirement_mutation(["tests/test_small.py"])
+    _mutate_requirements(runtime_state, ["tests/test_small.py"])
     services = RuntimeServices(
         model=model,
         tools=tools,
@@ -2845,6 +2896,7 @@ def test_native_runner_exact_acceptance_unlocks_bootstrap_requirement_gate(
     )
 
     def execution_context(run_context, runtime_services):
+        runtime_services.tools.state = runtime_state
         native_context = _execution_context(run_context, runtime_services)
 
         async def verify_completion(_messages, status, _content):
@@ -2858,7 +2910,7 @@ def test_native_runner_exact_acceptance_unlocks_bootstrap_requirement_gate(
         policy_members.update(
             observe_verification_contract=(
                 lambda accepted_command, _output, passed: (
-                    runtime_state.observe_requirement_verification(
+                    _execute_requirement(runtime_state,
                         accepted_command,
                         passed=passed,
                         acceptance=True,
@@ -2986,7 +3038,7 @@ def test_natural_completion_idle_yields_and_resumes_after_background_wake(
     assert model.calls == 2
     assert len(idle_calls) == 2
     assert any(
-        message.get("_nz_task_completed") is True
+        '<task-completed id="child-1">done</task-completed>' in str(message.get("content") or "")
         for message in model.seen_messages[1]
     )
 
@@ -3072,15 +3124,15 @@ def test_completion_review_rejection_authorizes_bounded_repair_after_nominal_sla
     tmp_path: Path,
 ):
     """A turn-15 Sidecar revise must reach a bounded turn 16, not die at the gate."""
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
     command = "pytest -q tests/test_app.py"
-    state = RuntimeState()
+    state = _verification_state(workspace=tmp_path)
     state.has_diff = True
     state.changed_files = ["app.py", "tests/test_app.py"]
     state.mutation_generation = 1
     state.source_mutation_generation = 1
-    state.verification_contract = VerificationContract(
+    _define_verification(state, VerificationContract(
         command=command,
         targets=("tests/test_app.py",),
         attempted_generation=1,
@@ -3089,8 +3141,8 @@ def test_completion_review_rejection_authorizes_bounded_repair_after_nominal_sla
         output="1 passed",
         source="runtime",
         zone="completion",
-    ).to_dict()
-    state.set_task_contract(TaskContract.from_dict({
+    ))
+    state.set_task_contract(parse_task_contract({
         "objective": "Change app while preserving compatibility",
         "requirements": [{
             "id": "R1",
@@ -3100,8 +3152,8 @@ def test_completion_review_rejection_authorizes_bounded_repair_after_nominal_sla
         "acceptance_commands": [command],
         "contract_version": 2,
     }, workspace=tmp_path))
-    state._observe_requirement_mutation(["app.py", "tests/test_app.py"])
-    state.observe_requirement_verification(command, passed=True, acceptance=True)
+    _mutate_requirements(state, ["app.py", "tests/test_app.py"])
+    _execute_requirement(state, command, passed=True, acceptance=True)
     assert state.semantic_review_pending_only() is True
 
     model = _ReviewRepairModel()
@@ -3139,7 +3191,7 @@ def test_completion_review_rejection_authorizes_bounded_repair_after_nominal_sla
             verifier_calls.append(status)
             if len(verifier_calls) == 1:
                 return "continue"
-            state.observe_requirement_semantic_review(
+            _review_requirement(state,
                 accepted=True,
                 fingerprint="verifier_ok:compatibility",
             )
@@ -3180,15 +3232,15 @@ def test_final_tool_call_settles_exact_contract_and_ledger_at_hard_cap(
     expected_status: RunStatus,
 ):
     """G1/G2: final tool batches cannot bypass exact terminal settlement."""
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
     command = "python -m pytest -q tests/test_app.py"
-    state = RuntimeState()
-    state.verification_contract = VerificationContract(
+    state = _verification_state(workspace=tmp_path)
+    _define_verification(state, VerificationContract(
         command=command,
         targets=("tests/test_app.py",),
-    ).to_dict()
-    state.set_task_contract(TaskContract.from_dict({
+    ))
+    state.set_task_contract(parse_task_contract({
         "objective": "Update app and preserve behavior",
         "requirements": [
             {
@@ -3292,23 +3344,26 @@ def test_final_tool_call_settles_exact_contract_and_ledger_at_hard_cap(
         (False, "continue", "", "semantic_review_requires_revision"),
     ],
 )
-def test_tool_boundary_routes_semantic_only_contract_through_verifier(
+@pytest.mark.parametrize("strict", [False, True])
+def test_tool_boundary_reviews_semantic_contract_only_in_strict_mode(
     tmp_path: Path,
+    strict: bool,
     verifier_accepts: bool,
     expected_action: str,
     expected_status: str,
     expected_reason: str,
 ):
-    """Passing tests cannot bypass compatibility review at nominal settlement."""
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    """普通模式留待模型交付；严格提前结算仍须接受兼容性审查。"""
+    from nz_coder.runtime.core.execution_context import scoped_runtime_overrides
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
     command = "pytest -q tests/test_app.py"
-    state = RuntimeState()
+    state = _verification_state(workspace=tmp_path)
     state.has_diff = True
     state.changed_files = ["app.py"]
     state.mutation_generation = 1
     state.source_mutation_generation = 1
-    state.verification_contract = VerificationContract(
+    _define_verification(state, VerificationContract(
         command=command,
         targets=("tests/test_app.py",),
         attempted_generation=1,
@@ -3317,8 +3372,8 @@ def test_tool_boundary_routes_semantic_only_contract_through_verifier(
         output="1 passed",
         source="runtime",
         zone="completion",
-    ).to_dict()
-    state.set_task_contract(TaskContract.from_dict({
+    ))
+    state.set_task_contract(parse_task_contract({
         "objective": "Change app while preserving compatibility",
         "requirements": [{
             "id": "R1",
@@ -3328,8 +3383,8 @@ def test_tool_boundary_routes_semantic_only_contract_through_verifier(
         "acceptance_commands": [command],
         "contract_version": 2,
     }, workspace=tmp_path))
-    state._observe_requirement_mutation(["app.py"])
-    state.observe_requirement_verification(
+    _mutate_requirements(state, ["app.py"])
+    _execute_requirement(state,
         command,
         passed=True,
         acceptance=True,
@@ -3370,7 +3425,7 @@ def test_tool_boundary_routes_semantic_only_contract_through_verifier(
         async def verify_completion(_messages, status, content):
             verifier_calls.append((status, content))
             if verifier_accepts:
-                state.observe_requirement_semantic_review(
+                _review_requirement(state,
                     accepted=True,
                     fingerprint="verifier_ok:compatibility",
                 )
@@ -3403,7 +3458,7 @@ def test_tool_boundary_routes_semantic_only_contract_through_verifier(
             content="",
             completed_turns=15,
             work_budget=budget,
-            resolve_tool_runtime_context=lambda: object(),
+            resolve_tool_runtime_context=lambda: SimpleNamespace(freeze_request=_freeze_request),
             natural_completion=False,
         )]
         if not verifier_accepts:
@@ -3416,19 +3471,24 @@ def test_tool_boundary_routes_semantic_only_contract_through_verifier(
                 content="",
                 completed_turns=16,
                 work_budget=budget,
-                resolve_tool_runtime_context=lambda: object(),
+                resolve_tool_runtime_context=lambda: SimpleNamespace(freeze_request=_freeze_request),
                 natural_completion=False,
             ))
         return decisions
 
-    decisions = asyncio.run(exercise())
+    with scoped_runtime_overrides(strict_local_tools=strict):
+        decisions = asyncio.run(exercise())
     decision = decisions[0]
 
-    assert verifier_calls == [(
-        "completed",
-        "Completed the requested changes in app.py. "
-        "Exact acceptance passed: `pytest -q tests/test_app.py`.",
-    )]
+    if not strict:
+        assert verifier_calls == []
+        assert all(item.action == "continue" and item.reason == "model_work_continues" for item in decisions)
+        assert state.semantic_review_pending_only()
+        return
+
+    assert len(verifier_calls) == 1
+    assert verifier_calls[0][0] == "completed"
+    assert "app.py" in verifier_calls[0][1] and command in verifier_calls[0][1]
     assert decision.action == expected_action
     assert decision.status == expected_status
     assert state.semantic_review_pending_only() is (not verifier_accepts)
@@ -3445,6 +3505,8 @@ def test_tool_boundary_routes_semantic_only_contract_through_verifier(
 def test_pressure_boundary_schedules_evidence_backed_targeted_once_per_mutation(
     tmp_path: Path,
 ):
+    original_cwd = tmp_path / "package"
+    original_cwd.mkdir()
     state = RuntimeState()
     state.mutation_generation = 2
     state.source_mutation_generation = 2
@@ -3498,6 +3560,8 @@ def test_pressure_boundary_schedules_evidence_backed_targeted_once_per_mutation(
                             "required": True,
                             "status": "pending",
                             "automation_provenance": "model_execution",
+                            "retry_eligible": True,
+                            "cwd": str(original_cwd),
                         }],
                     },
                 ],
@@ -3532,9 +3596,12 @@ def test_pressure_boundary_schedules_evidence_backed_targeted_once_per_mutation(
                 content="",
                 completed_turns=13,
                 work_budget=budget,
-                resolve_tool_runtime_context=lambda: object(),
+                resolve_tool_runtime_context=lambda: SimpleNamespace(freeze_request=_freeze_request),
                 natural_completion=False,
             ))
+        scheduled_calls = [call for message in run_context.transcript for call in message.get("tool_calls", [])
+                           if call["id"].startswith("verification-stage-")]
+        assert json.loads(scheduled_calls[0]["function"]["arguments"])["workdir"] == str(original_cwd)
         return decisions
 
     decisions = asyncio.run(exercise())
@@ -3555,11 +3622,11 @@ def test_natural_completion_injects_actionable_unresolved_requirement_guidance(
     tmp_path: Path,
 ):
     """A premature claim must tell the next model call which artifact is missing."""
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
     state = RuntimeState()
     state.mutation_generation = 3
-    state.set_task_contract(TaskContract.from_dict({
+    state.set_task_contract(parse_task_contract({
         "objective": "Update the package documentation",
         "requirements": [{
             "id": "R5",
@@ -3617,7 +3684,7 @@ def test_natural_completion_injects_actionable_unresolved_requirement_guidance(
             content="Everything is complete.",
             completed_turns=10,
             work_budget=budget,
-            resolve_tool_runtime_context=lambda: object(),
+            resolve_tool_runtime_context=lambda: SimpleNamespace(freeze_request=_freeze_request),
             natural_completion=True,
         )
         second = await runner._settle_terminal_boundary(
@@ -3629,7 +3696,7 @@ def test_natural_completion_injects_actionable_unresolved_requirement_guidance(
             content="Everything is complete.",
             completed_turns=11,
             work_budget=budget,
-            resolve_tool_runtime_context=lambda: object(),
+            resolve_tool_runtime_context=lambda: SimpleNamespace(freeze_request=_freeze_request),
             natural_completion=True,
         )
         message_count = len(run_context.transcript)
@@ -3642,7 +3709,7 @@ def test_natural_completion_injects_actionable_unresolved_requirement_guidance(
             content="Everything is complete.",
             completed_turns=12,
             work_budget=budget,
-            resolve_tool_runtime_context=lambda: object(),
+            resolve_tool_runtime_context=lambda: SimpleNamespace(freeze_request=_freeze_request),
             natural_completion=True,
         )
         return first, second, third, message_count, run_context.transcript
@@ -3652,9 +3719,13 @@ def test_natural_completion_injects_actionable_unresolved_requirement_guidance(
     assert first.action == second.action == "continue"
     assert first.reason == second.reason == "hard_requirements_unresolved"
     assert len(messages) == message_count
-    assert third.action == "continue"
-    assert third.status == ""
-    assert third.reason == "hard_requirements_unresolved"
+    assert third.action == "finalize"
+    assert third.status == "blocked"
+    assert third.reason == "requirement_completion_budget_exhausted"
+    assert "Completion guidance budget exhausted" in third.content
+    assert "without claiming completion" in third.content
+    assert "Unresolved requirements: R5" in third.content
+    assert "Everything is complete" not in third.content
     guidance = [
         message for message in messages
         if message.get("_nz_completion_gate") is True
@@ -3681,14 +3752,14 @@ def test_natural_completion_at_work_limit_never_preserves_false_success_text(
     tmp_path: Path,
 ):
     """MAX_TURNS output must be Runtime-owned truth, not model self-report."""
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    state = RuntimeState()
+    state = _verification_state(workspace=tmp_path)
     state.has_diff = True
     state.mutation_generation = 2
     state.changed_files = ["README.md"]
     command = "python -m pytest -q cron_engine/tests"
-    state.verification_contract = VerificationContract(
+    _define_verification(state, VerificationContract(
         command=command,
         targets=("cron_engine/tests",),
         attempted_generation=2,
@@ -3697,8 +3768,8 @@ def test_natural_completion_at_work_limit_never_preserves_false_success_text(
         output="99 passed",
         source="runtime",
         zone="completion",
-    ).to_dict()
-    state.set_task_contract(TaskContract.from_dict({
+    ))
+    state.set_task_contract(parse_task_contract({
         "objective": "Update the package documentation",
         "requirements": [{
             "id": "R5",
@@ -3749,7 +3820,7 @@ def test_natural_completion_at_work_limit_never_preserves_false_success_text(
             content="All requested work is complete and verified.",
             completed_turns=20,
             work_budget=WorkBudgetController(max_turns=20),
-            resolve_tool_runtime_context=lambda: object(),
+            resolve_tool_runtime_context=lambda: SimpleNamespace(freeze_request=_freeze_request),
             natural_completion=True,
         )
 
@@ -3767,12 +3838,12 @@ def test_natural_completion_at_work_limit_never_preserves_false_success_text(
 
 def test_model_hard_cap_acknowledgement_uses_runtime_owned_summary(tmp_path: Path):
     """Even an evidence-complete MAX_TURNS result must not echo model prose."""
-    state = RuntimeState()
+    state = _verification_state(workspace=tmp_path)
     state.has_diff = True
     state.mutation_generation = 1
     state.changed_files = ["app.py"]
     command = "pytest -q tests/test_app.py"
-    state.verification_contract = VerificationContract(
+    _define_verification(state, VerificationContract(
         command=command,
         targets=("tests/test_app.py",),
         attempted_generation=1,
@@ -3781,7 +3852,7 @@ def test_model_hard_cap_acknowledgement_uses_runtime_owned_summary(tmp_path: Pat
         output="1 passed",
         source="runtime",
         zone="completion",
-    ).to_dict()
+    ))
     sessions = _Sessions()
     services = RuntimeServices(
         model=_EarlyStopModel(),
@@ -3823,7 +3894,7 @@ def test_model_hard_cap_acknowledgement_uses_runtime_owned_summary(tmp_path: Pat
             content="Maximum number of steps reached; everything is complete.",
             completed_turns=20,
             work_budget=WorkBudgetController(max_turns=20),
-            resolve_tool_runtime_context=lambda: object(),
+            resolve_tool_runtime_context=lambda: SimpleNamespace(freeze_request=_freeze_request),
             natural_completion=True,
         )
 
@@ -3840,14 +3911,14 @@ def test_completion_review_budget_exhaustion_uses_runtime_owned_summary(
     tmp_path: Path,
 ):
     """A verifier stop cannot return the model's false completion claim."""
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    state = RuntimeState()
+    state = _verification_state(workspace=tmp_path)
     state.has_diff = True
     state.mutation_generation = 1
     state.changed_files = ["app.py"]
     command = "pytest -q tests/test_app.py"
-    state.verification_contract = VerificationContract(
+    _define_verification(state, VerificationContract(
         command=command,
         targets=("tests/test_app.py",),
         attempted_generation=1,
@@ -3856,8 +3927,8 @@ def test_completion_review_budget_exhaustion_uses_runtime_owned_summary(
         output="1 passed",
         source="runtime",
         zone="completion",
-    ).to_dict()
-    state.set_task_contract(TaskContract.from_dict({
+    ))
+    state.set_task_contract(parse_task_contract({
         "objective": "Preserve compatibility",
         "requirements": [{
             "id": "R1",
@@ -3866,8 +3937,8 @@ def test_completion_review_budget_exhaustion_uses_runtime_owned_summary(
         }],
         "acceptance_commands": [command],
     }, workspace=tmp_path))
-    state._observe_requirement_mutation(["app.py"])
-    state.observe_requirement_verification(command, passed=True, acceptance=True)
+    _mutate_requirements(state, ["app.py"])
+    _execute_requirement(state, command, passed=True, acceptance=True)
     sessions = _Sessions()
     services = RuntimeServices(
         model=_EarlyStopModel(),
@@ -3915,7 +3986,7 @@ def test_completion_review_budget_exhaustion_uses_runtime_owned_summary(
             content="All requested work is complete and verified.",
             completed_turns=10,
             work_budget=WorkBudgetController(max_turns=20),
-            resolve_tool_runtime_context=lambda: object(),
+            resolve_tool_runtime_context=lambda: SimpleNamespace(freeze_request=_freeze_request),
             natural_completion=True,
         )
 
@@ -3933,14 +4004,15 @@ def test_completion_guidance_repair_then_semantic_review_closes_mixed_ledger(
     tmp_path: Path,
 ):
     """The mixed docs/compatibility path must converge through one Runner."""
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
+    from nz_coder.state.workdir import scoped_workdir
 
     command = "pytest -q cron_engine/tests"
-    state = RuntimeState()
+    state = _verification_state(workspace=tmp_path)
     state.has_diff = True
     state.mutation_generation = 1
     state.changed_files = ["README.md", "cron_engine/parser.py"]
-    state.verification_contract = VerificationContract(
+    _define_verification(state, VerificationContract(
         command=command,
         targets=("cron_engine/tests",),
         attempted_generation=1,
@@ -3948,8 +4020,8 @@ def test_completion_guidance_repair_then_semantic_review_closes_mixed_ledger(
         passed=True,
         output="99 passed",
         source="model",
-    ).to_dict()
-    state.set_task_contract(TaskContract.from_dict({
+    ))
+    state.set_task_contract(parse_task_contract({
         "objective": "Add names while preserving compatibility and update docs",
         "requirements": [
             {
@@ -3966,8 +4038,8 @@ def test_completion_guidance_repair_then_semantic_review_closes_mixed_ledger(
         ],
         "acceptance_commands": [command],
     }, workspace=tmp_path))
-    state._observe_requirement_mutation(state.changed_files)
-    state.observe_requirement_verification(command, passed=True, acceptance=True)
+    _mutate_requirements(state, state.changed_files)
+    _execute_requirement(state, command, passed=True, acceptance=True)
     sessions = _Sessions()
     services = RuntimeServices(
         model=_EarlyStopModel(),
@@ -4000,7 +4072,7 @@ def test_completion_guidance_repair_then_semantic_review_closes_mixed_ledger(
 
         async def verify_completion(_messages, status, content):
             verifier_calls.append(content)
-            state.observe_requirement_semantic_review(
+            _review_requirement(state,
                 accepted=True,
                 fingerprint="verifier_ok:compatibility",
             )
@@ -4023,16 +4095,19 @@ def test_completion_guidance_repair_then_semantic_review_closes_mixed_ledger(
             content="Everything is complete.",
             completed_turns=10,
             work_budget=budget,
-            resolve_tool_runtime_context=lambda: object(),
+            resolve_tool_runtime_context=lambda: SimpleNamespace(freeze_request=_freeze_request),
             natural_completion=True,
         )
 
-        state.observe_tool(
-            "edit_file",
-            {"path": "cron_engine/README.md"},
-            "Updated cron_engine/README.md",
-            succeeded=True,
-        )
+        (tmp_path / "cron_engine").mkdir()
+        (tmp_path / "cron_engine/README.md").write_text("Updated examples\n")
+        with scoped_workdir(tmp_path):
+            _observe(state,
+                "edit_file",
+                {"path": "cron_engine/README.md"},
+                "Updated cron_engine/README.md",
+                succeeded=True,
+            )
         state.changed_files = ["cron_engine/README.md", "cron_engine/parser.py"]
         reviewed = await runner._settle_terminal_boundary(
             context,
@@ -4043,7 +4118,7 @@ def test_completion_guidance_repair_then_semantic_review_closes_mixed_ledger(
             content="Implemented and verified the requested changes.",
             completed_turns=11,
             work_budget=budget,
-            resolve_tool_runtime_context=lambda: object(),
+            resolve_tool_runtime_context=lambda: SimpleNamespace(freeze_request=_freeze_request),
             natural_completion=True,
         )
         return blocked, reviewed, run_context.transcript
@@ -4070,11 +4145,11 @@ def test_completion_guidance_repair_then_semantic_review_closes_mixed_ledger(
     assert reviewed.reason == "semantic_review_and_ledger_satisfied"
 
 
-def test_natural_completion_budget_exhaustion_preserves_configured_turn_cap(
+def test_natural_completion_budget_exhaustion_is_distinct_from_turn_cap(
     tmp_path: Path,
 ):
-    """Lifecycle/UI must never receive ``max_turns=None`` for an early gate stop."""
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    """Early guidance exhaustion must not claim the configured hard cap was hit."""
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
     class RecordingLifecycle(_DefaultTurnLifecycle):
         def __init__(self):
@@ -4087,7 +4162,7 @@ def test_natural_completion_budget_exhaustion_preserves_configured_turn_cap(
     model = _EarlyStopModel()
     lifecycle = RecordingLifecycle()
     state = RuntimeState()
-    state.set_task_contract(TaskContract.from_dict({
+    state.set_task_contract(parse_task_contract({
         "objective": "Update package docs",
         "requirements": [{
             "id": "R1",
@@ -4131,7 +4206,196 @@ def test_natural_completion_budget_exhaustion_preserves_configured_turn_cap(
         execution_context_factory=execution_context,
     ).run_result(request, options=request_contracts.RunOptions(stream=False)))
 
-    assert result.status is RunStatus.MAX_TURNS
-    assert model.calls == 20
-    assert lifecycle.finalize_kwargs[-1][0] == "max_turns"
-    assert lifecycle.finalize_kwargs[-1][1]["max_turns"] == 20
+    assert result.status is RunStatus.BLOCKED
+    assert model.calls == 4
+    assert lifecycle.finalize_kwargs[-1][0] == "blocked"
+    assert "max_turns" not in lifecycle.finalize_kwargs[-1][1]
+
+
+@pytest.mark.parametrize(
+    "prompt_count,use_adapter,complete_evidence,hard_cap",
+    [(0, False, False, 20), (2, False, False, 20), (2, True, False, 20),
+     (2, False, True, 20), (2, True, True, 20),
+     (2, False, False, 1), (2, True, False, 1),
+     (2, False, True, 1), (2, True, True, 1)],
+)
+@pytest.mark.parametrize("new_activation", [False, True])
+def test_native_runner_completion_guidance_budget_bounds_actual_calls(
+    tmp_path: Path, prompt_count: int, use_adapter: bool, complete_evidence: bool,
+    hard_cap: int, new_activation: bool,
+):
+    """同轮恢复保留指导预算；用户新激活重新计数，完成与硬上限仍优先。"""
+    from nz_coder.runtime.adapters.runner import _PolicyService
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
+    from nz_coder.state.workdir import scoped_workdir
+
+    class NaturalAnswerModel:
+        calls = 0
+
+        async def complete_turn(self, _context, _messages, **_kwargs):
+            self.calls += 1
+            return LLMResult(content="All work is complete.", finish_reason="stop")
+
+    class RecordingLifecycle(_DefaultTurnLifecycle):
+        def __init__(self):
+            self.finalize_kwargs = []
+
+        async def finalize(self, context, messages, status, **kwargs):
+            self.finalize_kwargs.append((status, kwargs))
+            return await super().finalize(context, messages, status, **kwargs)
+
+    state = _verification_state(workspace=tmp_path)
+    state.set_task_contract(parse_task_contract({
+        "objective": "Update the package README",
+        "requirements": [{
+            "id": "R1", "description": "Update package README",
+            "kind": "compatibility" if use_adapter else "docs",
+            "expected_artifacts": ["pkg/README.md"],
+        }],
+    }, workspace=tmp_path))
+    if use_adapter or complete_evidence:
+        target = tmp_path / "pkg/README.md"
+        target.parent.mkdir()
+        target.write_text("documented")
+        with scoped_workdir(tmp_path):
+            _observe(state, "write_file", {"path": "pkg/README.md"}, "Done", succeeded=True)
+        _execute_requirement(state, "pytest -q tests", passed=True, acceptance=True)
+    state.completion_gate_prompts = prompt_count
+    # 仅恢复快照不增加额度；用户开启新一轮时才重新计数。
+    restored = RuntimeState()
+    assert restored.restore(state.to_dict(active=True))
+    if new_activation:
+        restored.begin_resumed_activation(max_turns=hard_cap, timeout_seconds=0)
+    else:
+        restored.max_turns = hard_cap
+    scenario = VerificationScenario(workspace=tmp_path, plan={"stages": []})
+    restored.bind_run_context(scenario.context)
+    scenario.state = restored
+    scenario.runtime.state = restored
+    scenario.runtime.host.runtime_state = restored
+    restored._scenario = scenario
+    state = restored
+    scenario.runtime.synchronize_task()
+    if use_adapter or complete_evidence:
+        _mutate_requirements(state, ["pkg/README.md"])
+        _execute_requirement(state, "pytest -q tests", passed=True, acceptance=True)
+    model = NaturalAnswerModel()
+    lifecycle = RecordingLifecycle()
+    sessions = _Sessions()
+    traces = []
+
+    class Verifier:
+        async def verify(self, _context, _messages, status, _content):
+            if complete_evidence:
+                _review_requirement(state,
+                    accepted=True, fingerprint="verifier_ok:compatibility",
+                )
+            return status
+
+    services = RuntimeServices(
+        model=model, tools=_BudgetTools(), context=_Context(),
+        session_runtime=sessions, events=_Events(), host=_UnusedHost(),
+        memory=_Memory(), verifier=Verifier(), lifecycle=lifecycle,
+        guardrails=_Guardrails(), inputs=_Inputs(), transitions=_Transitions(),
+    )
+    request = RunRequest(
+        agent=AgentDefinition(name="native", instructions="finish the contract"),
+        profile=MAIN_PROFILE, messages=({"role": "user", "content": "Update package README."},),
+        workspace=tmp_path, session_id="bounded-guidance", stream=False,
+        metadata={"max_turns": hard_cap},
+    )
+
+    def execution_context(run_context, runtime_services):
+        native = _execution_context(run_context, runtime_services)
+        policy_members = dict(vars(native.policy))
+        if use_adapter:
+            host = SimpleNamespace(
+                runtime_state=state,
+                tracer=SimpleNamespace(log=lambda event, **payload: traces.append((event, payload))),
+                _persist_runtime_state=lambda **_kwargs: None,
+            )
+            policy_members["verify_completion"] = _PolicyService(host, services).verify_completion
+        hooks = dict(vars(native.hooks))
+        hooks["trace"] = lambda event, **payload: traces.append((event, payload))
+        return replace(native, runtime_state=state, policy=SimpleNamespace(**policy_members),
+                       hooks=SimpleNamespace(**hooks))
+
+    result = asyncio.run(AgentRunner(
+        services, execution_context_factory=execution_context,
+    ).run_result(request, options=request_contracts.RunOptions(stream=False)))
+    assert sessions.final_statuses == [result.status]
+    assert sessions.context.finalized is True
+    if complete_evidence:
+        assert result.status is RunStatus.COMPLETED
+        assert model.calls == 1
+        assert not state.requirement_ledger_snapshot().unresolved()
+        assert not any(event == "requirement_completion_budget_exhausted" for event, _ in traces)
+    elif hard_cap == 1:
+        assert result.status is RunStatus.MAX_TURNS
+        assert model.calls == 1
+        assert state.completion_gate_prompts == (0 if new_activation else 2)
+        assert not any(message.get("_nz_completion_gate") for message in result.messages)
+        assert lifecycle.finalize_kwargs[-1][1]["max_turns"] == 1
+        assert "All work is complete" not in result.final_text
+    else:
+        assert result.status is RunStatus.BLOCKED
+        assert model.calls == (3 if new_activation else 3 - prompt_count)
+        assert state.completion_gate_prompts == 2
+        assert sum(message.get("_nz_completion_gate") is True for message in result.messages) == (2 if new_activation else 2 - prompt_count)
+        assert [item.requirement.id for item in state.requirement_ledger_snapshot().unresolved()] == ["R1"]
+        assert "Completion guidance budget exhausted" in result.final_text
+        assert "without claiming completion" in result.final_text
+        assert "Unresolved requirements: R1" in result.final_text
+        assert "All work is complete" not in result.final_text
+        assert lifecycle.finalize_kwargs[-1][0] == "blocked"
+        assert "max_turns" not in lifecycle.finalize_kwargs[-1][1]
+        settled = [payload for event, payload in traces if event == "terminal_boundary_settled"]
+        assert settled[-1]["decision"] == "finalize"
+        assert settled[-1]["reason"] == "requirement_completion_budget_exhausted"
+
+
+@pytest.mark.parametrize('mode,cap,expected,calls', [
+    ('ignored', 20, 'completed', 1),
+    ('missing', 20, 'completed_unverified', 1),
+    ('mixed', 20, 'blocked', 3),
+    ('clean', 20, 'completed', 1),
+    ('read', 20, 'completed', 1),
+    ('ignored', 1, 'completed', 1),
+])
+def test_native_runner_settles_ordinary_verification_even_with_empty_contract(tmp_path, mode, cap, expected, calls):
+    class Answer:
+        calls = 0
+        async def complete_turn(self, *_args, **_kwargs):
+            self.calls += 1
+            return LLMResult(content='Done', finish_reason='stop')
+    model = Answer()
+    state = RuntimeState()
+    (tmp_path / 'tests').mkdir()
+    (tmp_path / 'tests/test_a.py').write_text('def test_a(): pass')
+    vm = VerificationScenario(workspace=tmp_path, plan={'stages': []})
+    state = vm.state
+    if mode == 'mixed':
+        from nz_coder.runtime.agent.task_contract import parse_task_contract
+        state.set_task_contract(parse_task_contract({'objective':'Write docs','requirements':[{'id':'R1','description':'write docs','kind':'docs','expected_artifacts':['pkg/README.md']}]},workspace=tmp_path))
+    if mode == 'missing':
+        vm.write_resource('edit_file', {'path': '.verify/deleted.py'})
+    elif mode in {'ignored', 'clean', 'mixed'}:
+        command = 'pytest tests/test_a.py' + (' | tail -8' if mode in {'ignored','mixed'} else '')
+        vm.command_result({'command': command, 'workdir': str(tmp_path)}, '1 passed', False, False, exit_code=0)
+    sessions = _Sessions()
+    services = RuntimeServices(model=model, tools=_BudgetTools(), context=_Context(),
+        session_runtime=sessions, events=_Events(), host=_UnusedHost(), memory=_Memory(),
+        verifier=_Verifier(), lifecycle=_DefaultTurnLifecycle(), guardrails=_Guardrails(),
+        inputs=_Inputs(), transitions=_Transitions())
+    request = RunRequest(agent=AgentDefinition(name='native', instructions='Finish'),
+        profile=MAIN_PROFILE, messages=({'role':'user','content':'check'},), workspace=tmp_path,
+        session_id='ordinary', stream=False, metadata={'max_turns': cap})
+    def execution_context(run_context, runtime_services):
+        native = _execution_context(run_context, runtime_services)
+        policy = dict(vars(native.policy), verification_status=vm.runtime.status)
+        return replace(native, runtime_state=state, policy=SimpleNamespace(**policy))
+    result = asyncio.run(AgentRunner(services, execution_context_factory=execution_context).run_result(
+        request, options=request_contracts.RunOptions(stream=False)))
+    assert result.status.value == expected
+    assert model.calls == calls
+    assert state.completion_gate_prompts <= 2

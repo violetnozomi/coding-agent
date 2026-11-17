@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 
 from nz_coder.swebench.artifacts import AttemptJournal
+from nz_coder.swebench.adapter import official_model_directory
 from nz_coder.swebench.profiles import BenchmarkProfile, instance_ids_digest
 from nz_coder.swebench.policy import STRICT_ALLOWED_TOOLS
 
@@ -246,7 +247,8 @@ def _find_instance_log_dir(
     """Resolve exactly one official run/model/instance directory."""
     root = Path(logs_dir)
     run = _safe_relative_parts(run_id)
-    model = _safe_relative_parts(model_name)
+    model = (_safe_relative_parts(official_model_directory(model_name))
+             if _safe_relative_parts(model_name) else ())
     instance = _safe_relative_parts(instance_id)
     if not run or not model or len(instance) != 1:
         return root / "__invalid_official_provenance__" / str(instance_id)

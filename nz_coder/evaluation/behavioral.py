@@ -178,7 +178,11 @@ class ProductionAgentBehaviorDriver:
 
     @staticmethod
     def _trace_events(workspace: Path, session_id: str) -> list[dict]:
-        root = workspace / ".nz-coder" / "sessions" / "_artifacts" / session_id
+        from nz_coder.state.sessions import session_trace_dir
+        from nz_coder.state.workdir import scoped_workdir
+
+        with scoped_workdir(workspace):
+            root = session_trace_dir(session_id)
         events: list[dict] = []
         for path in sorted(root.rglob("*.jsonl")) if root.exists() else ():
             for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():

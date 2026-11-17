@@ -702,3 +702,23 @@ def test_windows_control_parent_swap_during_capture_is_blocked_or_fails_closed(
     snapshot = project_control.capture_project_control_snapshot(workspace)
     assert attempted is True
     assert snapshot.get(".nz-coder/commands/review.md").content == b"OPENED-CONTENT"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX FIFO")
+def test_control_snapshot_rejects_fifo_without_waiting_for_writer(tmp_path):
+    import sys
+
+    os.mkfifo(tmp_path / "AGENTS.md")
+    code = """import sys
+from nz_coder.foundation.project_control import capture_project_control_snapshot, UnsafeProjectControl
+try:
+    capture_project_control_snapshot(sys.argv[1])
+except UnsafeProjectControl:
+    print('rejected')
+else:
+    raise AssertionError('FIFO accepted')
+"""
+    result = subprocess.run([sys.executable, "-c", code, str(tmp_path)],
+        capture_output=True, text=True, timeout=2)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "rejected"

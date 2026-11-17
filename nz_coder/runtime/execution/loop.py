@@ -6,6 +6,7 @@
 """
 
 import asyncio
+from contextlib import nullcontext
 import copy
 import json
 import hashlib
@@ -14,7 +15,8 @@ import re as _re
 import threading
 import time
 import uuid
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -36,6 +38,9 @@ from nz_coder.providers import (
 from nz_coder.providers.pricing import calculate_usage_cost
 from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.execution.runtime_state import RuntimeState
+from nz_coder.runtime.agent.task_intent import (
+    assessment_cache_key, current_task_assessment, render_task_assessment,
+)
 from nz_coder.state.trace import TraceRecorder
 from nz_coder.state.transaction import TransactionManager
 from nz_coder.tools import (
@@ -45,11 +50,7 @@ from nz_coder.tools import (
 )
 from nz_coder.mcp import MCPRuntime
 from nz_coder.runtime.verification.hooks import AgentHooks, build_default_hooks
-from nz_coder.runtime.verification.stall_sidecar import (
-    STALL_SIDECAR_TIMEOUT_SECONDS,
-    StallSidecarOrchestrator,
-    invoke_stall_sidecar,
-)
+
 from nz_coder.runtime.agent.handoffs import AgentGraph, HandoffSignal
 from nz_coder.runtime.agent.admission import (
     AdmittedAgentHandle,
@@ -73,6 +74,7 @@ from nz_coder.runtime.model_gateway import (
     resolve_model_runtime,
 )
 from nz_coder.runtime.session.session_processor import SessionProcessor
+from nz_coder.runtime.session.store import EphemeralSessionStore
 from nz_coder.protocol.public_error import TrustedPublicMessage
 from nz_coder.runtime.session.session_revert import SessionReverter
 from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
@@ -86,15 +88,12 @@ from nz_coder.state.sessions import (
     session_runtime_state_path,
     session_trace_dir,
 )
-from nz_coder.runtime.process.workdir import current_derived_path, current_workdir
+from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.runtime.core.execution_context import (
-    broad_tests_blocked,
-    set_broad_tests_blocked,
     strict_local_tools,
 )
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.tool_platform.command_policy import classify_bash
-from nz_coder.intelligence.verification import VerificationManager
 from nz_coder.runtime.execution.tool_executor import (
     ToolExecutionResult,
     ToolExecutor,
@@ -109,7 +108,7 @@ from nz_coder.runtime.tool_runtime.scheduler import (
 )
 from nz_coder.runtime.tool_runtime.pipeline import ProductionToolRuntime
 from nz_coder.runtime.conversation.context_manager import (
-    MAX_COMPACTION_ATTEMPTS as _MAX_COMPACTION_ATTEMPTS,
+    MAX_COMPACTIONS_WITHOUT_RESPONSE as _MAX_COMPACTIONS_WITHOUT_RESPONSE,
     CompactionAttemptState as _CompactionAttemptState,
     ProductionContextManager,
 )
@@ -138,7 +137,7 @@ from nz_coder.runtime.conversation.prompt_builder import (
     truncate_text_tokens,
 )
 from nz_coder.runtime.agent.agent_role_runtime import ProductionAgentRoleRuntime
-from nz_coder.lsp.write_diagnostics import collect_write_diagnostics
+from nz_coder.lsp.write_diagnostics import collect_write_diagnostics, format_write_diagnostics
 from nz_coder.intelligence.code_index import update_code_index_after_write
 from nz_coder.protocol.message_schema import (
     ASSISTANT_COST_KEY,
@@ -151,6 +150,7 @@ from nz_coder.protocol.message_schema import (
     ASSISTANT_TIME_KEY,
     ASSISTANT_USAGE_KEY,
     COMPACTION_KEY,
+    INTERACTION_RUN_ID_KEY,
     MESSAGE_ID_KEY,
     PARTS_KEY,
     SESSION_SUMMARY_KEY,
@@ -165,14 +165,17 @@ from nz_coder.protocol.message_schema import (
     bind_user_context,
     ensure_message_identities,
     is_synthetic_user_message,
+    project_public_message_part,
     set_assistant_error,
     set_assistant_end_state,
     stamp_user_message,
+    upsert_message_part,
 )
 from nz_coder.capabilities.vision import ProviderImageDescriber
 from nz_coder.capabilities.documents import read_document
 from nz_coder.runtime.observability.run_evidence import RunEvidence
 from nz_coder.foundation.async_utils import to_thread_settled as _to_thread_settled
+from nz_coder.runtime.core.run_context import request_current_run_cancel
 from nz_coder.runtime.agent.agent_resilience import (
     describe_transient_provider_retry,
     extract_terminal_promise_signal,
@@ -216,6 +219,8 @@ import nz_coder.runtime.agent.subagent          # noqa: F401
 import nz_coder.state.memory            # noqa: F401
 import nz_coder.state.skills            # noqa: F401
 import nz_coder.tools.scratchpad  # noqa: F401
+import nz_coder.tools.task_intent  # noqa: F401
+import nz_coder.tools.working_plan  # noqa: F401
 
 # compact 是特殊工具，在 loop 层注册（幂等）
 from nz_coder.tools import register
@@ -228,7 +233,9 @@ _truncate_text_tokens = truncate_text_tokens
 
 register(
     name="compact",
-    description="Manually compress the conversation context to free up space.",
+    description=("Manually compress conversation context. Before calling, use update_scratchpad "
+                 "to preserve any costly-to-rediscover findings you still need. "
+                 "Compaction runs in this tool batch; it does not first ask you to save notes."),
     parameters={"type": "object", "properties": {}},
     handler=lambda: "Compacting...",
     plan_mode_allowed=True,
@@ -306,8 +313,9 @@ def _close_completion_stream(stream) -> None:
 
 
 def _iter_completion_with_timeouts(
-    stream,
+    open_stream,
     *,
+    runtime,
     idle_timeout_seconds: float,
     hard_timeout_seconds: float,
     cancelled: Callable[[], bool] | None = None,
@@ -316,11 +324,20 @@ def _iter_completion_with_timeouts(
     from nz_coder.runtime.model_gateway.stream import iter_stream_with_timeouts
 
     yield from iter_stream_with_timeouts(
-        stream,
+        open_stream,
+        runtime=runtime,
         idle_timeout_seconds=idle_timeout_seconds,
         hard_timeout_seconds=hard_timeout_seconds,
         cancelled=cancelled,
     )
+
+
+@dataclass(eq=False)
+class _RunSessionWriter:
+    owner: object
+    retired: bool = False
+    settle: object | None = None
+    terminal_published: bool = False
 
 
 class ProductRunEnvironment:
@@ -335,16 +352,21 @@ class ProductRunEnvironment:
                  on_agent_switched=None,
                  admission_handle: AdmittedAgentHandle = None,
                  workflow_approval_asker=None, tool_allowlist=None,
-                 stall_sidecar=None, sidecar_verifier=None,
+                 sidecar_verifier=None,
                  model_runtime: ResolvedModelRuntime | None = None,
                  runtime_services: RuntimeServices | None = None,
                  event_bus_owned: bool = True,
                  auto_mode_classifier_enabled: bool = False,
                  config_snapshot=None,
-                 manage_model_runtime: bool | None = None):
+                 manage_model_runtime: bool | None = None,
+                 activate_session_on_build: bool = True):
         from nz_coder.providers.models import active_model_selection
 
         self._environment_cleanup_lock = threading.RLock()
+        self._session_checkpoint_lock = threading.RLock()
+        self._session_checkpoint_retired = False
+        self._session_checkpoint_writer = None
+        self._run_preparation = None
         self._environment_cleanup_completed: set[str] = set()
         self._environment_cleanup_failures: dict[str, str] = {}
         self._environment_provider_ids_closed: set[int] = set()
@@ -396,11 +418,6 @@ class ProductRunEnvironment:
         self._initial_model_runtime_available = True
         self.provider = model_runtime.provider
         self.client = model_runtime.client
-        self.stall_sidecar = stall_sidecar or self._provider_stall_sidecar
-        self.stall_orchestrator = StallSidecarOrchestrator(
-            evaluate=self.stall_sidecar,
-            on_event=self._trace_stall_sidecar_event,
-        )
         self.model_id = model_runtime.model_id
         self.request_model_id = model_runtime.request_model_id
         self.model_pricing = model_runtime.pricing
@@ -460,7 +477,13 @@ class ProductRunEnvironment:
         self.auto_permission_asker = None
         self.workflow_approval_asker = workflow_approval_asker
         self.workdir = initial_workspace
-        self.session_id = activate_session(session_id or create_session_id())
+        self.runtime_services = runtime_services or build_runtime_services()
+        if not isinstance(self.runtime_services, RuntimeServices):
+            raise TypeError("runtime_services must be a RuntimeServices graph")
+        self.session_id = session_id or create_session_id()
+        # 临时会话也有运行身份，但不能借构造过程覆盖可恢复会话的 active 别名。
+        if activate_session_on_build and not isinstance(self.runtime_services.session_runtime.store, EphemeralSessionStore):
+            self.session_id = activate_session(self.session_id)
         self.lineage = SessionLineage(
             session_runtime_dir(self.session_id) / "lineage.jsonl",
             self.session_id,
@@ -524,16 +547,10 @@ class ProductRunEnvironment:
         self.session_reverter = SessionReverter(
             self.workspace_snapshots,
             session_runtime_dir(self.session_id) / "message_revert.json",
+            before_transition=self.invalidate_working_plan,
         )
-        self.vm = VerificationManager(
-            self.recovery,
-            self.tracer,
-            require_targeted=strict_local_tools(),
-        )
+        self.verification_runtime = None
         self.executor = ToolExecutor(self.permissions, runtime_review=self._runtime_evidence_review)
-        self.runtime_services = runtime_services or build_runtime_services()
-        if not isinstance(self.runtime_services, RuntimeServices):
-            raise TypeError("runtime_services must be a RuntimeServices graph")
         self.tool_runtime = self.runtime_services.tools
         self.context_manager = self.runtime_services.context
         self.runtime_host = self.runtime_services.host
@@ -542,6 +559,7 @@ class ProductRunEnvironment:
             execution_context_factory=lambda run_context, services: (
                 self._native_execution_context(run_context, services)
             ),
+            context_factory_abort=self._abort_run_preparation,
         )
         self.tool_calls_this_run = 0
         self.used_save_memory = False
@@ -550,12 +568,12 @@ class ProductRunEnvironment:
         self.runtime_state = RuntimeState()
         self._runtime_state_path = session_runtime_state_path(self.session_id)
         self._restored_state = False
-        self._replan_count = 0
         from nz_coder.tools.scratchpad import scratchpad as _sp
         self._sp = _sp
         from nz_coder.state.memory import workspace_memory_manager
-        memory_dir = current_derived_path("MEMORY_DIR")
-        self._mm = workspace_memory_manager(memory_dir)
+        from nz_coder.state.memory_scope import session_memory_binding
+        self.memory_scope, self.memory_capability = session_memory_binding(self.session_id, self.workdir)
+        self._mm = workspace_memory_manager(scope=self.memory_scope)
         from nz_coder.state.skills import SkillLoader, current_skill_loader
         default_skills = current_skill_loader()
         project_skills = self.workdir / ".nz-coder" / "skills"
@@ -576,13 +594,8 @@ class ProductRunEnvironment:
             self._mm.load_all()
         except Exception as exc:
             self.tracer.log("memory_load_failed", error=str(exc))
-        bind_memory = getattr(self._mm, "ensure_transaction_binding", None)
-        if callable(bind_memory):
-            try:
-                bind_memory(self.txn)
-            except Exception as exc:
-                self.tracer.log("memory_sync_bind_failed", error=str(exc))
         # 上一轮 memory 查询缓存，避免连续相同查询重复计算
+        self._last_memory_cache_key = None
         self._last_memory_query: str = ""
         self._last_memory_block: str = ""
         self._project_profile_cache: dict | None = None
@@ -609,7 +622,7 @@ class ProductRunEnvironment:
         self._sidecar_risky_shell_ops = 0
         self._sidecar_unattributed_write_ops = 0
         if callable(sidecar_verifier):
-            self.hooks.stop_hooks.insert(0, sidecar_verifier)
+            self.hooks.completion_review_hooks.insert(0, sidecar_verifier)
         elif sidecar_verifier is not False and model_runtime.owns_client:
             from nz_coder.runtime.verification.sidecar_verifier import (
                 create_sidecar_verifier_hook,
@@ -624,8 +637,9 @@ class ProductRunEnvironment:
             self._sidecar_verifier_handle = create_sidecar_verifier_hook(
                 self,
                 resolved_verifier,
+                model_runtime=model_runtime,
             )
-            self.hooks.stop_hooks.insert(0, self._sidecar_verifier_handle)
+            self.hooks.completion_review_hooks.insert(0, self._sidecar_verifier_handle)
         self.hooks.reset_run_state()
         self._initialize_repo_intelligence(self.workdir)
         from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
@@ -633,6 +647,7 @@ class ProductRunEnvironment:
         self.repo_retrieval_strategy: str | None = None
         self._repo_retrieval_trace_signature = ""
         self._followup_pending: Callable[[], bool] | None = None
+        self._followup_waiter: Callable[[], Awaitable[None]] | None = None
 
     def prepare_run_control(
         self,
@@ -717,6 +732,7 @@ class ProductRunEnvironment:
                     if self._configured_hooks is not None:
                         for hook_list_name in (
                             "before_no_tool_response_hooks",
+                            "completion_review_hooks",
                             "stop_hooks",
                             "after_tool_result_hooks",
                             "after_tool_batch_hooks",
@@ -730,6 +746,7 @@ class ProductRunEnvironment:
                     if self._configured_hooks is None:
                         for hook_list_name in (
                             "before_no_tool_response_hooks",
+                            "completion_review_hooks",
                             "stop_hooks",
                             "after_tool_result_hooks",
                             "after_tool_batch_hooks",
@@ -811,14 +828,20 @@ class ProductRunEnvironment:
                             main_client=runtime.client,
                             main_model=runtime.request_model_id,
                         )
-                        candidate_sidecar = create_sidecar_verifier_hook(self, verifier)
+                        candidate_sidecar = create_sidecar_verifier_hook(self, verifier, model_runtime=runtime)
                         owns_sidecar = True
-                    if candidate_sidecar is not None and candidate_sidecar not in hooks.stop_hooks:
-                        hooks.stop_hooks.insert(0, candidate_sidecar)
+                    if candidate_sidecar is not None and candidate_sidecar not in hooks.completion_review_hooks:
+                        hooks.completion_review_hooks.insert(0, candidate_sidecar)
                     candidate_image_describer = self._configured_image_describer
                     if candidate_image_describer is None:
+                        # legacy override 先取得 owner、后建立 run control；此处只绑定该活跃 owner。
+                        image_observer = None
+                        with self._session_checkpoint_lock:
+                            writer = self._session_checkpoint_writer
+                            if writer is not None and not writer.retired:
+                                image_observer = self._model_gateway_observer_for_run()
                         candidate_image_describer = ProviderImageDescriber.configured(
-                            observer=self._model_gateway_observer,
+                            observer=image_observer,
                             run_settings=run_settings,
                         )
                         owns_image_describer = True
@@ -1055,9 +1078,15 @@ class ProductRunEnvironment:
         for bundle in list(self._pending_run_control_cleanup):
             self._attempt_run_control_cleanup(bundle, "deferred-retry")
 
-    def set_followup_pending(self, callback: Callable[[], bool] | None) -> None:
+    def set_followup_pending(
+        self,
+        callback: Callable[[], bool] | None,
+        *,
+        waiter: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
         """Bind a host-owned check for a newer prompt queued during this run."""
         self._followup_pending = callback
+        self._followup_waiter = waiter
 
     def _has_queued_followup(self) -> bool:
         """Check the host queue without allowing a UI failure to abort the Agent."""
@@ -1143,7 +1172,20 @@ class ProductRunEnvironment:
             if self._has_queued_followup():
                 self.tracer.log("idle_yield_superseded", recipient="worker")
                 return False
-            await asyncio.sleep(0.05)
+            waits = [asyncio.create_task(manager.wait_for_worker_wake())]
+            if self._followup_waiter is not None:
+                waits.append(asyncio.create_task(self._followup_waiter()))
+            try:
+                done, _pending = await asyncio.wait(
+                    waits, return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in done:
+                    task.result()
+            finally:
+                # 仅保留当前一次等待，取消或任一路唤醒都要回收另一路。
+                for task in waits:
+                    task.cancel()
+                await asyncio.gather(*waits, return_exceptions=True)
             if self._drain_background_agent_messages(messages):
                 self.tracer.log("idle_yield_resumed", recipient="worker")
                 return True
@@ -1371,15 +1413,41 @@ class ProductRunEnvironment:
             return False
         persisted_content = False
         if content_text.strip() and (
-            status == "max_turns"
+            status in {"max_turns", "blocked", "completed", "completed_unverified"}
             or not str(target.get("content") or "").strip()
         ):
+            content_changed = target.get("content") != content_text
             target["content"] = content_text
+            if content_changed:
+                session_id = str(getattr(self, "session_id", None) or "runtime-terminal")
+                ensure_message_identities(messages, session_id)
+                parts = target[PARTS_KEY]
+                now = time.time()
+                # 已完成的文本块不可原地覆盖；用新代发布终态，隔离迟到的旧文本事件。
+                terminal_part = {
+                    "id": f"part-{uuid.uuid4().hex}",
+                    "message_id": target[MESSAGE_ID_KEY],
+                    "type": "text",
+                    "text": content_text,
+                    "time": {"start": now, "end": now},
+                    "generation": max((part.get("generation", 0) for part in parts), default=0) + 1,
+                    "version": 1,
+                }
+                interaction_id = target.get(INTERACTION_RUN_ID_KEY)
+                if interaction_id:
+                    terminal_part["interaction_run_id"] = interaction_id
+                    terminal_part["run_id"] = interaction_id
+                target[PARTS_KEY] = [part for part in parts if part.get("type") != "text"]
+                attach_text_part(target, terminal_part)
+                self._emit_session_event("message.part.updated", {
+                    "message_id": target[MESSAGE_ID_KEY],
+                    "part": terminal_part,
+                })
             persisted_content = True
         error = target.get(ASSISTANT_ERROR_KEY)
         if isinstance(error, dict) and error.get("name") == "MessageAbortedError":
             reason = "canceled"
-        elif status in {"error", "aborted"}:
+        elif status in {"error", "aborted", "blocked"}:
             reason = "errored"
         elif status in {"interrupted", "cancelled", "max_turns"}:
             reason = "interrupted"
@@ -1463,20 +1531,63 @@ class ProductRunEnvironment:
 
     def _native_execution_context(self, run_context, services):
         """Bind legacy coding capabilities once at the compatibility edge."""
-        self.active_run_context = run_context
-        self.event_publisher = self.event_bus.for_interaction(
-            run_context.interaction_run_id,
-            agent_invocation_id=self.agent_id,
-            parent_interaction_run_id=str(
-                getattr(run_context.request, "parent_interaction_run_id", "")
-                or ""
-            ),
-            parent_agent_invocation_id=str(
-                getattr(run_context.request, "parent_agent_id", "") or ""
-            ),
-        )
-        self.background_agents.bind_event_publisher(self.event_publisher)
-        return runner_context_from_legacy_host(self, services, run_context)
+        from nz_coder.tools.scratchpad import current_scratchpad
+
+        with self._session_checkpoint_lock:
+            if self._session_checkpoint_retired:
+                raise RuntimeError("Cannot start a Run on a closed environment")
+            previous = (self.runtime_state._verification_context,
+                        getattr(self, "active_run_context", None), self.verification_runtime,
+                        self.event_publisher, self._sp)
+            self.runtime_state.bind_run_context(run_context)
+            self._run_preparation = (run_context, previous)
+            self.active_run_context = run_context
+            self._sp = current_scratchpad()
+        try:
+            from nz_coder.runtime.adapters.verification_runtime import VerificationRuntime
+            self.verification_runtime = VerificationRuntime(self, run_context)
+            self.event_publisher = self.event_bus.for_interaction(
+                run_context.interaction_run_id,
+                agent_invocation_id=self.agent_id,
+                parent_interaction_run_id=str(
+                    getattr(run_context.request, "parent_interaction_run_id", "")
+                    or ""
+                ),
+                parent_agent_invocation_id=str(
+                    getattr(run_context.request, "parent_agent_id", "") or ""
+                ),
+            )
+            self.background_agents.bind_event_publisher(self.event_publisher)
+            return runner_context_from_legacy_host(self, services, run_context)
+        except BaseException:
+            self._abort_run_preparation(run_context)
+            raise
+
+    def _complete_run_preparation(self, run_context) -> None:
+        with self._session_checkpoint_lock:
+            if self._run_preparation is not None and self._run_preparation[0] is run_context:
+                self._run_preparation = None
+
+    def _abort_run_preparation(self, run_context) -> None:
+        # 与检查点写入共用屏障：已经进入的写入先退出，只撤销本次尚未执行的绑定。
+        with self._session_checkpoint_lock:
+            preparation = self._run_preparation
+            if preparation is None or preparation[0] is not run_context:
+                return
+            if run_context.terminal_status is not None or run_context.finalized:
+                return
+            writer = self._session_checkpoint_writer
+            if writer is not None and writer.owner is run_context:
+                writer.retired = True
+            if self.runtime_state._verification_context is run_context:
+                previous_context, previous_active, verification, publisher, scratchpad = preparation[1]
+                self.runtime_state._verification_context = previous_context
+                self.active_run_context = previous_active
+                self.verification_runtime = verification
+                self.event_publisher = publisher
+                self.background_agents.bind_event_publisher(publisher)
+                self._sp = scratchpad
+            self._run_preparation = None
 
     async def _run_native_facade(
         self, messages, on_tool=None, on_text=None, on_token=None, stream=True,
@@ -1490,6 +1601,7 @@ class ProductRunEnvironment:
                 execution_context_factory=lambda run_context, services: (
                     self._native_execution_context(run_context, services)
                 ),
+                context_factory_abort=self._abort_run_preparation,
             )
         run_control = (
             self.prepare_run_control(config_snapshot)
@@ -1522,12 +1634,15 @@ class ProductRunEnvironment:
             bind_publisher = getattr(background, "bind_event_publisher", None)
             if callable(bind_publisher):
                 bind_publisher(self.event_publisher)
+        from nz_coder.tools import current_tool_cancel_event
         options = RunOptions(
+            cancellation=current_tool_cancel_event(),
             stream=stream,
             on_tool=on_tool,
             on_text=on_text,
             on_token=on_token,
             event_bus=getattr(self, "event_bus", None),
+            session_lease=getattr(self, "_requested_session_lease", None),
         )
 
         async def execute(_owner, _messages, *_callbacks):
@@ -1537,6 +1652,8 @@ class ProductRunEnvironment:
                 context = getattr(self, "active_run_context", None)
                 if context is not None:
                     messages[:] = copy.deepcopy(context.transcript)
+                if self.verification_runtime is not None:
+                    self.verification_runtime.close()
                 self.active_run_context = None
 
         return await self.runtime_host.run(
@@ -1780,8 +1897,20 @@ class ProductRunEnvironment:
             "version": message_part["version"],
         }
 
+    def request_retirement(self) -> None:
+        """先通知子域；不能在此等 Provider 或执行诊断 I/O。"""
+        background = getattr(self, "background_agents", None)
+        if background is not None:
+            background.request_retirement()
+
     def close(self) -> None:
         """Attempt every owned cleanup stage; failed stages remain retryable."""
+        self.request_retirement()
+        # 先等旧同步写入退出并永久退休，再释放锁做其他清理，避免与后台回调互等。
+        with self._session_checkpoint_lock:
+            self._session_checkpoint_retired = True
+            if self._session_checkpoint_writer is not None:
+                self._session_checkpoint_writer.retired = True
         lock = getattr(self, "_environment_cleanup_lock", None)
         if lock is None:
             lock = threading.RLock()
@@ -1791,18 +1920,7 @@ class ProductRunEnvironment:
                 self._environment_cleanup_completed = set()
             if not hasattr(self, "_environment_cleanup_failures"):
                 self._environment_cleanup_failures = {}
-            stages = (
-                ("run-control", self._close_environment_run_controls),
-                ("stall-sidecar", self._close_environment_stall_sidecar),
-                ("background-agents", self._close_environment_background_agents),
-                ("repo-intelligence", self._close_repo_intelligence),
-                ("mcp", self._close_environment_mcp),
-                ("sidecar", lambda: self._close_environment_object("_sidecar_verifier_handle")),
-                ("image-provider", lambda: self._close_environment_object("image_describer")),
-                ("provider-runtimes", self._close_environment_provider_runtimes),
-                ("event-bus", self._close_environment_event_bus),
-                ("tracer", lambda: self._close_environment_object("tracer")),
-            )
+            stages = self._environment_cleanup_stages()
             for label, operation in stages:
                 if label in self._environment_cleanup_completed:
                     continue
@@ -1825,13 +1943,28 @@ class ProductRunEnvironment:
                     self._environment_cleanup_completed.add(label)
                     self._environment_cleanup_failures.pop(label, None)
 
+    def _environment_cleanup_stages(self):
+        return (
+            ("verification-runtime", lambda: self.verification_runtime.close() if self.verification_runtime is not None else None),
+            ("run-control", self._close_environment_run_controls),
+            ("background-agents", self._close_environment_background_agents),
+            ("repo-intelligence", self._close_repo_intelligence),
+            ("mcp", self._close_environment_mcp),
+            ("sidecar", lambda: self._close_environment_object("_sidecar_verifier_handle")),
+            ("image-provider", lambda: self._close_environment_object("image_describer")),
+            ("provider-runtimes", self._close_environment_provider_runtimes),
+            ("event-bus", self._close_environment_event_bus),
+            ("tracer", lambda: self._close_environment_object("tracer")),
+        )
+
     @property
     def environment_cleanup_failures(self) -> dict[str, str]:
         return dict(getattr(self, "_environment_cleanup_failures", {}))
 
     @property
     def environment_cleanup_complete(self) -> bool:
-        return len(getattr(self, "_environment_cleanup_completed", ())) == 10
+        return all(label in getattr(self, "_environment_cleanup_completed", ())
+                   for label, _operation in self._environment_cleanup_stages())
 
     def _close_environment_run_controls(self) -> None:
         active = getattr(self, "_active_run_control", None)
@@ -1841,16 +1974,6 @@ class ProductRunEnvironment:
         if getattr(self, "_pending_run_control_cleanup", ()):
             raise RuntimeError("run-control cleanup remains pending")
 
-    def _close_environment_stall_sidecar(self) -> None:
-        orchestrator = getattr(self, "stall_orchestrator", None)
-        if orchestrator is None:
-            return
-        cancel = getattr(orchestrator, "cancel_and_settle", None)
-        if callable(cancel):
-            cancel(timeout=0.5)
-            return
-        orchestrator.reset()
-        orchestrator.settle(timeout=0.0)
 
     def _close_environment_background_agents(self) -> None:
         background_agents = getattr(self, "background_agents", None)
@@ -1968,6 +2091,7 @@ class ProductRunEnvironment:
             changed_paths=changed,
             semantic_available=self.repo_intelligence.semantic_available,
             known_paths=known_paths,
+            task_context=assessment_cache_key(self.runtime_state),
         )
         try:
             current_exposure_state().unlock(decision.signal.recommended_tools)
@@ -2003,7 +2127,7 @@ class ProductRunEnvironment:
             block = "\n\n".join(part for part in (block, fallback_block) if part)
         return block
 
-    def _implementation_bundle_block(self, query: str) -> str:
+    def _implementation_bundle_block(self, query: str, *, include_requirements: bool = True) -> str:
         """Build a bounded workset and refresh it when indexed facts change."""
         contract_data = getattr(self.runtime_state, "task_contract", None)
         if not isinstance(contract_data, dict) or not contract_data:
@@ -2012,7 +2136,9 @@ class ProductRunEnvironment:
             changed_paths = tuple(self.change_tracker.current_changed_paths())
             cache_key = (
                 str(query),
+                include_requirements,
                 repr(contract_data),
+                assessment_cache_key(self.runtime_state),
                 int(getattr(self.repo_intelligence.state, "generation", 0) or 0),
                 str(getattr(self.repo_intelligence.state, "status", "")),
                 changed_paths,
@@ -2029,20 +2155,14 @@ class ProductRunEnvironment:
         from nz_coder.intelligence.project_profile import (
             build_project_execution_facts,
         )
-        from nz_coder.runtime.agent.task_contract import TaskContract
+        from nz_coder.runtime.agent.task_contract import parse_task_contract
 
         try:
-            contract = TaskContract.from_dict(contract_data, workspace=self.workdir)
+            contract = parse_task_contract(contract_data, workspace=self.workdir)
         except (TypeError, ValueError) as exc:
             self.tracer.log("implementation_bundle_contract_invalid", error=str(exc))
             return ""
-        if not should_build_implementation_bundle(
-            contract,
-            text_complexity=str(
-                getattr(self.runtime_state, "initial_plan_complexity", "") or ""
-            ),
-            task_mode=str(getattr(self.runtime_state, "task_mode", "") or ""),
-        ):
+        if not should_build_implementation_bundle(contract):
             return ""
         try:
             if self._project_execution_facts_cache is None:
@@ -2053,6 +2173,7 @@ class ProductRunEnvironment:
                 strategy="auto-context",
                 changed_paths=tuple(self.change_tracker.current_changed_paths()),
                 semantic_available=self.repo_intelligence.semantic_available,
+                task_context=assessment_cache_key(self.runtime_state),
             )
             bootstrap_artifacts = resolve_bootstrap_artifacts(
                 query,
@@ -2069,6 +2190,7 @@ class ProductRunEnvironment:
                 workspace=self.workdir,
                 candidate_files=candidate_files,
                 token_budget=2400,
+                include_requirements=include_requirements,
             )
         except (OSError, RuntimeError, ValueError) as exc:
             self.tracer.log(
@@ -2080,7 +2202,9 @@ class ProductRunEnvironment:
         self._implementation_bundle_cache = block
         self._implementation_bundle_cache_key = (
             str(query),
+            include_requirements,
             repr(contract_data),
+            assessment_cache_key(self.runtime_state),
             int(getattr(self.repo_intelligence.state, "generation", 0) or 0),
             str(getattr(self.repo_intelligence.state, "status", "")),
             tuple(self.change_tracker.current_changed_paths()),
@@ -2268,6 +2392,11 @@ class ProductRunEnvironment:
             self.tracer.log("workspace_snapshot_skipped", reason="slow_workspace")
             return None
 
+    def invalidate_working_plan(self) -> None:
+        """历史转换前清理本会话路线；不改合同和执行事实。"""
+        from nz_coder.runtime.agent.planning_runtime import invalidate_working_plan
+        invalidate_working_plan(self.runtime_state, path=self._runtime_state_path)
+
     def revert_message(self, messages: list[dict], message_id: str | None = None):
         """Restore workspace and truncate history at one durable message boundary."""
         return self.session_reverter.revert(messages, message_id=message_id)
@@ -2314,7 +2443,7 @@ class ProductRunEnvironment:
         self.tracer.log(
             "context_compaction_exhausted",
             error=detail,
-            attempts=_MAX_COMPACTION_ATTEMPTS,
+            attempts=_MAX_COMPACTIONS_WITHOUT_RESPONSE,
         )
         return detail
 
@@ -2405,62 +2534,82 @@ class ProductRunEnvironment:
             return {}
         return {"_capabilities": capabilities}
 
+    def _model_gateway_observer_for_run(self):
+        """Capture the owner and processor before a Gateway can outlive its Run."""
+        with self._session_checkpoint_lock:
+            writer = self._session_checkpoint_writer
+            processor = getattr(self, "_active_session_processor", None)
+            messages = getattr(self, "_active_processor_messages", None)
+            provider_id = self.provider_id
+
+        def observe(name: str, payload: dict) -> None:
+            self._observe_model_gateway(writer, processor, messages, provider_id, name, payload)
+
+        return observe
+
     def _model_gateway_observer(self, name: str, payload: dict) -> None:
-        """Project Provider-neutral Gateway lifecycle facts into the run trace."""
+        self._model_gateway_observer_for_run()(name, payload)
+
+    def _observe_model_gateway(self, writer, processor, messages, provider_id, name, payload):
         tracer = getattr(self, "tracer", None)
         if tracer is not None:
-            trace_payload = payload
+            trace_payload = dict(payload)
+            if payload.get("purpose") == "coding" and getattr(self, "_last_compaction_operation_id", None):
+                trace_payload["preceding_compaction_operation_id"] = self._last_compaction_operation_id
             if str(payload.get("purpose") or "") == "auto_mode":
                 trace_payload = {
                     key: value for key, value in payload.items()
                     if key in _AUTO_MODE_TRACE_FIELDS
                 }
             tracer.log(name, **trace_payload)
-        if name == "model_call_finish":
-            state = getattr(self, "runtime_state", None)
-            observe = getattr(state, "observe_provider_call", None)
-            usage = payload.get("usage")
-            if callable(observe) and isinstance(usage, dict):
-                observe(
-                    str(payload.get("purpose") or "unknown"),
-                    usage=usage,
-                    attempts=max(1, int(payload.get("attempts") or 1)),
-                    duration_ms=max(0.0, float(payload.get("duration_ms") or 0.0)),
-                    provider_id=str(payload.get("provider_id") or ""),
-                    model_id=str(payload.get("model_id") or ""),
-                    cost=payload.get("cost"),
-                    cost_source=payload.get("cost_source"),
-                )
-                run_context = getattr(self, "active_run_context", None)
-                if (
-                    str(payload.get("purpose") or "") != "coding"
-                    and run_context is not None
-                    and not bool(getattr(run_context, "finalized", False))
-                ):
-                    from nz_coder.runtime.core.result import TokenUsage
+        with self._session_checkpoint_lock:
+            if self._session_checkpoint_retired or writer is not self._session_checkpoint_writer:
+                return
+            if writer is not None and writer.owner.finalized:
+                return
+            if name == "model_call_finish":
+                state = getattr(self, "runtime_state", None)
+                observe = getattr(state, "observe_provider_call", None)
+                usage = payload.get("usage")
+                if callable(observe) and isinstance(usage, dict):
+                    observe(
+                        str(payload.get("purpose") or "unknown"),
+                        usage=usage,
+                        attempts=max(1, int(payload.get("attempts") or 1)),
+                        duration_ms=max(0.0, float(payload.get("duration_ms") or 0.0)),
+                        provider_id=str(payload.get("provider_id") or ""),
+                        model_id=str(payload.get("model_id") or ""),
+                        cost=payload.get("cost"),
+                        cost_source=payload.get("cost_source"),
+                    )
+                    run_context = writer.owner if writer is not None else None
+                    if (
+                        str(payload.get("purpose") or "") != "coding"
+                        and run_context is not None
+                        and not bool(getattr(run_context, "finalized", False))
+                    ):
+                        from nz_coder.runtime.core.result import TokenUsage
 
-                    run_context.add_usage(TokenUsage(
-                        input_tokens=max(0, int(usage.get("input") or 0)),
-                        output_tokens=max(0, int(usage.get("output") or 0)),
-                        cached_read_tokens=max(0, int(usage.get("cache_read") or 0)),
-                        cached_write_tokens=max(0, int(usage.get("cache_write") or 0)),
-                        reasoning_tokens=max(0, int(usage.get("reasoning") or 0)),
-                    ))
-        if name != "model_call_retry":
-            return
-        processor = getattr(self, "_active_session_processor", None)
-        active_messages = getattr(self, "_active_processor_messages", None)
-        if isinstance(processor, SessionProcessor):
-            attempt = int(payload.get("attempt") or 1)
-            wait_seconds = float(payload.get("wait_seconds") or 0.0)
-            processor.add_retry(
-                attempt,
-                RuntimeError(str(payload.get("error") or "provider retry")),
-                next_at=time.time() + wait_seconds,
-                provider_id=self.provider_id,
-            )
-            if isinstance(active_messages, list):
-                self._checkpoint_messages(active_messages, "running")
+                        run_context.add_usage(TokenUsage(
+                            input_tokens=max(0, int(usage.get("input") or 0)),
+                            output_tokens=max(0, int(usage.get("output") or 0)),
+                            cached_read_tokens=max(0, int(usage.get("cache_read") or 0)),
+                            cached_write_tokens=max(0, int(usage.get("cache_write") or 0)),
+                            reasoning_tokens=max(0, int(usage.get("reasoning") or 0)),
+                        ))
+            if (name != "model_call_retry"
+                    or payload.get("purpose") == ModelCallPurpose.COMPACTION.value
+                    or (writer is not None and writer.retired)):
+                return
+            if isinstance(processor, SessionProcessor):
+                processor.add_retry(
+                    int(payload.get("attempt") or 1),
+                    RuntimeError(str(payload.get("error") or "provider retry")),
+                    next_at=time.time() + float(payload.get("wait_seconds") or 0.0),
+                    provider_id=provider_id,
+                )
+                if isinstance(messages, list):
+                    self._checkpoint_messages(messages, "running", writer=writer)
 
     def _gateway(self, *, max_retries: int | None = None) -> ProductionModelGateway:
         """Build a call-policy owner for the currently active model runtime."""
@@ -2489,7 +2638,7 @@ class ProductRunEnvironment:
         return ProductionModelGateway(
             runtime,
             max_retries=retries,
-            observer=self._model_gateway_observer,
+            observer=self._model_gateway_observer_for_run(),
             backoff_base=getattr(getattr(self, "recovery", None), "backoff_base", 2.0),
         )
 
@@ -2573,6 +2722,7 @@ class ProductRunEnvironment:
         *,
         auto: bool = False,
         overflow: bool = False,
+        model_runtime: ResolvedModelRuntime | None = None,
     ) -> list:
         """Compact through the Agent-bound provider/model capability snapshot."""
         cancel_event = threading.Event()
@@ -2583,19 +2733,37 @@ class ProductRunEnvironment:
             compact_kwargs = {
                 "provider": provider,
                 "capabilities": getattr(self, "model_capabilities", None),
+                "model_runtime": getattr(self, "model_runtime", None),
+            }
+        if model_runtime is not None:
+            compact_kwargs = {
+                "provider": model_runtime.provider,
+                "capabilities": model_runtime.capabilities,
+                "model_runtime": model_runtime,
             }
         if focus is not None:
             compact_kwargs["focus"] = focus
+        from nz_coder.runtime.conversation.continuation_context import build_current_facts, has_authoritative_task
+        state = getattr(self, "runtime_state", None)
+        if has_authoritative_task(messages, state):
+            compact_kwargs["current_facts"] = build_current_facts(
+                state, workspace=current_workdir(), run_evidence=getattr(self, "run_evidence", None),
+            )
         try:
             compacted = auto_compact(
                 messages,
-                self.client,
-                self._active_model_id(),
-                observer=self._model_gateway_observer,
+                model_runtime.client if model_runtime is not None else self.client,
+                model_runtime.request_model_id if model_runtime is not None else self._active_model_id(),
+                # 独立摘要只写观测，不向上一轮冻结的 RunContext 追记 usage。
+                observer=((lambda name, payload: self.tracer.log(name, **payload)) if model_runtime is not None
+                          else self._model_gateway_observer_for_run()),
                 cancel_event=cancel_event,
-                budget=self._prompt_budget(),
+                budget=(prompt_budget(model_runtime.capabilities.context_tokens,
+                                      model_runtime.capabilities.output_tokens)
+                        if model_runtime is not None else self._prompt_budget()),
                 auto=auto,
                 overflow=overflow,
+                project_history=_freeze_history_projection(self, messages),
                 **compact_kwargs,
             )
         finally:
@@ -2624,6 +2792,8 @@ class ProductRunEnvironment:
         if not isinstance(marker, dict):
             return
         marker.update({"auto": True, "overflow": True, "resume": True})
+        self._last_compaction_operation_id = marker.get("operation_id")
+        self._compaction_read_baseline = frozenset(getattr(getattr(self, "runtime_state", None), "read_files", []))
         ensure_message_identities(
             messages,
             getattr(self, "session_id", "session-compaction"),
@@ -2638,14 +2808,10 @@ class ProductRunEnvironment:
             clear_read_cache()
         recovery = getattr(self, "recovery", None)
         if recovery is not None:
-            recovery.reset_tool_call_history(reason="context_compacted")
+            run = getattr(self, "active_run_context", None)
+            with run._state_lock if run is not None else nullcontext():
+                recovery.reset_tool_call_history(reason="context_compacted", context_changed=True)
             self._trace_tool_streak_reset()
-        stall_orchestrator = getattr(self, "stall_orchestrator", None)
-        if stall_orchestrator is not None:
-            stall_orchestrator.reset()
-        tracer = getattr(self, "tracer", None)
-        if tracer is not None:
-            tracer.log("stall_history_reset", reason="context_compacted")
 
     def _projected_request_tokens(self, messages: list) -> int:
         """Estimate next request before dynamic context is assembled."""
@@ -2667,10 +2833,21 @@ class ProductRunEnvironment:
         active_system_prompt = self.system_prompt
         if plan_block:
             active_system_prompt += "\n\n" + plan_block
-        system_tokens = max(
-            _estimate_text_tokens(active_system_prompt),
-            current_run_settings().system_context_budget_tokens,
+        from nz_coder.runtime.conversation.continuation_context import build_current_facts, has_authoritative_task
+
+        state = self.runtime_state
+        facts = (build_current_facts(state, workspace=current_workdir(),
+                                    run_evidence=getattr(self, "run_evidence", None))
+                 if has_authoritative_task(messages, state) else "")
+        # 纯估算不能消费 freeze 的钩子；完整摘要不再受展示软目标约束。
+        scratch = ("" if getattr(self, "runtime_profile", "") in {"read_child", "write_child"}
+                   else self._sp.build_prompt_block())
+        assessment = render_task_assessment(state)
+        protected_tokens = sum(
+            _estimate_text_tokens(text)
+            for text in (active_system_prompt, facts, scratch, assessment)
         )
+        system_tokens = max(protected_tokens, current_run_settings().system_context_budget_tokens)
         return history_and_tools + system_tokens + instruction_tokens + 256
 
     def _projected_replay_tokens(self, messages: list) -> int:
@@ -2811,6 +2988,12 @@ class ProductRunEnvironment:
         prompt_builder = getattr(self, "prompt_builder", None) or ProductionPromptBuilder()
         return prompt_builder.build(self, messages)
 
+    def _freeze_api_request(self, messages: list):
+        """Capture dynamic layers once for an outbound request and its recovery."""
+        snapshot = self.prompt_builder.freeze(self, messages)
+        # 候选只执行纯投影，不推进旧包装层中的跟踪状态，也不重新选 provider。
+        return replace(snapshot, project_history=_freeze_history_projection(self, messages))
+
     async def _prepare_user_image_descriptions(
         self,
         messages: list,
@@ -2888,40 +3071,23 @@ class ProductRunEnvironment:
         )
 
 
-    async def _maybe_generate_plan(self, messages: list) -> None:
-        """复杂任务执行前生成结构化 plan；失败不阻断主流程。"""
+    def _bootstrap_task_contract(self, messages: list) -> None:
+        """在首个请求前建立用户合同，与可选专门规划分离。"""
         task_text = self.runtime_state.initial_task_text or _extract_last_user_text(messages)
-        exact_contract = str(
-            self.runtime_state.verification_contract.get("command") or ""
-        )
-        from nz_coder.runtime.agent.task_contract import (
-            PlanningEnvelope,
-            TaskContract,
-            derive_task_contract,
-            fallback_plan_text,
-            parse_planner_output,
-        )
-
-        bootstrap = TaskContract()
+        from nz_coder.runtime.verification.verification_contract import extract_verification_contracts
+        declared_commands = tuple(item.command for item in extract_verification_contracts(task_text))
+        from nz_coder.runtime.agent.task_contract import derive_task_contract
         contract_data = getattr(self.runtime_state, "task_contract", None)
-        if isinstance(contract_data, dict) and contract_data:
-            try:
-                bootstrap = TaskContract.from_dict(
-                    contract_data,
-                    workspace=self.workdir,
-                )
-            except (TypeError, ValueError):
-                bootstrap = TaskContract()
-        if not bootstrap.requirements:
+        if not contract_data:
             bootstrap = derive_task_contract(
                 task_text,
-                acceptance_command=exact_contract,
+                acceptance_commands=declared_commands,
                 workspace=self.workdir,
                 explicit_path_allowlist=tuple(
                     self.runtime_state.requested_paths
                 ),
             )
-            if bootstrap.requirements:
+            if bootstrap.objective or bootstrap.requirements or bootstrap.constraints or bootstrap.acceptance_commands:
                 self.runtime_state.set_task_contract(bootstrap)
                 self._persist_runtime_state(active=True)
                 self.tracer.log(
@@ -2934,107 +3100,107 @@ class ProductRunEnvironment:
                         for path in item.expected_artifacts
                     }),
                 )
+
+    async def _maybe_generate_plan(self, messages: list) -> None:
+        """按显式开关进行专门规划；失败保留合同并回到主流程。"""
         settings = current_run_settings()
         if strict_local_tools() or not settings.planning_enabled:
             return
         if self._restored_state or self.runtime_state.plan_generated:
             return
 
-        from nz_coder.runtime.agent.task_policy import estimate_text_complexity
-
-        task_mode = self.runtime_state.task_mode
-        text_complexity = estimate_text_complexity(task_text)
-        should_plan = (
-            task_mode in config.PLANNING_TASK_MODES
-            or text_complexity in {"moderate", "complex"}
+        task_text = self.runtime_state.initial_task_text or _extract_last_user_text(messages)
+        from nz_coder.runtime.agent.task_contract import fallback_plan_text, parse_task_contract
+        from nz_coder.runtime.agent.planning_runtime import (
+            parse_working_plan, capture_working_plan_scope, install_initial_working_plan,
         )
-        if not should_plan:
+        from nz_coder.runtime.verification.domain.requirements import TaskContract
+
+        context = self.runtime_state._verification_context
+        scope = capture_working_plan_scope(self.runtime_state, context, "", context.transcript if context else [])
+        if scope is None:
             return
 
-        self.tracer.log("planning_start", task_mode=task_mode, text_complexity=text_complexity)
+        bootstrap = TaskContract()
+        contract_data = self.runtime_state.task_contract
+        if contract_data:
+            try:
+                bootstrap = parse_task_contract(contract_data, workspace=self.workdir)
+            except (TypeError, ValueError):
+                bootstrap = TaskContract()
+        self.tracer.log("planning_start")
+        fallback = fallback_plan_text(bootstrap)
+        selected_plan = fallback
+        failure_reason = ""
+        for attempt in range(2):
+            if attempt:
+                if bootstrap.requirements:
+                    break
+                # 只有一次格式恢复，不与运行中策略选择维护第二套额度。
+                self.tracer.log("planning_recovery", reason=failure_reason, attempt=attempt)
+            self._planning_finish_reason = ""
+            retry_hint = (
+                "\n\nPrevious planning output was unusable (" + failure_reason + "). "
+                "Return a shorter complete JSON object containing plan stages only; "
+                "use at most 3 concise steps and no explanation outside JSON."
+                if attempt else ""
+            )
+            try:
+                plan_text = await self._call_planning_llm_async(task_text + retry_hint)
+            except Exception as exc:
+                self.tracer.log(
+                    "planning_failed", error=str(exc), error_type=type(exc).__name__,
+                    client_error=_is_client_error(exc),
+                )
+                break
+            if self._planning_finish_reason in {"length", "max_tokens"}:
+                failure_reason = "truncated"
+            elif not plan_text or not plan_text.strip():
+                failure_reason = "empty"
+                self.tracer.log("planning_empty")
+            else:
+                try:
+                    selected_plan = parse_working_plan(plan_text)
+                except (TypeError, ValueError) as exc:
+                    failure_reason = "invalid_plan"
+                    self.tracer.log("planning_output_parse_failed", error=str(exc), output_len=len(plan_text))
+                else:
+                    break
+            self.tracer.log("planning_output_invalid", reason=failure_reason, output_len=len(plan_text))
+        plan_text = selected_plan
+        if not plan_text:
+            return
+
         try:
-            plan_text = await self._call_planning_llm_async(task_text)
-        except Exception as exc:
-            self.tracer.log(
-                "planning_failed",
-                error=str(exc),
-                error_type=type(exc).__name__,
-                client_error=_is_client_error(exc),
-            )
+            install_initial_working_plan(self.runtime_state, scope, plan_text, run_context=context,
+                path=self._runtime_state_path if settings.runtime_state_persist else None,
+                superseded=self._has_queued_followup)
+        except (OSError, ValueError) as exc:
+            self.tracer.log("planning_commit_rejected", error=str(exc))
             return
-        if not plan_text or not plan_text.strip():
-            self.tracer.log("planning_empty")
-            return
-
-        try:
-            envelope = parse_planner_output(plan_text, self.workdir)
-        except (TypeError, ValueError) as exc:
-            self.tracer.log(
-                "planning_contract_invalid",
-                error=str(exc),
-                output_len=len(plan_text),
-            )
-            envelope = PlanningEnvelope(
-                plan_text=fallback_plan_text(bootstrap) or plan_text,
-                contract=bootstrap,
-            )
-        if not envelope.contract.requirements and bootstrap.requirements:
-            envelope = PlanningEnvelope(
-                plan_text=envelope.plan_text or fallback_plan_text(bootstrap),
-                contract=bootstrap,
-            )
-        plan_text = envelope.plan_text
-
-        self._sp.replace_category("plan", plan_text)
-        self.runtime_state.plan_generated = True
-        self.runtime_state.plan_text = plan_text
-        self.runtime_state.set_task_contract(envelope.contract)
-        self.runtime_state.initial_plan_complexity = text_complexity
-        self._persist_runtime_state(active=True)
         self.tracer.log("planning_done", plan_len=len(plan_text))
 
     async def _call_planning_llm_async(self, task_text: str) -> str:
         """Async wrapper for planner model calls."""
-        return await _to_thread_settled(self._call_planning_llm, task_text)
+        return await _to_thread_settled(self._call_planning_llm, task_text, cancel_callback=request_current_run_cancel)
 
 
     def _call_planning_llm(self, task_text: str) -> str:
         """调用 LLM 生成 plan；不传 tools，保持纯推理。"""
-        criteria = "; ".join(self.runtime_state.acceptance_criteria[:5]) or "(none extracted)"
-        task_mode = self.runtime_state.task_mode
-        exact_contract = str(
-            self.runtime_state.verification_contract.get("command") or ""
-        )
+        from nz_coder.runtime.agent.planning_runtime import planning_task_context
+
+        task = planning_task_context(self.runtime_state)
+        task["original_task"] = task_text
         prompt = (
-            "You are a coding agent planner. Given the user's task, produce one compact JSON plan and task contract.\n\n"
-            f"Task: {task_text}\n"
-            f"Task mode: {task_mode}\n"
-            f"Acceptance criteria: {criteria}\n\n"
-            f"Exact user verification command: {exact_contract or '(none)'}\n\n"
-            "Return JSON only with this schema:\n"
-            "{\n"
-            '  "objective": "one sentence",\n'
-            '  "plan": [{"title": "...", "target": "path or need to search", "verification": "..."}],\n'
-            '  "requirements": [{"id": "R1", "description": "...", "kind": "behavior|artifact|test|docs|compatibility|verification", "expected_artifacts": ["workspace/relative/path"], "satisfaction_mode": "deterministic|semantic|mixed", "depends_on": [], "required_evidence": ["semantic_review"]}],\n'
-            '  "constraints": ["..."],\n'
-            '  "acceptance_commands": ["exact command only when supplied above"],\n'
-            '  "contract_version": 2\n'
-            "}\n\n"
-            "Rules:\n"
-            "- Maximum 5 steps. Prefer fewer.\n"
-            "- Requirements must cover each requested behavior, test area, documentation update, compatibility promise, and explicit verification.\n"
-            "- Use unique IDs R1, R2, ... and workspace-relative expected_artifacts; never emit absolute paths or '..'.\n"
-            "- A behavior requirement may name its likely source artifact; a test requirement must name its requested test artifact when known.\n"
-            "- Compatibility requirements must include required_evidence=[\"semantic_review\"]; other kinds normally use an empty list.\n"
-            "- Each step should be independently verifiable.\n"
-            "- For bugfix: locate -> understand -> fix -> verify. Usually 3 steps.\n"
-            "- For feature: design -> implement -> test -> verify. Usually 4 steps.\n"
-            "- For refactor: identify scope -> rename/restructure -> verify no breakage. Usually 3 steps.\n"
-            "- For project_creation: requirements -> blueprint -> scaffold -> fill missing logic -> verify. Usually 5 steps.\n"
-            "- Do NOT include 'read the task' or 'understand requirements' as a step.\n"
-            "- Be specific about file paths when possible; say 'need to search' when not.\n"
-            "- Last step should always be verification.\n"
-            "- Keep total output under 2400 characters.\n"
+            "You are a coding agent planner. Produce a compact stage route.\n\n"
+            f"Current user task and contract definition:\n{json.dumps(task, ensure_ascii=False)}\n"
+            f"{render_task_assessment(self.runtime_state)}\n"
+            'Return JSON only: {"plan":[{"title":"stage goal", "target":"location or need to search", '
+            '"verification":"how to check this stage"}]}.\n'
+            "Prefer at most 5 concise stages and preserve the user's full semantic requirements.\n"
+            "Use the current constraints and all declared commands. Do not generate a second contract, "
+            "requirement ledger, findings list or accepted next action. Stage checks are suggestions, "
+            "not new user acceptance requirements. Precise actions remain with the main coding agent."
         )
         outcome = self._gateway().complete_sync(ModelCall(
             purpose=ModelCallPurpose.PLANNING,
@@ -3049,126 +3215,14 @@ class ProductRunEnvironment:
         ))
         if outcome.status is not ModelCallStatus.COMPLETED:
             raise RuntimeError(outcome.error or outcome.status.value)
-        return outcome.content.strip()
-
-    def _should_replan(self) -> bool:
-        """检查是否需要动态重规划。"""
-        settings = current_run_settings()
-        if strict_local_tools() or not settings.planning_enabled:
-            return False
-        if not self.runtime_state.plan_generated:
-            return False
-        if self._replan_count >= settings.replan_max_attempts:
-            return False
-        if self.runtime_state.task_mode == "discuss":
-            return False
-
-        rs = self.runtime_state
-        no_edit_turns = (rs.turn_count - rs.last_edit_turn) if rs.last_edit_turn else rs.turn_count
-        if no_edit_turns >= settings.replan_idle_turns and rs.turn_count >= settings.replan_idle_turns:
-            return True
-        if rs.has_diff and not rs.changed_files_verified and rs.verification_attempts >= 2:
-            return True
-        if rs.initial_plan_complexity:
-            current = rs.task_complexity()
-            initial = rs.initial_plan_complexity
-            escalated = (
-                (initial == "simple" and current in {"L2", "L3"})
-                or (initial == "moderate" and current == "L3")
-            )
-            if escalated:
-                return True
-        risk = rs.patch_risk if isinstance(rs.patch_risk, dict) else {}
-        risk_fingerprint = str(risk.get("fingerprint") or "")
-        if (
-            risk.get("requires_replan")
-            and risk_fingerprint
-            and risk_fingerprint != rs.risk_replan_fingerprint
-        ):
-            return True
-        return False
-
-    async def _maybe_replan(self) -> None:
-        """检查并执行动态重规划；失败不阻断主流程。"""
-        if not self._should_replan():
-            return
-        self._escalate_agent_reasoning("replan")
-        self.tracer.log("replan_start", attempt=self._replan_count + 1)
-        try:
-            new_plan = await self._call_replan_llm_async()
-        except Exception as exc:
-            self.tracer.log(
-                "replan_failed",
-                error=str(exc),
-                error_type=type(exc).__name__,
-                client_error=_is_client_error(exc),
-            )
-            return
-        if not new_plan or not new_plan.strip():
-            self.tracer.log("replan_empty")
-            return
-
-        self._sp.replace_category("plan", new_plan)
-        self.runtime_state.plan_text = new_plan
-        self._replan_count += 1
-        self.runtime_state.replan_count = self._replan_count
-        risk = self.runtime_state.patch_risk
-        if isinstance(risk, dict) and risk.get("requires_replan"):
-            self.runtime_state.risk_replan_fingerprint = str(risk.get("fingerprint") or "")
-        self._persist_runtime_state(active=True)
-        self.tracer.log("replan_done", attempt=self._replan_count, plan_len=len(new_plan))
-
-    async def _call_replan_llm_async(self) -> str:
-        """Async wrapper for re-planner model calls."""
-        return await _to_thread_settled(self._call_replan_llm)
+        self._planning_finish_reason = outcome.finish_reason
+        return outcome.content
 
 
-    def _call_replan_llm(self) -> str:
-        """调用 LLM 重新规划；不传 tools。"""
-        rs = self.runtime_state
-        failure_notes = "\n".join(
-            e["content"] for e in self._sp.entries if e.get("category") == "failure"
-        ) or "(none)"
-        turns_remaining = max(0, rs.max_turns - rs.turn_count)
-        risk_block = "(none)"
-        if isinstance(rs.patch_risk, dict) and rs.patch_risk:
-            from nz_coder.intelligence.impact_analyzer import format_impact_report
-            risk_block = format_impact_report(rs.patch_risk)
-        prompt = (
-            "You are a coding agent re-planner. The original plan hit obstacles. Revise it.\n\n"
-            f"Original plan:\n{rs.plan_text}\n\n"
-            "Execution progress:\n"
-            f"- Turn {rs.turn_count}/{rs.max_turns}, {turns_remaining} remaining\n"
-            f"- Files changed: {rs.changed_files or '(none)'}\n"
-            f"- Edits made: {rs.edits_this_run}\n"
-            f"- Verification: verified={rs.changed_files_verified}, attempts={rs.verification_attempts}\n"
-            f"- Last transition: {rs.transition}\n"
-            f"- Current complexity: {rs.task_complexity()}\n\n"
-            f"Failures encountered:\n{failure_notes}\n\n"
-            f"Current patch risk summary:\n{risk_block}\n\n"
-            f"Task: {rs.initial_task_text}\n"
-            f"Acceptance criteria: {'; '.join(rs.acceptance_criteria[:5]) or '(none)'}\n\n"
-            "Output a revised plan in the same format (## Plan, numbered steps). Rules:\n"
-            "- Mark completed steps with [DONE].\n"
-            "- Revise or replace steps that failed.\n"
-            "- If the approach is fundamentally wrong, propose a different approach.\n"
-            "- Maximum 5 steps. Be realistic about remaining turn budget.\n"
-            "- Do NOT repeat failed approaches listed above.\n"
-            "- Subtract accidental public API deletions and out-of-scope changes; keep them only when the user task explicitly requires them.\n"
-            "- Keep total output under 1200 characters.\n"
-        )
-        outcome = self._gateway().complete_sync(ModelCall(
-            purpose=ModelCallPurpose.REPLANNING,
-            messages=[
-                {"role": "system", "content": "You are a concise coding task re-planner."},
-                {"role": "user", "content": prompt},
-            ],
-            max_output_tokens=current_run_settings().planning_max_tokens,
-            timeout_seconds=current_run_settings().provider_hard_timeout,
-        ))
-        if outcome.status is not ModelCallStatus.COMPLETED:
-            raise RuntimeError(outcome.error or outcome.status.value)
-        return outcome.content.strip()
+
+
+
+
 
     def _inject_api_diagnostic(self, messages: list, diagnostic: str) -> None:
         """Inject structural recovery guidance without persisting Provider text."""
@@ -3414,13 +3468,11 @@ class ProductRunEnvironment:
             return False
         if status not in {"completed", "completed_unverified"}:
             return False
-        if self.runtime_state.task_mode == "discuss":
-            return False
         return True
 
     def _reflection_progress_signature(self) -> str:
         payload = {
-            "task_mode": self.runtime_state.task_mode,
+            "task_assessment": current_task_assessment(self.runtime_state),
             "acceptance_criteria": list(self.runtime_state.acceptance_criteria),
             "requested_paths": list(self.runtime_state.requested_paths),
             "runtime": self._runtime_summary(),
@@ -3436,12 +3488,11 @@ class ProductRunEnvironment:
         return review_run_evidence(
             evidence=evidence,
             runtime=runtime,
-            task_mode=self.runtime_state.task_mode,
         )
 
     def _runtime_evidence_review(self) -> dict:
         """Read settled facts from this Agent; review never mutates its ledger."""
-        from nz_coder.runtime.verification.completion_gate import CompletionGate
+        from nz_coder.runtime.verification.completion_gate import completion_feedback
 
         state = self.runtime_state
         if self.txn.active:
@@ -3452,23 +3503,25 @@ class ProductRunEnvironment:
                 "summary": "The current write batch has not settled. Review after its results are recorded.",
             }
         review = self._deterministic_reflection_review()
-        ledger = state.requirement_ledger_snapshot()
-        decision = CompletionGate().evaluate(ledger, mutation_generation=state.mutation_generation)
-        unresolved = ledger.unresolved()
+        snapshot = state.verification_domain.snapshot()
+        assessment = snapshot.assess_completion("completed")
+        guidance = completion_feedback(snapshot, assessment)
         review.update(
             evidence_source="runtime",
             run_id=self.run_evidence.run_id,
             mutation_generation=state.mutation_generation,
             verification_generation=state.verification_generation,
-            unresolved_requirements=[item.requirement.id for item in unresolved],
-            completion_guidance=decision.message,
-            completion_authority="advisory only; existing completion and semantic review still apply",
+            unresolved_requirements=[item.requirement.id for item in snapshot.requirements
+                                     if item.status != "satisfied"],
+            completion_guidance=guidance,
+            completion_authority="advisory only; the verification domain owns completion",
         )
-        if not decision.ready:
-            pending_review = ledger.semantic_review_pending_only()
+        if assessment.status != "completed":
+            pending_review = assessment.review_required and not assessment.blocking_ids
+            message = guidance or "; ".join(assessment.reasons)
             review["review_status"] = "pending_runtime_review" if pending_review else "needs_fix"
-            review["summary"] = decision.message
-            review["required_next_steps"] = [decision.message]
+            review["summary"] = message
+            review["required_next_steps"] = [message]
             review["final_answer_guidance"] = [
                 "Report actual results so Runtime can perform semantic review."
                 if pending_review else "Resolve the listed task requirements before claiming completion."
@@ -3758,9 +3811,10 @@ class ProductRunEnvironment:
         )
     def _strict_verification_completed(self, dispatched: list) -> bool:
         """Consume settled generation evidence as a strict terminal signal."""
-        verification = self.vm.status()
+        verification = self.verification_runtime.status()
         if (
             not strict_local_tools()
+            or self.txn.active
             or not self.runtime_state.strict_generation_terminal_ready()
             or verification.get("verification_needed")
             or verification.get("verification_state") not in {"passed", "degraded"}
@@ -3796,19 +3850,97 @@ class ProductRunEnvironment:
             return None
         return SessionProcessor(message, publish=self._emit_session_event)
 
-    def _checkpoint_messages(self, messages: list, run_status: str) -> None:
-        """Best-effort durable checkpoint at Agent step boundaries."""
-        if not current_run_settings().runtime_state_persist:
-            return
+    @property
+    def has_pending_settlement(self) -> bool:
+        with self._session_checkpoint_lock:
+            writer = self._session_checkpoint_writer
+            return (writer is not None and writer.settle is not None
+                    and writer.owner.terminal_status is not None and not writer.owner.finalized)
+
+    async def retry_settlement(self):
+        from nz_coder.runtime.core.result import SessionSettlementResult
+        from nz_coder.runtime.session.store import SessionCommitConflict
+        from nz_coder.protocol.public_error import PublicError, to_public_error
+        from nz_coder.state.sessions import SessionReadError
+        with self._session_checkpoint_lock:
+            writer = self._session_checkpoint_writer
+            operation = writer.settle if self.has_pending_settlement else None
+        if operation is None:
+            return SessionSettlementResult(self.session_id, None, "idle")
+        interaction = writer.owner.interaction_run_id
         try:
-            from nz_coder.runtime.session.session_repository import FileSessionRepository
-            FileSessionRepository().checkpoint(self, messages, run_status)
-        except Exception as exc:
-            self.tracer.log(
-                "session_checkpoint_failed",
-                error_type=type(exc).__name__,
-                error=str(exc)[:500],
-            )
+            await operation()
+        except SessionCommitConflict as error:
+            return SessionSettlementResult(self.session_id, interaction, "conflict", to_public_error(error))
+        except Exception as error:
+            if isinstance(error, OSError) or isinstance(error, SessionReadError) and error.kind == "unreadable":
+                public = PublicError("session_commit_pending", "The original result is waiting for Session storage.", True)
+            else:
+                public = to_public_error(error)
+            return SessionSettlementResult(self.session_id, interaction, "pending", public)
+        return SessionSettlementResult(self.session_id, interaction, "committed")
+
+    def _begin_session_checkpoints(self, run_context):
+        with self._session_checkpoint_lock:
+            if self._session_checkpoint_retired:
+                raise RuntimeError("Cannot start a Run on a closed environment")
+            previous = self._session_checkpoint_writer
+            if previous is not None and not previous.retired:
+                raise RuntimeError("Previous Run session checkpoints are still active")
+            writer = _RunSessionWriter(run_context)
+            previous_processor = getattr(self, "_active_session_processor", None)
+            previous_messages = getattr(self, "_active_processor_messages", None)
+            # factory 只能看到新 owner 与空 processor，不能认领前驱消息。
+            self._active_session_processor = None
+            self._active_processor_messages = None
+            self._session_checkpoint_writer = writer
+            try:
+                # 只绑定本轮独占的默认 describer，不修改用户注入的共享对象。
+                bundle = getattr(self, "_active_run_control", None)
+                if bundle is not None and bundle.owns_image_describer:
+                    self.image_describer.observer = self._model_gateway_observer_for_run()
+            except BaseException:
+                writer.retired = True
+                self._session_checkpoint_writer = previous
+                self._active_session_processor = previous_processor
+                self._active_processor_messages = previous_messages
+                raise
+            return writer
+
+    def _retire_session_checkpoints(self, writer) -> None:
+        with self._session_checkpoint_lock:
+            # 保留当前身份供同轮 terminal learning 记账；后继 begin 才替换。
+            writer.retired = True
+
+    def _session_writer_active(self, writer) -> bool:
+        return (not self._session_checkpoint_retired
+                and writer is self._session_checkpoint_writer
+                and (writer is None or not writer.retired))
+
+    def _checkpoint_messages(self, messages: list, run_status: str, *, writer=None) -> None:
+        """Best-effort durable checkpoint at Agent step boundaries."""
+        with self._session_checkpoint_lock:
+            if writer is None:
+                writer = self._session_checkpoint_writer
+            if not self._session_writer_active(writer):
+                return
+            if isinstance(self.runtime_services.session_runtime.store, EphemeralSessionStore):
+                return
+            context = writer.owner if writer is not None else getattr(self, "active_run_context", None)
+            if context is not None and not context.request.metadata.get("persist_session", True):
+                return
+            if not current_run_settings().runtime_state_persist:
+                return
+            try:
+                from nz_coder.runtime.session.session_repository import FileSessionRepository
+                # 检查和整个写入共用退休锁，close 返回后旧回调不能再覆盖终态。
+                FileSessionRepository().checkpoint(self, messages, run_status)
+            except Exception as exc:
+                self.tracer.log(
+                    "session_checkpoint_failed",
+                    error_type=type(exc).__name__,
+                    error=str(exc)[:500],
+                )
 
     def _tool_metadata_callback(
         self,
@@ -3816,6 +3948,8 @@ class ProductRunEnvironment:
         messages: list,
     ):
         """Bridge execution-local tool progress into durable Session parts."""
+        writer = self._session_checkpoint_writer
+
         def report(title: str, metadata: dict) -> None:
             if processor is None:
                 return
@@ -3828,14 +3962,16 @@ class ProductRunEnvironment:
             if lock is None:
                 lock = threading.RLock()
                 self._tool_metadata_lock = lock
-            with lock:
+            with self._session_checkpoint_lock, lock:
+                if not self._session_writer_active(writer):
+                    return
                 updated = processor.update_tool_metadata(
                     call_id,
                     title=title,
                     metadata=metadata,
                 )
                 if updated is not None:
-                    self._checkpoint_messages(messages, "running")
+                    self._checkpoint_messages(messages, "running", writer=writer)
 
         return report
 
@@ -3845,6 +3981,8 @@ class ProductRunEnvironment:
         messages: list,
     ):
         """Bridge the question tool and UI service into durable display parts."""
+        writer = self._session_checkpoint_writer
+
         def report(action: str, payload: dict) -> None:
             if processor is None:
                 return
@@ -3855,7 +3993,9 @@ class ProductRunEnvironment:
             if lock is None:
                 lock = threading.RLock()
                 self._tool_metadata_lock = lock
-            with lock:
+            with self._session_checkpoint_lock, lock:
+                if not self._session_writer_active(writer):
+                    return
                 updated = None
                 if action == "pending":
                     updated = processor.start_question(
@@ -3876,7 +4016,7 @@ class ProductRunEnvironment:
                         str(payload.get("error") or "Question failed"),
                     )
                 if updated is not None:
-                    self._checkpoint_messages(messages, "running")
+                    self._checkpoint_messages(messages, "running", writer=writer)
 
         return report
 
@@ -4005,129 +4145,47 @@ class ProductRunEnvironment:
         return await runtime.policy.resolve_doom_loop_permissions_async(
             policy_context_from_legacy_host(self), blocked, tool_calls,
         )
-    def _trace_stall_sidecar_event(self, event: dict) -> None:
-        """Bridge an async L2 verdict into the run trace without throwing."""
-        tracer = getattr(self, "tracer", None)
-        if tracer is None:
-            return
-        if event.get("is_stuck") is False and event.get("trace") == "sidecar_ok":
-            recovery = getattr(self, "recovery", None)
-            reset = getattr(recovery, "reset_tool_call_history", None)
-            still_current = getattr(recovery, "stall_scope_current", None)
-            scope_valid = callable(still_current) and still_current(event.get("scope"))
-            if callable(reset) and scope_valid:
-                reset(reason="stall_not_stuck")
-                tracer.log("stall_sidecar_not_stuck", trace=event.get("trace"))
-            elif callable(tracer.log):
-                tracer.log("stall_sidecar_verdict_stale", scope_valid=scope_valid)
-        tracer.log("stall_sidecar_verdict", **dict(event))
 
-    def _provider_stall_sidecar(
-        self,
-        signal: str,
-        cancel_event: threading.Event | None = None,
-    ) -> dict:
-        """Run InfCodeX's forced structured L2 judgement on the active provider."""
-        from nz_coder.runtime.verification.llm_judge import JudgeRequest, JudgeResponse
-
-        gateway = self._gateway(max_retries=1)
-
-        def invoke(request: JudgeRequest) -> JudgeResponse:
-            capability_options: dict = {"stream": False}
-            capabilities = getattr(self, "model_capabilities", None)
-            family = str(getattr(capabilities, "family", "") or "").casefold()
-            model_id = self._active_model_id().casefold()
-            if family == "deepseek" and "deepseek-v4" in model_id:
-                capability_options["extra_body"] = {
-                    "thinking": {"type": "disabled"},
-                }
-            outcome = gateway.complete_sync(
-                ModelCall(
-                    purpose=ModelCallPurpose.STALL_SIDECAR,
-                    messages=[
-                        {"role": "system", "content": request.system_prompt},
-                        {"role": "user", "content": request.user_message},
-                    ],
-                    tools=[request.report_tool],
-                    tool_choice={
-                        "type": "function",
-                        "function": {"name": request.report_tool_name},
-                    },
-                    max_output_tokens=request.max_output_tokens,
-                    timeout_seconds=STALL_SIDECAR_TIMEOUT_SECONDS,
-                    capability_options=capability_options,
-                ),
-                cancel_event=cancel_event,
-            )
-            if outcome.status is not ModelCallStatus.COMPLETED:
-                raise RuntimeError(outcome.error or outcome.status.value)
-            tool_blocks = []
-            for call in outcome.tool_calls:
-                function = call.get("function", {})
-                arguments = function.get("arguments", {})
-                if isinstance(arguments, str):
-                    try:
-                        arguments = json.loads(arguments)
-                    except json.JSONDecodeError:
-                        arguments = {}
-                tool_blocks.append({
-                    "name": str(function.get("name") or ""),
-                    "input": arguments if isinstance(arguments, dict) else {},
-                })
-            content = outcome.content.strip()
-            if not tool_blocks and content:
-                candidate = content
-                if candidate.startswith("```"):
-                    candidate = candidate.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-                try:
-                    payload = json.loads(candidate)
-                except json.JSONDecodeError:
-                    payload = None
-                if isinstance(payload, dict):
-                    tool_blocks.append({
-                        "name": request.report_tool_name,
-                        "input": payload,
-                    })
-            return JudgeResponse(tool_blocks=tuple(tool_blocks), text=content)
-
-        return invoke_stall_sidecar(
-            user_message=signal,
-            invoke=invoke,
-            timeout_seconds=STALL_SIDECAR_TIMEOUT_SECONDS,
-            cancel_event=cancel_event,
-        )
 
 
     def _execute_tool_call_with_hooks(self, tool_call: dict, index: int, messages: list):
-        """Run pre-tool hooks before permission checks and dispatch."""
-        started = time.perf_counter()
+        """执行前登记归属，范围采集在锁外，结果只交给本次运行的验证域。"""
+        from nz_coder.runtime.adapters.verification_runtime import scoped_tool_verification
+        started_at = time.perf_counter()
+        start = self.verification_runtime.begin_tool(tool_call)
         fn_name = tool_call["function"]["name"]
         tool_input = self._best_effort_tool_input(tool_call["function"].get("arguments", {}))
         call_is_write = is_transactional_write_tool(fn_name)
-        decision = self.hooks.before_tool_use(
-            self,
-            messages,
-            fn_name,
-            tool_input,
-            file_path=self._infer_hook_file_path(tool_input),
-            is_write=call_is_write,
-        )
-        if decision is not None and decision.rejected:
-            reason = decision.message or f"Blocked by hook {decision.hook_id}"
-            result = ToolExecutionResult(
-                name=fn_name,
-                tool_input=tool_input,
-                output=f"Denied: {reason}",
-                executed=False,
-                dispatch_failed=True,
-                command_failed=False,
-                is_write=call_is_write,
-                permission_denied=True,
-            )
-        else:
-            result = self.executor.execute_one(tool_call, index)
-        result.duration_ms = round((time.perf_counter() - started) * 1000, 3)
-        return result
+        try:
+            with scoped_tool_verification(start):
+                decision = self.hooks.before_tool_use(self, messages, fn_name, tool_input,
+                    file_path=self._infer_hook_file_path(tool_input), is_write=call_is_write)
+                if decision is not None and decision.rejected:
+                    reason = decision.message or f"Blocked by hook {decision.hook_id}"
+                    result = ToolExecutionResult(name=fn_name, tool_input=tool_input,
+                        output=f"Denied: {reason}", executed=False, dispatch_failed=True,
+                        command_failed=False, is_write=call_is_write, permission_denied=True)
+                else:
+                    store = self.workspace_snapshots
+                    observed = fn_name in {"bash", "process", "python_symbol_check", "verify_changed_files", "verify_project_build"}
+                    if observed or is_filesystem_mutation_tool(fn_name):
+                        from nz_coder.runtime.process.workspace_scope_execution import execute_observed
+                        result = execute_observed(store, start.version.generation,
+                            lambda: self.executor.execute_one(tool_call, index),
+                            on_before=lambda reference: self.verification_runtime.record_before(start, reference))
+                    else:
+                        result = self.executor.execute_one(tool_call, index)
+            result.execution_id = start.execution_id
+            result.duration_ms = round((time.perf_counter() - started_at) * 1000, 3)
+            # 先交接实际事实，后续工具才能从真实版本开始；展示和事务提交仍在批末。
+            self.verification_runtime.record_result(result)
+            return result
+        except BaseException as error:
+            try:
+                self.verification_runtime.abort_tool(start, fn_name, tool_input)
+            except BaseException as cleanup_error:
+                raise error from cleanup_error
+            raise
 
     def _best_effort_tool_input(self, raw_arguments) -> dict:
         """Parse tool arguments best-effort for hook matching without failing dispatch."""
@@ -4195,69 +4253,91 @@ class ProductRunEnvironment:
             removed=stats.removed,
         )
 
-    def _attach_lsp_write_diagnostics(self, dispatched: list, messages: list) -> None:
-        """Append committed-file diagnostics to the last write tool message."""
+    def _collect_lsp_write_diagnostics(self, dispatched: list, *, operation=None):
+        """收集诊断数据；工作线程不持有或修改 messages。"""
         paths, last_tool_call_id = self._committed_write_paths(dispatched)
-
         if not paths or not last_tool_call_id:
+            return None
+        batch = collect_write_diagnostics(paths, current_workdir(), operation=operation)
+        return batch, last_tool_call_id
+
+    def _apply_lsp_write_diagnostics(self, observation, messages: list) -> None:
+        if observation is None:
             return
-        try:
-            block = collect_write_diagnostics(paths, current_workdir())
-        except Exception as exc:
-            self.tracer.log("lsp_write_diagnostics_failed", error=str(exc))
-            return
+        batch, last_tool_call_id = observation
+        block = format_write_diagnostics(batch)
         if not block:
             return
-        tool_message = next(
-            (
-                message
-                for message in reversed(messages)
-                if message.get("role") == "tool"
-                and message.get("tool_call_id") == last_tool_call_id
-            ),
-            None,
-        )
+        tool_message = next((message for message in reversed(messages)
+            if message.get("role") == "tool" and message.get("tool_call_id") == last_tool_call_id), None)
         if tool_message is None:
             return
         tool_message["content"] = f"{tool_message.get('content', '')}\n\n{block}"
-        self.tracer.log(
-            "lsp_write_diagnostics",
-            files=len(dict.fromkeys(paths)),
-            output_len=len(block),
+        # 复用已完成 ToolPart 的 metadata；不重复完成工具或改动原完成时间。
+        fields = ("path", "status", "freshness", "analysis_environment", "reason_code", "truncated")
+        summary = {
+            "reports": [{key: report[key] for key in fields}
+                        for report in batch["reports"][:current_run_settings().lsp_write_diagnostic_max_files]],
+            "skipped": batch["skipped"],
+        }
+        for message in reversed(messages):
+            if message.get("role") != "assistant":
+                continue
+            part = next((part for part in message.get(PARTS_KEY, [])
+                         if part.get("type") == "tool" and part.get("call_id") == last_tool_call_id), None)
+            if part is None:
+                continue
+            state = part["state"]
+            updated = upsert_message_part(message, {
+                **part,
+                "state": {**state, "output": tool_message["content"],
+                          "metadata": {**state.get("metadata", {}), "lsp_diagnostics": summary}},
+            })
+            public_part = project_public_message_part(updated)
+            if public_part:
+                self._emit_session_event("message.part.updated", {
+                    "message_id": message[MESSAGE_ID_KEY], "part": public_part,
+                })
+            break
+        self.tracer.log("lsp_write_diagnostics", files=len(batch["reports"]),
+                        skipped=batch["skipped"], output_len=len(block))
+
+    def _attach_lsp_write_diagnostics(self, dispatched: list, messages: list) -> None:
+        from nz_coder.foundation.cancellation import CancellationView
+        from nz_coder.lsp.types import LspOperation
+        from nz_coder.tools import current_tool_cancel_event
+        from nz_coder.runtime.core.run_context import current_run_context
+        run = current_run_context()
+        operation = LspOperation(
+            CancellationView(current_tool_cancel_event(), run.cancel_scope if run else None),
+            time.monotonic() + current_run_settings().lsp_diagnostic_wait,
+        )
+        self._apply_lsp_write_diagnostics(
+            self._collect_lsp_write_diagnostics(dispatched, operation=operation), messages,
         )
 
     def _record_tool_result(self, result_r) -> bool:
-        """观察工具结果并更新 verification/scratchpad/runtime 状态。"""
+        """更新纯观察与控制记录；验证事实已在执行边界交接。"""
         if result_r.executed and not result_r.dispatch_failed:
             self.tool_calls_this_run += 1
             if result_r.name == "save_memory":
                 self.used_save_memory = True
             if result_r.name == "bash":
-                command = str((result_r.tool_input or {}).get("command") or "")
-                classification = classify_bash(command)
+                classification = classify_bash(str((result_r.tool_input or {}).get("command") or ""))
                 if classification.get("dangerous") or classification.get("mutating"):
                     self._sidecar_risky_shell_ops += 1
-            if result_r.is_write and not str(
-                (result_r.tool_input or {}).get("path") or ""
-            ).strip():
+            if result_r.is_write and not str((result_r.tool_input or {}).get("path") or "").strip():
                 self._sidecar_unattributed_write_ops += 1
         self._observe_write_tool(result_r)
-        self._observe_verification_tool(result_r)
-        self._observe_runtime_tool(result_r)
         self._observe_run_evidence(result_r)
         if self._admission_session is not None:
             self._admission_session.record_tool_result(result_r)
         return result_r.dispatch_failed
 
     def _observe_write_tool(self, result_r) -> None:
-        """写工具成功后更新验证状态并激活路径相关 skill。"""
+        """写工具成功后激活路径相关 skill；验证失效只消费 RuntimeState 事实。"""
         if not (result_r.is_write and result_r.executed and not result_r.dispatch_failed):
             return
-        self.vm.mark_write(
-            result_r.name,
-            result_r.tool_input,
-            output=result_r.output,
-        )
         edited_path = result_r.tool_input.get("path", "")
         if not edited_path:
             return
@@ -4265,66 +4345,11 @@ class ProductRunEnvironment:
         if activated:
             self.tracer.log("skills_activated", names=activated)
 
-    def _observe_verification_tool(self, result_r) -> None:
-        """根据 bash / symbol check / verify 工具结果更新验证状态。"""
-        if result_r.executed and result_r.name == "bash":
-            self.vm.observe_bash(
-                result_r.tool_input,
-                result_r.output,
-                result_r.dispatch_failed,
-                result_r.command_failed,
-                exit_code=(result_r.metadata or {}).get("exit"),
-            )
-            self._record_bash_failure(result_r)
-        if (result_r.executed and not result_r.dispatch_failed
-                and result_r.name == "python_symbol_check"):
-            self.vm.observe_symbol_check(result_r.output, result_r.tool_input)
-        if (result_r.executed and not result_r.dispatch_failed
-                and result_r.name == "verify_changed_files"):
-            self.vm.observe_verify_changed_files(result_r.output)
-
-    def _record_bash_failure(self, result_r) -> None:
-        """把失败测试摘要写入 scratchpad，减少同一 session 内重复踩坑。"""
-        if not result_r.command_failed:
-            return
-        from nz_coder.runtime.verification.recovery import _extract_failed_tests, _extract_traceback
-        failed = _extract_failed_tests(result_r.output)
-        tb = _extract_traceback(result_r.output, max_chars=300)
-        if not failed and not tb:
-            return
-        note = ""
-        if failed:
-            note += "Failed: " + ", ".join(failed[:3])
-        if tb:
-            first_line = tb.splitlines()[-1][:120] if tb.splitlines() else ""
-            note += (" | " if note else "") + first_line
-        if note:
-            self._sp.update("failure", note[:500])
-
-    def _observe_runtime_tool(self, result_r) -> None:
-        """把成功工具调用写入 RuntimeState。"""
-        if not (result_r.executed and not result_r.dispatch_failed):
-            return
-        acceptance = self.runtime_state.observe_tool(
-            result_r.name,
-            result_r.tool_input,
-            result_r.output,
-            succeeded=not result_r.command_failed,
-            metadata=result_r.metadata,
-        )
-        if acceptance is not None:
-            self.vm.observe_acceptance_contract(
-                acceptance["command"],
-                acceptance["output"],
-                passed=acceptance["passed"],
-            )
-        if self.runtime_state.has_diff and not broad_tests_blocked():
-            set_broad_tests_blocked(True)
 
     def _observe_run_evidence(self, result_r) -> None:
         """Best-effort record structured evidence without affecting loop control."""
         try:
-            self.run_evidence.task_mode = self.runtime_state.task_mode
+            self.run_evidence.task_assessment = current_task_assessment(self.runtime_state)
             self.run_evidence.record_tool_result(
                 result_r.name,
                 result_r.tool_input,
@@ -4409,15 +4434,20 @@ class ProductRunEnvironment:
         index: int | None = None,
     ) -> None:
         """记录工具调用 trace。"""
+        # stdout 可以包含错误样式的普通文字；两个展示通道只使用执行层结论。
+        status = "error" if result_r.dispatch_failed else "nonzero" if result_r.command_failed else "ok"
         self.tracer.log(
             "tool_call",
+            preceding_compaction_operation_id=getattr(self, "_last_compaction_operation_id", None),
+            read_cache_hit=(result_r.metadata or {}).get("read_cache_hit"),
+            reread_recorded_path=(
+                result_r.tool_input.get("path") in getattr(self, "_compaction_read_baseline", ())
+                if result_r.name in {"read_file", "read_symbol"} else None
+            ),
             tool_call_id=tool_call_id or None,
             index=index,
             name=result_r.name,
-            status=(
-                "error" if output.startswith("Error:") or output.startswith("Denied")
-                else ("nonzero" if output.startswith("Command exited with code") else "ok")
-            ),
+            status=status,
             executed=bool(result_r.executed),
             dispatch_failed=bool(result_r.dispatch_failed),
             command_failed=bool(result_r.command_failed),
@@ -4427,6 +4457,7 @@ class ProductRunEnvironment:
             queue_wait_ms=round(float(getattr(result_r, "queue_wait_ms", 0.0) or 0.0), 3),
             output_len=len(output),
             output=output,
+            public_error=result_r.public_error,
         )
         self._emit_session_event(
             "session.tool.completed",
@@ -4434,10 +4465,7 @@ class ProductRunEnvironment:
                 "tool_call_id": tool_call_id or None,
                 "index": index,
                 "name": result_r.name,
-                "status": (
-                    "error" if result_r.dispatch_failed
-                    else ("nonzero" if result_r.command_failed else "ok")
-                ),
+                "status": status,
                 "executed": bool(result_r.executed),
                 "is_write": bool(result_r.is_write),
                 "command_failed": bool(result_r.command_failed),
@@ -4452,6 +4480,7 @@ class ProductRunEnvironment:
                 ),
                 "output_len": len(output),
                 "output": output,
+                "public_error": result_r.public_error,
             },
         )
 
@@ -4471,7 +4500,10 @@ class ProductRunEnvironment:
         if all_succeeded:
             self.txn.commit()
             return
-        rollback_report = self.txn.rollback()
+        try:
+            rollback_report = self.txn.rollback()
+        finally:
+            self.verification_runtime.reconcile_workspace()
         if not rollback_report:
             return
         self.tracer.log("transaction_rollback", report=rollback_report)
@@ -4486,7 +4518,10 @@ class ProductRunEnvironment:
         try:
             from nz_coder.intelligence.impact_analyzer import analyze_patch_impact, format_impact_report
 
-            changed = self.change_tracker.current_changed_paths()
+            changed = list(dict.fromkeys([
+                *self.runtime_state.changed_files,
+                *self.change_tracker.current_changed_paths(),
+            ]))
             deleted = self.change_tracker.current_deleted_paths()
             diff = self.change_tracker.render_current_diff() if changed else ""
             report = analyze_patch_impact(
@@ -4495,15 +4530,10 @@ class ProductRunEnvironment:
                 project_profile=self._project_profile_data(),
                 deleted_files=deleted,
                 requested_paths=self.runtime_state.requested_paths,
-                task_mode=self.runtime_state.task_mode,
                 diff_chars=len(diff),
             )
             self.runtime_state.patch_risk = report
-            self.runtime_state.has_diff = bool(changed)
-            self.runtime_state.changed_files = list(changed)
             self.runtime_state.diff_chars = len(diff)
-            from nz_coder.runtime.agent.task_policy import is_test_file
-            self.runtime_state.tests_modified = any(is_test_file(path) for path in changed)
             self.run_evidence.impact_review = dict(report)
             self.tracer.log(
                 "patch_risk_refreshed",
@@ -4685,13 +4715,32 @@ class ProductRunEnvironment:
             max_turns,
         )
     def _persist_runtime_state(self, active: bool = True) -> None:
-        """将 RuntimeState 持久化到当前 session 的 runtime_state.json。"""
+        """运行与验证通过统一构建器写入同一检查点。"""
         if not current_run_settings().runtime_state_persist:
             return
+        context = self.runtime_state._verification_context
         try:
             self.runtime_state.save(self._runtime_state_path, active=active)
         except OSError as exc:
             self.tracer.log("runtime_state_persist_failed", error=str(exc))
+            settlement = {"status": "pending", "code": "runtime_checkpoint_pending"}
+        else:
+            settlement = None
+        if context is not None:
+            with context._state_lock:
+                if self.runtime_state._verification_context is not context:
+                    return
+                for metadata in (context.metadata, context.session.metadata):
+                    if settlement is None:
+                        metadata.pop("settlement", None)
+                    else:
+                        metadata["settlement"] = dict(settlement)
+                # 旧 facade 返回同一结算投影；行政终态和验证冻结结果保持不变。
+                if context.terminal_status is not None:
+                    if settlement is None:
+                        self.last_status.pop("settlement", None)
+                    else:
+                        self.last_status["settlement"] = dict(settlement)
 
     def clear_scratchpad(self) -> None:
         """清除当前 session 的 scratchpad 与 todo。供 CLI /clear 使用。"""
@@ -4709,6 +4758,7 @@ class ProductRunEnvironment:
         """Return a compact structured summary of the current run evidence."""
         evidence = self.run_evidence
         return {
+            "task_assessment": current_task_assessment(self.runtime_state),
             "created_files": len(evidence.created_files),
             "modified_files": len(evidence.modified_files),
             "expected_files": len(evidence.expected_files),
@@ -4765,10 +4815,11 @@ class ProductRunEnvironment:
             "forbids_test_changes": rs.forbids_test_changes,
             "requested_paths": rs.requested_paths,
             "broad_tests": rs.broad_test_attempts,
-            "task_complexity": rs.task_complexity(),
+            "task_assessment": current_task_assessment(rs),
+            "changed_files": list(rs.changed_files),
+            "edits_this_run": rs.edits_this_run,
             "acceptance_criteria": rs.acceptance_criteria,
             "plan_generated": rs.plan_generated,
-            "replan_count": rs.replan_count,
             "provider_calls": rs.provider_calls,
             "provider_attempts": rs.provider_attempts,
             "provider_calls_by_purpose": dict(rs.provider_calls_by_purpose),
@@ -4806,9 +4857,6 @@ class ProductRunEnvironment:
                 "requires_replan": bool(risk.get("requires_replan")),
                 "risk_signals": risk.get("risk_signals", [])[:6],
             } if risk else {},
-            "patch_risk_reviewed": bool(
-                risk_fingerprint and risk_fingerprint == rs.risk_replan_fingerprint
-            ),
             "tool_observability": tool_observability,
             "reflection_status": (self._last_reflection_review or {}).get("review_status"),
             "reflection_summary": (self._last_reflection_review or {}).get("summary"),
@@ -4841,6 +4889,7 @@ class ProductRunEnvironment:
         self.question_asker = question_asker
         self.auto_permission_asker = auto_permission_asker
         self.workflow_approval_asker = workflow_approval_asker
+        self._permission_asker = permission_asker
         self.permissions.set_asker(permission_asker)
         self.plan_mode.question_asker = question_asker
 
@@ -5054,6 +5103,7 @@ class ProductRunEnvironment:
         details = continuation_projection_details(messages)
         projection_stats: dict = {}
         provider_id, provider_instance_id, model_id = _provider_projection_identity(self)
+        from nz_coder.runtime.conversation.continuation_context import has_authoritative_task
         projected = project_provider_messages(
             messages,
             capabilities=getattr(self, "model_capabilities", None),
@@ -5062,6 +5112,7 @@ class ProductRunEnvironment:
             target_provider_id=provider_id,
             target_provider_instance_id=provider_instance_id,
             target_model_id=model_id,
+            authoritative_state=has_authoritative_task(messages, getattr(self, "runtime_state", None)),
         )
         AgentLoop._trace_continuation_projection(self, details)
         _trace_evidence_projection(self, include_attachments, projection_stats)
@@ -5069,6 +5120,22 @@ class ProductRunEnvironment:
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
+
+
+def _freeze_history_projection(owner, messages: list):
+    """切分和正式请求共用纯投影，计入目标连接实际会恢复的推理内容。"""
+    from nz_coder.runtime.conversation.continuation_context import has_authoritative_task
+
+    provider_id, provider_instance_id, model_id = _provider_projection_identity(owner)
+    return partial(
+        project_provider_messages,
+        capabilities=getattr(owner, "model_capabilities", None),
+        include_attachments=True,
+        target_provider_id=provider_id,
+        target_provider_instance_id=provider_instance_id,
+        target_model_id=model_id,
+        authoritative_state=has_authoritative_task(messages, getattr(owner, "runtime_state", None)),
+    )
 
 
 def _provider_projection_identity(owner) -> tuple[str, str, str]:

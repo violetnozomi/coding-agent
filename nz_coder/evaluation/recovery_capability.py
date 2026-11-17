@@ -9,10 +9,13 @@ import sys
 import time
 from unittest.mock import patch
 
-from nz_coder.intelligence.verification import VerificationManager
+from nz_coder.runtime.verification.domain.service import VerificationDomain
+from nz_coder.runtime.verification.domain.models import RunScope, TaskScope, WorkspaceVersion, ExecutionFact
+from nz_coder.runtime.adapters.verification_plans import register_verification_plan
+from nz_coder.runtime.verification.domain.identity import command_identity
+import threading
 from nz_coder.lsp.write_diagnostics import collect_write_diagnostics
 from nz_coder.permissions import PermissionManager
-from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.agent.agent_resilience import ProviderAttemptController
 from nz_coder.runtime.execution.tool_executor import ToolExecutor
 from nz_coder.runtime.core.run_settings import current_run_settings, scoped_run_settings
@@ -121,8 +124,9 @@ def run_recovery_fault_injection_suite(output_dir: Path) -> dict:
         diagnostics = collect_write_diagnostics(["app.py"], workspace)
     runs.append({
         "case_id": "R6", "failure": "lsp_unavailable", "expected_action": "optional_fallback",
-        "observed_action": "optional_fallback" if diagnostics == "" else "incorrect",
-        "evidence": "write remains committed; diagnostics omitted",
+        "observed_action": "optional_fallback" if (diagnostics["reports"] and
+            diagnostics["reports"][0]["status"] == "unavailable" and source.read_text() == "VALUE = 1\n") else "incorrect",
+        "evidence": "write remains committed; diagnostics explicitly unavailable",
     })
 
     plan = {
@@ -131,15 +135,16 @@ def run_recovery_fault_injection_suite(output_dir: Path) -> dict:
             "commands": [{"command": "pytest -q", "required": True}],
         }],
     }
-    manager = VerificationManager(RecoveryState(), _Tracer(), plan_builder=lambda _paths: plan)
-    manager.mark_write("write_file", {"path": "app.py"})
-    manager.observe_bash(
-        {"command": "pytest -q"},
-        "Command exited with code 127\npytest: command not found",
-        dispatch_failed=False, command_failed=True,
-        exit_code=127,
-    )
-    verification = manager.status()
+    scope = RunScope(TaskScope("recovery-eval", "unavailable-command", str(workspace)), "run", "main")
+    version = WorkspaceVersion(1, 1, 1)
+    domain = VerificationDomain(lock=threading.RLock(), scope=scope, version=version, require_targeted=True)
+    register_verification_plan(domain, plan)
+    id = domain.snapshot().specs[0].id
+    domain.begin_execution("command-not-found", (id,))
+    domain.observe_execution(ExecutionFact("command-not-found", scope, command_identity("pytest -q", str(workspace)),
+        "failed", version, version, capabilities=("test",), exit_code=127,
+        environment_error=True, reason="pytest: command not found"))
+    verification = domain.snapshot().to_dict()
     runs.append({
         "case_id": "R7", "failure": "verification_command_unavailable",
         "expected_action": "blocked_environment",

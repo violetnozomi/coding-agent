@@ -57,13 +57,13 @@ def test_read_only_shell_splits_newline_command_segments():
         assert classify_bash(command)["mutating"] is True
 
 
-def test_external_path_gate_rejects_home_expansion(tmp_path):
-    assert external_workspace_path("cat $HOME/.ssh/id_rsa", tmp_path) == (
-        "$HOME/.ssh/id_rsa"
-    )
-    assert external_workspace_path("type %USERPROFILE%\\.ssh\\id_rsa", tmp_path) == (
-        "%USERPROFILE%\\.ssh\\id_rsa"
-    )
+def test_private_home_expansion_is_forbidden_without_assuming_its_value(tmp_path):
+    from nz_coder.tool_platform.policies.command_policy import assess_shell_command
+    assessment = assess_shell_command("cat $HOME/.ssh/id_rsa", tmp_path, command_cwd=tmp_path)
+    assert assessment.paths.kind == "forbidden"
+    assert assessment.rejection
+    windows = assess_shell_command("type %USERPROFILE%\\.ssh\\id_rsa", tmp_path, command_cwd=tmp_path)
+    assert windows.paths.kind == "outside" and windows.rejection
 
 
 def test_external_path_gate_resolves_workspace_symlinks(tmp_path):

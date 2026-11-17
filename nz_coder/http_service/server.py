@@ -27,6 +27,7 @@ from nz_coder.state.instructions import (
 
 from .interactions import InteractionNotFoundError
 from .manager import SessionBusyError, SessionManager, SessionNotFoundError
+from nz_coder.state.sessions import SessionReadError
 from nz_coder.runtime.process.process_service import (
     ProcessNotFoundError,
     ProcessOwnershipError,
@@ -151,6 +152,9 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
                 "session_busy",
                 "The session or workspace is busy.",
             )
+        except SessionReadError as exc:
+            status = {"corrupt": HTTPStatus.UNPROCESSABLE_ENTITY, "unreadable": HTTPStatus.FORBIDDEN}.get(exc.kind, HTTPStatus.CONFLICT)
+            self._error(status, exc.kind, f"Session {exc.kind}")
         except ValueError:
             self._error(
                 HTTPStatus.BAD_REQUEST,
@@ -170,7 +174,7 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             public = to_public_error(exc)
             self._error(
-                HTTPStatus.INTERNAL_SERVER_ERROR,
+                HTTPStatus.CONFLICT if public.code == "session_busy" else HTTPStatus.INTERNAL_SERVER_ERROR,
                 public.code,
                 public.message,
             )
@@ -197,11 +201,11 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
                 self.service.manager.remove(segments[1])
                 self._json(HTTPStatus.OK, {"deleted": True})
                 return
+            if len(segments) == 2 and method == "GET":
+                self._json(HTTPStatus.OK, self.service.manager.info(segments[1]))
+                return
             session = self.service.manager.get(segments[1])
             if len(segments) == 2:
-                if method == "GET":
-                    self._json(HTTPStatus.OK, self.service.manager.info(session.session_id))
-                    return
                 if method == "PATCH":
                     body = self._read_json()
                     self._reject_unknown(body, {"title"})
@@ -302,29 +306,72 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
             if len(segments) == 3 and segments[2] == "agent" and method == "GET":
                 self._json(HTTPStatus.OK, {"agents": session.agents()})
                 return
-            if len(segments) == 3 and segments[2] == "memory" and method == "GET":
-                self._json(HTTPStatus.OK, session.memory_status())
+            if len(segments) == 3 and segments[2] == 'lsp' and method == 'GET':
+                self._json(HTTPStatus.OK,session.lsp_status())
                 return
-            if len(segments) == 4 and segments[2] == "memory" and method == "GET":
-                self._json(HTTPStatus.OK, session.memory_proposal(segments[3]))
-                return
-            if (
-                len(segments) == 5
-                and segments[2] == "memory"
-                and segments[4] in {"approve", "reject"}
-                and method == "POST"
-            ):
+            if len(segments) == 4 and segments[2:] == ['lsp','control'] and method == 'POST':
                 body = self._read_json()
-                self._reject_unknown(
-                    body, {"reason"} if segments[4] == "reject" else set()
-                )
-                self._json(
-                    HTTPStatus.OK,
-                    session.review_memory(
-                        segments[3], segments[4], str(body.get("reason") or "")
-                    ),
-                )
+                self._reject_unknown(body,{'entry_id','action'})
+                if not isinstance(body.get('entry_id'),str) or not body['entry_id']:
+                    raise ValueError('entry_id is required')
+                if body.get('action') not in {'trust','untrust','restart'}:
+                    raise ValueError('Unsupported LSP control action')
+                self._json(HTTPStatus.OK,session.lsp_control(body['entry_id'],body['action']))
                 return
+            if len(segments) >= 3 and segments[2] == "memory":
+                query = parse_qs(urlsplit(self.path).query)
+                if len(segments) == 3 and method == "GET":
+                    self._json(HTTPStatus.OK, session.memory_status())
+                    return
+                if len(segments) == 4 and method == "GET" and segments[3] == "records":
+                    self._reject_unknown(query, {"type", "status", "limit", "cursor"})
+                    self._json(HTTPStatus.OK, session.memory_records(
+                        type=self._single_query(query, "type") or None,
+                        status=self._single_query(query, "status") or "active",
+                        limit=int(self._single_query(query, "limit") or 50),
+                        cursor=self._single_query(query, "cursor") or None))
+                    return
+                if len(segments) == 4 and method == "GET" and segments[3] == "search":
+                    self._reject_unknown(query, {"q", "limit"})
+                    self._json(HTTPStatus.OK, session.memory_search(
+                        self._single_query(query, "q", required=True),
+                        limit=int(self._single_query(query, "limit") or 5)))
+                    return
+                if len(segments) == 5 and method == "GET" and segments[3] == "records":
+                    self._reject_unknown(query, {"revision"})
+                    revision = self._single_query(query, "revision")
+                    self._json(HTTPStatus.OK, session.memory_record(segments[4], revision=int(revision) if revision else None))
+                    return
+                if len(segments) == 6 and method == "GET" and segments[3] == "records" and segments[5] == "history":
+                    self._json(HTTPStatus.OK, session.memory_history(segments[4]))
+                    return
+                if len(segments) == 5 and method == "GET" and segments[3] == "proposals":
+                    self._json(HTTPStatus.OK, session.memory_proposal(segments[4]))
+                    return
+                if len(segments) == 4 and method == "POST" and segments[3] == "mutate":
+                    body = self._read_json()
+                    self._reject_unknown(body, {"command", "operation_id"})
+                    command = body.get("command")
+                    self._validate_memory_command(command)
+                    operation_id = body.get("operation_id")
+                    if not isinstance(operation_id, str) or not operation_id.strip():
+                        raise ValueError("operation_id is required")
+                    self._json(HTTPStatus.OK, session.mutate_memory(command, operation_id=operation_id))
+                    return
+                if len(segments) == 6 and method == "POST" and segments[3] == "proposals" and segments[5] in {"approve", "reject"}:
+                    body = self._read_json()
+                    allowed = {"expected_proposal_revision", "operation_id"}
+                    allowed.update({"expected_revision", "related_records"} if segments[5] == "approve" else {"reason"})
+                    self._reject_unknown(body, allowed)
+                    command = {key: value for key, value in body.items() if key != "operation_id"}
+                    command.update(action="apply_proposal" if segments[5] == "approve" else "reject_proposal",
+                                   proposal_id=segments[4])
+                    self._validate_memory_command(command)
+                    operation_id = body.get("operation_id")
+                    if not isinstance(operation_id, str) or not operation_id.strip():
+                        raise ValueError("operation_id is required")
+                    self._json(HTTPStatus.OK, session.review_memory(segments[4], segments[5], **body))
+                    return
             if len(segments) == 3 and segments[2] == "workflow" and method == "GET":
                 self._json(HTTPStatus.OK, session.workflows())
                 return
@@ -650,6 +697,51 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
         return payload
 
     @staticmethod
+    def _positive_memory_revision(value, name):
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise ValueError(f"{name} must be a positive integer")
+
+    def _validate_memory_command(self, command):
+        if not isinstance(command, dict):
+            raise ValueError("command must be an object")
+        fields = {"name", "type", "description", "content", "applicability", "source_refs"}
+        target = {"memory_id", "expected_revision"}
+        allowed = {
+            "create": fields,
+            "update": fields | target,
+            "archive": target | {"reason"}, "restore": target | {"reason"}, "delete": target | {"reason"},
+            "assess": target | {"judgment", "evidence_refs", "related_records", "resolves_event_ids", "resolution_reason"},
+            "apply_proposal": {"proposal_id", "expected_proposal_revision", "expected_revision", "related_records"},
+            "reject_proposal": {"proposal_id", "expected_proposal_revision", "reason"},
+        }
+        action = command.get("action")
+        if not isinstance(action, str) or action not in allowed:
+            raise ValueError("unknown memory action")
+        self._reject_unknown(command, allowed[action] | {"action"})
+        if action in {"update", "archive", "restore", "delete", "assess"}:
+            if not isinstance(command.get("memory_id"), str) or not command["memory_id"]:
+                raise ValueError("memory_id is required")
+            self._positive_memory_revision(command.get("expected_revision"), "expected_revision")
+        if action in {"apply_proposal", "reject_proposal"}:
+            if not isinstance(command.get("proposal_id"), str) or not command["proposal_id"]:
+                raise ValueError("proposal_id is required")
+            self._positive_memory_revision(command.get("expected_proposal_revision"), "expected_proposal_revision")
+        if "expected_revision" in command:
+            self._positive_memory_revision(command["expected_revision"], "expected_revision")
+        if "judgment" in command:
+            if not isinstance(command["judgment"], dict):
+                raise ValueError("judgment must be an object")
+            self._reject_unknown(command["judgment"], {"coverage", "result", "assessment", "covered_claims"})
+        if "related_records" in command:
+            if not isinstance(command["related_records"], list):
+                raise ValueError("related_records must be a list")
+            for endpoint in command["related_records"]:
+                if not isinstance(endpoint, dict):
+                    raise ValueError("related_records entries must be objects")
+                self._reject_unknown(endpoint, {"memory_id", "expected_revision"})
+                self._positive_memory_revision(endpoint.get("expected_revision"), "expected_revision")
+
+    @staticmethod
     def _reject_unknown(payload: dict, allowed: set[str]) -> None:
         unknown = sorted(set(payload) - allowed)
         if unknown:
@@ -791,16 +883,16 @@ class SessionHTTPService:
         with self._close_lock:
             if self._closed:
                 return
+            self._server.shutdown()
+            self._server.server_close()
+            self.manager.close()
             self._closed = True
-        self._server.shutdown()
-        self._server.server_close()
-        self.manager.close()
 
     def close_after_serve(self) -> None:
         """Release resources after serve_forever already returned."""
         with self._close_lock:
             if self._closed:
                 return
+            self._server.server_close()
+            self.manager.close()
             self._closed = True
-        self._server.server_close()
-        self.manager.close()

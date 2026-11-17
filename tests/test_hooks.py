@@ -690,8 +690,8 @@ def _stub_loop(
     tests_modified=False,
 ):
     runtime_state = SimpleNamespace(
+        task_assessment_state={"value": None, "revision": 0},
         turn_count=3,
-        task_mode="feature",
         initial_task_text="Implement the feature.",
         acceptance_criteria=["Add feature"],
         requested_paths=list(requested_paths or ["src/app.py"]),
@@ -724,7 +724,6 @@ def test_parse_hook_condition_matches_tool_and_runtime_context():
         loop=None,
         messages=[{"role": "user", "content": "fix it"}],
         event_name="pre_tool_use",
-        task_mode="feature",
         message_count=1,
         wants_tests=True,
         tests_modified=False,
@@ -734,7 +733,7 @@ def test_parse_hook_condition_matches_tool_and_runtime_context():
         is_write=True,
     )
     group = parse_hook_condition(
-        'tool == "write_file" && args.path ~= "*.py" && task_mode == "feature" && is_write == "true"'
+        'tool == "write_file" && args.path ~= "*.py" && is_write == "true"'
     )
 
     assert group is not None
@@ -882,13 +881,13 @@ def test_stop_hook_abort_and_reanimate_budget_are_explicit():
         stop_hooks=[lambda _context: {"abort": True, "reason": "Policy rejected completion."}]
     )
 
-    assert aborting.handle_no_tool_response(loop, messages, message="done") == "stopped_by_hook"
+    assert aborting.handle_no_tool_response(loop, messages, message="done") == "blocked"
     assert aborting.stop_hook_reason == "Policy rejected completion."
 
     bounded = AgentHooks(stop_hooks=[lambda _context: "Check once more."], stop_hook_reanimate_budget=1)
     assert bounded.handle_no_tool_response(loop, messages, message="done") == "continue"
-    assert bounded.handle_no_tool_response(loop, messages, message="done again") == "stopped_by_hook"
-    assert bounded.stop_hook_reason == "Stop-hook reanimate budget exhausted (1/1)."
+    assert bounded.handle_no_tool_response(loop, messages, message="done again") == "blocked"
+    assert bounded.stop_hook_reason == "Consecutive completion feedback exhausted (1/1). Check once more."
 
     bounded.reset_run_state()
     assert bounded.stop_hook_reason == ""
@@ -1073,3 +1072,83 @@ def test_hook_failure_is_written_to_trace(tmp_path, monkeypatch):
     assert '"event": "hook_failed"' in text
     assert '"hook_event": "pre_tool_use"' in text
     assert '"decision": "reject"' in text
+
+
+def test_removed_task_mode_hook_config_is_rejected_at_load_even_without_strict(tmp_path):
+    import pytest
+    from nz_coder.runtime.verification.hooks import HookConfigError, load_configured_hooks_from_settings
+
+    obsolete = [
+        {"if": 'task_mode == "feature"'},
+        {"if": 'when.task_mode != "discuss"'},
+        {"when": {"task_mode": "feature"}},
+        {"when.task_mode": "feature"},
+        {"action": {"type": "prompt", "message": "Task is $TASK_MODE"}},
+        {"error_message": "Failure for $TASK_MODE"},
+    ]
+    path = tmp_path / "settings.json"
+    for old_fields in obsolete:
+        entry = {"id": "old-intent-hook", "event": "pre_send",
+                 "action": {"type": "prompt", "message": "Continue."}, **old_fields}
+        path.write_text(json.dumps({"hooks": [entry]}), encoding="utf-8")
+        for strict in (False, True):
+            with pytest.raises(HookConfigError, match=r"old-intent-hook.*(?:task_mode|TASK_MODE)"):
+                load_configured_hooks_from_settings(path, strict=strict)
+
+
+def test_hidden_path_exact_deny_hook_blocks_real_write_dispatch(tmp_path):
+    from types import MethodType
+    from nz_coder.permissions import PermissionManager
+    from nz_coder.runtime.adapters.verification_runtime import VerificationRuntime
+    from nz_coder.runtime.core import MAIN_PROFILE
+    from nz_coder.runtime.core.request import AgentDefinition, RunRequest
+    from nz_coder.runtime.core.run_context import RunContext
+    from nz_coder.runtime.execution.loop import ProductRunEnvironment
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
+    from nz_coder.runtime.session.model import Session
+    from nz_coder.runtime.verification.domain.models import RunScope, TaskScope, WorkspaceVersion
+    from nz_coder.runtime.verification.domain.service import VerificationDomain
+    from nz_coder.runtime.verification.hooks import AgentHooks, parse_configured_hooks
+
+    for index, (given, blocked) in enumerate([
+        (".github/workflows/ci.yml", True), ("./.github/workflows/ci.yml", True),
+        ("././.github/workflows/ci.yml", True), ("github/workflows/ci.yml", False),
+        ("..github/workflows/ci.yml", False),
+    ]):
+        root = tmp_path / str(index)
+        root.mkdir()
+        with scoped_workdir(root):
+            request = RunRequest(agent=AgentDefinition(name="test", instructions="test"),
+                profile=MAIN_PROFILE, workspace=root, session_id=f"hook-{index}", messages=())
+            run = RunContext(request, Session.create(f"hook-{index}", [], workspace=root), "test")
+            run.attach_verification(VerificationDomain(lock=run._state_lock,
+                scope=RunScope(TaskScope(f"hook-{index}", "task", str(root)), run.interaction_run_id, "test"),
+                version=WorkspaceVersion()))
+            state = RuntimeState()
+            state.bind_run_context(run)
+            store = WorkspaceSnapshotStore(root, tmp_path / f"snapshots-{index}")
+            state.workspace_observation = {"reference": store.verification_snapshot(), "generation": 0, "complete": True}
+            hooks = AgentHooks(configured_hooks=parse_configured_hooks([{
+                "id": "protect-ci", "event": "pre_tool_use",
+                "if": 'normalized_file_path == ".github/workflows/ci.yml"',
+                "action": {"type": "prompt", "message": "Protected file"}, "reject": True,
+            }]))
+            host = SimpleNamespace(workdir=root, runtime_state=state, workspace_snapshots=store,
+                tracer=SimpleNamespace(log=lambda *_args, **_kwargs: None), hooks=hooks,
+                executor=ToolExecutor(PermissionManager("auto")))
+            for name in ("_best_effort_tool_input", "_infer_hook_file_path"):
+                setattr(host, name, MethodType(getattr(ProductRunEnvironment, name), host))
+            runtime = VerificationRuntime(host, run)
+            host.verification_runtime = runtime
+            try:
+                result = ProductRunEnvironment._execute_tool_call_with_hooks(host, {
+                    "id": f"write-{index}", "function": {"name": "write_file", "arguments":
+                        json.dumps({"path": given, "content": "sentinel\n"})}}, 0, [])
+                assert result.permission_denied is blocked, (given, result)
+                assert (root / given).exists() is not blocked
+                assert result.executed is not blocked
+            finally:
+                runtime.close()

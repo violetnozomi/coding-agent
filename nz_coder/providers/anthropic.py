@@ -7,7 +7,7 @@ from typing import Any, Iterable, Iterator
 
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.protocol.attachments import attachment_base64, normalize_attachments
-from nz_coder.providers.http import NativeClient, UrllibTransport
+from nz_coder.providers.http import NativeClient, OwnedStream, UrllibTransport
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
     configured_model_capabilities,
@@ -339,12 +339,20 @@ class AnthropicProvider:
 
     @staticmethod
     def _normalize_stream(events: Iterable[dict]) -> Iterator:
+        return OwnedStream(
+            AnthropicProvider._iter_normalized_stream(events),
+            close_owner=getattr(events, "close", lambda: None),
+        )
+
+    @staticmethod
+    def _iter_normalized_stream(events: Iterable[dict]) -> Iterator:
         tool_indexes: dict[int, int] = {}
         next_tool_index = 0
         input_tokens = 0
         output_tokens = 0
         cache_read_tokens = 0
         cache_write_tokens = 0
+        finish_emitted = False
         for event in events:
             event_type = event.get("type")
             if event_type == "error":
@@ -386,6 +394,7 @@ class AnthropicProvider:
                 if usage.get("cache_creation_input_tokens"):
                     cache_write_tokens = usage["cache_creation_input_tokens"]
                 delta = event.get("delta") or {}
+                stop_reason = delta.get("stop_reason")
                 stream_usage = {
                     "input_tokens": input_tokens,
                     "uncached_input_tokens": input_tokens,
@@ -403,11 +412,17 @@ class AnthropicProvider:
                     stream_usage["cache_creation_input_tokens"] = cache_write_tokens
                 yield chunk(
                     finish_reason=_finish_reason(
-                        delta.get("stop_reason"),
+                        stop_reason,
                         has_tools=bool(tool_indexes),
-                    ),
+                    ) if stop_reason else "",
                     usage=stream_usage,
                 )
+                finish_emitted = finish_emitted or bool(stop_reason)
+                continue
+            if event_type == "message_stop":
+                if not finish_emitted:
+                    yield chunk(finish_reason=_finish_reason(None, has_tools=bool(tool_indexes)))
+                    finish_emitted = True
                 continue
             if event_type == "content_block_start":
                 block = event.get("content_block") or {}

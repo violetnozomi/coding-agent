@@ -87,8 +87,10 @@ def test_remote_sse_continues_while_waiting_for_permission_input(monkeypatch):
             pass
 
     class View:
-        def __init__(self, *_args):
-            pass
+        interaction_run_id = "interaction-1"
+
+        def __init__(self, *_args, terminal_source):
+            assert terminal_source == "settled"
 
         def begin_remote(self, _agent):
             pass
@@ -123,7 +125,7 @@ def test_remote_sse_continues_while_waiting_for_permission_input(monkeypatch):
     monkeypatch.setattr(remote, "StreamingRenderer", Renderer)
     monkeypatch.setattr(remote, "TerminalRunRenderer", View)
     monkeypatch.setattr(remote, "TerminalInput", Input)
-    monkeypatch.setattr(remote, "TerminalInteractionBridge", Bridge)
+    monkeypatch.setattr(remote, "_RemoteInteractionBridge", Bridge)
 
     async def scenario():
         await remote._follow_run(

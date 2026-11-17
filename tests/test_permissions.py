@@ -5,6 +5,8 @@ import json
 import logging
 
 from nz_coder.foundation import config
+import pytest
+
 from nz_coder.permissions import PermissionManager
 from nz_coder.foundation.private_paths import inspect_private_path
 from nz_coder.runtime.execution.tool_executor import ToolExecutor
@@ -248,7 +250,8 @@ def test_special_doom_loop_permission_supports_once_always_and_fail_closed():
     pm = PermissionManager("default", asker=lambda _name, _input: next(answers))
     metadata = {"tool": "read_file", "input": {"path": "app.py"}}
 
-    assert PermissionManager("default").ask_special("doom_loop", metadata) is False
+    with pytest.raises(RuntimeError, match="not available"):
+        PermissionManager("default").ask_special("doom_loop", metadata)
     assert pm.ask_special("doom_loop", metadata) is True
     assert pm.ask_special("doom_loop", metadata) is True
     assert pm.ask_special("doom_loop", metadata) is True

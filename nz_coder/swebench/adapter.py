@@ -86,8 +86,8 @@ class SWEBenchAdapter:
 
         selected_ids = list(args.instance_ids or self.load_predictions(predictions_path))
         instance_ids = list(selected_ids)
-        selected_arch = getattr(args, "image_arch", "") or platform.machine()
-        native_arch = {"amd64": "x86_64", "aarch64": "arm64"}.get(platform.machine(), platform.machine())
+        native_arch = _normalize_arch(platform.machine())
+        selected_arch = _normalize_arch(getattr(args, "image_arch", "") or native_arch)
         if selected_arch != native_arch:
             print("Error: installed harness CLI cannot select a non-native architecture.")
             return 2
@@ -97,10 +97,10 @@ class SWEBenchAdapter:
                 timeout=args.prepull_timeout,
                 skip_failures=args.skip_prepull_failures,
                 namespace=args.image_namespace,
-                arch=args.image_arch or platform.machine(),
+                arch=selected_arch,
                 tag=args.instance_image_tag,
             )
-            if args.instance_ids and not instance_ids:
+            if selected_ids and not instance_ids:
                 print("No instances left after image pre-pull filtering.")
                 self._write_evaluation_results(predictions_path, args.run_id, selected_ids, [], 3)
                 return 3
@@ -175,7 +175,7 @@ class SWEBenchAdapter:
             prediction = by_id.get(instance_id, {})
             patch = prediction.get("model_patch")
             # 仅使用实际 harness 的 run/model/instance 路径，不搜索其他运行的旧报告。
-            report_path = log_root / str(prediction.get("model_name_or_path", "None")).replace("/", "__") / instance_id / "report.json"
+            report_path = log_root / official_model_directory(str(prediction.get("model_name_or_path", "None"))) / instance_id / "report.json"
             resolved = applied = None
             if instance_id not in selected_ids:
                 state, reason = "not_run", "outside_selected_subset"
@@ -434,6 +434,23 @@ class SWEBenchAdapter:
 
 
 # ── Module-level utilities ────────────────────────────────────────────────────
+
+def validate_instance_id(value: str) -> str:
+    """实例目录必须保留输入身份，不能通过替换字符合并两个实例。"""
+    if (not isinstance(value, str) or not value or value in {".", ".."}
+            or value != _safe_name(value) or value.endswith(".")):
+        raise ValueError(f"unsafe SWE-bench instance_id: {value!r}")
+    return value
+
+
+def official_model_directory(model_name: str) -> str:
+    """与官方 harness 的模型目录编码一致。"""
+    return model_name.replace("/", "__")
+
+
+def _normalize_arch(arch: str) -> str:
+    return {"amd64": "x86_64", "aarch64": "arm64"}.get(arch, arch)
+
 
 def _safe_name(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in value)

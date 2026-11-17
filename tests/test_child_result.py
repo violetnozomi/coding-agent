@@ -135,6 +135,7 @@ def test_child_result_from_state_projects_runtime_owners():
             "provider_id": "openai-compatible",
             "model_id": "model-x",
             "structured_output": {"fixed": True},
+            "execution_verification": {"verification_state": "passed", "domain_revision": 7},
             "changed_files": ["src/app.py"],
             "tokens": {"total": 12},
             "cost_known": True,
@@ -147,14 +148,13 @@ def test_child_result_from_state_projects_runtime_owners():
         },
         final_text="fixed",
         status="completed",
-        verification="pytest passed",
     )
 
     payload = result.to_dict()
     assert payload["structured"] == {"fixed": True}
     assert payload["provider"] == "openai-compatible"
     assert payload["model"] == "model-x"
-    assert payload["verification"]["status"] == "passed"
+    assert payload["verification"]["verification_state"] == "passed"
     assert payload["cost"] == 0.25
     assert payload["route_facts"]["iterations"] == 1
     assert payload["route_facts"]["requested_tier"] == "deep"

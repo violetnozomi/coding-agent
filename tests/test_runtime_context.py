@@ -110,7 +110,7 @@ def test_pre_edit_contract_keeps_investigation_tools_visible(monkeypatch):
 
     state = RuntimeState()
     state.task_mode = "feature"
-    state.verification_contract = {"command": "pytest tests/test_app.py"}
+    state.verification_definition = {"command": "pytest tests/test_app.py"}
     state.investigation_calls_since_edit = 6
     agent = AgentLoop.__new__(AgentLoop)
     agent.runtime_state = state
@@ -216,7 +216,7 @@ def test_contract_led_task_keeps_bash_schema_before_first_mutation(monkeypatch):
 
     state = RuntimeState()
     state.task_mode = "feature"
-    state.verification_contract = {"command": "pytest tests/test_app.py"}
+    state.verification_definition = {"command": "pytest tests/test_app.py"}
     agent = AgentLoop.__new__(AgentLoop)
     agent.runtime_state = state
     agent._structured_output_active_repair = ""
@@ -314,7 +314,7 @@ def test_agent_loops_bind_their_own_runtime_context(tmp_path):
 
             async def fake_run(self, messages, on_tool, on_text, on_token, stream):
                 self._sp.clear()
-                self._sp.update("plan", f"plan-{self.session_id}")
+                self._sp.update_section('focus', [{"summary": f"plan-{self.session_id}", "details": ""}])
                 await asyncio.sleep(0)
                 parent = _PARENT_CONTEXT.get()
                 context = (
@@ -365,7 +365,8 @@ class _CountingExecutor:
             self.max_active = max(self.max_active, self.active)
         try:
             time.sleep(self.delay)
-            return index
+            from nz_coder.tool_platform.execution import ToolExecutionResult
+            return ToolExecutionResult("task", {}, str(index), True, False, False, False)
         finally:
             with self.lock:
                 self.active -= 1
@@ -402,7 +403,7 @@ def test_read_only_tasks_parallelize_but_general_tasks_remain_serial():
                 _task_call(agent_type, i) for i, agent_type in enumerate(agent_types)
             ]
             results = asyncio.run(agent._dispatch_tool_calls_async(calls, False, []))
-            return executor.max_active, [item[2] for item in results]
+            return executor.max_active, [int(item[2].output) for item in results]
 
         read_max, read_order = run_batch(["explore", "plan", "reflection"])
         general_max, general_order = run_batch(["general-purpose", "general-purpose"])
@@ -442,7 +443,8 @@ class _BarrierExecutor:
             self.events.append(("start", index, name, time.monotonic()))
         try:
             time.sleep(0.02 if name == "read" else 0.005)
-            return index
+            from nz_coder.tool_platform.execution import ToolExecutionResult
+            return ToolExecutionResult("task", {}, str(index), True, False, False, False)
         finally:
             with self.lock:
                 self.events.append(("end", index, name, time.monotonic()))
@@ -459,7 +461,7 @@ def _mixed_calls():
 
 def _assert_barrier_schedule(executor, results):
     assert [item[0] for item in results] == [0, 1, 2, 3, 4]
-    assert [item[2] for item in results] == [0, 1, 2, 3, 4]
+    assert [int(item[2].output) for item in results] == [0, 1, 2, 3, 4]
     assert executor.max_active == 2
     timestamps = {
         (event, index): timestamp

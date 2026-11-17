@@ -4,6 +4,40 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 
+from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
+
+
+class PermissionInteractionError(PublicRuntimeError):
+    """交互故障不是拒绝回复；固定消息可安全进入终端、模型和HTTP。"""
+
+    def __init__(self, reason: str):
+        messages = {
+            "unavailable": "Permission approval interface is not available.",
+            "timed_out": "Permission approval timed out without a decision.",
+            "cancelled": "Permission approval cancelled with the current run.",
+            "invalid_response": "Permission approval returned an invalid response.",
+        }
+        self.reason = reason
+        super().__init__(PublicError("permission_" + reason, messages[reason]))
+
+
+def approval_stop_message(metadata: dict) -> str:
+    """结算只根据可信审批事实生成说明，不采用模型的完成声明。"""
+    if metadata.get("permission_source") == "approval_reply":
+        return "Permission approval rejected; the run stopped and the requested action was not executed."
+    if metadata.get("permission_source") == "interaction_failure":
+        return str(PermissionInteractionError(metadata["permission_reason"])) + " The run stopped without completing the action."
+    return "The run stopped because a required tool action was blocked."
+
+
+def normalize_permission_reply(value: object) -> str:
+    """仅已约定的回复能授权，未知非空值不能被bool(value)意外放行。"""
+    if isinstance(value, bool):
+        return "once" if value else "reject"
+    if isinstance(value, str) and value.strip().lower() in {"once", "always", "reject"}:
+        return value.strip().lower()
+    raise PermissionInteractionError("invalid_response")
+
 
 def format_tool_summary(tool_name: str, tool_input: dict) -> str:
     """Build a human-readable summary for permission prompts."""
@@ -67,7 +101,7 @@ def read_permission_answer(
             try:
                 raw = reader()
             except KeyboardInterrupt:
-                return None
+                raise
             except (EOFError, OSError):
                 continue
             if raw is None:
@@ -82,5 +116,5 @@ def read_permission_answer(
         else:
             print("  Please answer y/n/a/p.")
         if not got_input:
-            continue
-    return None
+            raise PermissionInteractionError("unavailable")
+    raise PermissionInteractionError("invalid_response")

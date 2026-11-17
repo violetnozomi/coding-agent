@@ -135,6 +135,7 @@ def test_python_module_mcp_change_invalidates_trust(tmp_path, monkeypatch):
 def test_user_config_system_python_does_not_auto_trust_workspace_module(
     tmp_path, monkeypatch,
 ):
+    import sys
     from nz_coder.foundation.workspace_trust import load_config_snapshot
     from nz_coder.mcp.config import load_mcp_server_configs
     from nz_coder.mcp.trust import MCPTrustStore
@@ -151,7 +152,7 @@ def test_user_config_system_python_does_not_auto_trust_workspace_module(
     trust_path = tmp_path / "user" / "mcp-trust.json"
     monkeypatch.setattr(
         "nz_coder.foundation.execution_identity.shutil.which",
-        lambda _name: "/usr/bin/python",
+        lambda _name, **_kwargs: sys.executable,
     )
     snapshot = load_config_snapshot(workspace, environ={
         "NZ_MCP_USER_CONFIG": str(user_config),
@@ -174,6 +175,7 @@ def test_user_config_system_python_does_not_auto_trust_workspace_module(
 
 
 def test_lsp_workspace_module_requires_execution_trust(tmp_path, monkeypatch):
+    import sys
     from nz_coder.foundation.workspace_trust import load_config_snapshot
     from nz_coder.lsp.servers import resolve_server
 
@@ -186,7 +188,7 @@ def test_lsp_workspace_module_requires_execution_trust(tmp_path, monkeypatch):
     _write_server(package / "__main__.py", "one")
     monkeypatch.setattr(
         "nz_coder.foundation.execution_identity.shutil.which",
-        lambda _name: "/usr/bin/python",
+        lambda _name, **_kwargs: sys.executable,
     )
     snapshot = load_config_snapshot(workspace, environ={
         "NZ_LSP_PYTHON_COMMAND": "python -m workspace_lsp",

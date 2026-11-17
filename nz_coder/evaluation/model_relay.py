@@ -107,13 +107,18 @@ def empirical_authorization_valid(grant) -> bool:
 class RelayLedger:
     """原子预留与追加记录；已有账本拒绝重开，避免重启清零。"""
 
-    def __init__(self, path: Path, limits: RelayLimits, *, clock=time.monotonic, empirical_authorization=None):
+    def __init__(self, path: Path, limits: RelayLimits, *, clock=time.monotonic, empirical_authorization=None,
+                 stop_on_rejection=False):
         if empirical_authorization is not None and not empirical_authorization_valid(empirical_authorization):
             raise ValueError("invalid_empirical_authorization")
         self.empirical_authorization = dict(empirical_authorization) if empirical_authorization is not None else None
         self.cost_occupied_cny = 0.0
         self.path, self.limits, self.clock = path, limits, clock
         self.lock = threading.RLock()
+        self.stop_on_rejection = stop_on_rejection
+        self._admission_closed_reason: str | None = None
+        self._journal_fault: BaseException | None = None
+        self._closed = False
         self.fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         self.counts: dict[str, int] = {}
         self.attempts: dict[str, dict] = {}
@@ -123,8 +128,16 @@ class RelayLedger:
         self.failed_contracts: dict[str, dict] = {}
         self.input_occupied = self.output_occupied = 0
         self.events: list[dict] = []
-        self._record("ledger_created", limits=vars(limits), input_admission_mode="empirical" if self.empirical_authorization else "strict",
-                     fee_authorization=self.empirical_authorization)
+        try:
+            self._record("ledger_created", limits=vars(limits), input_admission_mode="empirical" if self.empirical_authorization else "strict",
+                         fee_authorization=self.empirical_authorization)
+        except BaseException as exc:
+            # 构造失败后没有调用者持有账本，FD 必须在这里回收，仍保留原写盘异常。
+            try:
+                os.close(self.fd)
+            except OSError as close_error:
+                raise exc from close_error
+            raise
 
     def _estimated_cost(self, prompt, completion, cached=0):
         if self.empirical_authorization is None:
@@ -133,21 +146,55 @@ class RelayLedger:
         return ((prompt-cached)*prices["input"] + cached*prices["cached_input"] + completion*prices["output"]) / 1_000_000
 
     def _record(self, event, **fields):
-        row = {"event": event, "monotonic": self.clock(), "time_epoch": time.time(), **fields}
-        data = (json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n").encode()
-        # 账目落盘成功才可转发；失败向上抛出，不能有一次未记账的请求。
-        offset = 0
-        while offset < len(data):
-            offset += os.write(self.fd, data[offset:])
-        os.fsync(self.fd)
-        self.events.append(row)
+        with self.lock:
+            if self._journal_fault is not None:
+                raise self._journal_fault
+            row = {"event": event, "monotonic": self.clock(), "time_epoch": time.time(), **fields}
+            data = (json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n").encode()
+            # 落盘失败后的硬闸门只依赖内存，不能再依赖另一条日志成功。
+            try:
+                offset = 0
+                while offset < len(data):
+                    written = os.write(self.fd, data[offset:])
+                    if written == 0:
+                        raise OSError("journal write made no progress")
+                    offset += written
+                os.fsync(self.fd)
+            except OSError as exc:
+                self._journal_fault = exc
+                if self._admission_closed_reason is None:
+                    self._admission_closed_reason = "journal_fault"
+                raise
+            self.events.append(row)
+
+    @property
+    def admission_closed_reason(self) -> str | None:
+        with self.lock:
+            return self._admission_closed_reason
+
+    @property
+    def journal_fault(self) -> bool:
+        with self.lock:
+            return self._journal_fault is not None
+
+    def close_admissions(self, reason: str) -> None:
+        with self.lock:
+            if self._admission_closed_reason is None:
+                self._admission_closed_reason = reason
+                self._record("admissions_closed", reason=reason)
 
     def deny(self, binding, reason):
         with self.lock:
+            if self.stop_on_rejection:
+                self.close_admissions(reason)
             self._record("local_rejection", bucket=binding.bucket, reason=reason, usage=None)
 
     def stopped(self, binding) -> str:
         with self.lock:
+            if self._journal_fault is not None:
+                return "journal_fault"
+            if self._closed:
+                return "ledger_closed"
             if binding.experiment in self.failed_contracts:
                 return "experiment_accounting_contract_failed"
             if binding.run in self.cancelled:
@@ -162,7 +209,9 @@ class RelayLedger:
 
     def reserve(self, binding, nonce, raw, payload, accounting):
         with self.lock:
-            reason = self.stopped(binding)
+            reason = self.stopped(binding) or self._admission_closed_reason
+            if self._journal_fault is not None or self._closed:
+                raise AdmissionDenied(reason)
             if not reason and (not nonce or len(nonce) > 128):
                 reason = "missing_or_invalid_request_nonce"
             key = (binding.bucket, nonce)
@@ -206,8 +255,8 @@ class RelayLedger:
             cost = self._estimated_cost(count, output_reserved) if not reason else 0.0
             if not reason and empirical and self.cost_occupied_cny + cost > self.empirical_authorization["cost_limit"]:
                 reason = "estimated_fee_reservation_exhausted"
-            if reason:
-                self._record("local_rejection", bucket=binding.bucket, reason=reason, usage=None)
+            if reason or self._admission_closed_reason is not None:
+                self.deny(binding, reason)
                 raise AdmissionDenied(reason)
             attempt_id = uuid.uuid4().hex
             row = {"attempt_id": attempt_id, "experiment": binding.experiment, "bucket": binding.bucket,
@@ -229,7 +278,8 @@ class RelayLedger:
             return attempt_id
 
     def settle(self, attempt_id, *, status, usage=None, ambiguous=False, usage_conflict=False,
-               finish_reason=None, provider_model=None, system_fingerprint=None, conflicting_reports=None):
+               finish_reason=None, provider_model=None, system_fingerprint=None, conflicting_reports=None,
+               usage_high_water=None):
         with self.lock:
             row = self.attempts[attempt_id]
             if row["status"] != "reserved":
@@ -261,61 +311,92 @@ class RelayLedger:
                         if "prompt_cache_hit_tokens" in usage:
                             valid = valid and alias == cached
             trusted_usage = usage if valid and status == "complete" and finish_reason not in {"aborted", "error"} else None
-            prompt_claim = usage.get("prompt_tokens") if isinstance(usage, dict) else None
-            completion_claim = usage.get("completion_tokens") if isinstance(usage, dict) else None
+            peaks = {}
+            for report in [usage, *(conflicting_reports or []), usage_high_water]:
+                if isinstance(report, dict):
+                    for name in ("prompt_tokens", "completion_tokens"):
+                        value = report.get(name)
+                        if type(value) is int and value >= 0:
+                            peaks[name] = max(peaks.get(name, 0), value)
+            prompt_claim, completion_claim = peaks.get("prompt_tokens"), peaks.get("completion_tokens")
             over_input = max(0, prompt_claim - row["input_reserved"]) if type(prompt_claim) is int and prompt_claim >= 0 else None
             over_output = max(0, completion_claim - row["output_reserved"]) if type(completion_claim) is int and completion_claim >= 0 else None
             over_requested = max(0, completion_claim - row["output_requested"]) if type(completion_claim) is int and completion_claim >= 0 and type(row["output_requested"]) is int else None
-            if conflicting_reports:
-                for report in conflicting_reports:
-                    if not isinstance(report, dict):
-                        continue
-                    value = report.get("prompt_tokens")
-                    if type(value) is int and value >= 0:
-                        over_input = max(over_input or 0, value - row["input_reserved"])
-                    value = report.get("completion_tokens")
-                    if type(value) is int and value >= 0:
-                        over_output = max(over_output or 0, value - row["output_reserved"])
-            # 有效但超预留是契约被否证，不能伪装成缺失usage并继续发请求。
             empirical = self.empirical_authorization is not None
-            contract_failed = bool(over_input or over_output or usage_conflict or (empirical and trusted_usage is None))
             actual_cost = self._estimated_cost(prompt, completion, cached) if trusted_usage is not None and empirical else None
+            occupied_cost = actual_cost
+            if trusted_usage is None and empirical:
+                # 未确认缓存不打折；逐维覆盖预留与全程峰值，金额是占用而非实耗。
+                occupied_cost = self._estimated_cost(row["input_reserved"] + (over_input or 0),
+                                                     row["output_reserved"] + (over_output or 0))
+            reference_delta = prompt - row["input_reserved"] if empirical and trusted_usage is not None else None
+            exceeded = []
+            if empirical and trusted_usage is not None:
+                # 经验参考值不是上界；结算按服务端实际用量检查原有额度。
+                if prompt > self.limits.input_per_request:
+                    exceeded.append("single_request_input_exhausted")
+                if self.input_occupied - row["input_reserved"] + prompt > self.limits.input_total:
+                    exceeded.append("input_reservation_exhausted")
+                if self.output_occupied - row["output_reserved"] + completion > self.limits.output_total:
+                    exceeded.append("output_reservation_exhausted")
+                if self.cost_occupied_cny - row["estimated_cost_reserved_cny"] + actual_cost > self.empirical_authorization["cost_limit"]:
+                    exceeded.append("estimated_fee_reservation_exhausted")
+            # 严格计数失效、输出超额及未知/冲突用量仍停止整个实验。
+            contract_failed = bool((over_input and not empirical) or over_output or usage_conflict
+                                   or (empirical and trusted_usage is None) or exceeded)
             fields = dict(status=status, usage=trusted_usage, reported_usage=usage,
                           usage_valid=valid, usage_conflict=usage_conflict,
-                          conflicting_reports=conflicting_reports,
+                          conflicting_reports=conflicting_reports, usage_high_water=peaks,
                           usage_unknown_reason=None if trusted_usage is not None else ("missing_usage" if usage is None else "invalid_or_unsettled_usage"),
                           input_over_reservation=over_input, output_over_reservation=over_output,
+                          input_reference_delta=reference_delta, accounting_limits_exceeded=exceeded,
                           output_over_request_limit=over_requested,
                           reservation_retained=trusted_usage is None, ambiguous=ambiguous,
                           contract_failed=contract_failed, contract_id=row["contract_id"],
                           finish_reason=finish_reason, provider_model=provider_model, system_fingerprint=system_fingerprint)
             fields["estimated_cost_reported_cny"] = actual_cost
-            self._record("settled", attempt_id=attempt_id, **fields)
-            row.update(fields)
+            fields["estimated_cost_occupied_cny"] = occupied_cost
+            # 先保存已观察事实与占用；写盘故障不能抹去它们，也不能宣称已持久结算。
+            row.update(fields, settlement_persisted=False)
             if trusted_usage is not None:
                 self.input_occupied -= row["input_reserved"] - usage["prompt_tokens"]
                 self.output_occupied -= row["output_reserved"] - usage["completion_tokens"]
-                if empirical:
-                    self.cost_occupied_cny += actual_cost - row["estimated_cost_reserved_cny"]
             else:
                 # 未完成请求不得释放预留；已报告的超额仍须如实增加占用。
                 self.input_occupied += over_input or 0
                 self.output_occupied += over_output or 0
+            if empirical:
+                self.cost_occupied_cny += occupied_cost - row["estimated_cost_reserved_cny"]
             if contract_failed:
                 self.failed_contracts[row["experiment"]] = {"attempt_id": attempt_id, "contract_id": row["contract_id"]}
-                self._record("accounting_contract_failed", experiment=row["experiment"], attempt_id=attempt_id,
-                             contract_id=row["contract_id"], input_over_reservation=over_input,
-                             output_over_reservation=over_output)
             if ambiguous:
                 self.ambiguous.add(row["run"])
+            self._record("settled", attempt_id=attempt_id, **fields)
+            row["settlement_persisted"] = True
+            if contract_failed:
+                self._record("accounting_contract_failed", experiment=row["experiment"], attempt_id=attempt_id,
+                             contract_id=row["contract_id"], input_over_reservation=over_input,
+                             output_over_reservation=over_output, accounting_limits_exceeded=exceeded)
+            if reference_delta:
+                self._record("input_reference_drift", experiment=row["experiment"], attempt_id=attempt_id,
+                             reference_count=row["input_reserved"], prompt_tokens=prompt,
+                             delta=reference_delta, contract_id=row["contract_id"])
 
     def cancel(self, run):
         with self.lock:
-            self._record("run_cancelled", run=run)
             self.cancelled.add(run)
+            self._record("run_cancelled", run=run)
 
     def close(self):
-        os.close(self.fd)
+        with self.lock:
+            self.close_admissions("ledger_closing")
+            if any(row["status"] == "reserved" for row in self.attempts.values()):
+                raise RuntimeError("ledger_has_reserved_attempts")
+            if not self._closed:
+                os.close(self.fd)
+                self._closed = True
+            if self._journal_fault is not None:
+                raise RuntimeError("ledger_journal_fault") from self._journal_fault
 
 
 class _Usage:
@@ -325,7 +406,10 @@ class _Usage:
         self.last = None
         self.invalid = False
         self.conflicting_reports = None
+        self.high_water: dict[str, int] = {}
         self.done = not streaming
+        self.body_complete = False
+        self.finished = False
         self.finish_reason = self.provider_model = self.system_fingerprint = None
 
     def feed(self, chunk):
@@ -348,20 +432,35 @@ class _Usage:
             raise ValueError("invalid response object")
         self.provider_model = data.get("model", self.provider_model)
         self.system_fingerprint = data.get("system_fingerprint", self.system_fingerprint)
-        for choice in data.get("choices", []):
-            if choice.get("finish_reason") is not None:
-                self.finish_reason = choice["finish_reason"]
-        usage = data.get("usage")
+        # 先保留服务端用量；其他字段的协议错误不能抹掉已经收到的账目观察。
+        self._report(data.get("usage"))
+        choices = data.get("choices", [])
+        if not isinstance(choices, list) or any(not isinstance(choice, dict) for choice in choices):
+            raise ValueError("invalid response choices")
+        for choice in choices:
+            reason = choice.get("finish_reason")
+            if reason is not None:
+                if not isinstance(reason, str):
+                    raise ValueError("invalid response finish reason")
+                self.finish_reason = reason
+
+    def _report(self, usage):
         if usage is None:
             return
         if not isinstance(usage, dict):
             self.invalid = True
             self.last = usage
             return
+        # 诊断只留首对冲突，逐维峰值覆盖所有报告，内存不随流长度增长。
+        for name in ("prompt_tokens", "completion_tokens"):
+            value = usage.get(name)
+            if type(value) is int and value >= 0:
+                self.high_water[name] = max(self.high_water.get(name, 0), value)
         if self.last is not None:
             if not isinstance(self.last, dict):
                 self.invalid = True
-                self.conflicting_reports = [self.last, usage]
+                if self.conflicting_reports is None:
+                    self.conflicting_reports = [self.last, usage]
                 self.last = usage
                 return
             for name in ("prompt_tokens", "completion_tokens"):
@@ -373,9 +472,16 @@ class _Usage:
         self.last = usage
 
     def finish(self):
-        if not self.streaming:
+        if not self.streaming and not self.finished:
+            # 失败也只解析一次，finally 可以结算已有观察而不重复抛出解析异常。
+            self.finished = True
             self._frame(json.loads(self.buffer, parse_constant=lambda _v: None))
         return self.last
+
+    def observation(self):
+        return {"usage_conflict": self.invalid, "finish_reason": self.finish_reason,
+                "conflicting_reports": self.conflicting_reports, "usage_high_water": dict(self.high_water),
+                "provider_model": self.provider_model, "system_fingerprint": self.system_fingerprint}
 
 
 class RelayServer(ThreadingMixIn, UnixStreamServer):
@@ -405,17 +511,30 @@ class RelayServer(ThreadingMixIn, UnixStreamServer):
         if trace_directory is not None:
             trace_directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self._handler_slots = threading.BoundedSemaphore(8)
+        self._handlers_lock = threading.Lock()
+        self._handlers: set[threading.Thread] = set()
         super().__init__(str(socket_path), _Handler)
         os.chmod(socket_path, 0o600)
 
     def process_request(self, request, client_address):
         # 单元内连接也有上限；未准入连接不能无限创建宿主线程。
         if not self._handler_slots.acquire(blocking=False):
-            self.ledger.deny(self.binding, "relay_handler_capacity")
-            self.shutdown_request(request)
+            try:
+                self.ledger.deny(self.binding, "relay_handler_capacity")
+            finally:
+                self.shutdown_request(request)
             return
         try:
-            super().process_request(request, client_address)
+            # 启动前登记，覆盖尚在读取请求或计数的 handler；不以已准入数量代替。
+            with self._handlers_lock:
+                self._handlers = {thread for thread in self._handlers if thread.is_alive()}
+                thread = threading.Thread(target=self.process_request_thread, args=(request, client_address), daemon=True)
+                self._handlers.add(thread)
+                try:
+                    thread.start()
+                except BaseException:
+                    self._handlers.remove(thread)
+                    raise
         except BaseException:
             self._handler_slots.release()
             raise
@@ -426,6 +545,26 @@ class RelayServer(ThreadingMixIn, UnixStreamServer):
         finally:
             self._handler_slots.release()
 
+    @property
+    def active_handlers(self) -> int:
+        with self._handlers_lock:
+            return sum(thread.is_alive() for thread in self._handlers)
+
+    def wait_handlers(self, deadline: float) -> bool:
+        """按绝对 monotonic 截止等待真实线程退出；停止 listener 不代表结算结束。"""
+        while True:
+            with self._handlers_lock:
+                self._handlers = {thread for thread in self._handlers if thread.is_alive()}
+                pending = tuple(self._handlers)
+            if not pending:
+                return True
+            for thread in pending:
+                if thread.is_alive():
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        return False
+                    thread.join(remaining)
+
 
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *_args):
@@ -433,11 +572,14 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _error(self, code, reason):
         body = json.dumps({"error": {"type": "experiment_boundary", "message": reason}}).encode()
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except OSError:
+            pass  # 下游已经断开，错误回复失败不能覆盖原结算事实。
 
     def do_POST(self):
         server = self.server
@@ -464,9 +606,10 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(400, "invalid_local_request")
             return
         self.connection.settimeout(0.25)
-        status, usage, ambiguous, observation = "transport_error", None, True, {}
+        status, ambiguous = "transport_error", True
+        usage = _Usage(bool(payload.get("stream")))
         self._headers_sent = False
-        remaining = min(server.ledger.limits.request_seconds, server.binding.deadline - time.monotonic())
+        request_deadline = min(time.monotonic() + server.ledger.limits.request_seconds, server.binding.deadline)
         try:
             if server.trace_directory is not None:
                 path = server.trace_directory / (attempt + ".request.json")
@@ -475,13 +618,18 @@ class _Handler(BaseHTTPRequestHandler):
                     handle.write(raw)
                     handle.flush()
                     os.fsync(handle.fileno())
-            status, usage, ambiguous, observation = asyncio.run(asyncio.wait_for(self._forward(raw, payload, attempt), max(0.001, remaining)))
+            status, ambiguous = asyncio.run(asyncio.wait_for(self._forward(raw, payload, attempt, usage),
+                                                           max(0.001, request_deadline - time.monotonic())))
         except TimeoutError:
             status = "request_timeout"
         except (httpx.HTTPError, ConnectionError, OSError, ValueError):
             status = "transport_error"
         finally:
-            server.ledger.settle(attempt, status=status, usage=usage, ambiguous=ambiguous, **observation)
+            try:
+                usage.finish()
+            except (ValueError, TypeError):
+                pass  # 空或截断的响应仍是未知；不能凭解析失败捏造跨 run 的用量冲突。
+            server.ledger.settle(attempt, status=status, usage=usage.last, ambiguous=ambiguous, **usage.observation())
         if status not in {"complete", "upstream_error"}:
             if not self._headers_sent:
                 self._error(502, status)
@@ -493,10 +641,31 @@ class _Handler(BaseHTTPRequestHandler):
                     pass
         self.close_connection = True
 
-    async def _forward(self, raw, payload, attempt):
+    async def _forward(self, raw, payload, attempt, usage):
         server = self.server
-        usage = _Usage(bool(payload.get("stream")))
         status_code = None
+        downstream_open = True
+
+        def draining():
+            return server.ledger.admission_closed_reason is not None and not server.ledger.stopped(server.binding)
+
+        def write_downstream(data=None, *, response=None):
+            nonlocal downstream_open
+            if not downstream_open:
+                return
+            try:
+                if response is not None:
+                    self.send_response(response.status_code)
+                    self.send_header("Content-Type", response.headers.get("content-type", "application/json"))
+                    self.end_headers()
+                    self._headers_sent = True
+                else:
+                    self.wfile.write(data)
+                    self.wfile.flush()
+            except OSError:
+                if not draining():
+                    raise
+                downstream_open = False
 
         async def copy_response():
             nonlocal status_code
@@ -508,10 +677,7 @@ class _Handler(BaseHTTPRequestHandler):
             async with httpx.AsyncClient(trust_env=False, timeout=server.ledger.limits.request_seconds) as client:
                 async with client.stream("POST", server.upstream, content=raw, headers=headers) as response:
                     status_code = response.status_code
-                    self.send_response(status_code)
-                    self.send_header("Content-Type", response.headers.get("content-type", "application/json"))
-                    self.end_headers()
-                    self._headers_sent = True
+                    write_downstream(response=response)
                     path = server.trace_directory / (attempt + ".response.txt") if server.trace_directory else None
                     handle = path.open("xb") if path else None
                     if path:
@@ -522,41 +688,51 @@ class _Handler(BaseHTTPRequestHandler):
                             recorded_bytes += len(chunk)
                             if recorded_bytes > 32 * 1024 * 1024:
                                 raise ValueError("bounded_response_capture_exhausted")
+                            usage.feed(chunk)
                             if handle:
                                 handle.write(chunk)
                                 handle.flush()
-                            usage.feed(chunk)
-                            self.wfile.write(chunk)
-                            self.wfile.flush()
+                            write_downstream(chunk)
+                        usage.body_complete = True
                     finally:
                         if handle:
                             os.fsync(handle.fileno())
                             handle.close()
 
         async def interruption():
+            nonlocal downstream_open
             while True:
                 if server.ledger.stopped(server.binding):
                     return
-                readable, _, _ = select.select([self.connection], [], [], 0)
-                if readable and not self.connection.recv(1, 2):  # MSG_PEEK，不消费新请求。
-                    return
+                if downstream_open:
+                    try:
+                        readable, _, _ = select.select([self.connection], [], [], 0)
+                        disconnected = bool(readable and not self.connection.recv(1, 2))  # MSG_PEEK，不消费新请求。
+                    except OSError:
+                        disconnected = True
+                    if disconnected:
+                        if not draining():
+                            return
+                        # 预算封门只停止回写；仍收取同一个已预留请求，不重试或延长期限。
+                        downstream_open = False
                 await asyncio.sleep(0.01)
 
         copy_task = asyncio.create_task(copy_response())
         cancel_task = asyncio.create_task(interruption())
         try:
             done, _ = await asyncio.wait((copy_task, cancel_task), return_when=asyncio.FIRST_COMPLETED)
-            if cancel_task in done:
-                return "cancelled_or_disconnected", usage.last, True, {"usage_conflict": usage.invalid,
-                                                                       "conflicting_reports": usage.conflicting_reports}
-            await copy_task
+            # DONE 或非流式 body 正常耗尽已确认完整性，晚到的取消不能抹掉用量。
+            stream_complete = usage.streaming and usage.done
+            upstream_complete = stream_complete or (not usage.streaming and usage.body_complete)
+            if cancel_task in done and not upstream_complete:
+                return "cancelled_or_disconnected", True
+            if not stream_complete:
+                await copy_task
             if status_code != 200:
-                return "upstream_error", usage.finish(), False, {}
-            actual = usage.finish()
-            observation = {"usage_conflict": usage.invalid, "finish_reason": usage.finish_reason,
-                           "conflicting_reports": usage.conflicting_reports,
-                           "provider_model": usage.provider_model, "system_fingerprint": usage.system_fingerprint}
-            return ("complete", actual, False, observation) if usage.done else ("stream_incomplete", actual, True, observation)
+                usage.finish()
+                return "upstream_error", False
+            usage.finish()
+            return ("complete", False) if usage.done else ("stream_incomplete", True)
         finally:
             for task in (copy_task, cancel_task):
                 task.cancel()

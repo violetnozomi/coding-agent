@@ -32,6 +32,7 @@ class ChildAgentResult:
     summary_kind: str = ""
     evidence_refs: tuple[str, ...] = ()
     verification: dict | None = None
+    postconditions: dict | None = None
     changed_files: tuple[str, ...] = ()
     conflicts: tuple[dict, ...] = ()
     provider: str = ""
@@ -78,6 +79,8 @@ class ChildAgentResult:
             payload["summary_kind"] = self.summary_kind
         if self.verification is not None:
             payload["verification"] = copy.deepcopy(self.verification)
+        if self.postconditions is not None:
+            payload["postconditions"] = copy.deepcopy(self.postconditions)
         if self.route_facts is not None:
             payload["route_facts"] = copy.deepcopy(self.route_facts)
         if self.cost is not None:
@@ -90,7 +93,9 @@ class ChildAgentResult:
         """Publish the canonical object plus additive legacy child_* aliases."""
         verification_summary = ""
         if isinstance(self.verification, dict):
-            verification_summary = str(self.verification.get("summary") or "")
+            verification_summary = str(self.verification.get("summary") or self.verification.get("verification_state") or "")
+        if not verification_summary and isinstance(self.postconditions, dict):
+            verification_summary = str(self.postconditions.get("summary") or "")
         metadata = {
             CHILD_RESULT_KEY: self.to_dict(),
             "child_session_id": self.session_id,
@@ -152,6 +157,7 @@ class ChildAgentResult:
             ),
             evidence_refs=tuple(_strings(payload.get("evidence_refs"), 20)),
             verification=json_safe_value(verification),
+            postconditions=json_safe_value(payload.get("postconditions")) if isinstance(payload.get("postconditions"), dict) else None,
             changed_files=tuple(_strings(payload.get("changed_files"), 50)),
             conflicts=tuple(_dicts(payload.get("conflicts"), 20)),
             provider=str(payload.get("provider") or "")[:120],
@@ -213,23 +219,14 @@ def child_result_from_state(
     *,
     final_text: str,
     status: str,
-    verification: str | dict = "",
 ) -> ChildAgentResult:
     """Build the canonical result from NZ's persistent child state owner."""
     structured_present = "structured_output" in state
-    verification_payload = None
-    state_verification = state.get("verification_result")
-    if isinstance(state_verification, dict):
-        verification_payload = copy.deepcopy(state_verification)
-    elif isinstance(verification, dict):
-        verification_payload = copy.deepcopy(verification)
-    elif verification:
-        verification_payload = {
-            "status": (
-                "failed" if "fail" in status or "error" in status else "passed"
-            ),
-            "summary": str(verification)[:1200],
-        }
+    # 执行验证来自子运行冻结的域投影，后置检查和显示字符串不能生成通过事实。
+    verification_payload = copy.deepcopy(state.get("execution_verification"))
+    if not isinstance(verification_payload, dict):
+        verification_payload = None
+    postconditions = state.get("postconditions")
     cost = _finite_nonnegative(state.get("cost")) if state.get("cost_known") else None
     raw = {
         "task_id": str(state.get("session_id") or state.get("agent_id") or "child"),
@@ -240,6 +237,8 @@ def child_result_from_state(
         "agent_id": str(state.get("agent_id") or ""),
         "parent_session_id": str(state.get("parent_session_id") or ""),
         "trace_id": str(state.get("trace_id") or ""),
+        "verification": verification_payload,
+        "postconditions": copy.deepcopy(postconditions) if isinstance(postconditions, dict) else None,
         "changed_files": state.get("changed_files") or [],
         "conflicts": state.get("conflicts") or [],
         "provider": str(state.get("provider_id") or ""),

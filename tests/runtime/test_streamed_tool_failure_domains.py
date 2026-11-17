@@ -25,10 +25,14 @@ from nz_coder.runtime.model_gateway import ResolvedModelRuntime
 
 def _run(monkeypatch, tmp_path, *, command='sleep 5', denied=False, idle=60,
          infrastructure=False, provider_error=False, cancel=False, verification=False,
-         rerun=False, hard=600):
+         rerun=False, hard=600, initial_files=None):
     requests, exceptions, tool_results, bridge_outcomes, request_states = [], [], [], [], []
     workspace = tmp_path / 'workspace'
     workspace.mkdir()
+    for relative, content in (initial_files or {}).items():
+        path = workspace / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
     home = tmp_path / 'home'
     home.mkdir()
     monkeypatch.setenv('HOME', str(home))
@@ -60,6 +64,11 @@ def _run(monkeypatch, tmp_path, *, command='sleep 5', denied=False, idle=60,
         name = 'offline'
 
         def create_completion(self, _client, **kwargs):
+            if any(item.get('function', {}).get('name') == 'emit_sidecar_verdict' for item in kwargs.get('tools', [])):
+                call = SimpleNamespace(function=SimpleNamespace(name='emit_sidecar_verdict', arguments=json.dumps({
+                    'verdict': 'accept', 'reason': 'Observed command outcomes are accurately reported.',
+                    'delivery_assessment': {'status': 'reviewed', 'issues': []}})))
+                return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='', tool_calls=[call]), finish_reason='tool_calls')])
             requests.append(copy.deepcopy(kwargs))
             request_states.append(copy.deepcopy(env.runtime_state.to_dict()))
             assert kwargs.get('stream') is True
@@ -98,8 +107,8 @@ def _run(monkeypatch, tmp_path, *, command='sleep 5', denied=False, idle=60,
                    'nz_coder.runtime.model_gateway.resolve_model_runtime'):
         monkeypatch.setattr(target, lambda *_a, **_k: runtime)
 
-    from nz_coder.runtime.model_gateway import gateway
-    original_iterator = gateway.iter_stream_with_timeouts
+    from nz_coder.runtime.model_gateway import gateway, stream
+    original_iterator = stream.iter_stream_with_timeouts
     original_error_metadata = gateway._error_metadata
 
     def observe_error(exc):
@@ -115,7 +124,7 @@ def _run(monkeypatch, tmp_path, *, command='sleep 5', denied=False, idle=60,
             exceptions.append(traceback.format_exc())
             raise
 
-    monkeypatch.setattr(gateway, 'iter_stream_with_timeouts', observe_iterator)
+    monkeypatch.setattr(stream, 'iter_stream_with_timeouts', observe_iterator)
     original_bridge = _StreamToolBridge.execute
 
     def observe_bridge(self, result):
@@ -177,7 +186,7 @@ def _run(monkeypatch, tmp_path, *, command='sleep 5', denied=False, idle=60,
         durable = copy.deepcopy(saved.transcript)
         capture = dict(requests=requests, exceptions=exceptions, tools=tool_results,
                        result=asdict(result), state=state, runtime=trace,
-                       run_evidence=env.run_evidence.to_dict(), verification=env.vm.status(),
+                       run_evidence=env.run_evidence.to_dict(), verification=env.verification_runtime.status(),
                        durable=durable, bridge_outcomes=bridge_outcomes, request_states=request_states)
         evidence = os.environ.get('NZ_TIMEOUT_EVIDENCE_DIR')
         if evidence:
@@ -195,7 +204,7 @@ def test_successful_streamed_tool_timeout_is_recoverable(monkeypatch, tmp_path, 
     capture = _run(monkeypatch, tmp_path, idle=idle, hard=hard)
     assert capture['tools'], capture['exceptions']
     tool = capture['tools'][0]
-    assert tool['executed'] and tool['dispatch_failed']
+    assert tool['executed'] and not tool['dispatch_failed']
     assert not tool['command_failed'] and not tool['permission_denied']
     assert tool['metadata']['timed_out'] is True
     assert tool['metadata']['exit'] is None
@@ -216,13 +225,12 @@ def test_successful_streamed_tool_timeout_is_recoverable(monkeypatch, tmp_path, 
     assert finish[0]['finish_reason'] == 'tool_calls'
 
 
-@pytest.mark.parametrize('command,denied,expected', [
-    ('exit 7', False, 'command_failed'),
-    ('sleep 5', True, 'permission_denied'),
-    ('printf recovered', False, 'success'),
+@pytest.mark.parametrize('command,expected', [
+    ('exit 7', 'command_failed'),
+    ('printf recovered', 'success'),
 ])
-def test_streamed_tool_result_domains_continue(monkeypatch, tmp_path, command, denied, expected):
-    capture = _run(monkeypatch, tmp_path, command=command, denied=denied)
+def test_streamed_tool_result_domains_continue(monkeypatch, tmp_path, command, expected):
+    capture = _run(monkeypatch, tmp_path, command=command)
     assert len(capture['requests']) == 2, capture['exceptions']
     assert not capture['exceptions']
     tool = capture['tools'][0]
@@ -232,6 +240,26 @@ def test_streamed_tool_result_domains_continue(monkeypatch, tmp_path, command, d
         assert tool[expected]
     feedback = [m for m in capture['requests'][1]['messages'] if m.get('role') == 'tool']
     assert any(m['tool_call_id'] == 'call-1' and tool['output'] in m['content'] for m in feedback)
+
+
+def test_streamed_tool_approval_rejection_stops_and_persists_result(monkeypatch, tmp_path):
+    capture = _run(monkeypatch, tmp_path, command='sleep 5', denied=True)
+
+    assert len(capture['requests']) == 1
+    assert not capture['exceptions']
+    assert capture['bridge_outcomes'] == ['stop']
+    assert capture['result']['status'] == 'blocked'
+    tool = capture['tools'][0]
+    assert tool['permission_denied'] and not tool['executed']
+    assert not tool['command_failed']
+    assert tool['metadata']['permission_source'] == 'approval_reply'
+    assert tool['metadata']['permission_reason'] == 'rejected'
+    assert any(m.get('role') == 'tool' and m.get('tool_call_id') == 'call-1'
+               and m.get('content') == tool['output'] for m in capture['durable'])
+    parts = [p for m in capture['durable'] for p in m.get('_nz_parts', [])
+             if p.get('type') == 'tool']
+    assert any(p.get('state', {}).get('error', {}).get('code') == 'permission_stopped'
+               for p in parts)
 
 
 def test_streamed_tool_infrastructure_exception_remains_fatal(monkeypatch, tmp_path):

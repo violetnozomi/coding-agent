@@ -60,7 +60,7 @@ def install():
 
         setattr(target, attribute, wrapped)
 
-    for name in ("_close_environment_run_controls", "_close_environment_stall_sidecar",
+    for name in ("_close_environment_run_controls",
                  "_close_environment_background_agents", "_close_repo_intelligence",
                  "_close_environment_mcp", "_close_environment_object",
                  "_close_environment_provider_runtimes", "_close_environment_event_bus"):

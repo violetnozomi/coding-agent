@@ -32,6 +32,8 @@ from nz_coder.foundation.project_control import (
     capture_user_instruction_snapshot,
 )
 from nz_coder.foundation.languages import LSP_LANGUAGES, lsp_command_config_key
+from nz_coder.foundation.secret_values import secret_str
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env, UnsafeSubprocessEnvironment
 
 
 _SCHEMA_VERSION = 1
@@ -67,10 +69,7 @@ _KNOWN_CONFIG_KEYS = (
     "BASH_TIMEOUT_SECONDS", "GEMINI_API_BASE_URL", "GEMINI_API_KEY", "LOG_LEVEL",
     "MAX_AGENT_TURNS", "MAX_CONTEXT_TOKENS", "MAX_OUTPUT_TOKENS",
     "MAX_PARALLEL_TASKS", "MAX_TOOL_CALLS_PER_RESPONSE",
-    "MAX_VERIFICATION_GATE_PROMPTS", "MEMORY_ASYNC_WRITE", "MEMORY_AUTO_DREAM",
-    "MEMORY_AUTO_DREAM_MIN_HOURS", "MEMORY_AUTO_DREAM_MIN_NEW_SESSIONS",
-    "MEMORY_AUTO_EXTRACT", "MEMORY_CLEANUP_DAYS", "MEMORY_LLM_EXTRACT",
-    "MEMORY_LLM_RERANK", "MODEL_CAPABILITIES_JSON", "MODEL_CATALOG_JSON",
+    "MAX_VERIFICATION_GATE_PROMPTS", "MEMORY_LLM_RERANK", "NZ_MEMORY_RETRIEVAL_MODE", "NZ_MEMORY_EMBEDDING_MODEL", "MODEL_CAPABILITIES_JSON", "MODEL_CATALOG_JSON",
     "MODEL_CATALOG_PATH", "MODEL_ID", "MODEL_PROVIDER", "MODEL_VARIANT",
     "NZ_AUTO_MODE_CLASSIFIER_BLOCK_STREAK", "NZ_AUTO_MODE_CLASSIFIER_ENABLED",
     "NZ_AUTO_MODE_CLASSIFIER_INFRA_FAILURES",
@@ -97,7 +96,8 @@ _KNOWN_CONFIG_KEYS = (
     "NZ_PROVIDER_HARD_TIMEOUT_SECONDS", "NZ_PROVIDER_MAX_RETRIES",
     "NZ_PROVIDER_NON_STREAMING_FALLBACK", "NZ_PROVIDER_STREAM_IDLE_TIMEOUT_SECONDS",
     "NZ_READ_DEDUP_ENABLED", "NZ_REFLECTION_ENABLED", "NZ_REFLECTION_MAX_ATTEMPTS",
-    "NZ_REMOTE_EVENT_QUEUE_SIZE", "NZ_REPLAN_IDLE_TURNS", "NZ_REPLAN_MAX_ATTEMPTS",
+    "NZ_REMOTE_EVENT_QUEUE_SIZE",
+    "NZ_WORKING_MEMORY_REMINDER_STEPS", "NZ_SUBAGENT_WORKSPACE_JSON",
     "NZ_REPO_MAP_MAX_FILE_BYTES", "NZ_REPO_MAP_MAX_FILES", "NZ_REPO_MAP_MAX_SYMBOLS",
     "NZ_REPO_RETRIEVAL_STRATEGY", "NZ_SEMANTIC_MODEL",
     "NZ_STREAM_CHECKPOINT_INTERVAL_SECONDS", "NZ_STREAM_CHECKPOINT_MIN_CHARS",
@@ -115,6 +115,9 @@ CONFIG_SCHEMA: dict[str, ConfigSpec] = {
     key: ConfigSpec() for key in _KNOWN_CONFIG_KEYS
 }
 CONFIG_SCHEMA.update({
+    "NZ_MEMORY_RETRIEVAL_MODE": ConfigSpec("lexical"),
+    "NZ_MEMORY_EMBEDDING_MODEL": ConfigSpec(""),
+    "NZ_SUBAGENT_WORKSPACE_JSON": ConfigSpec("{}", public_projection="configured-status", opaque_configured=True, structured_redaction=True),
     "API_KEY": ConfigSpec("", secret=True),
     "OPENAI_API_KEY": ConfigSpec("", secret=True),
     "ANTHROPIC_API_KEY": ConfigSpec("", secret=True),
@@ -136,6 +139,10 @@ CONFIG_SCHEMA.update({
         opaque_configured=True, structured_redaction=True,
     ),
     "NZ_LSP_PYTHON_COMMAND": ConfigSpec(""),
+    "NZ_LSP_SERVERS_JSON": ConfigSpec(
+        "{}", public_projection="configured-status", opaque_configured=True,
+        structured_redaction=True,
+    ),
     "NZ_SUBAGENT_PROCESS_ISOLATION_ENABLED": ConfigSpec("1", value_type="bool"),
     "LOG_LEVEL": ConfigSpec("INFO", workspace_trust_required=False),
 })
@@ -152,8 +159,7 @@ for _language in LSP_LANGUAGES:
     CONFIG_SCHEMA[lsp_command_config_key(_language)] = ConfigSpec("")
 
 _BOOL_CONFIG_KEYS = (
-    "ALLOW_BASH_PACKAGE_INSTALLS", "MEMORY_ASYNC_WRITE", "MEMORY_AUTO_DREAM",
-    "MEMORY_AUTO_EXTRACT", "MEMORY_LLM_EXTRACT", "MEMORY_LLM_RERANK",
+    "ALLOW_BASH_PACKAGE_INSTALLS", "MEMORY_LLM_RERANK",
     "NZ_AUTO_MODE_CLASSIFIER_ENABLED", "NZ_CONTINUE_LOOP_ON_DENY", "NZ_LSP_ENABLED",
     "NZ_LSP_WRITE_DIAGNOSTICS_ENABLED", "NZ_PLANNING_ENABLED",
     "NZ_PROVIDER_NON_STREAMING_FALLBACK", "NZ_READ_DEDUP_ENABLED",
@@ -166,9 +172,7 @@ for _key in _BOOL_CONFIG_KEYS:
 _INTEGER_CONFIG_KEYS = (
     "BASH_TIMEOUT_SECONDS", "MAX_AGENT_TURNS", "MAX_CONTEXT_TOKENS",
     "MAX_OUTPUT_TOKENS", "MAX_PARALLEL_TASKS", "MAX_TOOL_CALLS_PER_RESPONSE",
-    "MAX_VERIFICATION_GATE_PROMPTS", "MEMORY_AUTO_DREAM_MIN_HOURS",
-    "MEMORY_AUTO_DREAM_MIN_NEW_SESSIONS", "MEMORY_CLEANUP_DAYS",
-    "NZ_AUTO_MODE_CLASSIFIER_BLOCK_STREAK", "NZ_AUTO_MODE_CLASSIFIER_INFRA_FAILURES",
+    "MAX_VERIFICATION_GATE_PROMPTS", "NZ_AUTO_MODE_CLASSIFIER_BLOCK_STREAK", "NZ_AUTO_MODE_CLASSIFIER_INFRA_FAILURES",
     "NZ_AUTO_MODE_CLASSIFIER_MAX_OUTPUT_TOKENS", "NZ_BASH_OUTPUT_HARD_LIMIT_BYTES",
     "NZ_CONTEXT_REPLAY_COMPACTION_TOKENS", "NZ_DOOM_LOOP_THRESHOLD",
     "NZ_IMAGE_DESCRIBE_MAX_TOKENS", "NZ_LSP_MAX_OUTPUT_CHARS",
@@ -177,7 +181,8 @@ _INTEGER_CONFIG_KEYS = (
     "NZ_PROCESS_MAX_PER_WORKSPACE", "NZ_PROCESS_READ_MAX_BYTES",
     "NZ_PROCESS_WRITE_MAX_BYTES", "NZ_PROJECT_VERIFY_TIMEOUT_SECONDS",
     "NZ_PROVIDER_MAX_RETRIES", "NZ_REFLECTION_MAX_ATTEMPTS", "NZ_REMOTE_EVENT_QUEUE_SIZE",
-    "NZ_REPLAN_IDLE_TURNS", "NZ_REPLAN_MAX_ATTEMPTS", "NZ_REPO_MAP_MAX_FILE_BYTES",
+    "NZ_REPO_MAP_MAX_FILE_BYTES",
+    "NZ_WORKING_MEMORY_REMINDER_STEPS",
     "NZ_REPO_MAP_MAX_FILES", "NZ_REPO_MAP_MAX_SYMBOLS", "NZ_STREAM_CHECKPOINT_MIN_CHARS",
     "NZ_SWE_NOMINAL_AGENT_TURNS", "NZ_WRITE_BATCH_MAX_FILE_BYTES",
     "NZ_WRITE_BATCH_MAX_TOTAL_BYTES", "SUBAGENT_BACKGROUND_MAX_CONCURRENT",
@@ -202,8 +207,6 @@ for _key in _FLOAT_CONFIG_KEYS:
 
 _TYPED_DEFAULTS = {
     "ALLOW_BASH_PACKAGE_INSTALLS": "0",
-    "MEMORY_ASYNC_WRITE": "0", "MEMORY_AUTO_DREAM": "1",
-    "MEMORY_AUTO_EXTRACT": "1", "MEMORY_LLM_EXTRACT": "0",
     "MEMORY_LLM_RERANK": "0", "NZ_AUTO_MODE_CLASSIFIER_ENABLED": "1",
     "NZ_CONTINUE_LOOP_ON_DENY": "0", "NZ_LSP_ENABLED": "1",
     "NZ_LSP_WRITE_DIAGNOSTICS_ENABLED": "1", "NZ_MCP_ENABLED": "0",
@@ -214,22 +217,21 @@ _TYPED_DEFAULTS = {
     "BASH_TIMEOUT_SECONDS": "120", "MAX_AGENT_TURNS": "500",
     "MAX_CONTEXT_TOKENS": "100000", "MAX_OUTPUT_TOKENS": "8000",
     "MAX_PARALLEL_TASKS": "4", "MAX_TOOL_CALLS_PER_RESPONSE": "20",
-    "MAX_VERIFICATION_GATE_PROMPTS": "2", "MEMORY_AUTO_DREAM_MIN_HOURS": "24",
-    "MEMORY_AUTO_DREAM_MIN_NEW_SESSIONS": "5", "MEMORY_CLEANUP_DAYS": "30",
-    "NZ_AUTO_MODE_CLASSIFIER_BLOCK_STREAK": "3",
+    "MAX_VERIFICATION_GATE_PROMPTS": "2", "NZ_AUTO_MODE_CLASSIFIER_BLOCK_STREAK": "3",
     "NZ_AUTO_MODE_CLASSIFIER_INFRA_FAILURES": "5",
     "NZ_AUTO_MODE_CLASSIFIER_MAX_OUTPUT_TOKENS": "256",
     "NZ_BASH_OUTPUT_HARD_LIMIT_BYTES": str(64 * 1024 * 1024),
     "NZ_CONTEXT_REPLAY_COMPACTION_TOKENS": "0", "NZ_DOOM_LOOP_THRESHOLD": "3",
     "NZ_IMAGE_DESCRIBE_MAX_TOKENS": "1200", "NZ_LSP_MAX_OUTPUT_CHARS": "20000",
     "NZ_LSP_WRITE_DIAGNOSTIC_MAX_FILES": "8", "NZ_MODEL_REGISTRY_TTL_SECONDS": "300",
-    "NZ_NOMINAL_AGENT_TURNS": "200", "NZ_PLANNING_MAX_TOKENS": "1500",
+    "NZ_NOMINAL_AGENT_TURNS": "200", "NZ_PLANNING_MAX_TOKENS": "8192",
     "NZ_PROCESS_BUFFER_BYTES": str(2 * 1024 * 1024),
     "NZ_PROCESS_MAX_PER_WORKSPACE": "16", "NZ_PROCESS_READ_MAX_BYTES": str(64 * 1024),
     "NZ_PROCESS_WRITE_MAX_BYTES": str(64 * 1024), "NZ_PROJECT_VERIFY_TIMEOUT_SECONDS": "60",
     "NZ_PROVIDER_MAX_RETRIES": "3", "NZ_REFLECTION_MAX_ATTEMPTS": "2",
-    "NZ_REMOTE_EVENT_QUEUE_SIZE": "512", "NZ_REPLAN_IDLE_TURNS": "5",
-    "NZ_REPLAN_MAX_ATTEMPTS": "2", "NZ_REPO_MAP_MAX_FILE_BYTES": "1000000",
+    "NZ_REMOTE_EVENT_QUEUE_SIZE": "512",
+    "NZ_REPO_MAP_MAX_FILE_BYTES": "1000000",
+    "NZ_WORKING_MEMORY_REMINDER_STEPS": "25",
     "NZ_REPO_MAP_MAX_FILES": "80", "NZ_REPO_MAP_MAX_SYMBOLS": "600",
     "NZ_STREAM_CHECKPOINT_MIN_CHARS": "4096", "NZ_SWE_NOMINAL_AGENT_TURNS": "200",
     "NZ_WRITE_BATCH_MAX_FILE_BYTES": "100000", "NZ_WRITE_BATCH_MAX_TOTAL_BYTES": "500000",
@@ -311,6 +313,65 @@ class ConfigIssue:
 
 class ConfigValidationError(ValueError):
     """Raised when a configuration or trust document is structurally unsafe."""
+
+
+def validate_lsp_environment(overrides: Mapping[str, str]) -> None:
+    """LSP 配置不能借环境加载钩子绕过已核对的入口载荷。"""
+    loading_names = {
+        "NODE_OPTIONS", "LD_PRELOAD", "LD_LIBRARY_PATH", "JAVA_TOOL_OPTIONS",
+        "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS", "RUBYOPT", "PERL5OPT", "BASH_ENV", "ENV",
+    }
+    if any(name.upper() in loading_names or name.upper().startswith("DYLD_") for name in overrides):
+        raise ConfigValidationError("Invalid NZ_LSP_SERVERS_JSON: code-loading environment is blocked")
+    try:
+        build_sanitized_subprocess_env(source={}, overrides=overrides, profile="strict-service")
+    except UnsafeSubprocessEnvironment as exc:
+        raise ConfigValidationError("Invalid NZ_LSP_SERVERS_JSON: unsafe environment assignment") from exc
+
+
+def normalize_lsp_servers_json(raw: str) -> str:
+    """在快照边界验证唯一补充配置，返回稳定且无调用者可变引用的 JSON。"""
+    message = "Invalid NZ_LSP_SERVERS_JSON"
+    try:
+        if len(raw.encode("utf-8")) > _MAX_CONFIG_BYTES:
+            raise ValueError("oversized")
+        value = json.loads(raw, parse_constant=lambda _value: (_ for _ in ()).throw(ValueError()))
+    except (TypeError, ValueError, UnicodeError, RecursionError) as exc:
+        raise ConfigValidationError(message) from exc
+    if not isinstance(value, dict) or set(value) - set(LSP_LANGUAGES):
+        raise ConfigValidationError(message + ": unknown language")
+
+    def validate_strings(item):
+        if isinstance(item, str):
+            if "\x00" in item:
+                raise ConfigValidationError(message + ": null byte")
+            import re
+            for token in re.findall(r"\$\{([^}]+)\}", item):
+                if token != "worktree" and not re.fullmatch(r"env:[A-Za-z_][A-Za-z0-9_()]*", token):
+                    raise ConfigValidationError(message + ": unknown placeholder")
+        elif isinstance(item, dict):
+            for key, nested in item.items():
+                validate_strings(key)
+                validate_strings(nested)
+        elif isinstance(item, list):
+            for nested in item:
+                validate_strings(nested)
+
+    try:
+        validate_strings(value)
+    except RecursionError as exc:
+        raise ConfigValidationError(message + ": nesting is too deep") from exc
+    for profile in value.values():
+        if not isinstance(profile, dict) or set(profile) - {"env", "initialization", "settings"}:
+            raise ConfigValidationError(message + ": unknown server field")
+        for section in ("initialization", "settings"):
+            if section in profile and not isinstance(profile[section], dict):
+                raise ConfigValidationError(message + ": configuration sections must be objects")
+        env = profile.get("env", {})
+        if not isinstance(env, dict) or any(not isinstance(v, str) for v in env.values()):
+            raise ConfigValidationError(message + ": env must map names to strings")
+        validate_lsp_environment(env)
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 @dataclass(frozen=True)
@@ -585,6 +646,30 @@ class WorkspaceTrustStore:
     def __init__(self, path: Path | None = None):
         self.path = Path(path or default_trust_store_path()).expanduser().absolute()
 
+    def capture_record_key(
+        self, workspace: Path, config_type: str, *, executable: str = ""
+    ) -> str:
+        """可信 owner 捕获原授权槽；后续撤销不再读取变化中的路径身份。"""
+        return _trust_key(_workspace_identity(workspace), config_type, executable)
+
+    def is_trusted_record(self, record_key: str, fingerprint: str) -> bool:
+        """只检查已捕获键的现有记录，不重建工作区 namespace。"""
+        if not fingerprint:
+            return False
+        record = self._read().get(record_key)
+        return bool(
+            isinstance(record, dict)
+            and isinstance(record.get("workspace"), dict)
+            and isinstance(record.get("config_type"), str)
+            and isinstance(record.get("executable"), str)
+            and record.get("fingerprint") == fingerprint
+            and _trust_key(
+                record["workspace"],
+                record.get("config_type", ""),
+                record.get("executable", ""),
+            ) == record_key
+        )
+
     def is_trusted(
         self,
         workspace: Path,
@@ -595,15 +680,9 @@ class WorkspaceTrustStore:
     ) -> bool:
         if not fingerprint:
             return False
-        identity = _workspace_identity(workspace)
-        key = _trust_key(identity, config_type, executable)
-        record = self._read().get(key)
-        return bool(
-            isinstance(record, dict)
-            and record.get("workspace") == identity
-            and record.get("config_type") == config_type
-            and record.get("fingerprint") == fingerprint
-            and record.get("executable") == executable
+        return self.is_trusted_record(
+            self.capture_record_key(workspace, config_type, executable=executable),
+            fingerprint,
         )
 
     def trust(
@@ -630,11 +709,15 @@ class WorkspaceTrustStore:
             self._write_unlocked(entries)
 
     def remove(self, workspace: Path, config_type: str, *, executable: str = "") -> bool:
-        identity = _workspace_identity(workspace)
-        key = _trust_key(identity, config_type, executable)
+        return self.remove_record(
+            self.capture_record_key(workspace, config_type, executable=executable)
+        )
+
+    def remove_record(self, record_key: str) -> bool:
+        """仅删除可信 owner 捕获的现有键；不创建或重定向任何授权。"""
         with self._exclusive_lock():
             entries = self._read_unlocked()
-            removed = entries.pop(key, None) is not None
+            removed = entries.pop(record_key, None) is not None
             if removed:
                 self._write_unlocked(entries)
             return removed
@@ -871,6 +954,9 @@ def _validate_captured_values(
     normalized = dict(values)
     issues: list[ConfigIssue] = []
     for key, record in values.items():
+        if key == "NZ_LSP_SERVERS_JSON":
+            normalized[key] = replace(record, value=secret_str(normalize_lsp_servers_json(record.value)))
+            continue
         spec = CONFIG_SCHEMA.get(key)
         if spec is None or spec.value_type == "string":
             continue

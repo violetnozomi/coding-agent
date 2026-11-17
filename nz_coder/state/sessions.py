@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import json
+import heapq
+import math
 import os
 import shutil
+import stat
 import tempfile
 import time
 import uuid
@@ -15,13 +18,29 @@ from typing import Callable
 from nz_coder.foundation import config
 from nz_coder.foundation.json_safety import json_safe_value
 from nz_coder.protocol.message_schema import (
-    MESSAGE_SCHEMA_VERSION,
+    MESSAGE_SCHEMA_VERSION, MESSAGE_ID_KEY, PARTS_KEY, _MESSAGE_ID_RE, _PART_ID_RE,
     is_synthetic_user_message,
     session_diffs,
     session_summary,
 )
 from nz_coder.state.workdir import current_derived_path, current_workdir
 from nz_coder.foundation.private_paths import harden_private_path
+from nz_coder.protocol.public_error import PublicInputError
+
+class SessionReadError(PublicInputError):
+    """会话存在但无法安全恢复；kind 用于跨界面传递稳定原因。"""
+    def __init__(self, kind: str, path: Path, *, size_bytes=None, limit_bytes=None, detail=None):
+        self.kind = kind
+        self.path = path
+        self.size_bytes = size_bytes
+        self.limit_bytes = limit_bytes
+        safe_detail = " (invalid message parts)" if detail == "invalid persisted message parts" else ""
+        super().__init__(f"Session {kind}{safe_detail}", code=kind)
+
+
+def _session_byte_limit() -> int:
+    return 64 * 1024 * 1024
+
 
 _DEFAULT_SESSION_DIR = Path(config.SESSION_DIR)
 _DEFAULT_SESSION_TITLE = "New Session"
@@ -102,7 +121,21 @@ def save_session(
     session_runtime_dir(session_id).mkdir(parents=True, exist_ok=True)
     _harden_session_directory(session_runtime_dir(session_id))
     path = _session_path(session_id)
-    existing = _read_json(path)
+    existing = _read_saved_session(path, expected_id=session_id) or {}
+    payload, diffs = _session_write_payload(
+        messages, mode=mode, session_id=session_id, run_status=run_status,
+        title=title, parent_session_id=parent_session_id,
+        session_metadata=session_metadata, model=model, existing=existing,
+    )
+    return _save_session_payload(path, payload, diffs, activate=activate, require_aliases=require_aliases)
+
+
+def _session_write_payload(
+    messages, *, mode=None, session_id, run_status=None, title=None,
+    parent_session_id=None, session_metadata=None, model=None, existing=None,
+):
+    """普通保存与终态重试使用同一持久投影，不另造摘要字段规则。"""
+    existing = existing or {}
     resolved_title = _normalize_title(
         title if title is not None else existing.get("title", _DEFAULT_SESSION_TITLE)
     ) or _DEFAULT_SESSION_TITLE
@@ -145,27 +178,39 @@ def save_session(
         payload["summary"] = summary
     if diffs:
         diff_path = session_diff_path(session_id)
-        try:
-            write_session_runtime_json(diff_path, {"version": 1, "diffs": diffs})
-        except OSError:
-            pass
-        else:
-            payload["diff_path"] = str(diff_path)
-    # The session-ID file is the authoritative commit point. HTTP callers opt
-    # out of requiring convenience aliases because they restore strictly by
-    # ID; interactive CLI callers retain the historical strict alias behavior.
-    _write_json(path, payload)
+        payload["diff_path"] = str(diff_path)
+    return payload, diffs
+
+
+def _save_session_payload(path, payload, diffs, *, activate=False, require_aliases=False, strict_diffs=False):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _harden_session_directory(path.parent)
+    session_id = payload["session_id"]
+    for directory in (session_artifact_dir(session_id), session_runtime_dir(session_id)):
+        directory.mkdir(parents=True, exist_ok=True)
+        _harden_session_directory(directory)
+    diff_path = session_diff_path(session_id)
+    # 在任何持久文件替换前，先验证最终 UTF-8 字节数和可表示性。
+    prepared = _prepare_session_json(path, payload)
     try:
-        _write_json(_latest_path(), payload)
-    except OSError:
-        if require_aliases:
-            raise
-    if activate:
-        try:
-            _write_json(_active_path(), payload)
-        except OSError:
-            if require_aliases:
-                raise
+        if diffs:
+            try:
+                write_session_runtime_json(diff_path, {"version": 1, "diffs": diffs})
+            except OSError:
+                if strict_diffs:
+                    raise
+                payload.pop("diff_path")
+                prepared.unlink(missing_ok=True)
+                prepared = _prepare_session_json(path, payload)
+        _publish_session_json(prepared, path)
+        for alias in ([_latest_path(), _active_path()] if activate else [_latest_path()]):
+            try:
+                _publish_session_json(prepared, alias)
+            except OSError:
+                if require_aliases:
+                    raise
+    finally:
+        prepared.unlink(missing_ok=True)
     return path
 
 
@@ -176,20 +221,22 @@ def rename_session(session_id: str, title: str) -> str:
     if not normalized:
         raise ValueError("Session title cannot be empty")
     path = _session_path(safe)
-    payload = _read_json(path)
-    if not payload:
-        active_payload = _read_json(_active_path())
+    payload = _read_saved_session(path, expected_id=safe)
+    if payload is None:
+        active_payload = _read_saved_session(_active_path()) or {}
         if active_payload.get("session_id") == safe:
             payload = active_payload
     if not payload:
         raise ValueError(f"Unknown session '{safe}'")
     payload["title"] = normalized
-    _write_json(path, payload)
-    for alias in (_latest_path(), _active_path()):
-        alias_payload = _read_json(alias)
-        if alias_payload.get("session_id") == safe:
-            alias_payload["title"] = normalized
-            _write_json(alias, alias_payload)
+    aliases = [alias for alias in (_latest_path(), _active_path()) if (_read_saved_session(alias) or {}).get("session_id") == safe]
+    prepared = _prepare_session_json(path, payload)
+    try:
+        _publish_session_json(prepared, path)
+        for alias in aliases:
+            _publish_session_json(prepared, alias)
+    finally:
+        prepared.unlink(missing_ok=True)
     return normalized
 
 
@@ -258,16 +305,14 @@ def delete_session(session_id: str) -> bool:
 
 def load_session(session_id: str = "latest") -> dict:
     if session_id == "active":
-        payload = _read_json(_active_path()) or _read_json(_latest_path())
+        payload = _read_saved_session(_active_path()) or _read_saved_session(_latest_path())
         if not payload:
             return {}
         real_id = payload.get("session_id") or ""
-        return _read_json(_session_path(real_id)) or payload
+        return _read_saved_session(_session_path(real_id), expected_id=real_id) or payload
 
     path = _session_path(session_id)
-    if not path.exists():
-        return {}
-    return _read_json(path)
+    return _read_saved_session(path, expected_id=None if session_id == "latest" else session_id) or {}
 
 
 def list_sessions(limit: int = 10) -> list[Path]:
@@ -277,7 +322,7 @@ def list_sessions(limit: int = 10) -> list[Path]:
     base = session_dir()
     if not base.exists():
         return []
-    dated: list[tuple[float, Path]] = []
+    dated: list[tuple[float, str, Path]] = []
     for path in base.glob("*.json"):
         if path.name in {"latest.json", "active.json"}:
             continue
@@ -285,9 +330,12 @@ def list_sessions(limit: int = 10) -> list[Path]:
             modified = path.stat().st_mtime
         except OSError:
             continue
-        dated.append((modified, path))
-    dated.sort(key=lambda item: (item[0], item[1].name), reverse=True)
-    return [path for _modified, path in dated[:bounded]]
+        item = (modified, path.name, path)
+        if len(dated) < bounded:
+            heapq.heappush(dated, item)
+        elif item > dated[0]:
+            heapq.heapreplace(dated, item)
+    return [path for _modified, _name, path in sorted(dated, reverse=True)]
 
 
 def describe_sessions(limit: int = 10) -> str:
@@ -310,7 +358,7 @@ def active_session_id() -> str | None:
     contextual = _ACTIVE_SESSION.get()
     if contextual and contextual[0] == current_workdir():
         return contextual[1]
-    payload = _read_json(_active_path()) or _read_json(_latest_path())
+    payload = _read_saved_session(_active_path()) or _read_saved_session(_latest_path())
     if not isinstance(payload, dict):
         return None
     session_id = payload.get("session_id")
@@ -328,7 +376,7 @@ def activate_session(session_id: str) -> str:
     _harden_session_directory(session_dir())
     session_runtime_dir(safe).mkdir(parents=True, exist_ok=True)
     _harden_session_directory(session_runtime_dir(safe))
-    payload = _read_json(_session_path(safe)) or {
+    payload = _read_saved_session(_session_path(safe), expected_id=safe) or {
         "session_id": safe,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "workspace": str(current_workdir()),
@@ -338,7 +386,16 @@ def activate_session(session_id: str) -> str:
         "artifacts_dir": str(session_artifact_dir(safe)),
         "runtime_dir": str(session_runtime_dir(safe)),
     }
-    _write_json(_active_path(), payload)
+    prepared = _prepare_session_json(_active_path(), payload)
+    try:
+        try:
+            _publish_session_json(prepared, _active_path())
+        except Exception:
+            # replace 后的 harden 也可能抛错；只有精确读回候选才发布内存身份。
+            if _read_session_payload(_active_path()) != payload:
+                raise
+    finally:
+        prepared.unlink(missing_ok=True)
     # Publish the process-local identity only after the durable alias reaches
     # its commit point; otherwise a disk failure creates a phantom Session.
     _ACTIVE_SESSION.set((current_workdir(), safe))
@@ -518,11 +575,37 @@ def _safe_session_id(session_id: str) -> str:
     return safe or "session"
 
 
+def _filename_component_limit(directory: Path) -> int:
+    # 会话目录可能尚未创建；卷查询需要已有的祖先目录。
+    while not directory.exists():
+        directory = directory.parent
+    if os.name != "nt":
+        return os.pathconf(directory, "PC_NAME_MAX")
+    import ctypes
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    root = ctypes.create_unicode_buffer(32768)
+    if not kernel.GetVolumePathNameW(str(directory), root, len(root)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    limit = wintypes.DWORD()
+    if not kernel.GetVolumeInformationW(root, None, 0, None, ctypes.byref(limit), None, None, 0):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return limit.value
+
+
 def _exact_session_id(session_id: str) -> str:
     """Validate one owned identity without aliasing or lossy sanitization."""
     raw = str(session_id or "")
     safe = _safe_session_id(raw)
-    if not raw or raw != safe or safe in {"active", "latest"}:
+    try:
+        limit = _filename_component_limit(session_dir())
+        filename = raw + ".json"
+        units = len(filename.encode("utf-16-le")) // 2 if os.name == "nt" else len(os.fsencode(filename))
+        representable = units <= limit
+    except (OSError, ValueError, UnicodeError):
+        representable = False
+    if not raw or raw != safe or safe in {"active", "latest"} or not representable:
         raise ValueError("Session ID must be an exact non-reserved identifier")
     return safe
 
@@ -563,16 +646,20 @@ def _remove_owned_tree(path: Path, owner: Path) -> None:
 
 
 def _repair_alias_after_delete(alias: Path, deleted_id: str) -> None:
-    payload = _read_json(alias)
+    payload = _read_saved_session(alias) or {}
     if payload.get("session_id") != deleted_id:
         return
     replacement = next(iter(list_sessions(limit=1)), None)
     if replacement is None:
         alias.unlink(missing_ok=True)
         return
-    replacement_payload = _read_json(replacement)
+    replacement_payload = _read_saved_session(replacement, expected_id=replacement.stem) or {}
     if replacement_payload:
-        _write_json(alias, replacement_payload)
+        prepared = _prepare_session_json(alias, replacement_payload)
+        try:
+            _publish_session_json(prepared, alias)
+        finally:
+            prepared.unlink(missing_ok=True)
     else:
         alias.unlink(missing_ok=True)
 
@@ -584,6 +671,192 @@ def _read_json(path: Path) -> dict:
         return {}
     normalized = json_safe_value(payload)
     return normalized if isinstance(normalized, dict) else {}
+
+
+def _file_identity(st):
+    return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+
+
+def _read_session_payload(path: Path, *, maximum_bytes: int | None = None, expected_identity=None) -> dict | None:
+    limit = _session_byte_limit() if maximum_bytes is None else maximum_bytes
+    try:
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    except FileNotFoundError as exc:
+        if expected_identity is not None:
+            raise SessionReadError("changed", path) from exc
+        return None
+    except OSError as exc:
+        raise SessionReadError("unreadable", path) from exc
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise SessionReadError("unreadable", path)
+        identity = _file_identity(before)
+        if expected_identity is not None and identity != expected_identity:
+            raise SessionReadError("changed", path)
+        chunks = []
+        remaining = limit + 1
+        while remaining:
+            chunk = os.read(descriptor, remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        after = os.fstat(descriptor)
+        try:
+            entry = path.stat(follow_symlinks=False)
+        except OSError as exc:
+            raise SessionReadError("changed", path) from exc
+        if identity != _file_identity(after) or identity != _file_identity(entry):
+            raise SessionReadError("changed", path)
+        if len(raw) > limit:
+            raise SessionReadError("resource_limit", path, size_bytes=before.st_size, limit_bytes=limit)
+        try:
+            payload = json.loads(raw.decode("utf-8"), parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+        except (UnicodeError, ValueError, RecursionError) as exc:
+            raise SessionReadError("corrupt", path) from exc
+        if not isinstance(payload, dict):
+            raise SessionReadError("corrupt", path)
+        try:
+            _validate_json_value(payload)
+        except (ValueError, RecursionError) as exc:
+            raise SessionReadError("corrupt", path) from exc
+        return payload
+    except OSError as exc:
+        raise SessionReadError("unreadable", path) from exc
+    finally:
+        os.close(descriptor)
+
+
+def _valid_persisted_parts(message: dict) -> bool:
+    """拒绝无法安全恢复的 Part，同时保留原始文件供诊断。"""
+    parts = message.get(PARTS_KEY, [])
+    if not isinstance(parts, list):
+        return False
+    if not parts:
+        return True
+    message_id = message.get(MESSAGE_ID_KEY)
+    if not isinstance(message_id, str) or not _MESSAGE_ID_RE.fullmatch(message_id):
+        return False
+    seen = set()
+    for part in parts:
+        if not isinstance(part, dict):
+            return False
+        part_id = part.get("id")
+        if (not isinstance(part_id, str) or not _PART_ID_RE.fullmatch(part_id)
+                or part_id in seen or part.get("message_id", message_id) != message_id
+                or not isinstance(part.get("type"), str)):
+            return False
+        seen.add(part_id)
+        if "status" in part and not isinstance(part["status"], str):
+            return False
+        state = part.get("state")
+        if state is not None:
+            if not isinstance(state, dict):
+                return False
+            if "status" in state and not isinstance(state["status"], str):
+                return False
+            if "time" in state and not isinstance(state["time"], dict):
+                return False
+    return True
+
+
+def _read_saved_session(path: Path, *, expected_id: str | None = None, expected_identity=None) -> dict | None:
+    """校验持久文件身份及 Part，旧外层消息修复仍由 Store 负责。"""
+    payload = _read_session_payload(path, expected_identity=expected_identity)
+    if payload is None:
+        return None
+    sid = payload.get("session_id")
+    try:
+        if not isinstance(sid, str) or _exact_session_id(sid) != sid:
+            raise ValueError()
+        if expected_id is not None and sid != expected_id:
+            raise ValueError()
+        workspace = payload.get("workspace")
+        if not isinstance(workspace, str) or not workspace or Path(workspace).resolve() != current_workdir():
+            raise ValueError()
+        parent = payload.get("parent_session_id")
+        if parent not in (None, ""):
+            if not isinstance(parent, str) or _exact_session_id(parent) != parent or parent == sid:
+                raise ValueError()
+        metadata = payload.get("metadata")
+        if "metadata" in payload and not isinstance(metadata, dict):
+            raise ValueError()
+        messages = payload.get("messages")
+        if isinstance(messages, list) and any(isinstance(item, dict) and not _valid_persisted_parts(item) for item in messages):
+            raise SessionReadError("corrupt", path, detail="invalid persisted message parts")
+    except (OSError, RuntimeError, ValueError) as exc:
+        if isinstance(exc, SessionReadError):
+            raise
+        raise SessionReadError("corrupt", path) from exc
+    return payload
+
+def _validate_json_value(value, depth=0, *, allow_nonfinite=False):
+    if depth > 200:
+        raise ValueError("Session JSON is too deeply nested")
+    if value is None or isinstance(value, (str, bool, int)):
+        return
+    if isinstance(value, float) and (allow_nonfinite or math.isfinite(value)):
+        return
+    if isinstance(value, list):
+        for item in value:
+            _validate_json_value(item, depth + 1, allow_nonfinite=allow_nonfinite)
+        return
+    if isinstance(value, dict) and all(isinstance(key, str) for key in value):
+        for item in value.values():
+            _validate_json_value(item, depth + 1, allow_nonfinite=allow_nonfinite)
+        return
+    raise ValueError("Session JSON contains an unsupported value")
+
+
+def _canonical_session_payload(payload: dict) -> dict:
+    _validate_json_value(payload, allow_nonfinite=True)
+    # 深度先严格检查，避免通用规范化函数静默替换合法历史。
+    payload = json_safe_value(payload, max_depth=201)
+    _validate_json_value(payload)
+    return payload
+
+
+def _prepare_session_json(path: Path, payload: dict) -> Path:
+    payload = _canonical_session_payload(payload)
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix=".session-", suffix=".tmp")
+    temp = Path(name)
+    limit = _session_byte_limit()
+    size = 0
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            encoder = json.JSONEncoder(ensure_ascii=False, indent=2, allow_nan=False)
+            for part in encoder.iterencode(payload):
+                data = part.encode("utf-8")
+                size += len(data)
+                if size > limit:
+                    raise SessionReadError("resource_limit", path, size_bytes=size, limit_bytes=limit)
+                handle.write(data)
+            size += 1
+            if size > limit:
+                raise SessionReadError("resource_limit", path, size_bytes=size, limit_bytes=limit)
+            handle.write(b"\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        return temp
+    except Exception:
+        temp.unlink(missing_ok=True)
+        raise
+
+
+def _publish_session_json(prepared: Path, path: Path) -> None:
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix=".session-", suffix=".tmp")
+    temp = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as target, prepared.open("rb") as source:
+            shutil.copyfileobj(source, target)
+            target.flush()
+            os.fsync(target.fileno())
+        temp.replace(path)
+        harden_private_path(path)
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def _write_json(path: Path, payload: dict) -> None:

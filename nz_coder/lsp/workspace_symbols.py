@@ -1,4 +1,5 @@
 """Best-effort LSP workspace-symbol enrichment for repository maps."""
+
 # pyright: reportAny=false, reportUnknownMemberType=false
 from __future__ import annotations
 
@@ -136,9 +137,7 @@ def _parse_symbol(
 
 def _rank(entry: WorkspaceSymbolEntry, query: str) -> MatchRank:
     qualified_name = (
-        f"{entry.container}.{entry.name}"
-        if entry.container
-        else entry.name
+        f"{entry.container}.{entry.name}" if entry.container else entry.name
     )
     rank = rank_repo_symbol(
         path=entry.path,
@@ -159,10 +158,22 @@ def collect_workspace_symbols(
     base: Path,
     query: str,
     limit: int,
+    operation=None,
 ) -> WorkspaceSymbolResult:
     """Collect bounded, in-scope workspace symbols without failing Repo Map."""
+    from .types import LspOperation
+    from nz_coder.runtime.core.run_settings import current_run_settings
+    from nz_coder.tools import current_tool_cancel_event
+
+    settings = current_run_settings()
+    operation = operation or LspOperation(
+        current_tool_cancel_event(),
+        time.monotonic()
+        + settings.lsp_initialize_timeout
+        + settings.lsp_request_timeout,
+    )
     try:
-        client = get_client_for_file(probe, workspace)
+        client = get_client_for_file(probe, workspace, operation=operation)
         if client is None:
             return WorkspaceSymbolResult(
                 source="",
@@ -172,21 +183,33 @@ def collect_workspace_symbols(
         from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 
         relative = probe.resolve().relative_to(workspace.resolve()).as_posix()
-        text, identity = WorkspaceFileAccess(workspace).read_text_with_identity(
-            relative, errors="replace",
+        _ = client.open_document(
+            probe,
+            reader=lambda: WorkspaceFileAccess(workspace).read_text_with_identity(
+                relative, errors="replace"
+            ),
+            operation=operation,
         )
-        _ = client.open_document(probe, text, identity)
         response = cast(
             object,
-            client.request("workspace/symbol", {"query": query.strip()}),
+            client.request(
+                "workspace/symbol", {"query": query.strip()}, operation=operation
+            ),
         )
         if isinstance(response, list) and not response and query.strip():
             # A freshly started server can accept requests before its index is
             # ready. Retry once so the first semantic Repo Map is useful.
-            time.sleep(_WORKSPACE_SYMBOL_WARMUP_SECONDS)
+            end = min(
+                operation.deadline, time.monotonic() + _WORKSPACE_SYMBOL_WARMUP_SECONDS
+            )
+            while time.monotonic() < end:
+                client._check(operation)
+                time.sleep(min(0.02, end - time.monotonic()))
             response = cast(
                 object,
-                client.request("workspace/symbol", {"query": query.strip()}),
+                client.request(
+                    "workspace/symbol", {"query": query.strip()}, operation=operation
+                ),
             )
         if not isinstance(response, list):
             return WorkspaceSymbolResult(
@@ -225,11 +248,7 @@ def collect_workspace_symbols(
         bounded_limit = max(1, min(int(limit), _WORKSPACE_SYMBOL_MAX))
         truncated = len(ordered) > bounded_limit
         symbols = tuple(ordered[:bounded_limit])
-        notice = (
-            f"LSP symbols truncated at {bounded_limit}"
-            if truncated
-            else ""
-        )
+        notice = f"LSP symbols truncated at {bounded_limit}" if truncated else ""
         return WorkspaceSymbolResult(
             source=f"lsp/{client.server_id}",
             symbols=symbols,
@@ -247,16 +266,16 @@ def format_workspace_symbols(result: WorkspaceSymbolResult) -> list[str]:
     """Format a semantic supplement for the text repository map."""
     rows: list[str] = []
     if result.source:
-        rows.extend([
-            "",
-            "LSP workspace symbols",
-            f"semantic_source: {result.source}, symbols: {len(result.symbols)}",
-        ])
+        rows.extend(
+            [
+                "",
+                "LSP workspace symbols",
+                f"semantic_source: {result.source}, symbols: {len(result.symbols)}",
+            ]
+        )
         for symbol in result.symbols:
             qualified_name = (
-                f"{symbol.container}.{symbol.name}"
-                if symbol.container
-                else symbol.name
+                f"{symbol.container}.{symbol.name}" if symbol.container else symbol.name
             )
             rows.append(
                 f"  {symbol.path}:{symbol.line}:{symbol.character} | "

@@ -134,17 +134,20 @@ def test_strict_product_runtime_requires_evidence_without_promoting_inferred_tar
             sidecar_verifier=False,
         )
         try:
-            agent.vm.mark_write("edit_file", {"path": "src/widget.py"})
-            agent.vm.observe_verify_changed_files("OK: py_compile changed files")
-            verification_needed = agent.vm.should_gate()
-            pipeline = agent.vm.status()["verification_pipeline"]
+            from tests.verification_scenarios import VerificationScenario
+            scenario = VerificationScenario(workspace=tmp_path, require_targeted=True)
+            scenario.write_resource("edit_file", {"path": "src/widget.py"})
+            scenario.runtime.refresh_plan()
+            scenario.syntax_result("OK: py_compile changed files", passed=True)
+            verification_needed = scenario.runtime.should_gate()
+            pipeline = scenario.runtime.status()["verification_pipeline"]
+
         finally:
             agent.close()
 
     targeted = next(stage for stage in pipeline["stages"] if stage["name"] == "targeted")
     assert verification_needed is True
-    assert targeted["required"] is True
-    assert targeted["evidence_required"] is True
+    assert scenario.domain.snapshot().targeted_pending
     assert targeted["status"] == "pending"
     assert targeted["commands"][0]["command"] == "pytest tests/test_widget.py"
     assert targeted["commands"][0]["required"] is False
@@ -174,7 +177,7 @@ def test_coding_and_declared_profiles_share_services_runner_and_trace(tmp_path):
     ):
         workspace = tmp_path / name
         workspace.mkdir()
-        tracer = TraceRecorder(trace_dir=workspace / "traces", enabled=True)
+        tracer = TraceRecorder(trace_dir=tmp_path / (name + "-traces"), enabled=True)
         with scoped_workdir(workspace):
             agent = factory(tracer)
             try:

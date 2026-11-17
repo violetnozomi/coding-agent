@@ -9,8 +9,14 @@ import time
 
 from nz_coder.foundation.async_utils import to_thread_settled as _to_thread_settled
 from nz_coder.runtime.core.execution_context import max_parallel_tasks
-from nz_coder.tool_platform.execution import ToolExecutionResult
-from nz_coder.tools import current_tool_cancel_event, scoped_tool_cancellation
+from nz_coder.tool_platform.execution import ToolExecutionResult, skipped_after_approval
+from nz_coder.tools import ToolCancellationScope, current_tool_cancel_event, scoped_tool_cancellation
+from nz_coder.runtime.core.run_context import current_run_context
+
+def _new_tool_cancellation_scope() -> ToolCancellationScope:
+    run = current_run_context()
+    return ToolCancellationScope(current_tool_cancel_event(), run.cancel_scope if run else None)
+
 
 def _notify_schedule_observer(observer, payload: dict) -> None:
     """Keep best-effort observability callbacks outside the execution contract."""
@@ -23,7 +29,7 @@ def _notify_schedule_observer(observer, payload: dict) -> None:
 
 
 def _execute_with_tool_cancellation(
-    cancel_event: threading.Event,
+    cancel_event: ToolCancellationScope,
     function,
     *args,
 ):
@@ -79,6 +85,10 @@ def _execute_scheduled(
     segment_index = 0
     preceding_parallel_ms = 0.0
     while index < len(tool_calls_raw):
+        if any(result.approval_stopped for _, _, result in results):
+            results.extend((i, call, skipped_after_approval(call)) for i, call in
+                           enumerate(tool_calls_raw[index:], start=index))
+            break
         if not can_run_concurrently(tool_calls_raw[index]):
             tc = tool_calls_raw[index]
             started = time.perf_counter()
@@ -209,10 +219,14 @@ async def _execute_scheduled_async(
     segment_index = 0
     preceding_parallel_ms = 0.0
     while index < len(tool_calls_raw):
+        if any(result.approval_stopped for _, _, result in results):
+            results.extend((i, call, skipped_after_approval(call)) for i, call in
+                           enumerate(tool_calls_raw[index:], start=index))
+            break
         if not can_run_concurrently(tool_calls_raw[index]):
             tc = tool_calls_raw[index]
             started = time.perf_counter()
-            cancel_event = current_tool_cancel_event() or threading.Event()
+            cancel_event = _new_tool_cancellation_scope()
             result = await _to_thread_settled(
                 _execute_with_tool_cancellation,
                 cancel_event,
@@ -278,7 +292,7 @@ async def _execute_concurrent_async(executor, tool_calls_raw: list, on_metrics=N
     if len(tool_calls_raw) <= 1:
         results = []
         for i, tc in enumerate(tool_calls_raw):
-            cancel_event = current_tool_cancel_event() or threading.Event()
+            cancel_event = _new_tool_cancellation_scope()
             result = await _to_thread_settled(
                 _execute_with_tool_cancellation,
                 cancel_event,
@@ -293,7 +307,7 @@ async def _execute_concurrent_async(executor, tool_calls_raw: list, on_metrics=N
         return results
 
     async def run_one(i: int, tc: dict):
-        cancel_event = current_tool_cancel_event() or threading.Event()
+        cancel_event = _new_tool_cancellation_scope()
         try:
             result_r = await _to_thread_settled(
                 _execute_with_tool_cancellation,
@@ -323,6 +337,20 @@ async def _execute_concurrent_async(executor, tool_calls_raw: list, on_metrics=N
     indexed_calls = list(enumerate(tool_calls_raw))
     for start in range(0, len(indexed_calls), parallel_limit):
         batch = indexed_calls[start:start + parallel_limit]
-        results.extend(await asyncio.gather(*(run_one(i, tc) for i, tc in batch)))
+        tasks = [asyncio.create_task(run_one(i, tc)) for i, tc in batch]
+        try:
+            results.extend(await asyncio.gather(*tasks))
+        except BaseException:
+            # gather会在首个child取消时提前返回；先合作取消并排空整段，再允许回滚。
+            for task in tasks:
+                task.cancel()
+            drained = asyncio.gather(*tasks, return_exceptions=True)
+            while not drained.done():
+                try:
+                    await asyncio.shield(drained)
+                except asyncio.CancelledError:
+                    continue
+            drained.result()
+            raise
     _notify_schedule_observer(on_metrics, probe.metrics())
     return results

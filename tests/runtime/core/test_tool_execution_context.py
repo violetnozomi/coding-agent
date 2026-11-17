@@ -59,7 +59,6 @@ class _Host:
         self.runtime_state = object()
         self.recovery = object()
         self.permissions = object()
-        self.stall_orchestrator = None
         self._tool_observability = {}
         self._tool_batch_sequence = 0
         self.hooks = _Hooks()
@@ -142,9 +141,11 @@ def test_tool_context_refreshes_policy_identity_after_handoff(tmp_path) -> None:
 
 def test_projected_output_reaches_every_post_result_hook() -> None:
     """No legacy hook may bypass the unified result admission decision."""
+    from nz_coder.runtime.verification.hooks import AgentHooks
+
     received: list[tuple[str, str]] = []
 
-    class Hooks:
+    class Hooks(AgentHooks):
         def after_tool_result(self, _host, _messages, _result, output) -> None:
             received.append(("after", output))
 

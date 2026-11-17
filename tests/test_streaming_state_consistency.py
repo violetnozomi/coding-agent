@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from nz_coder.providers.normalized import chunk
 from nz_coder.protocol.message_schema import attach_message_identity
 from nz_coder.protocol.message_part_reducer import MessagePartReducer
 from nz_coder.protocol.message_schema import (
@@ -335,7 +336,7 @@ def test_output_guardrail_never_leaks_raw_delta(tmp_path, monkeypatch):
 
     class Completions:
         def create(self, **_kwargs):
-            return iter([_chunk("raw-secret")])
+            return iter([_chunk("raw-secret"), chunk(finish_reason="stop")])
 
     async def rewrite(message, _context):
         assert message["content"] == "raw-secret"
@@ -383,12 +384,19 @@ def test_output_guardrail_never_leaks_raw_delta(tmp_path, monkeypatch):
         finally:
             agent.close()
 
-    assert result["status"] == "completed"
-    assert messages[-1]["content"] == "safe-output"
+    # 离线替身没有提供验证或交付评审证据，保留真实的未验证终态。
+    assert result["status"] == "completed_unverified"
+    assert result["verification"]["verification_state"] == "unverified"
+    assert result["verification"]["last_verification"] is None
+    assert result["verification"]["delivery_review"] is None
+    assert result["authored_content"] == "safe-output"
+    assert result["content"].startswith("本次执行已结束，验证尚未确认。")
+    assert result["content"].endswith("模型交付说明（未经独立确认）：\nsafe-output")
+    assert messages[-1]["content"] == result["content"]
     assert "raw-secret" not in repr(messages)
     assert "raw-secret" not in "".join(str(token or "") for token in tokens)
     assert "raw-secret" not in repr(persisted.get("messages", []))
-    assert persisted["messages"][-1]["content"] == "safe-output"
+    assert persisted["messages"][-1]["content"] == result["content"]
     assert all(
         "raw-secret" not in repr(event.properties)
         for event in events
@@ -406,7 +414,7 @@ def test_output_guardrail_reject_discards_entire_attempt(tmp_path, monkeypatch):
 
     class Completions:
         def create(self, **_kwargs):
-            return iter([_chunk("must-not-escape")])
+            return iter([_chunk("must-not-escape"), chunk(finish_reason="stop")])
 
     graph = AgentGraph([
         AgentSpec(
@@ -538,8 +546,15 @@ def test_output_guardrail_tool_turn_never_materializes_private_text(
     public_state = repr(messages) + repr([
         event.properties for event in events
     ]) + journal.read_text(encoding="utf-8")
-    assert result["status"] == "completed"
-    assert messages[-1]["content"] == "safe-output"
+    # 离线替身没有提供验证或交付评审证据，保留真实的未验证终态。
+    assert result["status"] == "completed_unverified"
+    assert result["verification"]["verification_state"] == "unverified"
+    assert result["verification"]["last_verification"] is None
+    assert result["verification"]["delivery_review"] is None
+    assert result["authored_content"] == "safe-output"
+    assert result["content"].startswith("本次执行已结束，验证尚未确认。")
+    assert result["content"].endswith("模型交付说明（未经独立确认）：\nsafe-output")
+    assert messages[-1]["content"] == result["content"]
     assert "raw-secret" not in public_state
     assert "private-reasoning" not in public_state
 
@@ -919,7 +934,11 @@ def test_raw_tool_arguments_not_published_before_guardrail(tmp_path, monkeypatch
     finally:
         agent.close()
 
-    assert result["status"] == "completed"
+    # 离线替身没有提供验证或交付评审证据，保留真实的未验证终态。
+    assert result["status"] == "completed_unverified"
+    assert result["verification"]["verification_state"] == "unverified"
+    assert result["verification"]["last_verification"] is None
+    assert result["verification"]["delivery_review"] is None
     assert seen_messages
     public = repr(messages) + repr([event.properties for event in events])
     assert "raw-secret-path" not in public
@@ -946,7 +965,7 @@ def test_tool_guardrail_block_does_not_expose_raw_input(tmp_path, monkeypatch):
             finish_reason="tool_calls",
             delta=SimpleNamespace(content=None, tool_calls=[tool_call], reasoning_content=None),
         )])]),
-        iter([_chunk("recovered")]),
+        iter([_chunk("recovered"), chunk(finish_reason="stop")]),
     ]
 
     class Completions:
@@ -1016,7 +1035,7 @@ def test_guardrail_reason_not_present_in_event_journal(tmp_path, monkeypatch):
 
     class Completions:
         def create(self, **_kwargs):
-            return iter([_chunk("private-output")])
+            return iter([_chunk("private-output"), chunk(finish_reason="stop")])
 
     graph = AgentGraph([
         AgentSpec(
@@ -1080,7 +1099,7 @@ def test_stream_retry_removes_old_part_everywhere(tmp_path, monkeypatch):
             self.calls += 1
             if self.calls == 1:
                 return broken_stream()
-            return iter([_chunk("complete-new")])
+            return iter([_chunk("complete-new"), chunk(finish_reason="stop")])
 
     bus = SessionEventBus(session_id="retry-authoritative")
     subscription = bus.subscribe()
@@ -1108,13 +1127,20 @@ def test_stream_retry_removes_old_part_everywhere(tmp_path, monkeypatch):
     reducer = MessagePartReducer()
     for event in events:
         reducer.apply_event(event)
-    assert result["status"] == "completed"
-    assert messages[-1]["content"] == "complete-new"
+    # 离线替身没有提供验证或交付评审证据，保留真实的未验证终态。
+    assert result["status"] == "completed_unverified"
+    assert result["verification"]["verification_state"] == "unverified"
+    assert result["verification"]["last_verification"] is None
+    assert result["verification"]["delivery_review"] is None
+    assert result["authored_content"] == "complete-new"
+    assert result["content"].startswith("本次执行已结束，验证尚未确认。")
+    assert result["content"].endswith("模型交付说明（未经独立确认）：\ncomplete-new")
+    assert messages[-1]["content"] == result["content"]
     assert "partial-old" not in repr(messages[-1].get(PARTS_KEY, []))
-    assert latest_assistant_text(messages) == "complete-new"
+    assert latest_assistant_text(messages) == result["content"]
     assert "partial-old" not in repr(persisted.get("messages", []))
-    assert latest_assistant_text(persisted["messages"]) == "complete-new"
-    assert reducer.visible_text == "complete-new"
+    assert latest_assistant_text(persisted["messages"]) == result["content"]
+    assert reducer.visible_text == result["content"]
     assert any(event.type == "message.part.removed" for event in events)
 
 
@@ -1284,7 +1310,7 @@ def test_checkpoint_is_coalesced(tmp_path, monkeypatch):
 
     class Completions:
         def create(self, **_kwargs):
-            return iter([_chunk("x") for _index in range(200)])
+            return iter([*[_chunk("x") for _index in range(200)], chunk(finish_reason="stop")])
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
     monkeypatch.setattr(config, "STREAM_CHECKPOINT_INTERVAL_SECONDS", 60.0)
@@ -1340,7 +1366,7 @@ def test_reasoning_part_updates_are_coalesced(tmp_path, monkeypatch):
 
     class Completions:
         def create(self, **_kwargs):
-            return iter([_reasoning_chunk("r") for _index in range(200)])
+            return iter([*[_reasoning_chunk("r") for _index in range(200)], chunk(finish_reason="stop")])
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
     monkeypatch.setattr(config, "STREAM_DELTA_INTERVAL_SECONDS", 0.08)
@@ -1997,8 +2023,10 @@ def test_remote_cleanup_when_reconcile_fails(monkeypatch):
             state["renderer_finished"] += 1
 
     class RunView:
-        def __init__(self, _console, _renderer):
-            pass
+        interaction_run_id = ""
+
+        def __init__(self, _console, _renderer, *, terminal_source):
+            assert terminal_source == "settled"
 
         def begin_remote(self, _agent):
             pass

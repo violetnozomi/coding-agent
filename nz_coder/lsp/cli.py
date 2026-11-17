@@ -1,4 +1,5 @@
 """Explicit trust controls for workspace-local language servers."""
+
 from __future__ import annotations
 
 import argparse

@@ -52,7 +52,7 @@ class _ControlClient:
         return {"id": session_id, "status": "idle"}
 
     def list_sessions(self):
-        return [{"id": self.selected}]
+        return {"sessions": [{"id": self.selected}], "unavailable": []}
 
     def messages(self, session_id):
         return [{"role": "user", "content": session_id}]
@@ -140,7 +140,7 @@ def test_remote_backend_session_and_process_controls_delegate_to_runtime_truth()
     client = _ControlClient()
     backend = RemoteTerminalBackend(client, "parent")
 
-    assert backend.sessions() == [{"id": "parent"}]
+    assert backend.sessions() == {"sessions": [{"id": "parent"}], "unavailable": []}
     assert backend.messages()[0]["content"] == "parent"
     assert backend.rename("Renamed")["title"] == "Renamed"
     assert backend.fork(1)["parent_session_id"] == "parent"

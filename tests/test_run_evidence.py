@@ -540,3 +540,101 @@ def test_symbol_check_evidence_is_keyed_by_file_path():
     assert len(evidence.verification_results) == 2
     assert [item["path"] for item in evidence.verification_results] == ["pkg/a.py", "pkg/b.py"]
     assert [item["status"] for item in evidence.verification_results] == ["error", "passed"]
+
+
+def test_denied_atomic_write_batch_does_not_report_requested_files_as_modified():
+    from nz_coder.runtime.observability.run_evidence import RunEvidence
+
+    evidence = RunEvidence("denied-batch")
+    evidence.record_tool_result(
+        "write_files_batch",
+        {"files": [{"path": "app.py", "content": "pass"}, {"path": "tests/test_app.py", "content": "pass"}]},
+        "Denied: the current task forbids modifying test files.",
+        success=False,
+        dispatch_failed=True,
+    )
+    assert evidence.created_files == []
+    assert evidence.modified_files == []
+    assert evidence.actual_output_paths == []
+    assert len(evidence.tool_failures) == 1
+
+
+
+def test_review_explanation_assessment_does_not_waive_changed_file_verification():
+    from nz_coder.intelligence.reviewer import review_run_evidence
+
+    review = review_run_evidence({
+        "task_assessment": {"task_kinds": ["explain"], "complexity": "simple"},
+        "modified_files": ["app.py"],
+    })
+    assert review["review_status"] == "needs_fix"
+    assert "verification_results" in review["missing_evidence"]
+
+
+def test_review_assessment_does_not_invent_artifact_or_test_obligations():
+    from nz_coder.intelligence.reviewer import review_run_evidence
+
+    review = review_run_evidence({
+        "task_assessment": {"task_kinds": ["project_creation", "test"], "complexity": "complex"},
+    })
+    assert review["review_status"] == "approved"
+    assert review["missing_evidence"] == []
+    assert review["required_next_steps"] == []
+
+
+def test_review_observed_verification_failure_blocks_read_only_assessment():
+    from nz_coder.intelligence.reviewer import review_run_evidence
+
+    review = review_run_evidence({
+        "task_assessment": {"task_kinds": ["review"]},
+        "verification_results": [{"status": "failed", "command": "pytest"}],
+    })
+    assert review["review_status"] == "needs_fix"
+
+
+def test_review_mixed_outputs_retains_artifact_coverage_and_patch_risk():
+    from nz_coder.intelligence.reviewer import review_run_evidence
+
+    review = review_run_evidence({
+        "created_files": ["report.md"],
+        "modified_files": ["app.py"],
+        "expected_files": ["report.md", "schema.json"],
+        "verification_results": [{"status": "passed"}],
+        "impact_review": {"requires_replan": True, "risk_signals": [{"category": "public_signature_change"}]},
+    })
+    assert review["review_status"] == "needs_fix"
+    assert "expected_files_coverage" in review["missing_evidence"]
+    assert any("public_signature_change" in item for item in review["limitations"])
+
+
+def test_review_created_files_retains_real_patch_risk():
+    from nz_coder.intelligence.reviewer import review_run_evidence
+
+    review = review_run_evidence({
+        "created_files": ["app.py"],
+        "verification_results": [{"status": "passed"}],
+        "impact_review": {"requires_replan": True, "risk_signals": [{"category": "requested_scope_expansion"}]},
+    })
+    assert review["review_status"] == "approved_with_limitations"
+    assert any("requested_scope_expansion" in item for item in review["limitations"])
+
+
+def test_review_uses_raw_diff_size_for_impact_obligation():
+    from nz_coder.intelligence.reviewer import review_run_evidence
+
+    review = review_run_evidence({"modified_files": ["app.py"], "verification_results": [{"status": "passed"}]},
+                                 {"diff_chars": 2000})
+    assert review["review_status"] == "approved_with_limitations"
+    assert any("Impact review" in item for item in review["limitations"])
+
+
+def test_review_user_test_requirement_is_not_waived_by_assessment():
+    from nz_coder.intelligence.reviewer import review_run_evidence
+
+    review = review_run_evidence({
+        "task_assessment": {"task_kinds": ["explain"]},
+        "modified_files": ["app.py"],
+        "verification_results": [{"status": "passed"}],
+    }, {"wants_tests": True, "tests_modified": False})
+    assert review["review_status"] == "needs_fix"
+    assert any("asks for tests" in item for item in review["reasons"])

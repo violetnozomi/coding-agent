@@ -6,9 +6,10 @@ do not reimplement this lifecycle.
 """
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import asyncio
 import copy
-import threading
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
@@ -18,20 +19,25 @@ from nz_coder.runtime.adapters.tool import (
     policy_context_from_legacy_host,
     projection_context_from_legacy_host,
     tool_context_from_legacy_host,
+    commit_execution_handoff_result,
 )
 from nz_coder.runtime.core.tool_context import ToolExecutionContext, ToolPolicyContext
 from nz_coder.runtime.agent.guardrails import GuardrailEscalateError
+from nz_coder.runtime.agent.task_intent import submit_task_assessment
+from nz_coder.runtime.agent.planning_runtime import submit_working_plan
 from nz_coder.runtime.agent.guardrail_runtime import ProductionGuardrailRuntime
 from nz_coder.runtime.agent.auto_mode import parse_tool_arguments
 from nz_coder.runtime.conversation.input_preflight import ProductionInputPreflight
 from nz_coder.tool_platform.execution import (
     ToolExecutionResult,
+    skipped_after_approval,
     is_transactional_write_tool,
 )
 from nz_coder.runtime.tool_runtime.scheduler import (
     _execute_scheduled,
     _execute_scheduled_async,
     _execute_with_tool_cancellation,
+    _new_tool_cancellation_scope,
 )
 from nz_coder.runtime.tool_runtime.policy import ProductionToolPolicy
 from nz_coder.runtime.tool_runtime.result_projection import ProductionToolResultProjector
@@ -40,13 +46,13 @@ from nz_coder.runtime.tool_runtime.envelope import (
     normalize_raw_tool_calls,
 )
 from nz_coder.tools import (
-    current_tool_cancel_event,
     get_specs,
     scoped_dynamic_tool_snapshot,
     scoped_tool_metadata_reporter,
 )
 from nz_coder.protocol.public_error import to_public_error
 from nz_coder.tools.question import scoped_question_lifecycle_reporter
+from nz_coder.tool_platform.permissioning.command_authorization import CommandApprovalBatch
 
 
 @dataclass
@@ -55,6 +61,7 @@ class ApprovedToolBatch:
 
     calls: list[dict]
     blocked: dict[int, ToolExecutionResult] = field(default_factory=dict)
+    approvals: CommandApprovalBatch = field(default_factory=CommandApprovalBatch, repr=False)
 
 
 class ProductionToolRuntime:
@@ -107,10 +114,16 @@ class ProductionToolRuntime:
             trace("tool_call_repaired", **repair)
         calls: list[dict] = []
         blocked: dict[int, ToolExecutionResult] = {}
+        approvals = CommandApprovalBatch()
         guardrails = _guardrail_runtime(host)
         before_tool = getattr(guardrails, "before_tool_sync", guardrails.before_tool)
+        stopped = False
         for index, tool_call in enumerate(original):
-            guarded, rejected = asyncio.run(before_tool(host, tool_call, messages))
+            if stopped:
+                guarded, rejected = tool_call, skipped_after_approval(tool_call)
+            else:
+                with approvals.collecting(index):
+                    guarded, rejected = asyncio.run(before_tool(host, tool_call, messages))
             function = guarded.get("function", {})
             parsed = parse_tool_arguments(function.get("arguments", {}))
             if parsed is None:
@@ -119,11 +132,10 @@ class ProductionToolRuntime:
             calls.append(approved_tool_call(guarded, parsed).to_wire())
             if rejected is not None:
                 blocked[index] = rejected
-        blocked.update(self._static_policy_rejections(
-            policy_context_from_legacy_host(host),
-            calls,
-        ))
-        return ApprovedToolBatch(calls, blocked)
+                stopped = stopped or rejected.approval_stopped
+        for index, result in self._static_policy_rejections(policy_context_from_legacy_host(host), calls).items():
+            blocked.setdefault(index, result)
+        return ApprovedToolBatch(calls, blocked, approvals)
 
     async def approve_tool_calls_async(
         self,
@@ -140,11 +152,14 @@ class ProductionToolRuntime:
             context.lifecycle.trace("tool_call_repaired", **repair)
         calls: list[dict] = []
         blocked: dict[int, ToolExecutionResult] = {}
+        approvals = CommandApprovalBatch()
+        stopped = False
         for index, tool_call in enumerate(original):
-            guarded, rejected = await context.lifecycle.before_tool(
-                tool_call,
-                messages,
-            )
+            if stopped:
+                guarded, rejected = tool_call, skipped_after_approval(tool_call)
+            else:
+                with approvals.collecting(index):
+                    guarded, rejected = await context.lifecycle.before_tool(tool_call, messages)
             function = guarded.get("function", {})
             parsed = parse_tool_arguments(function.get("arguments", {}))
             if parsed is None:
@@ -153,8 +168,10 @@ class ProductionToolRuntime:
             calls.append(approved_tool_call(guarded, parsed).to_wire())
             if rejected is not None:
                 blocked[index] = rejected
-        blocked.update(self._static_policy_rejections(context.policy, calls))
-        return ApprovedToolBatch(calls, blocked)
+                stopped = stopped or rejected.approval_stopped
+        for index, result in self._static_policy_rejections(context.policy, calls).items():
+            blocked.setdefault(index, result)
+        return ApprovedToolBatch(calls, blocked, approvals)
 
     def _static_policy_rejections(
         self,
@@ -188,6 +205,10 @@ class ProductionToolRuntime:
         """执行一批工具调用，并分发执行后的状态更新。"""
         policy_context = policy_context_from_legacy_host(host)
         projection_context = projection_context_from_legacy_host(host)
+        repeat_run = getattr(host, "active_run_context", None)
+        repeat_source = host.recovery.capture_repeat_source(
+            host.runtime_state, repeat_run, getattr(host, "current_agent_name", ""), messages,
+        )
         resolver = getattr(host, "_processor_for_latest_assistant", None)
         if processor is None and callable(resolver):
             processor = resolver(messages)
@@ -206,23 +227,22 @@ class ProductionToolRuntime:
             if write_override is not None
             else self.policy.tool_batch_has_write(policy_context, tool_calls_raw)
         )
-        if has_write:
-            host.txn.begin()
-
-        transaction_finished = False
-        callback_factory = getattr(host, "_tool_metadata_callback", None)
-        reporter = (
-            callback_factory(processor, messages)
-            if callable(callback_factory)
-            else (lambda _title, _metadata: None)
-        )
-        question_factory = getattr(host, "_question_lifecycle_callback", None)
-        question_reporter = (
-            question_factory(processor, messages)
-            if callable(question_factory)
-            else (lambda _action, _payload: None)
-        )
+        rollback_needed = has_write
         try:
+            if has_write:
+                host.txn.begin()
+            callback_factory = getattr(host, "_tool_metadata_callback", None)
+            reporter = (
+                callback_factory(processor, messages)
+                if callable(callback_factory)
+                else (lambda _title, _metadata: None)
+            )
+            question_factory = getattr(host, "_question_lifecycle_callback", None)
+            question_reporter = (
+                question_factory(processor, messages)
+                if callable(question_factory)
+                else (lambda _action, _payload: None)
+            )
             with (
                 scoped_tool_metadata_reporter(reporter),
                 scoped_question_lifecycle_reporter(question_reporter),
@@ -270,14 +290,17 @@ class ProductionToolRuntime:
                     projection_context, dispatched, messages, **consume_kwargs,
                 )
             )
-            if host._strict_verification_completed(dispatched):
-                batch_state["terminal"] = True
+            # 回滚本轮只尝试一次；提交失败仍需进入异常回滚。
+            if not batch_state["all_succeeded"]:
+                rollback_needed = False
             host._finish_tool_transaction(
                 has_write,
                 batch_state["all_succeeded"],
                 messages,
             )
-            transaction_finished = True
+            rollback_needed = False
+            if host._strict_verification_completed(dispatched):
+                batch_state["terminal"] = True
             signal = batch_state.get("handoff_signal")
             if signal is not None:
                 transition = host.runtime_services.transitions.apply(
@@ -290,25 +313,25 @@ class ProductionToolRuntime:
                 host._notify_agent_switched(transition)
             if describe_interrupted:
                 raise asyncio.CancelledError
-        except BaseException:
+        except BaseException as error:
+            failures = []
+            if rollback_needed and host.txn.active:
+                try:
+                    host._finish_tool_transaction(has_write, False, messages)
+                except BaseException as cleanup_error:
+                    failures.append(("transaction", cleanup_error))
             if processor is not None:
-                processor.interrupt_unsettled()
-                host._checkpoint_messages(messages, "interrupted")
-            if has_write and not transaction_finished and host.txn.active:
-                host._finish_tool_transaction(has_write, False, messages)
-            raise
+                try:
+                    processor.interrupt_unsettled()
+                    host._checkpoint_messages(messages, "interrupted")
+                except BaseException as cleanup_error:
+                    failures.append(("checkpoint", cleanup_error))
+            _raise_batch_failure(error, failures, host.tracer.log)
 
-        record_evidence = getattr(host.recovery, "record_tool_result_evidence", None)
-        if callable(record_evidence):
-            for _index, _tool_call, result in dispatched:
-                record_evidence(
-                    result.name, result.tool_input, result.output,
-                    executed=result.executed,
-                    dispatch_failed=result.dispatch_failed,
-                    command_failed=result.command_failed,
-                    cache_hit=bool((result.metadata or {}).get("read_cache_hit")),
-                    metadata=result.metadata,
-                )
+        _record_repeat_evidence(
+            host.recovery, host.runtime_state, repeat_run,
+            getattr(host, "current_agent_name", ""), repeat_source, dispatched, messages,
+        )
 
         if has_write and batch_state["all_succeeded"]:
             record_committed = getattr(host.executor, "record_committed_writes", None)
@@ -317,11 +340,15 @@ class ProductionToolRuntime:
             if host._admission_session is not None:
                 for _index, _tool_call, result in dispatched:
                     host._admission_session.record_committed_mutation(result)
-            host.recovery.reset_tool_call_history(reason="workspace_changed")
+            with repeat_run._state_lock if repeat_run is not None else nullcontext():
+                host.recovery.reset_tool_call_history(reason="workspace_changed")
             self.policy.trace_tool_streak_reset(policy_context)
             host._refresh_patch_risk(messages)
             host._refresh_code_index(dispatched)
             host._attach_lsp_write_diagnostics(dispatched, messages)
+        from nz_coder.runtime.agent.planning_runtime import observe_execution_handoff
+        observe_execution_handoff(host.runtime_state, dispatched, messages,
+                                  committed_writes=has_write and batch_state["all_succeeded"])
         host.hooks.after_tool_batch(
             host,
             messages,
@@ -443,13 +470,12 @@ class ProductionToolRuntime:
             if write_override is not None
             else self.policy.tool_batch_has_write(policy_context, tool_calls_raw)
         )
-        if has_write:
-            lifecycle.begin_transaction()
-
-        transaction_finished = False
-        reporter = lifecycle.metadata_reporter(processor, messages)
-        question_reporter = lifecycle.question_reporter(processor, messages)
+        rollback_needed = has_write
         try:
+            if has_write:
+                lifecycle.begin_transaction()
+            reporter = lifecycle.metadata_reporter(processor, messages)
+            question_reporter = lifecycle.question_reporter(processor, messages)
             with (
                 scoped_tool_metadata_reporter(reporter),
                 scoped_question_lifecycle_reporter(question_reporter),
@@ -478,14 +504,16 @@ class ProductionToolRuntime:
                     context.projection, dispatched, messages, **consume_kwargs,
                 )
             )
-            if lifecycle.strict_completed(dispatched):
-                batch_state["terminal"] = True
+            if not batch_state["all_succeeded"]:
+                rollback_needed = False
             lifecycle.finish_transaction(
                 has_write,
                 batch_state["all_succeeded"],
                 messages,
             )
-            transaction_finished = True
+            rollback_needed = False
+            if lifecycle.strict_completed(dispatched):
+                batch_state["terminal"] = True
             signal = batch_state.get("handoff_signal")
             if signal is not None:
                 transition = await lifecycle.apply_transition(
@@ -497,40 +525,62 @@ class ProductionToolRuntime:
                 )
             if describe_interrupted:
                 raise asyncio.CancelledError
-        except BaseException as exc:
-            policy_escalation = isinstance(exc, GuardrailEscalateError)
-            if processor is not None:
-                # Escalation belongs to the Runner's atomic policy boundary.
-                # Settling here would publish an intermediate checkpoint and
-                # make the same failed attempt observable twice.
-                if not policy_escalation:
+        except BaseException as error:
+            failures = []
+            # 调度器排空工作线程后先结清事务，存盘或Part故障不能跳过恢复。
+            if rollback_needed and lifecycle.transaction_active():
+                try:
+                    lifecycle.finish_transaction(has_write, False, messages)
+                except BaseException as cleanup_error:
+                    failures.append(("transaction", cleanup_error))
+            if processor is not None and not isinstance(error, GuardrailEscalateError):
+                try:
                     processor.interrupt_unsettled()
                     await checkpoint_state("interrupted")
-            # Executor cancellation cannot stop an already-running write. The
-            # scheduler drains it before re-raising, then this rollback keeps
-            # late side effects from escaping an interrupted Agent turn.
-            if has_write and not transaction_finished and lifecycle.transaction_active():
-                lifecycle.finish_transaction(has_write, False, messages)
-            raise
+                except BaseException as cleanup_error:
+                    failures.append(("checkpoint", cleanup_error))
+            _raise_batch_failure(error, failures, lifecycle.trace)
 
-        record_evidence = getattr(context.policy.recovery, "record_tool_result_evidence", None)
-        if callable(record_evidence):
-            for _index, _tool_call, result in dispatched:
-                record_evidence(
-                    result.name, result.tool_input, result.output,
-                    executed=result.executed,
-                    dispatch_failed=result.dispatch_failed,
-                    command_failed=result.command_failed,
-                    cache_hit=bool((result.metadata or {}).get("read_cache_hit")),
-                    metadata=result.metadata,
-                )
+        if not context.request_superseded():
+            _record_repeat_evidence(
+                context.policy.recovery, context.policy.runtime_state, context.run,
+                context.current_agent_name() if context.run is not None else "",
+                context.repeat_source, dispatched, messages,
+            )
 
         if has_write and batch_state["all_succeeded"]:
             record_committed = getattr(lifecycle.executor, "record_committed_writes", None)
             if callable(record_committed):
                 record_committed(dispatched)
-            lifecycle.observer.post_write(dispatched, messages)
+            try:
+                await lifecycle.observer.post_write_async(dispatched,messages)
+            except BaseException as error:
+                # 写事务已经提交；重复取消也不能截断 patch 和检查点结算。
+                if processor is not None:
+                    async def settle_committed_write():
+                        failures = []
+                        try:
+                            finish_snapshot = await lifecycle.observer.capture_snapshot(processor)
+                            lifecycle.observer.record_patch(messages, processor, finish_snapshot)
+                        except BaseException as cleanup_error:
+                            failures.append(("patch", cleanup_error))
+                        try:
+                            processor.interrupt_unsettled()
+                            await checkpoint_state("interrupted")
+                        except BaseException as cleanup_error:
+                            failures.append(("checkpoint", cleanup_error))
+                        return failures
+
+                    settlement = asyncio.create_task(settle_committed_write())
+                    while not settlement.done():
+                        try:
+                            await asyncio.shield(settlement)
+                        except asyncio.CancelledError:
+                            continue
+                    _raise_batch_failure(error, settlement.result(), lifecycle.trace)
+                raise
             self.policy.trace_tool_streak_reset(policy_context)
+        batch_state["dispatched"] = dispatched
         lifecycle.observer.after_batch(messages, batch_state, on_text)
         lifecycle.observer.apply_plan_mode()
         if processor is not None and finish_step:
@@ -582,72 +632,81 @@ class ProductionToolRuntime:
             tool_calls_raw,
             messages,
         )
-        will_execute = approved_batch.calls
-        guardrail_blocked = dict(approved_batch.blocked)
-        batch_id, started = self.policy.begin_tool_batch(
-            policy_context, will_execute, has_write,
-        )
-        segments: list[dict] = []
-        blocked = self.policy.find_repeated_tool_calls(policy_context, will_execute)
-        blocked = self.policy.resolve_doom_loop_permissions(
-            policy_context, blocked, will_execute,
-        )
-        blocked.update(guardrail_blocked)
-        mode = "scheduled"
+        def execute_approved(call, index):
+            with approved_batch.approvals.executing(index, call):
+                return host._execute_tool_call_with_hooks(call, index, messages)
+
         try:
-            if len(will_execute) > 1 and not blocked and not host.hooks.has_pre_tool_use_hooks():
-                dispatched = _execute_scheduled(
-                    host.executor,
-                    will_execute,
-                    lambda call: self.policy.tool_call_can_run_concurrently(
-                        policy_context, call,
-                    ),
-                    on_segment=segments.append,
-                )
-            else:
-                mode = "single" if len(will_execute) <= 1 else "sequential_guarded"
-                dispatched = [
-                    (
-                        i,
-                        tc,
-                        blocked.get(i) or host._execute_tool_call_with_hooks(tc, i, messages),
+            will_execute = approved_batch.calls
+            guardrail_blocked = dict(approved_batch.blocked)
+            batch_id, started = self.policy.begin_tool_batch(
+                policy_context, will_execute, has_write,
+            )
+            segments: list[dict] = []
+            blocked = dict(guardrail_blocked)
+            if not any(result.approval_stopped for result in blocked.values()):
+                blocked = {index: result for index, result in
+                           self.policy.find_repeated_tool_calls(policy_context, will_execute).items()
+                           if index not in guardrail_blocked}
+                blocked = self.policy.resolve_doom_loop_permissions(policy_context, blocked, will_execute)
+                blocked.update(guardrail_blocked)
+            blocked = _stop_unstarted_calls(will_execute, blocked)
+            mode = "scheduled"
+            try:
+                if len(will_execute) > 1 and not blocked and not host.hooks.has_pre_tool_use_hooks():
+                    dispatched = _execute_scheduled(
+                        _BoundToolExecution(execute_approved),
+                        will_execute,
+                        lambda call: self.policy.tool_call_can_run_concurrently(
+                            policy_context, call,
+                        ),
+                        on_segment=segments.append,
                     )
-                    for i, tc in enumerate(will_execute)
-                ]
-        except BaseException as exc:
+                else:
+                    mode = "single" if len(will_execute) <= 1 else "sequential_guarded"
+                    dispatched = []
+                    stopped = False
+                    for i, tc in enumerate(will_execute):
+                        result = blocked.get(i) or (
+                            skipped_after_approval(tc) if stopped else execute_approved(tc, i)
+                        )
+                        dispatched.append((i, tc, result))
+                        stopped = stopped or result.approval_stopped
+            except BaseException as exc:
+                self.policy.finish_tool_batch_observation(
+                    policy_context,
+                    batch_id=batch_id,
+                    started=started,
+                    mode=mode,
+                    dispatched=[],
+                    segments=segments,
+                    error=to_public_error(exc).message,
+                )
+                raise
+            transformed = []
+            for index, tool_call, result in dispatched:
+                if index not in guardrail_blocked:
+                    result = asyncio.run(_guardrail_runtime(host).after_tool(host, tool_call, result, messages))
+                    # 同步独立调用没有冻结的模型请求来源，只返回明确拒绝，不能发布判断。
+                    result = submit_task_assessment(
+                        policy_context.runtime_state, None, tool_call, result, messages, run_context=None,
+                    )
+                    result = submit_working_plan(
+                        policy_context.runtime_state, None, tool_call, result, messages, run_context=None,
+                    )
+                transformed.append((index, tool_call, commit_execution_handoff_result(host, tool_call, result, messages)))
+            dispatched = transformed
             self.policy.finish_tool_batch_observation(
                 policy_context,
                 batch_id=batch_id,
                 started=started,
                 mode=mode,
-                dispatched=[],
+                dispatched=dispatched,
                 segments=segments,
-                error=to_public_error(exc).message,
             )
-            raise
-        dispatched = [
-            (
-                index,
-                tool_call,
-                result
-                if index in guardrail_blocked
-                else asyncio.run(
-                    _guardrail_runtime(host).after_tool(
-                        host, tool_call, result, messages,
-                    )
-                ),
-            )
-            for index, tool_call, result in dispatched
-        ]
-        self.policy.finish_tool_batch_observation(
-            policy_context,
-            batch_id=batch_id,
-            started=started,
-            mode=mode,
-            dispatched=dispatched,
-            segments=segments,
-        )
-        return dispatched
+            return dispatched
+        finally:
+            approved_batch.approvals.close()
 
     async def dispatch_async(
         self,
@@ -667,71 +726,95 @@ class ProductionToolRuntime:
             tool_calls_raw,
             messages,
         )
-        will_execute = approved_batch.calls
-        guardrail_blocked = dict(approved_batch.blocked)
-        batch_id, started = self.policy.begin_tool_batch(
-            policy_context, will_execute, has_write,
-        )
-        segments: list[dict] = []
-        blocked = self.policy.find_repeated_tool_calls(policy_context, will_execute)
-        blocked = await self.policy.resolve_doom_loop_permissions_async(
-            policy_context, blocked, will_execute,
-        )
-        blocked.update(guardrail_blocked)
-        mode = "scheduled"
+        def execute_approved(call, index, _messages=None):
+            with approved_batch.approvals.executing(index, call):
+                return lifecycle.execute_one(call, index, messages)
+
         try:
-            if len(will_execute) > 1 and not blocked and not lifecycle.has_pre_tool_hooks():
-                dispatched = await _execute_scheduled_async(
-                    lifecycle.executor,
-                    will_execute,
-                    lambda call: self.policy.tool_call_can_run_concurrently(
-                        policy_context, call,
-                    ),
-                    on_segment=segments.append,
+            will_execute = approved_batch.calls
+            guardrail_blocked = dict(approved_batch.blocked)
+            batch_id, started = self.policy.begin_tool_batch(
+                policy_context, will_execute, has_write,
+            )
+            segments: list[dict] = []
+            blocked = dict(guardrail_blocked)
+            if not any(result.approval_stopped for result in blocked.values()):
+                blocked = {index: result for index, result in
+                           self.policy.find_repeated_tool_calls(policy_context, will_execute).items()
+                           if index not in guardrail_blocked}
+                blocked = await self.policy.resolve_doom_loop_permissions_async(policy_context, blocked, will_execute)
+                blocked.update(guardrail_blocked)
+            blocked = _stop_unstarted_calls(will_execute, blocked)
+            mode = "scheduled"
+            try:
+                if len(will_execute) > 1 and not blocked and not lifecycle.has_pre_tool_hooks():
+                    dispatched = await _execute_scheduled_async(
+                        _BoundToolExecution(execute_approved),
+                        will_execute,
+                        lambda call: self.policy.tool_call_can_run_concurrently(
+                            policy_context, call,
+                        ),
+                        on_segment=segments.append,
+                    )
+                else:
+                    mode = "single" if len(will_execute) <= 1 else "sequential_guarded"
+                    dispatched = []
+                    stopped = False
+                    for i, tc in enumerate(will_execute):
+                        result = blocked.get(i)
+                        if result is None and stopped:
+                            result = skipped_after_approval(tc)
+                        if result is None:
+                            cancel_event = _new_tool_cancellation_scope()
+                            result = await _to_thread_settled(
+                                _execute_with_tool_cancellation,
+                                cancel_event,
+                                execute_approved,
+                                tc,
+                                i,
+                                messages,
+                                cancel_callback=cancel_event.set,
+                            )
+                        dispatched.append((i, tc, result))
+                        stopped = stopped or result.approval_stopped
+            except BaseException as exc:
+                self.policy.finish_tool_batch_observation(
+                    policy_context,
+                    batch_id=batch_id,
+                    started=started,
+                    mode=mode,
+                    dispatched=[],
+                    segments=segments,
+                    error=to_public_error(exc).message,
                 )
-            else:
-                mode = "single" if len(will_execute) <= 1 else "sequential_guarded"
-                dispatched = []
-                for i, tc in enumerate(will_execute):
-                    result = blocked.get(i)
-                    if result is None:
-                        cancel_event = current_tool_cancel_event() or threading.Event()
-                        result = await _to_thread_settled(
-                            _execute_with_tool_cancellation,
-                            cancel_event,
-                            lifecycle.execute_one,
-                            tc,
-                            i,
-                            messages,
-                            cancel_callback=cancel_event.set,
-                        )
-                    dispatched.append((i, tc, result))
-        except BaseException as exc:
+                raise
+            transformed = []
+            for index, tool_call, result in dispatched:
+                if index not in guardrail_blocked:
+                    result = await lifecycle.after_tool(tool_call, result, messages)
+                    result = submit_task_assessment(
+                        context.policy.runtime_state, context.assessment_scope, tool_call, result, messages,
+                        run_context=context.run, path=context.runtime_state_path,
+                        superseded=context.request_superseded,
+                    )
+                    result = submit_working_plan(
+                        context.policy.runtime_state, context.working_plan_scope, tool_call, result, messages,
+                        run_context=context.run, path=context.runtime_state_path,
+                        superseded=context.request_superseded,
+                    )
+                transformed.append((index, tool_call, result))
+            dispatched = transformed
             self.policy.finish_tool_batch_observation(
                 policy_context,
                 batch_id=batch_id,
                 started=started,
                 mode=mode,
-                dispatched=[],
+                dispatched=dispatched,
                 segments=segments,
-                error=to_public_error(exc).message,
             )
-            raise
-        transformed = []
-        for index, tool_call, result in dispatched:
-            if index not in guardrail_blocked:
-                result = await lifecycle.after_tool(tool_call, result, messages)
-            transformed.append((index, tool_call, result))
-        dispatched = transformed
-        self.policy.finish_tool_batch_observation(
-            policy_context,
-            batch_id=batch_id,
-            started=started,
-            mode=mode,
-            dispatched=dispatched,
-            segments=segments,
-        )
-        return dispatched
+            return dispatched
+        finally:
+            approved_batch.approvals.close()
 
 
 def _has_read_image_result(dispatched: list, capabilities) -> bool:
@@ -818,3 +901,50 @@ async def _checkpoint_async(
     legacy = getattr(host, "_checkpoint_messages", None)
     if callable(legacy):
         legacy(messages, status)
+
+
+class _BoundToolExecution:
+    """调度只改变执行顺序；每条路径仍经过相同的宿主观察边界。"""
+
+
+    def __init__(self, execute_one):
+        self.execute_one = execute_one
+
+
+def _stop_unstarted_calls(calls: list[dict], blocked: dict[int, ToolExecutionResult]) -> dict[int, ToolExecutionResult]:
+    """前置审批已停止时，已准入但尚未执行的前缀也不能晚执行。"""
+    if not any(result.approval_stopped for result in blocked.values()):
+        return blocked
+    return {index: blocked[index] if index in blocked and blocked[index].approval_stopped else skipped_after_approval(call)
+            for index, call in enumerate(calls)}
+
+
+def _raise_batch_failure(error, failures, trace):
+    """执行错误保持为主因；独立清理错误留因果和安全诊断。"""
+    for stage, failure in failures:
+        try:
+            trace("tool_batch_cleanup_failed", stage=stage, public_error=to_public_error(failure).to_dict())
+        except Exception:
+            pass
+    if failures:
+        raise error from failures[0][1]
+    raise error
+
+
+def _record_repeat_evidence(recovery, state, run, persona, source, dispatched, messages):
+    def record():
+        for _index, _call, result in dispatched:
+            recovery.record_tool_result_evidence(
+                result.name, result.tool_input, result.output,
+                executed=result.executed, dispatch_failed=result.dispatch_failed,
+                command_failed=result.command_failed,
+                cache_hit=bool((result.metadata or {}).get("read_cache_hit")),
+                metadata=result.metadata, source=source,
+            )
+    if run is None:
+        record()
+    else:
+        with run._state_lock:
+            # 比较请求前来源，不在切换或写入后把迟到结果重新归属。
+            if source is None or recovery.repeat_source_current(source, state, run, persona, messages):
+                record()

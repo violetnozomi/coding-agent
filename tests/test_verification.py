@@ -1,49 +1,44 @@
-"""tests/test_verification.py — VerificationManager 单元测试。
+"""tests/test_verification.py — VerificationScenario 单元测试。
 
 覆盖写文件触发验证需求、scratch 文件豁免、bash 验证命令清除/设置状态、
 python_symbol_check 结果、环境错误不覆盖已通过的验证等场景。
 """
 from unittest.mock import MagicMock
+from pathlib import Path
 
 import pytest
 
-from nz_coder.intelligence.verification import VerificationManager
+from tests.verification_scenarios import VerificationScenario
+from nz_coder.runtime.process.workdir import current_workdir
 
 
 # ── 测试辅助 ────────────────────────────────────────────────────────────────
 
-def make_vm(
-    plan: dict | None = None,
-    plan_builder=None,
-    *,
-    require_targeted: bool = False,
-) -> VerificationManager:
-    """创建一个带 mock 依赖的 VerificationManager。"""
-    recovery = MagicMock()
-    recovery.verification_gate_message.return_value = "Please verify your changes."
-    tracer = MagicMock()
-    if plan is not None:
-        def plan_builder(_changed_files):
-            return plan
-    vm = VerificationManager(
-        recovery,
-        tracer,
-        plan_builder=plan_builder,
-        require_targeted=require_targeted,
-    )
-    vm.reset()
-    return vm
+def make_vm(plan: dict | None = None, plan_builder=None, *, require_targeted=False, workspace=None):
+    """只有域持有结论；夹具通过类型化事实声明每次宿主执行。"""
+    root = current_workdir()
+    workspace = workspace or (root if root != Path(__file__).resolve().parents[1] else None)
+    selected = plan if plan is not None else {"stages": []}
+    scenario = VerificationScenario(workspace=workspace, plan={"stages": []}, require_targeted=require_targeted)
+    scenario._unit_plan = selected
+    scenario._unit_plan_builder = plan_builder
+    scenario.runtime._native_runner_kind = str(selected.get("native_runner_kind") or "")
+    return scenario
+
+
+def _stage(scenario, name):
+    return next(stage for stage in scenario.runtime.status()["verification_pipeline"]["stages"] if stage["name"] == name)
 
 
 def test_native_bin_test_empty_selection_is_not_a_pass():
     # 来自固定初态 bin/test 的真实零选择输出；退出 0 也没有运行测试。
     vm = make_vm(require_targeted=True)
-    vm.mark_write("edit_file", {"path": "module.py"})
-    vm.observe_bash({"command": "python3 bin/test test_no_such_test --no-colors"},
+    vm.write_resource("edit_file", {"path": "module.py"})
+    vm.command_result({"command": "python3 bin/test test_no_such_test --no-colors"},
                     "================== tests finished: 0 passed, in 0.00 seconds ===================",
                     False, False, exit_code=0)
-    assert vm.status()["last_verification"]["status"] == "skipped"
-    assert vm.should_gate()
+    assert vm.runtime.status()["last_verification"]["status"] == "pending"
+    assert vm.runtime.should_gate()
 
 
 def staged_plan(
@@ -84,48 +79,48 @@ def staged_plan(
 def test_no_gate_before_any_write():
     """初始状态不需要 gate。"""
     vm = make_vm()
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
 
 def test_verification_needed_after_write():
     """write_file 写非 scratch 文件后，should_gate() 应返回 True。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
-    assert vm.should_gate()
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
+    assert vm.runtime.should_gate()
 
 
 def test_scratch_file_no_verification():
     """根目录 test_*.py scratch 文件写入不应触发 gate。"""
     vm = make_vm()
-    vm.mark_write(
+    vm.write_resource(
         "write_file",
         {"path": "test_scratch.py"},
         output="Created test_scratch.py (5 bytes)",
     )
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
 
 def test_nested_ephemeral_scratch_lifecycle_preserves_verification():
     """Creating and deleting an explicit scratch test must not stale source evidence."""
     vm = make_vm(staged_plan(static=("python -m py_compile pkg/module.py",)))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
     scratch = "scratch/probe_scratch.py"
-    vm.mark_write(
+    vm.write_resource(
         "write_file",
         {"path": scratch, "content": "def test_fix(): pass\n"},
         output=f"Created {scratch} (21 bytes)",
     )
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
-    vm.mark_write(
+    vm.write_resource(
         "apply_patch",
         {"changes": [{"path": scratch, "op": "delete", "old_text": "test"}]},
     )
-    assert not vm.should_gate()
-    assert vm.status()["verification_pipeline"]["changed_files"] == [
+    assert not vm.runtime.should_gate()
+    assert vm.state.changed_files == [
         "pkg/module.py",
     ]
 
@@ -133,14 +128,14 @@ def test_nested_ephemeral_scratch_lifecycle_preserves_verification():
 def test_editing_existing_nested_scratch_file_reopens_verification():
     """An existing scratch-named file is a normal mutation when edited."""
     vm = make_vm(staged_plan(static=("python -m py_compile pkg/module.py",)))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
     scratch = "tests/pkg/test_module_scratch.py"
-    vm.mark_write("edit_file", {"path": scratch})
+    vm.write_resource("edit_file", {"path": scratch})
 
-    assert vm.should_gate()
-    assert vm.status()["verification_pipeline"]["changed_files"] == [
+    assert vm.runtime.should_gate()
+    assert vm.state.changed_files == [
         "pkg/module.py",
         scratch,
     ]
@@ -149,17 +144,17 @@ def test_editing_existing_nested_scratch_file_reopens_verification():
 def test_replacing_existing_nested_scratch_file_reopens_verification():
     """A replace patch cannot claim the temporary create/delete exemption."""
     vm = make_vm(staged_plan(static=("python -m py_compile pkg/module.py",)))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
     scratch = "tests/pkg/test_module_scratch.py"
-    vm.mark_write(
+    vm.write_resource(
         "apply_patch",
         {"changes": [{"path": scratch, "op": "replace", "old_text": "old"}]},
     )
 
-    assert vm.should_gate()
-    assert scratch in vm.status()["verification_pipeline"]["changed_files"]
+    assert vm.runtime.should_gate()
+    assert scratch in vm.state.changed_files
 
 
 def test_contradictory_scratch_write_output_reopens_verification():
@@ -167,7 +162,7 @@ def test_contradictory_scratch_write_output_reopens_verification():
     vm = make_vm()
     scratch = "scratch/probe_scratch.py"
 
-    vm.mark_write(
+    vm.write_resource(
         "write_file",
         {"path": scratch},
         output=(
@@ -176,39 +171,39 @@ def test_contradictory_scratch_write_output_reopens_verification():
         ),
     )
 
-    assert vm.should_gate()
+    assert vm.runtime.should_gate()
 
 
 def test_root_md_no_verification():
     """根目录 *.md 文档文件写入不触发 gate。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "CHANGES.md"})
-    assert not vm.should_gate()
+    vm.write_resource("write_file", {"path": "CHANGES.md"})
+    assert not vm.runtime.should_gate()
 
 
 def test_edit_file_always_triggers():
     """edit_file 无论路径都视为实质修改，应触发 gate。"""
     vm = make_vm()
-    vm.mark_write("edit_file", {"path": "test_something.py"})
-    assert vm.should_gate()
+    vm.write_resource("edit_file", {"path": "test_something.py"})
+    assert vm.runtime.should_gate()
 
 
 def test_apply_patch_dry_run_does_not_trigger_verification():
     """纯预览没有改变工作区，不应打开 completion gate。"""
     vm = make_vm()
-    vm.mark_write("apply_patch", {"changes": [{"path": "pkg/module.py"}], "dry_run": True})
-    assert not vm.should_gate()
+    vm.write_resource("apply_patch", {"changes": [{"path": "pkg/module.py"}], "dry_run": True})
+    assert not vm.runtime.should_gate()
 
 
 # ── bash 验证命令 ─────────────────────────────────────────────────────────────
 
-def _bash_pass(vm: VerificationManager, command: str) -> None:
+def _bash_pass(vm: VerificationScenario, command: str) -> None:
     """模拟 bash 验证命令执行成功。"""
-    vm.observe_bash({"command": command}, "1 passed", False, False)
+    vm.command_result({"command": command}, "1 passed", False, False, exit_code=0)
 
 
 def _bash_fail(
-    vm: VerificationManager,
+    vm: VerificationScenario,
     command: str,
     output: str = "1 failed",
     *,
@@ -217,7 +212,7 @@ def _bash_fail(
     """模拟 bash 验证命令执行失败（非零退出）。"""
     prefix = f"Command exited with code {exit_code}"
     wrapped_output = output if output.startswith(prefix) else f"{prefix}\n{output}"
-    vm.observe_bash(
+    vm.command_result(
         {"command": command},
         wrapped_output,
         False,
@@ -229,36 +224,36 @@ def _bash_fail(
 def test_py_compile_clears_verification():
     """写文件后 py_compile 通过，should_gate() 应返回 False。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
-    assert vm.should_gate()
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
+    assert vm.runtime.should_gate()
     _bash_pass(vm, "python3 -m py_compile nz_coder/loop.py")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
 
 def test_pytest_failed_sets_verification():
     """写文件后 pytest 失败，should_gate() 应返回 True。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
     _bash_pass(vm, "python3 -m py_compile nz_coder/loop.py")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
     _bash_fail(vm, "pytest tests/")
-    assert vm.should_gate()
+    assert vm.runtime.should_gate()
 
 
 def test_module_not_found_reopens_gate():
     """ModuleNotFoundError 应作为失败验证反馈重新打开 gate。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
     _bash_pass(vm, "python3 -m py_compile nz_coder/loop.py")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
     env_error_output = (
         "Command exited with code 1\n"
         "ModuleNotFoundError: No module named 'requests'"
     )
     _bash_fail(vm, "pytest tests/", env_error_output)
-    assert vm.should_gate()
-    assert vm.status()["last_verification"]["status"] == "failed"
+    assert vm.runtime.should_gate()
+    assert vm.runtime.status()["last_verification"]["status"] == "failed"
 
 
 def test_strict_missing_checkout_dependency_blocks_environment():
@@ -271,7 +266,7 @@ def test_strict_missing_checkout_dependency_blocks_environment():
         ),
         require_targeted=True,
     )
-    vm.mark_write("edit_file", {"path": "pylint/lint/pylinter.py"})
+    vm.write_resource("edit_file", {"path": "pylint/lint/pylinter.py"})
     _bash_pass(vm, "python -m py_compile pylint/lint/pylinter.py")
 
     _bash_fail(
@@ -288,7 +283,7 @@ def test_strict_missing_checkout_dependency_blocks_environment():
         exit_code=4,
     )
 
-    status = vm.status()
+    status = vm.runtime.status()
     assert status["verification_state"] == "blocked_environment"
     assert status["last_verification"]["status"] == "blocked_environment"
     assert status["environment_blocker"]["command"] == command
@@ -308,7 +303,7 @@ def test_strict_runner_startup_traceback_exit_one_blocks_environment():
         ),
         require_targeted=True,
     )
-    vm.mark_write("edit_file", {"path": "src/_pytest/main.py"})
+    vm.write_resource("edit_file", {"path": "src/_pytest/main.py"})
     _bash_pass(vm, "python -m py_compile src/_pytest/main.py")
 
     _bash_fail(
@@ -325,7 +320,7 @@ def test_strict_runner_startup_traceback_exit_one_blocks_environment():
         exit_code=1,
     )
 
-    status = vm.status()
+    status = vm.runtime.status()
     assert status["verification_state"] == "blocked_environment"
     assert status["last_verification"]["status"] == "blocked_environment"
     assert status["environment_blocker"]["command"] == command
@@ -340,7 +335,7 @@ def test_strict_runner_wrapped_missing_module_exit_one_blocks_environment():
         staged_plan(targeted=(command,)),
         require_targeted=True,
     )
-    vm.mark_write("edit_file", {"path": changed_file})
+    vm.write_resource("edit_file", {"path": changed_file})
 
     _bash_fail(
         vm,
@@ -362,7 +357,7 @@ def test_strict_runner_wrapped_missing_module_exit_one_blocks_environment():
         exit_code=1,
     )
 
-    status = vm.status()
+    status = vm.runtime.status()
     assert status["verification_state"] == "blocked_environment"
     assert status["last_verification"]["status"] == "blocked_environment"
     assert status["environment_blocker"]["stage"] == "targeted"
@@ -378,7 +373,7 @@ def test_strict_wrapped_missing_module_from_changed_runner_is_repairable(
     """A wrapper edited by the patch remains code-owned failure evidence."""
     command = "python3 tests/runtests.py auth_tests.test_migrations -v1"
     vm = make_vm(staged_plan(targeted=(command,)), require_targeted=True)
-    vm.mark_write("edit_file", {"path": changed_file})
+    vm.write_resource("edit_file", {"path": changed_file})
 
     _bash_fail(
         vm,
@@ -397,7 +392,7 @@ def test_strict_wrapped_missing_module_from_changed_runner_is_repairable(
         exit_code=1,
     )
 
-    status = vm.status()
+    status = vm.runtime.status()
     assert status["verification_state"] == "failed_repairable"
     assert status["environment_blocker"] is None
 
@@ -409,7 +404,7 @@ def test_strict_missing_module_from_changed_file_remains_repairable():
         staged_plan(targeted=(command,)),
         require_targeted=True,
     )
-    vm.mark_write("edit_file", {"path": "pylint/lint/pylinter.py"})
+    vm.write_resource("edit_file", {"path": "pylint/lint/pylinter.py"})
 
     _bash_fail(
         vm,
@@ -422,7 +417,7 @@ def test_strict_missing_module_from_changed_file_remains_repairable():
         exit_code=4,
     )
 
-    status = vm.status()
+    status = vm.runtime.status()
     assert status["verification_state"] == "failed_repairable"
     assert status["environment_blocker"] is None
 
@@ -431,7 +426,7 @@ def test_strict_incompatible_host_pytest_config_blocks_environment():
     """A checkout warning category removed from host pytest is infrastructure."""
     command = "python3 -m pytest -q testing/test_assertion.py"
     vm = make_vm(staged_plan(targeted=(command,)), require_targeted=True)
-    vm.mark_write("edit_file", {"path": "src/_pytest/assertion/util.py"})
+    vm.write_resource("edit_file", {"path": "src/_pytest/assertion/util.py"})
 
     _bash_fail(
         vm,
@@ -448,14 +443,14 @@ def test_strict_incompatible_host_pytest_config_blocks_environment():
         exit_code=4,
     )
 
-    assert vm.status()["verification_state"] == "blocked_environment"
+    assert vm.runtime.status()["verification_state"] == "blocked_environment"
 
 
 def test_strict_changed_pytest_config_failure_remains_repairable():
     """A warning-filter error caused by an edited config still belongs to code."""
     command = "python3 -m pytest -q tests/test_parser.py"
     vm = make_vm(staged_plan(targeted=(command,)), require_targeted=True)
-    vm.mark_write("edit_file", {"path": "tox.ini"})
+    vm.write_resource("edit_file", {"path": "tox.ini"})
 
     _bash_fail(
         vm,
@@ -467,7 +462,7 @@ def test_strict_changed_pytest_config_failure_remains_repairable():
         exit_code=4,
     )
 
-    assert vm.status()["verification_state"] == "failed_repairable"
+    assert vm.runtime.status()["verification_state"] == "failed_repairable"
 
 
 def test_unrelated_stdlib_import_break_during_collection_blocks_environment():
@@ -477,7 +472,7 @@ def test_unrelated_stdlib_import_break_during_collection_blocks_environment():
         static=("python -m py_compile requests/models.py",),
         targeted=(command,),
     ))
-    vm.mark_write("edit_file", {"path": "requests/models.py"})
+    vm.write_resource("edit_file", {"path": "requests/models.py"})
     _bash_pass(vm, "python -m py_compile requests/models.py")
 
     _bash_fail(
@@ -493,70 +488,72 @@ def test_unrelated_stdlib_import_break_during_collection_blocks_environment():
         exit_code=2,
     )
 
-    status = vm.status()
+    status = vm.runtime.status()
     assert status["verification_state"] == "blocked_environment"
     assert status["last_verification"]["status"] == "blocked_environment"
     assert status["environment_blocker"]["command"] == command
 
 
 def test_traceback_output_with_zero_exit_is_not_a_pass():
-    """管道吞掉非零退出码时，Traceback 输出仍应视为失败。"""
+    """管道吞掉非零退出码时，Traceback 输出不能形成通过证据。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
-    vm.observe_bash(
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
+    vm.command_result(
         {"command": "pytest tests/ | tail -30"},
         "Traceback (most recent call last):\nAssertionError: bad",
         False,
         False,
-    )
-    assert vm.should_gate()
-    assert vm.status()["last_verification"]["status"] == "failed"
+     exit_code=0)
+    assert vm.runtime.should_gate()
+    assert vm.runtime.status()["last_verification"]["status"] == "pending"
 
 
 def test_no_module_named_output_with_zero_exit_keeps_gate_open():
     """输出 No module named 且退出 0 时，仍应视为失败反馈。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
-    vm.observe_bash(
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
+    vm.command_result(
         {"command": "python3 -c \"import django; print('Django setup failed: No module named cgi')\""},
         "Django setup failed: No module named 'cgi'",
         False,
         False,
-    )
-    assert vm.should_gate()
-    assert vm.status()["last_verification"]["status"] == "failed"
+     exit_code=0)
+    assert vm.runtime.should_gate()
+    assert vm.runtime.status()["last_verification"] is None
+    assert not vm.domain.snapshot().obligations
 
 
-def test_no_module_named_output_with_zero_exit_replaces_prior_pass():
-    """输出 No module named 且退出 0 时，应覆盖之前的通过状态为失败。"""
+def test_unclassified_zero_exit_text_does_not_replace_actual_prior_pass():
+    """无分类脚本打印诊断不能生成失败真值或覆盖已有实际验证。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
     _bash_pass(vm, "python3 -m py_compile nz_coder/loop.py")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
-    vm.observe_bash(
+    vm.command_result(
         {"command": "python3 -c \"import django; print('Django setup failed: No module named cgi')\""},
         "Django setup failed: No module named 'cgi'",
         False,
         False,
-    )
-    assert vm.should_gate()
-    assert vm.status()["last_verification"]["status"] == "failed"
-    assert vm.status()["last_verification"]["command"].startswith("python3 -c")
+     exit_code=0)
+    assert not vm.runtime.should_gate()
+    assert any(item.status == "passed" for item in vm.domain.snapshot().checks)
+    assert not vm.domain.snapshot().obligations
 
 
 def test_manual_fail_output_with_zero_exit_is_not_a_pass():
     """手写验证脚本打印 FAIL 但退出 0 时，不应误判为验证通过。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
-    vm.observe_bash(
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
+    vm.command_result(
         {"command": "python3 -c \"import sys; print('Test 1 FAIL: wrong')\""},
         "Test 1 FAIL: wrong\nTest 2 PASS",
         False,
         False,
-    )
-    assert vm.should_gate()
-    assert vm.status()["last_verification"]["status"] == "failed"
+     exit_code=0)
+    assert vm.runtime.should_gate()
+    assert vm.runtime.status()["last_verification"] is None
+    assert not vm.domain.snapshot().obligations
 
 
 # ── python_symbol_check ───────────────────────────────────────────────────────
@@ -564,18 +561,18 @@ def test_manual_fail_output_with_zero_exit_is_not_a_pass():
 def test_symbol_check_passed_clears():
     """python_symbol_check 返回 OK 后，should_gate() 应为 False。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
-    assert vm.should_gate()
-    vm.observe_symbol_check("OK: all symbols verified")
-    assert not vm.should_gate()
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
+    assert vm.runtime.should_gate()
+    vm.symbol_result("OK: all symbols verified", passed=True)
+    assert not vm.runtime.should_gate()
 
 
 def test_symbol_check_failed_keeps_gate():
     """python_symbol_check 返回非 OK，should_gate() 保持 True。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
-    vm.observe_symbol_check("Error: symbol not found")
-    assert vm.should_gate()
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
+    vm.symbol_result("Error: symbol not found", passed=False)
+    assert vm.runtime.should_gate()
 
 
 def test_symbol_check_only_completes_static_command_for_its_path():
@@ -584,36 +581,36 @@ def test_symbol_check_only_completes_static_command_for_its_path():
         "python -m py_compile pkg/a.py",
         "python -m py_compile pkg/b.py",
     )))
-    vm.mark_write("write_files_batch", {"files": [{"path": "pkg/a.py"}, {"path": "pkg/b.py"}]})
+    vm.write_resource("write_files_batch", {"files": [{"path": "pkg/a.py"}, {"path": "pkg/b.py"}]})
 
-    vm.observe_symbol_check("OK: symbols verified", {"path": "pkg/a.py"})
+    vm.symbol_result("OK: symbols verified", {"path": "pkg/a.py"}, passed=True)
 
-    assert vm.should_gate()
-    static = vm.status()["verification_pipeline"]["stages"][0]
-    assert [item["status"] for item in static["commands"]] == ["passed", "pending"]
+    assert vm.runtime.should_gate()
+    static = vm.runtime.status()["verification_pipeline"]["stages"][0]
+    assert [item["status"] for item in [item for item in static["commands"] if "py_compile" in item["command"]]] == ["passed", "pending"]
 
 
 def test_verify_changed_files_ok_clears_gate():
     """verify_changed_files OK 应清除 verification gate。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
-    assert vm.should_gate()
-    vm.observe_verify_changed_files("OK: py_compile changed files\nOK  nz_coder/loop.py")
-    assert not vm.should_gate()
-    assert vm.status()["last_verification"]["status"] == "passed"
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
+    assert vm.runtime.should_gate()
+    vm.syntax_result("OK: py_compile changed files\nOK  nz_coder/loop.py", passed=True)
+    assert not vm.runtime.should_gate()
+    assert vm.runtime.status()["last_verification"]["status"] == "passed"
 
 
 def test_verify_changed_files_failure_reopens_gate_after_prior_pass():
     """verify_changed_files FAIL 不应被之前的通过状态掩盖。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "nz_coder/loop.py"})
-    vm.observe_symbol_check("OK: all symbols verified")
-    assert not vm.should_gate()
+    vm.write_resource("write_file", {"path": "nz_coder/loop.py"})
+    vm.symbol_result("OK: all symbols verified", passed=True)
+    assert not vm.runtime.should_gate()
 
-    vm.observe_verify_changed_files("FAIL: py_compile changed files\nFAIL nz_coder/loop.py")
+    vm.syntax_result("FAIL: py_compile changed files\nFAIL nz_coder/loop.py", passed=False)
 
-    assert vm.should_gate()
-    assert vm.status()["last_verification"]["status"] == "failed"
+    assert vm.runtime.should_gate()
+    assert vm.runtime.status()["last_verification"]["status"] == "failed"
 
 
 # ── Gate 提示计数 ─────────────────────────────────────────────────────────────
@@ -621,12 +618,12 @@ def test_verify_changed_files_failure_reopens_gate_after_prior_pass():
 def test_gate_prompt_counter():
     """increment_gate_prompt 每调一次加一，reset 后归零。"""
     vm = make_vm()
-    vm.mark_write("write_file", {"path": "src/main.py"})
-    assert vm.gate_prompts == 0
-    assert vm.increment_gate_prompt() == 1
-    assert vm.increment_gate_prompt() == 2
-    vm.reset()
-    assert vm.gate_prompts == 0
+    vm.write_resource("write_file", {"path": "src/main.py"})
+    assert vm.runtime.gate_prompts == 0
+    assert vm.runtime.increment_gate_prompt() == 1
+    assert vm.runtime.increment_gate_prompt() == 2
+    vm.restart()
+    assert vm.runtime.gate_prompts == 0
 
 
 # ── status() 快照 ──────────────────────────────────────────────────────────────
@@ -637,22 +634,22 @@ def test_status_reflects_state():
         static=("python -m py_compile pkg/module.py",),
         regression=("pytest",),
     ))
-    s = vm.status()
+    s = vm.runtime.status()
     assert s["verification_needed"] is False
     assert s["last_verification"] is None
 
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
-    s = vm.status()
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
+    s = vm.runtime.status()
     assert s["verification_needed"] is True
 
     _bash_pass(vm, "pytest tests/")
-    s = vm.status()
+    s = vm.runtime.status()
     assert s["verification_needed"] is True
     assert s["last_verification"] is not None
     assert s["last_verification"]["status"] == "passed"
 
     _bash_pass(vm, "python -m py_compile pkg/module.py")
-    s = vm.status()
+    s = vm.runtime.status()
     assert s["verification_needed"] is False
     assert s["verification_pipeline"]["stages"]
 
@@ -663,20 +660,21 @@ def test_user_acceptance_contract_settles_inferred_required_stages():
         static=("python -m py_compile pkg/module.py",),
         regression=("pytest",),
     ))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     command = "python -m pytest -q tests"
 
     _bash_pass(vm, command)
-    assert vm.should_gate()
+    assert vm.runtime.should_gate()
 
-    vm.observe_acceptance_contract(command, "3 passed", passed=True)
+    vm.acceptance_result(command, "3 passed", passed=True)
 
-    status = vm.status()
+    status = vm.runtime.status()
     assert status["verification_needed"] is False
     assert status["verification_state"] == "passed"
-    assert status["verification_pipeline"]["next_required_stage"] is None
+    assert status["next_required_stage"] is None
     static = status["verification_pipeline"]["stages"][0]
-    assert static["commands"][0]["satisfied_by"] == "user_acceptance_contract"
+    assert static["commands"][0]["status"] == "covered"
+    assert static["commands"][0]["satisfied_by"].startswith("check-")
 
 
 def test_strict_acceptance_contract_does_not_replace_static_evidence():
@@ -689,17 +687,17 @@ def test_strict_acceptance_contract_does_not_replace_static_evidence():
         ),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
-    vm.observe_bash({"command": command}, "1 passed", False, False)
-    vm.observe_acceptance_contract(command, "1 passed", passed=True)
+    vm.command_result({"command": command}, "1 passed", False, False, exit_code=0)
+    vm.acceptance_result(command, "1 passed", passed=True)
 
-    assert vm.should_gate()
-    static = vm.status()["verification_pipeline"]["stages"][0]
+    assert vm.runtime.should_gate()
+    static = vm.runtime.status()["verification_pipeline"]["stages"][0]
     assert static["status"] == "pending"
 
     _bash_pass(vm, "python -m py_compile pkg/module.py")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
 
 @pytest.mark.parametrize(
@@ -728,14 +726,14 @@ def test_strict_empty_acceptance_contract_cannot_clear_targeted_gate(
         ),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
-    vm.observe_bash({"command": command}, output, False, False)
-    vm.observe_acceptance_contract(command, output, passed=True)
+    vm.command_result({"command": command}, output, False, False, exit_code=0)
+    vm.acceptance_result(command, output, passed=True)
 
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
+    assert vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
     assert targeted["status"] == "pending"
 
 
@@ -770,7 +768,7 @@ def test_assertion_text_environment_phrase_is_repairable_failure(output):
         staged_plan(targeted=(command,)),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
     _bash_fail(
         vm,
@@ -778,7 +776,7 @@ def test_assertion_text_environment_phrase_is_repairable_failure(output):
         output,
     )
 
-    status = vm.status()
+    status = vm.runtime.status()
     assert status["verification_state"] == "failed_repairable"
     assert status["environment_blocker"] is None
 
@@ -806,11 +804,11 @@ def test_failed_test_exit_one_cannot_claim_environment_blocker(output):
         staged_plan(targeted=(command,)),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
     _bash_fail(vm, command, output)
 
-    status = vm.status()
+    status = vm.runtime.status()
     assert status["verification_state"] == "failed_repairable"
     assert status["environment_blocker"] is None
 
@@ -832,11 +830,11 @@ def test_structured_test_infrastructure_failure_is_environment_blocker(
     """Structured runner startup failures remain unavailable infrastructure."""
     command = "pytest tests/test_module.py::test_fix"
     vm = make_vm(staged_plan(targeted=(command,)))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
     _bash_fail(vm, command, output, exit_code=exit_code)
 
-    assert vm.status()["verification_state"] == "blocked_environment"
+    assert vm.runtime.status()["verification_state"] == "blocked_environment"
 
 
 def test_command_not_found_exit_127_is_environment_blocker():
@@ -846,7 +844,7 @@ def test_command_not_found_exit_127_is_environment_blocker():
         staged_plan(targeted=(command,)),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
     _bash_fail(
         vm,
@@ -855,21 +853,21 @@ def test_command_not_found_exit_127_is_environment_blocker():
         exit_code=127,
     )
 
-    status = vm.status()
+    status = vm.runtime.status()
     assert status["verification_state"] == "blocked_environment"
     assert status["environment_blocker"]["command"] == command
 
 
-def test_mismatched_exit_metadata_cannot_claim_environment_blocker():
-    """Metadata/output disagreement is untrusted and remains repairable."""
+def test_actual_exit_overrides_diagnostic_text():
+    """真实退出码独立于诊断文本；exit 127 始终是实际失败。"""
     command = "pytest tests/test_module.py::test_fix"
     vm = make_vm(
         staged_plan(targeted=(command,)),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
-    vm.observe_bash(
+    vm.command_result(
         {"command": command},
         "Command exited with code 1\n1 failed",
         False,
@@ -877,9 +875,10 @@ def test_mismatched_exit_metadata_cannot_claim_environment_blocker():
         exit_code=127,
     )
 
-    status = vm.status()
-    assert status["verification_state"] == "failed_repairable"
-    assert status["environment_blocker"] is None
+    status = vm.runtime.status()
+    assert status["verification_state"] == "blocked_environment"
+    assert status["environment_blocker"] is not None
+    assert not vm.domain.snapshot().ready_for_completion
 
 
 def test_static_environment_blocker_records_static_stage():
@@ -889,7 +888,7 @@ def test_static_environment_blocker_records_static_stage():
         staged_plan(static=(command,)),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
     _bash_fail(
         vm,
@@ -898,7 +897,7 @@ def test_static_environment_blocker_records_static_stage():
         exit_code=127,
     )
 
-    blocker = vm.status()["environment_blocker"]
+    blocker = vm.runtime.status()["environment_blocker"]
     assert blocker["stage"] == "static"
 
 
@@ -910,7 +909,7 @@ def test_short_circuit_static_blocker_is_not_promoted_to_targeted():
         staged_plan(static=(static,), targeted=(targeted,)),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
     _bash_fail(
         vm,
@@ -919,9 +918,13 @@ def test_short_circuit_static_blocker_is_not_promoted_to_targeted():
         exit_code=127,
     )
 
-    status = vm.status()
-    assert status["verification_state"] == "blocked_environment"
-    assert status["environment_blocker"]["stage"] == "static"
+    status = vm.runtime.status()
+    # 整体非零不能证明执行到了哪个检查；原计划仍须逐项验证。
+    assert status["verification_state"] == "verifying"
+    assert status["environment_blocker"] is None
+    assert status["test_obligations"] == []
+    assert status["verification_needed"] is True
+    assert vm.domain.snapshot().executions[-1].exit_code == 127
 
 
 # ── 分层验证流水线 ───────────────────────────────────────────────────────────
@@ -933,14 +936,14 @@ def test_static_pass_waits_for_required_target():
         targeted=("pytest tests/test_module.py::test_fix",),
         regression=("pytest",),
     ))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
     _bash_pass(vm, "python3 -m py_compile pkg/module.py")
-    assert vm.should_gate()
-    assert vm.status()["verification_pipeline"]["next_required_stage"] == "targeted"
+    assert vm.runtime.should_gate()
+    assert vm.runtime.status()["next_required_stage"] == "targeted"
 
     _bash_pass(vm, "python -m pytest -q tests/test_module.py::test_fix")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
 
 def test_target_pass_waits_for_static_stage():
@@ -949,13 +952,13 @@ def test_target_pass_waits_for_static_stage():
         static=("python -m py_compile pkg/module.py",),
         targeted=("pytest tests/test_module.py::test_fix",),
     ))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
     _bash_pass(vm, "pytest tests/test_module.py::test_fix")
-    assert vm.should_gate()
+    assert vm.runtime.should_gate()
 
     _bash_pass(vm, "python -m py_compile pkg/module.py")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
 
 def test_all_required_static_commands_must_pass():
@@ -964,12 +967,12 @@ def test_all_required_static_commands_must_pass():
         "python -m py_compile pkg/a.py",
         "python -m py_compile pkg/b.py",
     )))
-    vm.mark_write("write_files_batch", {"files": [{"path": "pkg/a.py"}, {"path": "pkg/b.py"}]})
+    vm.write_resource("write_files_batch", {"files": [{"path": "pkg/a.py"}, {"path": "pkg/b.py"}]})
 
     _bash_pass(vm, "python -m py_compile pkg/a.py")
-    assert vm.should_gate()
+    assert vm.runtime.should_gate()
     _bash_pass(vm, "python3 -m py_compile pkg/b.py")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
 
 def test_verify_changed_files_passes_whole_static_stage():
@@ -978,12 +981,12 @@ def test_verify_changed_files_passes_whole_static_stage():
         "python -m py_compile pkg/a.py",
         "python -m py_compile pkg/b.py",
     )))
-    vm.mark_write("apply_patch", {"patch": "*** Update File: pkg/a.py\n*** Update File: pkg/b.py"})
+    vm.write_resource("apply_patch", {"changes": [{"path": "pkg/a.py", "op": "replace"}, {"path": "pkg/b.py", "op": "replace"}]})
 
-    vm.observe_verify_changed_files("OK: py_compile changed files")
+    vm.syntax_result("OK: py_compile changed files", passed=True)
 
-    assert not vm.should_gate()
-    static = vm.status()["verification_pipeline"]["stages"][0]
+    assert not vm.runtime.should_gate()
+    static = vm.runtime.status()["verification_pipeline"]["stages"][0]
     assert all(item["status"] == "passed" for item in static["commands"])
 
 
@@ -993,26 +996,26 @@ def test_optional_regression_failure_is_sticky_until_same_command_passes():
         static=("python -m py_compile pkg/module.py",),
         regression=("pytest",),
     ))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
     _bash_fail(vm, "pytest")
-    assert vm.should_gate()
+    assert vm.runtime.should_gate()
     _bash_pass(vm, "python -m py_compile pkg/module.py")
-    assert vm.should_gate()
+    assert vm.runtime.should_gate()
 
     _bash_pass(vm, "pytest")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
 
 def test_native_runner_serial_retry_replaces_same_target_failure():
     """Changing Django runner parallelism must not create a second test target."""
     vm = make_vm(
-        staged_plan(static=("python -m py_compile pkg/module.py",)),
+        staged_plan(static=("python -m py_compile pkg/module.py",), native_runner_kind="django"),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
     _bash_fail(
@@ -1020,9 +1023,9 @@ def test_native_runner_serial_retry_replaces_same_target_failure():
         "PYTHONPATH=. python3 tests/runtests.py auth_tests.test_migrations -v1",
         "RuntimeWarning: TestResult has no addDuration method",
     )
-    assert vm.should_gate()
+    assert vm.runtime.should_gate()
 
-    vm.observe_bash(
+    vm.command_result(
         {
             "command": (
                 "PYTHONPATH=. python3 tests/runtests.py "
@@ -1032,12 +1035,13 @@ def test_native_runner_serial_retry_replaces_same_target_failure():
         "Ran 8 tests in 0.120s\n\nOK",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert not vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
-    assert targeted["status"] == "passed"
-    assert [item["status"] for item in targeted["observed"]] == ["passed"]
+    assert not vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
+    assert targeted["status"] == "optional"
+    assert vm.runtime.status()["tests_passed"] is True
+    assert [item["status"] for item in [item for item in targeted["commands"] if item.get("execution_id")]] == ["passed"]
 
 
 def test_django_native_runner_replaces_equivalent_pytest_path_failure():
@@ -1053,17 +1057,17 @@ def test_django_native_runner_replaces_equivalent_pytest_path_failure():
         ),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
     _bash_fail(
         vm,
-        "python3 -m pytest tests/auth_tests/test_migrations.py -q",
+        "PYTHONPATH=. python3 -m pytest tests/auth_tests/test_migrations.py -q",
         "ERROR collecting tests/auth_tests/test_migrations.py",
     )
-    assert vm.should_gate()
+    assert vm.runtime.should_gate()
 
-    vm.observe_bash(
+    vm.command_result(
         {
             "command": (
                 "PYTHONPATH=. python3 tests/runtests.py "
@@ -1073,13 +1077,14 @@ def test_django_native_runner_replaces_equivalent_pytest_path_failure():
         "Ran 8 tests in 0.120s\n\nOK",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert not vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
-    assert targeted["status"] == "passed"
-    assert [item["status"] for item in targeted["observed"]] == ["passed"]
-    assert targeted["observed"][0]["last_command"].endswith(
+    assert not vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
+    assert targeted["status"] == "optional"
+    assert vm.runtime.status()["tests_passed"] is True
+    assert [item["status"] for item in [item for item in targeted["commands"] if item.get("execution_id")]] == ["passed"]
+    assert [item for item in targeted["commands"] if item.get("execution_id")][0]["last_command"].endswith(
         "auth_tests.test_migrations -v1 --parallel 1"
     )
 
@@ -1097,7 +1102,7 @@ def test_django_native_runner_keeps_different_pytest_scope_failure():
         ),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
     _bash_fail(
@@ -1105,7 +1110,7 @@ def test_django_native_runner_keeps_different_pytest_scope_failure():
         "python3 -m pytest tests/auth_tests/test_migrations.py -q",
         "ERROR collecting tests/auth_tests/test_migrations.py",
     )
-    vm.observe_bash(
+    vm.command_result(
         {
             "command": (
                 "PYTHONPATH=. python3 tests/runtests.py "
@@ -1115,12 +1120,12 @@ def test_django_native_runner_keeps_different_pytest_scope_failure():
         "Ran 4 tests in 0.080s\n\nOK",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
+    assert vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
     assert targeted["status"] == "failed"
-    assert [item["status"] for item in targeted["observed"]] == [
+    assert [item["status"] for item in [item for item in targeted["commands"] if item.get("execution_id")]] == [
         "failed",
         "passed",
     ]
@@ -1139,7 +1144,7 @@ def test_django_native_runner_does_not_alias_pytest_option_value():
         ),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
     _bash_fail(
@@ -1150,7 +1155,7 @@ def test_django_native_runner_does_not_alias_pytest_option_value():
         ),
         "ERROR: usage error while loading pytest configuration",
     )
-    vm.observe_bash(
+    vm.command_result(
         {
             "command": (
                 "PYTHONPATH=. python3 tests/runtests.py "
@@ -1160,12 +1165,12 @@ def test_django_native_runner_does_not_alias_pytest_option_value():
         "Ran 8 tests in 0.120s\n\nOK",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
+    assert vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
     assert targeted["status"] == "failed"
-    assert [item["status"] for item in targeted["observed"]] == [
+    assert [item["status"] for item in [item for item in targeted["commands"] if item.get("execution_id")]] == [
         "failed",
         "passed",
     ]
@@ -1184,7 +1189,7 @@ def test_django_native_runner_does_not_drop_unmapped_pytest_scope():
         ),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
     _bash_fail(
@@ -1195,7 +1200,7 @@ def test_django_native_runner_does_not_drop_unmapped_pytest_scope():
         ),
         "ERROR collecting integration/test_other.py",
     )
-    vm.observe_bash(
+    vm.command_result(
         {
             "command": (
                 "PYTHONPATH=. python3 tests/runtests.py "
@@ -1205,12 +1210,12 @@ def test_django_native_runner_does_not_drop_unmapped_pytest_scope():
         "Ran 8 tests in 0.120s\n\nOK",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
+    assert vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
     assert targeted["status"] == "failed"
-    assert [item["status"] for item in targeted["observed"]] == [
+    assert [item["status"] for item in [item for item in targeted["commands"] if item.get("execution_id")]] == [
         "failed",
         "passed",
     ]
@@ -1229,7 +1234,7 @@ def test_django_native_runner_filtered_success_does_not_cover_full_file():
         ),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
     _bash_fail(
@@ -1237,7 +1242,7 @@ def test_django_native_runner_filtered_success_does_not_cover_full_file():
         "python3 -m pytest tests/auth_tests/test_migrations.py -q",
         "ERROR collecting tests/auth_tests/test_migrations.py",
     )
-    vm.observe_bash(
+    vm.command_result(
         {
             "command": (
                 "PYTHONPATH=. python3 tests/runtests.py "
@@ -1247,10 +1252,10 @@ def test_django_native_runner_filtered_success_does_not_cover_full_file():
         "Ran 2 tests in 0.040s\n\nOK",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
+    assert vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
     assert targeted["status"] == "failed"
 
 
@@ -1266,7 +1271,7 @@ def test_untrusted_native_runner_does_not_alias_pytest_path():
         ),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
     _bash_fail(
@@ -1274,7 +1279,7 @@ def test_untrusted_native_runner_does_not_alias_pytest_path():
         "python3 -m pytest tests/auth_tests/test_migrations.py -q",
         "ERROR collecting tests/auth_tests/test_migrations.py",
     )
-    vm.observe_bash(
+    vm.command_result(
         {
             "command": (
                 "python3 tests/runtests.py "
@@ -1284,10 +1289,10 @@ def test_untrusted_native_runner_does_not_alias_pytest_path():
         "Ran 8 tests in 0.120s\n\nOK",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
+    assert vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
     assert targeted["status"] == "failed"
 
 
@@ -1304,7 +1309,7 @@ def test_django_alias_rejects_different_runtests_path():
         ),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
     _bash_fail(
@@ -1312,7 +1317,7 @@ def test_django_alias_rejects_different_runtests_path():
         "python3 -m pytest tests/auth_tests/test_migrations.py -q",
         "ERROR collecting tests/auth_tests/test_migrations.py",
     )
-    vm.observe_bash(
+    vm.command_result(
         {
             "command": (
                 "python3 vendor/tests/runtests.py "
@@ -1322,10 +1327,10 @@ def test_django_alias_rejects_different_runtests_path():
         "Ran 8 tests in 0.120s\n\nOK",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
+    assert vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
     assert targeted["status"] == "failed"
 
 
@@ -1335,11 +1340,11 @@ def test_gate_reprints_failed_planned_optional_command():
         static=("python -m py_compile pkg/module.py",),
         regression=("pytest",),
     ))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
     _bash_fail(vm, "pytest")
 
-    message = vm.make_gate_message()
+    message = vm.runtime.make_gate_message()
 
     assert "Failed checks that must be rerun after fixing:" in message
     assert "pytest" in message
@@ -1348,14 +1353,14 @@ def test_gate_reprints_failed_planned_optional_command():
 def test_new_write_resets_previous_stage_results():
     """验证通过后再次修改代码，所需 stage 必须重新执行。"""
     vm = make_vm(staged_plan(static=("python -m py_compile pkg/module.py",)))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
-    vm.mark_write("edit_file", {"path": "pkg/module.py"})
+    vm.write_resource("edit_file", {"path": "pkg/module.py"})
 
-    assert vm.should_gate()
-    static = vm.status()["verification_pipeline"]["stages"][0]
+    assert vm.runtime.should_gate()
+    static = vm.runtime.status()["verification_pipeline"]["stages"][0]
     assert static["commands"][0]["status"] == "pending"
 
 
@@ -1369,14 +1374,14 @@ def test_failed_target_before_edit_is_required_after_edit():
         "FAILED tests/test_module.py::test_fix - AssertionError",
     )
 
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
+    assert vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
     assert targeted["commands"][0]["automation_provenance"] == "failure_evidence"
 
     _bash_pass(vm, "pytest tests/test_module.py::test_fix")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
 
 def test_model_executed_target_is_automation_safe_after_followup_write():
@@ -1384,11 +1389,11 @@ def test_model_executed_target_is_automation_safe_after_followup_write():
 
     target = "pytest tests/test_module.py::test_fix"
     vm = make_vm(staged_plan(targeted=(target,)))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, target)
 
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
-    status = vm.status()
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
+    status = vm.runtime.status()
     action = VerificationScheduler().action(
         "orange",
         verification_status=status,
@@ -1401,8 +1406,29 @@ def test_model_executed_target_is_automation_safe_after_followup_write():
         for stage in status["verification_pipeline"]["stages"]
         if stage["name"] == "targeted"
     )
-    assert targeted["commands"][0]["automation_provenance"] == "model_execution"
+    assert targeted["commands"][0]["automation_provenance"] == "planner"
+    assert targeted["commands"][0]["retry_eligible"] is True
     assert action.command == target
+
+
+@pytest.mark.parametrize(("failed", "provenance"), [
+    (False, "model_execution"), (True, "failure_evidence"),
+])
+def test_carried_target_preserves_quoted_whitespace_and_evidence_source(failed, provenance):
+    command = "VERIFY_LABEL='a  b' go test ./oval -run Test_util 2>&1"
+    vm = make_vm(staged_plan())
+    vm.command_result({"command": command}, "FAIL" if failed else "ok", False, failed,
+                    exit_code=1 if failed else 0)
+
+    vm.write_resource("edit_file", {"path": "oval/util.go"})
+
+    targeted = next(
+        stage for stage in vm.runtime.status()["verification_pipeline"]["stages"]
+        if stage["name"] == "targeted"
+    )
+    assert len(targeted["commands"]) == 1
+    assert targeted["commands"][0]["command"] == command
+    assert targeted["commands"][0]["automation_provenance"] == provenance
 
 
 def test_many_failures_keep_only_one_bounded_target_per_test_file():
@@ -1418,20 +1444,22 @@ def test_many_failures_keep_only_one_bounded_target_per_test_file():
     )
 
     _bash_fail(vm, "pytest tests", failures)
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
     required = [item["command"] for item in targeted["commands"] if item["required"]]
-    assert len(required) == 3
-    assert required == [
-        "pytest tests/test_parser.py::test_case_0",
-        "pytest tests/test_scheduler.py::test_case_0",
-        "pytest tests/test_cli.py::test_case_0",
-    ]
+    # 原始全量失败义务不能被几个采样节点代替，否则会漏掉实际失败。
+    assert required == []
+    assert [item["command"] for item in vm.runtime.status()["test_obligations"]] == ["pytest tests"]
+    _bash_pass(vm, "pytest tests/test_parser.py::test_case_0")
+    assert vm.runtime.should_gate()
+    _bash_pass(vm, "python -m py_compile pkg/module.py")
+    _bash_pass(vm, "pytest tests")
+    assert not vm.runtime.should_gate()
 
 
-def test_failed_target_upgrades_matching_optional_related_command():
-    """真实失败与 related 候选重合时，必须把原 optional item 升级为 required。"""
+def test_failed_optional_target_creates_independent_retest_obligation():
+    """真实失败必须独立保留复测义务，不把 optional 观察升级为验收定义。"""
     target = "pytest tests/test_module.py::test_fix"
     plan = staged_plan(
         static=("python -m py_compile pkg/module.py",),
@@ -1440,28 +1468,32 @@ def test_failed_target_upgrades_matching_optional_related_command():
     vm = make_vm(plan)
     _bash_fail(vm, target, "FAILED tests/test_module.py::test_fix - AssertionError")
 
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
-    assert targeted["commands"][0]["required"] is True
+    assert vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
+    assert targeted["commands"][0]["required"] is False
+    assert vm.runtime.status()["test_obligations"][0]["status"] == "pending"
     assert plan["stages"][1]["commands"][0]["required"] is False
 
     _bash_pass(vm, "python -m pytest -q tests/test_module.py::test_fix")
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
 
-def test_planner_failure_falls_back_to_legacy_single_check_semantics():
-    """planner 异常不得让未知项目永久卡在 completion gate。"""
-    def broken_plan(_changed_files):
-        raise RuntimeError("profile unavailable")
-
-    vm = make_vm(plan_builder=broken_plan)
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+def test_unavailable_planner_keeps_observed_checks_usable(monkeypatch, tmp_path):
+    from nz_coder.runtime.adapters.verification_runtime import VerificationRuntime
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg/module.py").write_text("value = 1\n")
+    vm = make_vm(workspace=tmp_path)
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
+    def unavailable(**_kwargs):
+        raise OSError("profile unavailable")
+    monkeypatch.setattr("nz_coder.intelligence.verification_planner.plan_verification_commands", unavailable)
+    VerificationRuntime.refresh_plan(vm.runtime)
+    assert vm.runtime.should_gate()
     _bash_pass(vm, "pytest")
-
-    assert not vm.should_gate()
+    assert not vm.runtime.should_gate()
 
 
 def test_strict_manager_keeps_inferred_related_target_advisory_while_gating(tmp_path):
@@ -1479,21 +1511,18 @@ def test_strict_manager_keeps_inferred_related_target_advisory_while_gating(tmp_
     recovery.verification_gate_message.return_value = "Please verify your changes."
 
     with scoped_workdir(tmp_path):
-        vm = VerificationManager(
-            recovery,
-            MagicMock(),
-            require_targeted=True,
-        )
-        vm.mark_write("edit_file", {"path": "lib/package/widget.py"})
-        vm.observe_verify_changed_files("OK: py_compile changed files")
-        pipeline = vm.status()["verification_pipeline"]
+        from nz_coder.intelligence.verification_planner import plan_verification_commands
+        vm = make_vm(plan_builder=lambda paths: plan_verification_commands(changed_files=paths, require_targeted=True), require_targeted=True)
+        vm.write_resource("edit_file", {"path": "lib/package/widget.py"})
+        vm.syntax_result("OK: py_compile changed files", passed=True)
+        pipeline = vm.runtime.status()["verification_pipeline"]
 
     targeted = next(stage for stage in pipeline["stages"] if stage["name"] == "targeted")
-    assert vm.should_gate() is True
-    assert targeted["required"] is True
-    assert targeted["evidence_required"] is True
-    assert targeted["status"] == "pending"
-    assert pipeline["next_required_stage"] == "targeted"
+    assert vm.runtime.should_gate() is True
+    assert vm.domain.snapshot().targeted_pending
+    assert targeted["status"] == "optional"
+    assert vm.runtime.status()["tests_passed"] is False
+    assert vm.runtime.status()["next_required_stage"] == "targeted"
     assert targeted["commands"][0]["command"] == (
         "pytest lib/package/tests/test_widget.py"
     )
@@ -1506,19 +1535,20 @@ def test_strict_model_selected_target_pass_clears_gate():
         staged_plan(static=("python -m py_compile pkg/module.py",)),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
-    vm.observe_bash(
+    vm.command_result(
         {"command": "pytest tests/test_module.py::test_fix"},
         "1 passed in 0.01s",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert not vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
-    assert targeted["status"] == "passed"
+    assert not vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
+    assert targeted["status"] == "optional"
+    assert vm.runtime.status()["tests_passed"] is True
 
 
 def test_strict_zero_test_target_does_not_clear_gate():
@@ -1527,20 +1557,21 @@ def test_strict_zero_test_target_does_not_clear_gate():
         staged_plan(static=("python -m py_compile pkg/module.py",)),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
-    vm.observe_bash(
+    vm.command_result(
         {"command": "pytest tests/test_module.py::test_missing"},
         "collected 0 items\n\nno tests ran in 0.01s",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
-    assert targeted["status"] == "pending"
-    assert targeted["observed"][0]["status"] == "skipped"
+    assert vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
+    assert targeted["status"] == "optional"
+    assert vm.runtime.status()["tests_passed"] is False
+    assert [item for item in targeted["commands"] if item.get("execution_id")][0]["status"] == "pending"
 
 
 def test_strict_gate_message_requests_non_empty_targeted_behavior_check():
@@ -1549,13 +1580,13 @@ def test_strict_gate_message_requests_non_empty_targeted_behavior_check():
         staged_plan(static=("python -m py_compile pkg/module.py",)),
         require_targeted=True,
     )
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
-    message = vm.make_gate_message()
+    message = vm.runtime.make_gate_message()
 
     assert "direct narrow behavioral test" in message
-    assert "at least one test" in message
+    assert "non-empty selection" in message
 
 
 def test_gate_message_lists_required_checks_not_optional_broad_runner():
@@ -1564,9 +1595,9 @@ def test_gate_message_lists_required_checks_not_optional_broad_runner():
         static=("python -m py_compile pkg/module.py",),
         regression=("pytest",),
     ))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
-    message = vm.make_gate_message()
+    message = vm.runtime.make_gate_message()
 
     assert "python -m py_compile pkg/module.py" in message
     assert "pytest" not in message
@@ -1575,28 +1606,28 @@ def test_gate_message_lists_required_checks_not_optional_broad_runner():
 def test_text_search_for_pytest_is_not_verification():
     """echo/rg 中出现 pytest 文本不能误清 verification gate。"""
     vm = make_vm(staged_plan(static=("python -m py_compile pkg/module.py",)))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
-    vm.observe_bash({"command": "rg pytest tests"}, "tests/test_a.py", False, False)
+    vm.command_result({"command": "rg pytest tests"}, "tests/test_a.py", False, False, exit_code=0)
 
-    assert vm.should_gate()
-    assert vm.status()["last_verification"] is None
+    assert vm.runtime.should_gate()
+    assert vm.runtime.status()["last_verification"] is None
 
 
 def test_printed_required_command_inside_compound_does_not_count_as_executed():
     """打印计划命令再运行另一 static 工具，不能伪造 required command 覆盖。"""
     vm = make_vm(staged_plan(static=("python -m py_compile pkg/module.py",)))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
-    vm.observe_bash(
+    vm.command_result(
         {"command": "echo 'python -m py_compile pkg/module.py' && ruff check pkg/module.py"},
         "All checks passed!",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert vm.should_gate()
-    static = vm.status()["verification_pipeline"]["stages"][0]
+    assert vm.runtime.should_gate()
+    static = vm.runtime.status()["verification_pipeline"]["stages"][0]
     assert static["commands"][0]["status"] == "pending"
 
 
@@ -1606,7 +1637,7 @@ def test_compound_static_and_targeted_commands_complete_both_stages():
         static=("python -m py_compile pkg/module.py",),
         targeted=("pytest tests/test_module.py::test_fix",),
     ))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
     _bash_pass(
         vm,
@@ -1614,47 +1645,52 @@ def test_compound_static_and_targeted_commands_complete_both_stages():
         "python -m pytest -q tests/test_module.py::test_fix",
     )
 
-    assert not vm.should_gate()
-    stages = vm.status()["verification_pipeline"]["stages"]
+    assert vm.runtime.should_gate()
+    _bash_pass(vm, "python -m py_compile pkg/module.py")
+    _bash_pass(vm, "pytest tests/test_module.py::test_fix")
+    assert not vm.runtime.should_gate()
+    stages = vm.runtime.status()["verification_pipeline"]["stages"]
     assert [stage["status"] for stage in stages[:2]] == ["passed", "passed"]
 
 
-def test_semantic_command_matching_handles_wrapper_and_argument_order():
+def test_environment_and_order_changes_require_the_original_check():
     """wrapper 与无关参数顺序差异不能导致已执行命令永远 pending。"""
     vm = make_vm(staged_plan(static=("go test ./pkg -run '^$'",)))
-    vm.mark_write("write_file", {"path": "pkg/main.go"})
+    vm.write_resource("write_file", {"path": "pkg/main.go"})
 
     _bash_pass(vm, "env GOFLAGS=-mod=mod go test -run '^$' ./pkg")
 
-    assert not vm.should_gate()
+    assert vm.runtime.should_gate()
+    _bash_pass(vm, "go test ./pkg -run '^$'")
+    assert not vm.runtime.should_gate()
 
 
 def test_shell_or_chain_cannot_hide_failed_static_check():
     """最终 true 的退出码不能把 ``cargo check || true`` 当成通过。"""
     vm = make_vm(staged_plan(static=("cargo check",)))
-    vm.mark_write("write_file", {"path": "src/lib.rs"})
+    vm.write_resource("write_file", {"path": "src/lib.rs"})
 
-    vm.observe_bash(
+    vm.command_result(
         {"command": "cargo check || true"},
         "error: could not compile demo",
         False,
         False,
-    )
+     exit_code=0)
 
-    assert vm.should_gate()
-    static = vm.status()["verification_pipeline"]["stages"][0]
+    assert vm.runtime.should_gate()
+    static = vm.runtime.status()["verification_pipeline"]["stages"][0]
     assert static["commands"][0]["status"] == "pending"
 
 
 def test_non_execution_compile_help_cannot_clear_static_gate():
     """py_compile --help 只展示帮助，不能证明文件可编译。"""
     vm = make_vm(staged_plan(static=("python -m py_compile pkg/module.py",)))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
     _bash_pass(vm, "python -m py_compile --help pkg/module.py")
 
-    assert vm.should_gate()
-    assert vm.status()["last_verification"] is None
+    assert vm.runtime.should_gate()
+    assert vm.runtime.status()["last_verification"] is None
 
 
 def test_pytest_collect_only_cannot_clear_required_target():
@@ -1663,51 +1699,135 @@ def test_pytest_collect_only_cannot_clear_required_target():
         static=("python -m py_compile pkg/module.py",),
         targeted=("pytest tests/test_module.py::test_fix",),
     ))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
     _bash_pass(vm, "python -m py_compile pkg/module.py")
 
     _bash_pass(vm, "pytest --collect-only tests/test_module.py::test_fix")
 
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
+    assert vm.runtime.should_gate()
+    targeted = vm.runtime.status()["verification_pipeline"]["stages"][1]
     assert targeted["commands"][0]["status"] == "pending"
 
 
 def test_bash_dispatch_failure_is_not_an_executed_verification():
     """策略阻断等 dispatch failure 只保留 pending，不制造测试失败证据。"""
     vm = make_vm(staged_plan(static=("python -m py_compile pkg/module.py",)))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
-    vm.observe_bash(
+    vm.command_result(
         {"command": "python -m py_compile pkg/module.py"},
         "Error: command blocked by policy",
         True,
         False,
-    )
+     exit_code=0)
 
-    assert vm.should_gate()
-    assert vm.status()["last_verification"] is None
+    assert vm.runtime.should_gate()
+    assert not vm.domain.snapshot().executions
+    assert not vm.domain.snapshot().obligations
 
 
 def test_cargo_harness_list_cannot_clear_required_target():
     """Cargo libtest --list 只枚举测试，不能满足 required target。"""
     vm = make_vm(staged_plan(targeted=("cargo test test_parser",)))
-    vm.mark_write("write_file", {"path": "src/lib.rs"})
+    vm.write_resource("write_file", {"path": "src/lib.rs"})
 
     _bash_pass(vm, "cargo test test_parser -- --list")
 
-    assert vm.should_gate()
-    assert vm.status()["last_verification"] is None
+    assert vm.runtime.should_gate()
+    assert vm.runtime.status()["last_verification"] is None
 
 
 def test_extra_pytest_selector_cannot_claim_exact_target_coverage():
     """新增 -k 可能排除 required test，不能靠 token 子集误判为覆盖。"""
     target = "pytest tests/test_module.py::test_fix"
     vm = make_vm(staged_plan(targeted=(target,)))
-    vm.mark_write("write_file", {"path": "pkg/module.py"})
+    vm.write_resource("write_file", {"path": "pkg/module.py"})
 
     _bash_pass(vm, target + " -k never_matches")
 
-    assert vm.should_gate()
-    targeted = vm.status()["verification_pipeline"]["stages"][1]
+    assert vm.runtime.should_gate()
+    targeted = _stage(vm, "targeted")
     assert targeted["commands"][0]["status"] == "pending"
+
+
+@pytest.mark.parametrize('command,output', [
+    ('python -m unittest discover -s tests 2>&1 | tail -8', 'Ran 65 tests\nOK'),
+    ('pytest tests/test_empty.py', 'no tests ran in 0.01s'),
+])
+def test_optional_unreliable_attempt_keeps_history_without_new_obligation(command, output):
+    vm = make_vm()
+    vm.command_result({'command': command, 'workdir': 'pkg'}, output, False, False, exit_code=0)
+    assert not vm.runtime.should_gate()
+    assert vm.runtime.status()["tests_passed"] is None
+    assert not vm.domain.snapshot().obligations
+    assert vm.runtime.status()['verification_state'] != 'passed'
+    if 'tail' in command:
+        ignored = vm.runtime.status()['ignored_verifications']
+        assert ignored[-1]['command'] == command
+        assert ignored[-1]['cwd'] == str(vm.root / "pkg")
+    reliable_command = command.split('2>&1')[0].split('|')[0].strip()
+    vm.command_result({'command': reliable_command, 'workdir':'pkg'}, '1 passed', False, False, exit_code=0)
+    assert not vm.runtime.should_gate()
+
+
+def test_dispatch_denial_does_not_create_test_attempt():
+    vm = make_vm()
+    vm.command_result({'command': 'pytest tests/test_a.py'}, 'permission denied', True, True, exit_code=1)
+    assert not vm.domain.snapshot().executions
+    assert not vm.domain.snapshot().obligations
+    assert vm.runtime.status()['ignored_verifications'] == []
+
+
+def test_checkpoint_restores_obligation_and_invalidates_unproven_pass(tmp_path):
+    vm = make_vm(workspace=tmp_path)
+    vm.command_result({'command': 'pytest tests/test_a.py | tail -8', 'workdir': str(tmp_path)}, '1 passed', False, False, exit_code=0)
+    data = vm.domain.checkpoint()
+    vm.restart()
+    vm.restore(data, workspace=tmp_path, generation=3)
+    assert vm.runtime.should_gate()
+    assert vm.runtime.status()['ignored_verifications'][0]['command'].endswith('tail -8')
+    vm.command_result({'command': 'pytest tests/test_a.py', 'workdir': str(tmp_path)}, '1 passed', False, False, exit_code=0)
+    assert not vm.runtime.should_gate()
+    data = vm.domain.checkpoint()
+    vm.restart()
+    vm.restore(data, workspace=tmp_path, generation=4)
+    assert vm.runtime.should_gate()
+    assert vm.runtime.status()['verification_state'] != 'passed'
+
+
+def test_denied_retry_preserves_obligation_without_claiming_execution(tmp_path):
+    from nz_coder.runtime.verification.completion_gate import ordinary_verification_guidance
+    vm=make_vm()
+    vm.command_result({'command':'pytest tests/test_a.py | tail -8'},'1 failed',False,True, exit_code=1)
+    vm.command_result({'command':'pytest tests/test_a.py'},'Denied: permission',True,True, exit_code=1)
+    assert vm.runtime.should_gate()
+    assert len(vm.domain.snapshot().executions) == 1
+    assert vm.runtime.status()['last_verification']['command'].endswith('tail -8')
+    assert ordinary_verification_guidance(vm.runtime.status(),tmp_path)==''
+    assert not vm.domain.snapshot().ready_for_completion
+
+
+@pytest.mark.parametrize('command,output', [
+    ('pytest tests/test_a.py | tail -8','1 passed'),
+    ('pytest tests/test_a.py','no tests ran in 0.01s'),
+])
+def test_unconfirmed_tests_require_same_scope_reliable_evidence(command, output, tmp_path):
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    vm=make_vm(workspace=tmp_path)
+    vm.state.verification_definition = {"command": "pytest tests/test_a.py"}
+    with scoped_workdir(tmp_path):
+        vm.command_result({'command':command},output,False,False,exit_code=0)
+        vm.command_result({'command':'python -m py_compile app.py'},'',False,False,exit_code=0)
+        assert vm.runtime.should_gate()
+        vm.command_result({'command':'pytest tests/test_b.py'},'1 passed',False,False,exit_code=0)
+        assert vm.runtime.should_gate()
+        vm.command_result({'command':'pytest tests/test_a.py','workdir':'another'},'1 passed',False,False,exit_code=0)
+        assert vm.runtime.should_gate()
+        snapshot=vm.domain.checkpoint()
+        vm.restart()
+        vm.restore(snapshot,workspace=tmp_path,generation=0)
+        vm.command_result({'command':'python -m py_compile app.py'},'',False,False,exit_code=0)
+        assert vm.runtime.should_gate()
+        # 只需可靠闭合明确验收；其他 cwd/选择范围的临时观察不新增义务。
+        vm.command_result({'command':'pytest tests/test_a.py'},'1 passed',False,False,exit_code=0)
+        assert not vm.runtime.should_gate()

@@ -7,6 +7,8 @@ import threading
 import time
 import warnings
 
+import pytest
+
 
 def test_close_cancels_cold_scan_and_queued_query_without_partial_commit(tmp_path, monkeypatch):
     import sqlite3
@@ -382,6 +384,48 @@ print("watchers-ready")
     assert completed.stdout.strip() == "watchers-ready"
 
 
+@pytest.mark.parametrize("active_work", ["prewarm", "query"])
+def test_interpreter_exit_signals_active_repository_work_before_join(tmp_path, active_work):
+    """A leaked lease must receive its stop signal before executor shutdown waits."""
+    import subprocess
+    import sys
+
+    script = """
+import sys
+from pathlib import Path
+from threading import Event
+from nz_coder.intelligence.service import (
+    RepoIntelligenceService, RepoIntelligenceState, acquire_repo_intelligence,
+)
+
+entered = Event()
+def cooperative_work(service):
+    entered.set()
+    service._watch_stop.wait()
+    print("worker-stopped", flush=True)
+    return RepoIntelligenceState(status="cancelled")
+
+if sys.argv[2] == "prewarm":
+    RepoIntelligenceService._build = lambda self, max_files: cooperative_work(self)
+service = acquire_repo_intelligence(Path(sys.argv[1]), max_files=20)
+if sys.argv[2] == "query":
+    service.wait_ready(timeout=2)
+    service.submit_bounded_query(lambda: cooperative_work(service))
+assert entered.wait(2)
+print("main-finished", flush=True)
+"""
+    completed = subprocess.run(
+        [sys.executable, "-X", "faulthandler", "-c", script, str(tmp_path), active_work],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.splitlines() == ["main-finished", "worker-stopped"]
+
+
 def test_workspace_lease_acquire_is_atomic_with_last_release(tmp_path, monkeypatch) -> None:
     """A new Session lease must not race a final release into a closed worker."""
     import nz_coder.intelligence.service as service_module
@@ -598,3 +642,116 @@ def _wait_until(predicate, timeout: float = 3.0) -> bool:
             return True
         time.sleep(0.02)
     return False
+
+
+def test_query_cache_isolates_nested_values_on_miss_and_hit(tmp_path):
+    from nz_coder.intelligence.service import RepoIntelligenceService
+
+    service = RepoIntelligenceService(tmp_path)
+    try:
+        def compute():
+            return {"matches": [{"name": "original", "lines": [1]}]}
+        first = service._cached_query("test", (), compute)
+        first["matches"][0]["name"] = "changed"
+        first["matches"][0]["lines"].append(2)
+        second = service._cached_query("test", (), compute)
+        assert second["matches"] == [{"name": "original", "lines": [1]}]
+        second["matches"][0]["lines"].append(3)
+        third = service._cached_query("test", (), compute)
+        assert third["matches"] == [{"name": "original", "lines": [1]}]
+    finally:
+        service.close()
+
+
+def test_registry_retains_failed_owner_and_retries_cleanup(tmp_path, monkeypatch):
+    import nz_coder.intelligence.service as module
+    import nz_coder.lsp.manager as lsp
+    service = module.RepoIntelligenceService(tmp_path)
+    attempts = []
+    original_close = service.close
+    def close():
+        attempts.append("close")
+        if len(attempts) == 1:
+            raise RuntimeError("still running")
+        original_close()
+    monkeypatch.setattr(service, "close", close)
+    monkeypatch.setattr(lsp, "close_workspace_clients", lambda path: attempts.append("lsp"))
+    key = tmp_path.resolve()
+    module._REGISTRY[key] = (service, 1)
+    try:
+        with pytest.raises(RuntimeError, match="Workspace resource cleanup pending"):
+            module.release_repo_intelligence(key)
+        assert module._REGISTRY[key][0] is service
+        assert attempts == ["close", "lsp"]
+        with pytest.raises(RuntimeError):
+            module.acquire_repo_intelligence(key)
+        module.release_repo_intelligence(key)
+        assert key not in module._REGISTRY
+        assert attempts == ["close", "lsp", "close", "lsp"]
+    finally:
+        module._REGISTRY.pop(key, None)
+        original_close()
+
+
+def test_late_duplicate_release_cannot_close_replacement_owner_lsp(tmp_path, monkeypatch):
+    import nz_coder.intelligence.service as module
+    import nz_coder.lsp.manager as lsp
+    key = tmp_path.resolve()
+    old = module.RepoIntelligenceService(key)
+    replacement = module.RepoIntelligenceService(key)
+    original_old_close = old.close
+    entered, finish_close, second_waiting, allow_second = (threading.Event() for _ in range(4))
+    closed_lsp = []
+    failures = []
+    claim = threading.Lock()
+    class DelayedClaim:
+        def __enter__(self):
+            if threading.current_thread().name == "second-release":
+                second_waiting.set()
+                assert allow_second.wait(3)
+            claim.acquire()
+        def __exit__(self, *args):
+            claim.release()
+    old._registry_cleanup_lock = DelayedClaim()
+    def close_old():
+        entered.set()
+        assert finish_close.wait(3)
+        original_old_close()
+    monkeypatch.setattr(old, "close", close_old)
+    monkeypatch.setattr(lsp, "close_workspace_clients", lambda path: closed_lsp.append(path))
+    module._REGISTRY[key] = (old, 1)
+    def release():
+        try:
+            module.release_repo_intelligence(key)
+        except BaseException as exc:
+            failures.append(exc)
+    first = threading.Thread(target=release, name="first-release")
+    second = threading.Thread(target=release, name="second-release")
+    try:
+        first.start()
+        assert entered.wait(3)
+        second.start()
+        assert second_waiting.wait(3)
+        with pytest.raises(RuntimeError):
+            module.acquire_repo_intelligence(key)
+        finish_close.set()
+        first.join(3)
+        assert not first.is_alive()
+        monkeypatch.setattr(module, "RepoIntelligenceService", lambda path: replacement)
+        assert module.acquire_repo_intelligence(key) is replacement
+        allow_second.set()
+        second.join(3)
+        assert not second.is_alive()
+        assert not failures
+        assert closed_lsp == [key]
+        assert module._REGISTRY[key][0] is replacement
+    finally:
+        finish_close.set()
+        allow_second.set()
+        if first.ident is not None:
+            first.join(3)
+        if second.ident is not None:
+            second.join(3)
+        module._REGISTRY.pop(key, None)
+        original_old_close()
+        replacement.close()

@@ -189,6 +189,7 @@ class FullscreenComposer:
         self._input = input
         self._output = output
         self._submissions: asyncio.Queue[object] = asyncio.Queue()
+        self._submission_available = asyncio.Event()
         self._application_task: asyncio.Task | None = None
         self._closed = False
         self._recovery_count = 0
@@ -401,7 +402,7 @@ class FullscreenComposer:
                 self.clear_exit_request()
                 value = self.buffer.text
                 self.buffer.reset(append_to_history=True)
-                self._submissions.put_nowait(value)
+                self._queue_submission(value)
 
         @bindings.add("escape", "enter", filter=main)
         def _newline(_event) -> None:  # noqa: ANN001
@@ -437,7 +438,7 @@ class FullscreenComposer:
             else:
                 if self.empty_ctrl_c_requests_exit():
                     self._idle_exit_hint_until = 0.0
-                    self._submissions.put_nowait(TerminalInputAction("exit_confirmed"))
+                    self._queue_submission(TerminalInputAction("exit_confirmed"))
                 else:
                     self._idle_exit_hint_until = time.monotonic() + 1.0
             self.invalidate()
@@ -447,20 +448,20 @@ class FullscreenComposer:
             from nz_coder.interface.terminal_input import TerminalInputAction
 
             if not self.buffer.text and not self._run_active:
-                self._submissions.put_nowait(TerminalInputAction("exit_confirmed"))
+                self._queue_submission(TerminalInputAction("exit_confirmed"))
 
         @bindings.add("c-p", eager=True, filter=main)
         @bindings.add("c-k", eager=True, filter=main)
         def _palette(_event) -> None:  # noqa: ANN001
             from nz_coder.interface.terminal_input import TerminalInputAction
 
-            self._submissions.put_nowait(TerminalInputAction("command_palette", self.buffer.text))
+            self._queue_submission(TerminalInputAction("command_palette", self.buffer.text))
 
         @bindings.add("f2", eager=True, filter=main)
         def _cycle(_event) -> None:  # noqa: ANN001
             from nz_coder.interface.terminal_input import TerminalInputAction
 
-            self._submissions.put_nowait(TerminalInputAction("model_cycle", "/model-cycle next"))
+            self._queue_submission(TerminalInputAction("model_cycle", "/model-cycle next"))
 
         @bindings.add("c-x", "e", eager=True, filter=main)
         def _editor(_event) -> None:  # noqa: ANN001
@@ -483,7 +484,7 @@ class FullscreenComposer:
             def _leader(_event, selected=command) -> None:  # noqa: ANN001
                 from nz_coder.interface.terminal_input import TerminalInputAction
 
-                self._submissions.put_nowait(TerminalInputAction("leader", selected))
+                self._queue_submission(TerminalInputAction("leader", selected))
 
         @bindings.add("pageup", filter=main)
         def _page_up(_event) -> None:  # noqa: ANN001
@@ -699,6 +700,11 @@ class FullscreenComposer:
 
     async def select_async(self, **kwargs):  # noqa: ANN003, ANN202
         """Open a fuzzy selector as an overlay in this Application."""
+        from nz_coder.tool_platform.permissioning.interaction import PermissionInteractionError
+
+        require_interaction = kwargs.pop("require_interaction", False)
+        if require_interaction and self._closed:
+            raise PermissionInteractionError("unavailable")
         await self.start_async()
         detail = str(kwargs.pop("detail", "") or "")
         selector = FuzzySelector(style=None, mouse_support=self.mouse_support, **kwargs)
@@ -710,11 +716,19 @@ class FullscreenComposer:
         self._selector_detail_window.vertical_scroll = 0
         self._dialog_password = False
         self._dialog_buffer.reset()
-        self._dialog_future = asyncio.get_running_loop().create_future()
+        future = self._dialog_future = asyncio.get_running_loop().create_future()
         self.application.layout.focus(self._dialog_input)
         selector._notify_move()
         self.invalidate()
-        return await self._dialog_future
+        try:
+            result = await future
+            if require_interaction and self._closed:
+                raise PermissionInteractionError("unavailable")
+            return result
+        finally:
+            # 取消旧选择器时，只撤下它自己仍持有的 overlay。
+            if self._dialog_future is future:
+                self._resolve_dialog(None)
 
     async def prompt_text_async(
         self, message: str, *, password: bool = False, default: str = ""
@@ -752,6 +766,17 @@ class FullscreenComposer:
     def has_pending_submission(self) -> bool:
         """Return whether a newer prompt or command is waiting behind this run."""
         return not self._submissions.empty()
+
+    def _queue_submission(self, value: object) -> None:
+        self._submissions.put_nowait(value)
+        self._submission_available.set()
+
+    async def wait_for_pending_submission(self) -> None:
+        """Notify the Agent of queued input without consuming the user's text."""
+        while self._submissions.empty():
+            # 提交与检查都在终端事件循环上；清除旧通知后再等待新输入。
+            self._submission_available.clear()
+            await self._submission_available.wait()
 
     def apply_preferences(
         self,

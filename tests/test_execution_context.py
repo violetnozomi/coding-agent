@@ -2,24 +2,18 @@
 from __future__ import annotations
 
 import ast
-import io
-import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
 
+
 from nz_coder.foundation import config
 from nz_coder.runtime.core.execution_context import (
     agent_timeout_seconds,
-    broad_tests_blocked,
-    declared_test_scopes,
     max_agent_turns,
     max_parallel_tasks,
     nominal_agent_turns,
-    scoped_broad_test_guard,
-    scoped_declared_test_scopes,
     scoped_runtime_overrides,
-    set_broad_tests_blocked,
 )
 from nz_coder.runtime.process.workdir import current_workdir, scoped_workdir
 
@@ -87,101 +81,24 @@ def test_nominal_turn_budget_is_context_local_and_bounded_by_hard_cap():
 
 def test_runtime_context_is_isolated_across_threads(tmp_path):
     barrier = Barrier(2)
-
-    def worker(name: str, turns: int, parallel: int, blocked: bool):
+    def worker(name, turns, parallel):
         root = tmp_path / name
         root.mkdir()
-        with (
-            scoped_workdir(root),
-            scoped_runtime_overrides(
-                max_agent_turns=turns,
-                agent_timeout_seconds=turns / 10,
-                max_parallel_tasks=parallel,
-            ),
-            scoped_broad_test_guard(),
+        with scoped_workdir(root), scoped_runtime_overrides(
+            max_agent_turns=turns, agent_timeout_seconds=turns / 10,
+            max_parallel_tasks=parallel,
         ):
-            set_broad_tests_blocked(blocked)
             barrier.wait()
-            return (
-                current_workdir(),
-                max_agent_turns(),
-                agent_timeout_seconds(),
-                max_parallel_tasks(),
-                broad_tests_blocked(),
-            )
-
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        alpha = pool.submit(worker, "alpha", 11, 2, True)
-        beta = pool.submit(worker, "beta", 23, 5, False)
-        results = [alpha.result(), beta.result()]
-
-    assert results == [
-        (tmp_path / "alpha", 11, 1.1, 2, True),
-        (tmp_path / "beta", 23, 2.3, 5, False),
-    ]
-    assert broad_tests_blocked() is False
-
-
-def test_bash_broad_test_guard_is_context_local(monkeypatch, tmp_path):
-    from nz_coder.tools.bash import run_bash
-
-    calls = []
-
-    class FakeProcess:
-        def __init__(self, *args, **kwargs):
-            calls.append((args, kwargs))
-            self.stdout = io.StringIO("ok")
-            self.returncode = 0
-
-        def poll(self):
-            return self.returncode
-
-        def wait(self, timeout=None):
-            return self.returncode
-
-    monkeypatch.setattr(subprocess, "Popen", FakeProcess)
-    with scoped_workdir(tmp_path), scoped_broad_test_guard(True):
-        blocked = run_bash("pytest")
-    with scoped_workdir(tmp_path), scoped_broad_test_guard(False):
-        allowed = run_bash("pytest")
-
-    assert blocked.startswith("Error: Broad test runner blocked")
-    assert allowed == "ok"
-    assert len(calls) == 1
-
-
-def test_bash_guard_allows_only_user_declared_directory_suite(monkeypatch, tmp_path):
-    from nz_coder.tools.bash import run_bash
-
-    calls = []
-
-    class FakeProcess:
-        def __init__(self, *args, **kwargs):
-            calls.append((args, kwargs))
-            self.stdout = io.StringIO("75 passed")
-            self.returncode = 0
-
-        def poll(self):
-            return self.returncode
-
-        def wait(self, timeout=None):
-            return self.returncode
-
-    monkeypatch.setattr(subprocess, "Popen", FakeProcess)
-    with (
-        scoped_workdir(tmp_path),
-        scoped_broad_test_guard(True),
-        scoped_declared_test_scopes(("cron_engine/tests",)),
-    ):
-        assert declared_test_scopes() == ("cron_engine/tests",)
-        allowed = run_bash(
-            "python -m pytest -q cron_engine/tests 2>&1 | tail -4"
-        )
-        blocked = run_bash("python -m pytest -q other/tests")
-
-    assert allowed == "75 passed"
-    assert blocked.startswith("Error: Broad test runner blocked")
-    assert len(calls) == 1
+            return current_workdir(), max_agent_turns(), agent_timeout_seconds(), max_parallel_tasks()
+    with scoped_runtime_overrides(max_agent_turns=31):
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            alpha = pool.submit(worker, "alpha", 11, 2)
+            beta = pool.submit(worker, "beta", 23, 5)
+            assert [alpha.result(), beta.result()] == [
+                (tmp_path / "alpha", 11, 1.1, 2),
+                (tmp_path / "beta", 23, 2.3, 5),
+            ]
+        assert max_agent_turns() == 31
 
 
 def test_declared_test_scope_stops_at_chinese_comma():

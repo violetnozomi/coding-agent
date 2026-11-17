@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import os
+import errno
 from pathlib import Path
 import stat
 from typing import Iterator
@@ -12,8 +13,12 @@ class UnsafeFileLock(OSError):
     """Raised when a private lock path can be redirected or is not regular."""
 
 
+class FileLockBusy(BlockingIOError):
+    """The requested nonblocking lock is held by another owner."""
+
+
 @contextmanager
-def exclusive_file_lock(path: Path) -> Iterator[None]:
+def exclusive_file_lock(path: Path, *, blocking: bool = True) -> Iterator[None]:
     """Hold an OS-released exclusive lock on one stable lock file."""
     target = Path(path).absolute()
     if os.name == "nt":
@@ -34,7 +39,12 @@ def exclusive_file_lock(path: Path) -> Iterator[None]:
                 handle.write(b"\0")
                 handle.flush()
             handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK, 1)
+            except OSError as exc:
+                if not blocking and exc.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                    raise FileLockBusy("Lock is held by another owner") from exc
+                raise
             try:
                 yield
             finally:
@@ -60,7 +70,10 @@ def exclusive_file_lock(path: Path) -> Iterator[None]:
     try:
         import fcntl
 
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+        except BlockingIOError as exc:
+            raise FileLockBusy("Lock is held by another owner") from exc
         try:
             yield
         finally:
@@ -115,4 +128,4 @@ def _is_windows_reparse_point(path: Path) -> bool:
         return False
 
 
-__all__ = ["UnsafeFileLock", "exclusive_file_lock"]
+__all__ = ["UnsafeFileLock", "FileLockBusy", "exclusive_file_lock"]

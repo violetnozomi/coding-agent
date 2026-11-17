@@ -103,6 +103,7 @@ def _result_record(result: RunResult) -> dict:
         },
         "changed_files": list(result.metadata.get("changed_files", [])),
         "error": result.error or None,
+        "verification": dict(result.metadata.get("verification") or {}),
     }
     runtime = result.metadata.get("runtime")
     if isinstance(runtime, dict) and int(runtime.get("provider_calls") or 0) > 0:

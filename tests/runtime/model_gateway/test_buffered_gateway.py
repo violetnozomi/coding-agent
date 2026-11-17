@@ -216,7 +216,7 @@ def test_forced_tool_choice_rejection_retries_without_forcing() -> None:
     ])
     observed = []
     call = ModelCall(
-        purpose=ModelCallPurpose.STALL_SIDECAR,
+        purpose=ModelCallPurpose.VERIFIER,
         messages=[{"role": "user", "content": "judge"}],
         tools=[{"type": "function", "function": {"name": "emit_verdict"}}],
         tool_choice={
@@ -247,7 +247,7 @@ def test_unrelated_forced_tool_choice_400_does_not_fallback() -> None:
         _response(),
     ])
     call = ModelCall(
-        purpose=ModelCallPurpose.STALL_SIDECAR,
+        purpose=ModelCallPurpose.VERIFIER,
         messages=[{"role": "user", "content": "judge"}],
         tools=[{"type": "function", "function": {"name": "emit_verdict"}}],
         tool_choice={
@@ -412,6 +412,7 @@ def test_thread_start_failure_releases_inflight_slot(monkeypatch) -> None:
     assert retried.status is ModelCallStatus.COMPLETED
     assert runtime.inflight_status() == {
         "worker_still_running": 0,
+        "inflight_calls": 0,
         "tainted": False,
     }
 

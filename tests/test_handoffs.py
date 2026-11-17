@@ -107,7 +107,7 @@ def test_agent_loop_switches_prompt_persists_part_and_honors_terminal_signal(tmp
         config.WORKDIR = old_workdir
 
     assert result["status"] == "completed"
-    assert visible == ["work done"]
+    assert len(visible) == 1 and visible[0].startswith("work done")
     assert fake.chat.completions.calls == 2
     assert fake.chat.completions.requests[0]["messages"][0]["content"].startswith("SCOUT_ROLE")
     assert fake.chat.completions.requests[1]["messages"][0]["content"].startswith("WORKER_ROLE")
@@ -470,6 +470,16 @@ def test_as_tool_handoff_recovers_caller_after_process_crash(tmp_path):
                 session_id=session_id,
             )
             caller_messages = [{"role": "user", "content": "Fix the parser."}]
+            from nz_coder.runtime.core.run_context import RunContext
+            from nz_coder.runtime.core.request import RunRequest, AgentDefinition
+            from nz_coder.runtime.core import MAIN_PROFILE
+            from nz_coder.runtime.session.model import Session
+            from nz_coder.runtime.adapters.verification_runtime import VerificationRuntime
+            request = RunRequest(agent=AgentDefinition(name="caller", instructions="test"), profile=MAIN_PROFILE,
+                workspace=tmp_path, session_id=session_id, messages=tuple(caller_messages))
+            context = RunContext(request, Session.create(session_id, caller_messages, workspace=tmp_path), "caller")
+            before_crash.runtime_state.bind_run_context(context)
+            before_crash.verification_runtime = VerificationRuntime(before_crash, context)
             before_crash._init_run(caller_messages, False)
             signal = before_crash._tool_handoff_signal({
                 "handoffTarget": "helper",
@@ -485,6 +495,9 @@ def test_as_tool_handoff_recovers_caller_after_process_crash(tmp_path):
                 session_id=session_id,
             )
             helper_messages = [{"role": "user", "content": "resume helper"}]
+            resumed_context = RunContext(request, Session.create(session_id, [], workspace=tmp_path), "caller")
+            resumed.runtime_state.bind_run_context(resumed_context)
+            resumed.verification_runtime = VerificationRuntime(resumed, resumed_context)
             resumed._init_run(helper_messages, False)
 
             assert resumed.current_agent_name == "helper"
@@ -599,10 +612,12 @@ def test_agent_input_and_output_guardrails_rewrite_authoritative_transcript(tmp_
 
     assert result["status"] == "completed"
     assert messages[0]["content"] == "guarded input"
-    assert messages[-1]["content"] == "GUARDED OUTPUT"
-    assert fake.chat.completions.requests[0]["messages"][-1]["content"].endswith(
-        "guarded input"
-    )
+    assert messages[-1]["content"] == result["content"]
+    assert result["content"].startswith("GUARDED OUTPUT")
+    assert any(message.get("content") == "guarded input"
+               for message in fake.chat.completions.requests[0]["messages"])
+    assert not any(message.get("content") == "raw input"
+                   for message in fake.chat.completions.requests[0]["messages"])
 
 
 def test_agent_tool_guardrail_blocks_call_and_model_can_recover(tmp_path):

@@ -71,7 +71,7 @@ def test_pro_twenty_task_grant_uses_same_ledger_and_never_widens_old_scope(tmp_p
 def test_pro_grant_rejects_scope_or_model_expansion(change):
     authorization = pro_grant()
     if change == "too_many":
-        authorization["scope"].append("instance_example__project-" + "f" * 40)
+        authorization["scope"] = [f"instance_example__project-{i:040x}" for i in range(41)]
     elif change == "duplicate":
         authorization["scope"][1] = authorization["scope"][0]
     elif change == "bad_id":
@@ -150,8 +150,8 @@ def test_empirical_cannot_widen_scope_or_skip_a_count(tmp_path, variant):
         ledger.close()
 
 
-@pytest.mark.parametrize('usage', [None, {'prompt_tokens': -1, 'completion_tokens': 1}, {'prompt_tokens': 101, 'completion_tokens': 1}])
-def test_empirical_unreliable_or_over_reserved_usage_stops_other_units(tmp_path, usage):
+@pytest.mark.parametrize('usage', [None, {'prompt_tokens': -1, 'completion_tokens': 1}, {'prompt_tokens': 101, 'completion_tokens': 1025}])
+def test_empirical_unreliable_or_output_over_reserved_usage_stops_other_units(tmp_path, usage):
     ledger = RelayLedger(tmp_path/'ledger', RelayLimits(), empirical_authorization=grant())
     binding, raw, payload, accounting = request()
     try:

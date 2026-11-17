@@ -16,6 +16,13 @@ from nz_coder.runtime.core.context import ContextExecutionContext
 from nz_coder.state.context import PromptBudget
 
 
+
+
+def _freeze_request(messages):
+    from nz_coder.runtime.conversation.request_snapshot import FrozenRequestSnapshot, message_version
+    from nz_coder.runtime.conversation.message_projection import project_provider_messages
+    return FrozenRequestSnapshot("", "", "", message_version(messages), project_provider_messages, ())
+
 def _budget(
     *,
     usable: int = 100,
@@ -55,6 +62,7 @@ def test_context_runtime_returns_without_compaction_below_soft_limit(tmp_path) -
     compact_calls: list[list[dict]] = []
     events: list[tuple[str, dict]] = []
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path,
         budget=_budget(),
         projected_tokens=lambda _messages: 12,
@@ -71,9 +79,62 @@ def test_context_runtime_returns_without_compaction_below_soft_limit(tmp_path) -
     assert events == []
 
 
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_context_runtime_cleans_single_task_batches_before_semantic_compaction(tmp_path, asynchronous):
+    """Production preparation must clean old batches without spending a summary call."""
+    from nz_coder.state.context import estimate_tokens, prompt_budget
+
+    raw = "source line\n" * 700
+    messages = [{"role": "user", "content": "Fix the parser and verify its tests."}]
+    results = []
+    for index in range(40):
+        call_id = f"read-{index}"
+        result = {"role": "tool", "tool_call_id": call_id, "content": raw}
+        results.append(result)
+        messages.extend([
+            {"role": "assistant", "content": "Inspect source.", "tool_calls": [{
+                "id": call_id, "type": "function",
+                "function": {"name": "read_file", "arguments": '{"path":"parser.py"}'},
+            }]},
+            result,
+        ])
+    budget = prompt_budget(100_000, 8_000)
+    before = estimate_tokens(messages)
+    events = []
+
+    def unexpected_summary(_messages):
+        raise AssertionError("Read-result cleanup must not call a semantic summarizer")
+
+    context = ContextExecutionContext(
+        freeze_request=_freeze_request,
+        workspace=tmp_path,
+        budget=budget,
+        projected_tokens=estimate_tokens,
+        compact=unexpected_summary,
+        stamp_auto_compaction=lambda _messages: None,
+        trace=lambda event, **payload: events.append((event, payload)),
+    )
+    manager = ProductionContextManager()
+
+    if asynchronous:
+        compacted = asyncio.run(manager.prepare_async(context, messages))
+    else:
+        compacted = manager.prepare_sync(context, messages)
+
+    assert compacted is False
+    assert estimate_tokens(messages) < before
+    assert estimate_tokens(messages) < budget.soft_preflight_tokens
+    assert results[0]["content"] != raw
+    assert all(result["content"] == raw for result in results[-2:])
+    assert any(event == "context_tool_pruned" for event, _ in events)
+    assert all(event != "compact" for event, _ in events)
+    assert messages[0] == {"role": "user", "content": "Fix the parser and verify its tests."}
+
+
 def test_context_runtime_reports_live_pressure_before_early_return(tmp_path) -> None:
     reports = []
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path,
         budget=_budget(usable=100, soft=80),
         projected_tokens=lambda _messages: 12,
@@ -103,6 +164,7 @@ def test_context_runtime_compacts_replayed_history_before_physical_limit(
     events: list[tuple[str, dict]] = []
     budget = _budget(usable=100, soft=80, replay=60)
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path,
         budget=budget,
         projected_tokens=lambda _messages: 70,
@@ -135,6 +197,7 @@ def test_context_runtime_does_not_compact_fixed_request_overhead(
     compact_calls: list[list[dict]] = []
     budget = _budget(usable=100, soft=80, replay=60)
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path,
         budget=budget,
         projected_tokens=lambda _messages: 95,
@@ -159,6 +222,7 @@ def test_context_runtime_ignores_invalid_optional_replay_metric(
     """A custom replay projector cannot crash the shared Context Runtime."""
     events = []
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path,
         budget=_budget(usable=100, soft=80, replay=60),
         projected_tokens=lambda _messages: 12,
@@ -185,6 +249,7 @@ def test_context_runtime_falls_back_when_required_projector_is_invalid(
     """Required port corruption uses a conservative local token estimate."""
     reports = []
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path,
         budget=_budget(usable=100, soft=80),
         projected_tokens=lambda _messages: float("nan"),
@@ -213,6 +278,7 @@ def test_context_runtime_marks_cost_compaction_as_non_overflow(tmp_path) -> None
         })
 
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path,
         budget=budget,
         projected_tokens=lambda _messages: 70,
@@ -225,7 +291,7 @@ def test_context_runtime_marks_cost_compaction_as_non_overflow(tmp_path) -> None
         trace=lambda _event, **_payload: None,
         projected_replay_tokens=lambda _messages: 61,
     )
-    messages = [{"role": "user", "content": "long history"}]
+    messages = [{"role": "user", "content": "long history " * 10}]
 
     ProductionContextManager().prepare_sync(context, messages)
 
@@ -238,6 +304,7 @@ def test_context_runtime_async_compacts_replayed_history(tmp_path) -> None:
     budget = _budget(usable=100, soft=80, replay=60)
     events: list[tuple[str, dict]] = []
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path,
         budget=budget,
         projected_tokens=lambda _messages: 70,
@@ -272,6 +339,7 @@ def test_context_runtime_cancellation_interrupts_inflight_compaction(tmp_path) -
         release.set()
 
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path,
         budget=_budget(usable=100, soft=80, replay=60),
         projected_tokens=lambda _messages: 70,
@@ -323,6 +391,7 @@ def test_context_runtime_does_not_mutate_history_hidden_by_continuation_boundary
         {"role": "user", "content": "continue"},
     ]
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path,
         budget=_budget(),
         projected_tokens=lambda _messages: 12,
@@ -352,6 +421,7 @@ def test_context_runtime_async_compacts_above_hard_limit(tmp_path) -> None:
         return [{"role": "system", "content": "summary"}]
 
     context = ContextExecutionContext(
+        freeze_request=_freeze_request,
         workspace=tmp_path,
         budget=_budget(usable=50, soft=40),
         projected_tokens=lambda _messages: 75,

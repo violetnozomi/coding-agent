@@ -1,34 +1,28 @@
-"""Tests for the read-only LSP sidebar status projection."""
-from __future__ import annotations
-
-from types import SimpleNamespace
+"""LSP状态投影只呈现当前workspace的真实entry。"""
 
 from nz_coder.lsp import manager
+from tests.test_lsp import _registered_client
+from types import SimpleNamespace
 
 
 def test_client_status_summary_is_workspace_scoped_and_secret_free(tmp_path):
     other = tmp_path / "other"
     other.mkdir()
-    first = (str(tmp_path.resolve()), "pyright", str(tmp_path.resolve()))
-    second = (str(other.resolve()), "clangd", str(other.resolve()))
-    old_clients, old_broken = dict(manager._CLIENTS), set(manager._BROKEN)
+    first = _registered_client(
+        tmp_path,
+        SimpleNamespace(_closed=False, process=SimpleNamespace(poll=lambda: None)),
+    )
+    second = _registered_client(
+        other,
+        SimpleNamespace(_closed=False, process=SimpleNamespace(poll=lambda: None)),
+    )
     try:
-        manager._CLIENTS.clear()
-        manager._BROKEN.clear()
-        manager._CLIENTS[first] = SimpleNamespace(
-            process=SimpleNamespace(poll=lambda: None),
-        )
-        manager._BROKEN.add(second)
-
         rows = manager.client_status_summary(tmp_path)
-
-        assert rows == [{
-            "id": "pyright",
-            "root": str(tmp_path.resolve()),
-            "status": "connected",
-        }]
+        assert len(rows) == 1
+        assert rows[0]["entry_id"] == first.entry_id
+        assert rows[0]["status"] == "ready"
+        assert second.entry_id not in repr(rows)
+        assert "environment" not in rows[0]
     finally:
-        manager._CLIENTS.clear()
-        manager._CLIENTS.update(old_clients)
-        manager._BROKEN.clear()
-        manager._BROKEN.update(old_broken)
+        manager._ENTRIES.pop(first.key, None)
+        manager._ENTRIES.pop(second.key, None)

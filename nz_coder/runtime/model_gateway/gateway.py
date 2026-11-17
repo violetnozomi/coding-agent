@@ -9,6 +9,8 @@ import time
 from dataclasses import replace
 from typing import Callable
 
+from nz_coder.foundation.cancellation import CancellationView
+from nz_coder.runtime.core.run_context import current_run_context
 from nz_coder.runtime.agent.agent_resilience import ProviderAttemptController
 from nz_coder.runtime.model_gateway.errors import (
     classify_provider_error,
@@ -17,6 +19,7 @@ from nz_coder.runtime.model_gateway.errors import (
 from nz_coder.runtime.model_gateway.models import (
     ModelCall,
     ModelCallOutcome,
+    ModelCallPurpose,
     ModelStreamEvent,
 )
 from nz_coder.runtime.model_gateway.runtime import ResolvedModelRuntime
@@ -28,7 +31,7 @@ from nz_coder.runtime.model_gateway.usage import (
 )
 from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.conversation.think_tags import ThinkTagDemux, demux_think_tags
-from nz_coder.runtime.model_gateway.stream import iter_stream_with_timeouts
+from nz_coder.runtime.model_gateway.stream import StreamExecution
 from nz_coder.providers.capabilities import configured_model_capabilities
 from nz_coder.protocol.public_error import to_public_error
 
@@ -129,12 +132,19 @@ class ProductionModelGateway:
             raise ValueError("wait must be callable")
         if observer is not None and not callable(observer):
             raise ValueError("observer must be callable")
+        self._run_context = current_run_context()
         self.runtime = runtime
         self.max_retries = max_retries
         self.wait = wait
         self.poll_interval = min(0.05, max(0.001, normalized_poll))
         self.observer = observer
         self.backoff_base = normalized_backoff
+
+    def _cancellation(self, local=None):
+        return CancellationView(
+            self._run_context.cancel_scope if self._run_context is not None else None,
+            local,
+        )
 
     def _wait_for_retry(
         self,
@@ -269,7 +279,13 @@ class ProductionModelGateway:
             while True:
                 if cancel_event is not None and cancel_event.is_set():
                     self._settle_interrupted_worker(worker, kind="transport_cancellation")
-                    raise _CallCancelled("model call cancelled")
+                    try:
+                        kind, value = result_queue.get_nowait()
+                    except queue.Empty:
+                        response = None
+                    else:
+                        response = value if kind == "result" else None
+                    raise _CallCancelled("model call cancelled", response=response)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     self._settle_interrupted_worker(worker, kind="logical_timeout")
@@ -333,10 +349,15 @@ class ProductionModelGateway:
         *,
         started: float,
         attempts: int,
+        purpose: ModelCallPurpose,
     ) -> ModelCallOutcome:
         choice = response.choices[0]
         message = choice.message
-        visible, tagged_reasoning = demux_think_tags(_field(message, "content") or "")
+        visible = _field(message, "content") or ""
+        tagged_reasoning = ""
+        # 摘要正文是 JSON 协议，字符串里的思考标签同样是数据，不能静默删除。
+        if purpose is not ModelCallPurpose.COMPACTION:
+            visible, tagged_reasoning = demux_think_tags(visible)
         native_reasoning = str(_field(message, "reasoning_content") or "")
         reasoning = "".join((native_reasoning, tagged_reasoning))
         calls = tuple(_tool_call_dict(item) for item in (_field(message, "tool_calls") or ()))
@@ -350,15 +371,16 @@ class ProductionModelGateway:
             self.runtime.pricing,
             extract_provider_reported_cost(raw_usage),
         )
-        finish_reason = str(
-            _field(choice, "finish_reason") or ("tool-calls" if calls else "stop")
-        )
+        finish_reason = _field(choice, "finish_reason")
+        # 摘要必须由服务明确确认完成，不能把缺失标记推断为 stop。
+        if not finish_reason and purpose is not ModelCallPurpose.COMPACTION:
+            finish_reason = "tool-calls" if calls else "stop"
         return ModelCallOutcome.completed(
             content=visible,
             reasoning=reasoning,
             tool_calls=calls,
             provider_metadata=provider_metadata,
-            finish_reason=finish_reason,
+            finish_reason=str(finish_reason or ""),
             usage=usage,
             cost=cost,
             cost_source=cost_source,
@@ -368,7 +390,9 @@ class ProductionModelGateway:
 
     def normalize_response(self, response) -> ModelCallOutcome:
         """Normalize an already settled adapter response for compatibility hosts."""
-        return self._normalize(response, started=time.perf_counter(), attempts=1)
+        return self._normalize(
+            response, started=time.perf_counter(), attempts=1, purpose=ModelCallPurpose.CODING,
+        )
 
     def complete_sync(
         self,
@@ -380,6 +404,7 @@ class ProductionModelGateway:
         """Execute and settle one buffered logical call."""
         if call.streaming:
             raise ValueError("complete_sync requires a buffered ModelCall")
+        cancel_event = self._cancellation(cancel_event)
         started = time.perf_counter()
         if cancel_event is not None and cancel_event.is_set():
             return ModelCallOutcome.cancelled(
@@ -416,6 +441,7 @@ class ProductionModelGateway:
                 outcome = ModelCallOutcome.aborted(
                     str(exc),
                     retryable=False,
+                    provider_metadata={"request_lifecycle": {"dispatch_blocked": True}},
                     duration_ms=round((time.perf_counter() - started) * 1000, 3),
                     attempts=attempt,
                 )
@@ -434,14 +460,18 @@ class ProductionModelGateway:
                     attempts=attempt,
                 )
                 return finish(outcome)
-            except _CallCancelled as exc:
+            except (_CallCancelled, asyncio.CancelledError) as exc:
+                # 已结清且实际返回的用量仍保留；取消只丢弃正文和工具，不伪造零费用。
+                raw_usage = _field(getattr(exc, "response", None), "usage")
+                usage = normalize_usage(raw_usage)
+                cost, source = resolve_usage_cost(usage, self.runtime.pricing, extract_provider_reported_cost(raw_usage))
                 outcome = ModelCallOutcome.cancelled(
-                    error=str(exc),
+                    error=str(exc), usage=usage, cost=cost, cost_source=source,
                     duration_ms=round((time.perf_counter() - started) * 1000, 3),
                     attempts=attempt,
                 )
                 return finish(outcome)
-            except BaseException as exc:
+            except Exception as exc:
                 if (
                     active_call.tool_choice is not None
                     and not tool_choice_fallback_used
@@ -528,6 +558,7 @@ class ProductionModelGateway:
                     response,
                     started=started,
                     attempts=attempt,
+                    purpose=call.purpose,
                 )
             except Exception as exc:
                 outcome = ModelCallOutcome.aborted(
@@ -551,13 +582,16 @@ class ProductionModelGateway:
         cancel_event: threading.Event | None = None,
     ) -> ModelCallOutcome:
         """Run the buffered Gateway without blocking the event loop."""
-        owned_cancel = cancel_event or threading.Event()
+        owned_cancel = threading.Event()
+        cancellation = self._cancellation(CancellationView(owned_cancel, cancel_event))
         task = asyncio.create_task(
-            asyncio.to_thread(self.complete_sync, call, owned_cancel)
+            asyncio.to_thread(self.complete_sync, call, cancellation)
         )
         try:
             return await asyncio.shield(task)
         except asyncio.CancelledError:
+            if self._run_context is not None:
+                self._run_context.request_cancel()
             owned_cancel.set()
             while not task.done():
                 try:
@@ -577,6 +611,7 @@ class ProductionModelGateway:
         """Settle one stream while emitting Provider-neutral ordered events."""
         if not call.streaming:
             raise ValueError("complete_stream_sync requires a streaming ModelCall")
+        cancel_event = self._cancellation(cancel_event)
         if not self.runtime.capabilities.supports_streaming:
             return self.complete_sync(replace(call, streaming=False), cancel_event)
         started = time.perf_counter()
@@ -667,7 +702,6 @@ class ProductionModelGateway:
             finish_reason = ""
             finish_emitted = False
             first_token_ms = None
-            stream = None
             think_tags = ThinkTagDemux()
             stable_boundary = False
             side_effect_committed = False
@@ -726,12 +760,10 @@ class ProductionModelGateway:
             try:
                 if cancel_event is not None and cancel_event.is_set():
                     return terminal("cancelled", "model stream cancelled")
-                stream = self.runtime.provider.create_completion(
-                    self.runtime.client,
-                    **self._request_kwargs(active_call),
-                )
-                for chunk in iter_stream_with_timeouts(
-                    stream,
+                for chunk in StreamExecution(
+                    lambda: self.runtime.provider.create_completion(
+                        self.runtime.client, **self._request_kwargs(active_call)),
+                    runtime=self.runtime,
                     idle_timeout_seconds=idle_timeout_seconds,
                     hard_timeout_seconds=call.timeout_seconds,
                     cancelled=(cancel_event.is_set if cancel_event is not None else None),
@@ -750,8 +782,6 @@ class ProductionModelGateway:
                     if observed_finish:
                         finish_reason = str(observed_finish)
                     delta = _field(choice, "delta")
-                    if delta is None:
-                        continue
                     content = _field(delta, "content")
                     if content:
                         consume_think(think_tags.push(str(content)))
@@ -808,7 +838,7 @@ class ProductionModelGateway:
                 if cancel_event is not None and cancel_event.is_set():
                     return terminal("cancelled", "model stream cancelled")
                 if not finish_emitted:
-                    emit("finish", reason=finish_reason or ("tool-calls" if tool_calls else "stop"))
+                    raise ConnectionError("Provider stream interrupted before completion")
                 return terminal("completed")
             except BaseException as exc:
                 consume_think(think_tags.finish())
@@ -883,6 +913,9 @@ class ProductionModelGateway:
                 if decision.action != "retry":
                     return terminal("aborted", public_error.message, retryable)
                 archive_attempt(usage, provider_cost)
+                # 当前尝试已归档；退避期间取消时只结算账本，不能重复累加。
+                usage = NormalizedUsage()
+                provider_cost = None
                 recovery.record_error(exc)
                 wait_seconds = recovery.backoff_seconds(exc)
                 self._observe(
@@ -895,14 +928,13 @@ class ProductionModelGateway:
                 )
                 if self._wait_for_retry(wait_seconds, cancel_event):
                     return terminal("cancelled", "model stream cancelled")
-            finally:
-                if stream is not None:
-                    from nz_coder.runtime.model_gateway.stream import close_stream
-                    close_stream(stream)
 
 
 class _CallCancelled(RuntimeError):
     """Internal control-flow marker for cooperative cancellation."""
+    def __init__(self, message, *, response=None):
+        super().__init__(message)
+        self.response = response
 
 
 class _ProviderUnsettled(RuntimeError):

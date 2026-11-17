@@ -154,3 +154,33 @@ def test_provider_smoke_cli_defaults_to_safe_dry_run(capsys):
     output = capsys.readouterr().out
     assert "Dry run only" in output
     assert "no API request sent" in output
+
+
+def test_stream_smoke_closes_real_transport_on_success_and_errors():
+    from nz_coder.providers import AnthropicProvider
+    from nz_coder.providers.http import UrllibTransport
+
+    class Response:
+        def __init__(self, lines, fail_close):
+            self.lines, self.fail_close, self.closes = lines, fail_close, 0
+        def __iter__(self):
+            return iter(self.lines)
+        def close(self):
+            self.closes += 1
+            if self.fail_close:
+                raise OSError("close failed")
+    class Transport(UrllibTransport):
+        def __init__(self, response):
+            super().__init__()
+            self.response = response
+        def _open(self, *args):
+            return self.response
+    valid = [b'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"ok"}}\n', b'\n']
+    for lines, close_failure, success in [(valid, False, True), ([b'data: {broken}\n', b'\n'], False, False), (valid, True, False)]:
+        response = Response(lines, close_failure)
+        provider = AnthropicProvider(api_key="test", transport=Transport(response))
+        report = run_provider_smoke(provider, model="fake", checks=("stream",))
+        assert report.ok is success
+        assert response.closes == 1
+        if close_failure:
+            assert "close failed" in report.checks[0].detail

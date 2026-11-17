@@ -1,23 +1,17 @@
 """Production resource host around the shared AgentRunner state machine."""
 from __future__ import annotations
 
-import asyncio
 from contextlib import ExitStack
 import threading
 
 from nz_coder.mcp import MCPRuntime
 from nz_coder.protocol.message_schema import is_synthetic_user_message
-from nz_coder.protocol.public_error import to_public_error
 from nz_coder.runtime.agent.agent_manager import (
     background_agent_manager,
     scoped_agent_message_sender,
     scoped_background_agent_manager,
 )
 from nz_coder.foundation.async_utils import to_thread_settled
-from nz_coder.runtime.core.execution_context import (
-    scoped_broad_test_guard,
-    scoped_declared_test_scopes,
-)
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.protocol.session_events import SessionEventBus, scoped_session_event_bus
 from nz_coder.state.sessions import scoped_session
@@ -47,14 +41,16 @@ class ProductionRuntimeHost:
             )
         agent._rotate_change_tracker_if_needed()
         agent.change_tracker.history_start = _last_user_message_position(messages)
-        from nz_coder.state.memory import bind_memory_manager
+        from nz_coder.state.memory import bind_memory_manager, bind_memory_runtime
+        from nz_coder.state.memory_scope import scoped_memory_scope
         from nz_coder.mcp import scoped_mcp_runtime
         from nz_coder.state.skills import bind_skill_loader
         from nz_coder.foundation.workspace_trust import (
             current_config_snapshot,
             scoped_config_snapshot,
         )
-        from nz_coder.runtime.agent.subagent import scoped_parent_context
+        from nz_coder.runtime.agent.subagent import scoped_parent_context, current_parent_command_authorizer
+        from nz_coder.tool_platform.permissioning.command_authorization import CommandAuthorizer
         from nz_coder.runtime.core.run_settings import RunSettings, scoped_run_settings
         from nz_coder.tools.files import bind_tool_state
 
@@ -106,8 +102,6 @@ class ProductionRuntimeHost:
                 stack.enter_context(scoped_workdir(agent.workdir))
                 stack.enter_context(scoped_config_snapshot(run_config_snapshot))
                 stack.enter_context(scoped_run_settings(run_settings))
-                stack.enter_context(scoped_broad_test_guard())
-                stack.enter_context(scoped_declared_test_scopes())
                 stack.enter_context(scoped_session(agent.session_id))
                 stack.enter_context(scoped_session_event_bus(agent.event_publisher))
                 stack.enter_context(scoped_background_agent_manager(agent.background_agents))
@@ -117,6 +111,14 @@ class ProductionRuntimeHost:
                 ))
                 stack.enter_context(bind_tool_state(txn=agent.txn, change_tracker=agent.change_tracker))
                 stack.enter_context(bind_memory_manager(agent._mm))
+                stack.enter_context(scoped_memory_scope(agent.memory_scope))
+                stack.enter_context(bind_memory_runtime(
+                    session_id=agent.session_id, agent_id=agent.agent_id,
+                    parent_session_id=getattr(agent, "parent_session_id", ""),
+                    capability=agent.memory_capability, execution_root=agent.workdir,
+                    source_authorizer=lambda path: agent.permissions.check("read_file", {"path": path})["behavior"] == "allow",
+                    messages=messages,
+                ))
                 stack.enter_context(bind_skill_loader(agent._skill_loader))
                 if getattr(agent, "agent_graph", None) is not None:
                     stack.enter_context(scoped_dynamic_tools([
@@ -138,6 +140,9 @@ class ProductionRuntimeHost:
                     trace_id=agent.trace_id,
                     model_id=agent._active_model_id(),
                     config_snapshot=run_config_snapshot,
+                    memory_scope=agent.memory_scope.to_dict(),
+                    command_authorizer=(current_parent_command_authorizer()
+                        if getattr(agent, "parent_session_id", "") else CommandAuthorizer(agent.permissions)),
                 ))
                 mcp_status = mcp_runtime.status_summary()
                 if mcp_status:
@@ -151,16 +156,6 @@ class ProductionRuntimeHost:
                         "tool_count": len(mcp_runtime.tool_bindings()),
                     })
                 return await execute(agent, messages, on_tool, on_text, on_token, stream)
-        except asyncio.CancelledError:
-            agent._emit_session_event("session.run.cancelled", {})
-            raise
-        except Exception as exc:
-            public_error = to_public_error(exc)
-            agent._emit_session_event("session.run.failed", {
-                "error_type": public_error.metadata.get("error_type", public_error.code),
-                "error": public_error.to_dict(),
-            })
-            raise
         finally:
             retire = getattr(agent, "retire_run_control", None)
             if run_control is not None and callable(retire):

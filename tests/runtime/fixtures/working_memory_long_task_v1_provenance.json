@@ -1,0 +1,15 @@
+[
+  {
+    "fixture": "working_memory_long_task_v1_002.json",
+    "source_snapshot": "/home/pyh/.codex/artifacts/serial-memory-long-task-20261105/attempts/run-01/memory-snapshots/002.json",
+    "source_sha256": "c04a1b218b9946ef0b1d6d2b4726f7316dc9406e6ae6a40e0e8545bbdcbb2de7",
+    "note": "Observed snapshot wrapped with v1 version, entries and reminder unchanged."
+  },
+  {
+    "fixture": "working_memory_long_task_v1_003.json",
+    "source_snapshot": "/home/pyh/.codex/artifacts/serial-memory-long-task-20261105/attempts/run-01/memory-snapshots/003.json",
+    "source_sha256": "306c37d50bcd671d6809090bb8864ed4bb74063d6b1ccb914f8295851df1b7c9",
+    "note": "Observed snapshot wrapped with v1 version, entries and reminder unchanged.",
+    "actual_file_sha256": "58e57f417f3ae955b7c97727e63905e551e6f7efb21ce8fc0df6e3259411c886"
+  }
+]

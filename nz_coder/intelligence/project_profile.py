@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 
+from nz_coder.foundation.workspace_file_access import FixedFileAccess
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
 
@@ -266,9 +267,9 @@ def build_project_profile(path: str | Path | None = None, save: bool = False) ->
         _add_unique(profile["known_env_noise"], "node_modules missing")
 
     if save:
-        out = root / ".nz-coder" / "project_profile.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
+        FixedFileAccess(root, allowed=(".nz-coder/project_profile.json",)).write_text(
+            ".nz-coder/project_profile.json", json.dumps(profile, ensure_ascii=False, indent=2)
+        )
     return profile
 
 
@@ -393,10 +394,9 @@ def _node_execution_facts(root: Path) -> list[dict]:
 def load_project_profile(path: str | Path | None = None, rebuild: bool = False) -> dict:
     """Load a saved project profile or rebuild it if missing/stale is acceptable."""
     root = _safe_workdir(path)
-    fp = root / ".nz-coder" / "project_profile.json"
-    if fp.exists() and not rebuild:
+    if not rebuild:
         try:
-            data = json.loads(fp.read_text(encoding="utf-8"))
+            data = json.loads(FixedFileAccess(root, allowed=(".nz-coder/project_profile.json",)).read_text(".nz-coder/project_profile.json"))
             if isinstance(data, dict):
                 return data
         except (OSError, json.JSONDecodeError):

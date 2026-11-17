@@ -12,7 +12,7 @@ from contextvars import ContextVar
 from typing import Callable, get_type_hints
 
 from nz_coder.protocol.attachments import normalize_attachments
-from nz_coder.protocol.public_error import format_public_error
+from nz_coder.protocol.public_error import PublicRuntimeError, format_public_error
 
 
 class ToolOutput(str):
@@ -30,11 +30,14 @@ class ToolOutput(str):
         title: str = "",
         metadata: dict | None = None,
         attachments: list[dict] | None = None,
+        execution_facts: tuple = (),
     ):
         instance = super().__new__(cls, str(value))
         instance.title = str(title)
         instance.metadata = dict(metadata or {})
         instance.attachments = normalize_attachments(attachments)
+        # 私有宿主回执不进入公共 metadata，不能从外部工具 JSON 反向生成。
+        instance.execution_facts = tuple(execution_facts)
         return instance
 
 
@@ -107,7 +110,25 @@ _TOOL_CALL_ID: ContextVar[str] = ContextVar(
     "nz_coder_tool_call_id",
     default="",
 )
-_TOOL_CANCEL_EVENT: ContextVar[threading.Event | None] = ContextVar(
+class ToolCancellationScope:
+    """工具只写自己的取消位，父运行和外部调用方始终只读。"""
+
+    def __init__(self, *parents) -> None:
+        from nz_coder.foundation.cancellation import CancellationView
+        self._local = threading.Event()
+        self._view = CancellationView(self._local, *parents)
+
+    def set(self) -> None:
+        self._local.set()
+
+    def is_set(self) -> bool:
+        return self._view.is_set()
+
+    def wait(self, timeout: float | None = None) -> bool:
+        return self._view.wait(timeout)
+
+
+_TOOL_CANCEL_EVENT: ContextVar[threading.Event | ToolCancellationScope | None] = ContextVar(
     "nz_coder_tool_cancel_event",
     default=None,
 )
@@ -146,10 +167,10 @@ def current_tool_call_id() -> str:
 
 
 @contextmanager
-def scoped_tool_cancellation(cancel_event: threading.Event):
+def scoped_tool_cancellation(cancel_event: threading.Event | ToolCancellationScope):
     """Bind one cooperative cancellation signal to a tool worker context."""
-    if not isinstance(cancel_event, threading.Event):
-        raise ValueError("Tool cancellation requires a threading.Event")
+    if not isinstance(cancel_event, (threading.Event, ToolCancellationScope)):
+        raise ValueError("Tool cancellation requires an Event or ToolCancellationScope")
     token = _TOOL_CANCEL_EVENT.set(cancel_event)
     try:
         yield
@@ -157,7 +178,7 @@ def scoped_tool_cancellation(cancel_event: threading.Event):
         _TOOL_CANCEL_EVENT.reset(token)
 
 
-def current_tool_cancel_event() -> threading.Event | None:
+def current_tool_cancel_event() -> threading.Event | ToolCancellationScope | None:
     """Return the current tool call's cooperative cancellation event."""
     return _TOOL_CANCEL_EVENT.get()
 
@@ -814,6 +835,8 @@ def dispatch(name: str, arguments) -> str:
         if isinstance(result, str):
             return result
         return str(result) if result is not None else "(no output)"
+    except PublicRuntimeError:
+        raise
     except TypeError:
         return f"Error: Bad arguments for {name}"
     except Exception as e:

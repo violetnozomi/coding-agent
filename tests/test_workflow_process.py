@@ -104,3 +104,173 @@ def test_workflow_reconcile_is_idempotent(tmp_path):
     store.reconcile([_state()])
 
     assert store.snapshot()["revision"] == revision
+
+
+def _invocation(status="completed", identity="round-1"):
+    return {**_state(status), "settlement_id": identity, "finished_at": 13.0,
+            "child_result_settlement_id": identity,
+            "child_result": {"task_id": "child-1", "name": "offline", "status": status,
+                             "digest": "done", "usage": {"total": 18}}}
+
+
+def _store(tmp_path):
+    from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
+
+    store = WorkflowProcessStore(tmp_path / "workflow", "parent", agent_cap=4)
+    store.record_task("task_queued", _invocation("queued"))
+    return store
+
+
+def test_short_writes_are_completed_for_journal_and_snapshot(tmp_path, monkeypatch):
+    import os
+    from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
+
+    store = _store(tmp_path)
+    original = os.write
+    monkeypatch.setattr(os, "write", lambda fd, data: original(fd, data[:17]))
+    store.record_task("task_terminal", _invocation())
+    assert json.loads(store.snapshot_path.read_text())["counts"]["completed"] == 1
+    assert WorkflowProcessStore(store.root, "parent", agent_cap=4).snapshot()["counts"]["completed"] == 1
+
+
+def test_zero_write_cannot_be_acknowledged(tmp_path, monkeypatch):
+    import os
+
+    store = _store(tmp_path)
+    with monkeypatch.context() as fault:
+        fault.setattr(os, "write", lambda fd, data: 0)
+        with pytest.raises(OSError):
+            store.record_task("task_terminal", _invocation())
+    assert store.snapshot()["counts"]["completed"] == 0
+
+
+@pytest.mark.parametrize("partial", [False, True], ids=["complete-unacked", "partial-line"])
+def test_uncertain_append_is_verified_before_terminal_retry(tmp_path, monkeypatch, partial):
+    import os
+    from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
+
+    store = _store(tmp_path)
+    original_write, original_sync = os.write, os.fsync
+    identity = store.events_path.stat().st_ino
+    writes = 0
+
+    def write(fd, data):
+        nonlocal writes
+        if os.fstat(fd).st_ino == identity:
+            writes += 1
+            if partial:
+                if writes == 1:
+                    return original_write(fd, data[:19])
+                raise OSError("injected partial write")
+        return original_write(fd, data)
+
+    def sync(fd):
+        original_sync(fd)
+        if os.fstat(fd).st_ino == identity:
+            raise OSError("injected ambiguous acknowledgement")
+
+    with monkeypatch.context() as fault:
+        fault.setattr(os, "write", write)
+        fault.setattr(os, "fsync", sync)
+        with pytest.raises(OSError):
+            store.commit_terminal(_invocation(), event_id="terminal-fixed")
+    commit = store.commit_terminal(_invocation(), event_id="terminal-fixed")
+    assert commit.event_id == "terminal-fixed"
+    assert len([event for event in store.events() if event["type"] == "task_terminal"]) == 1
+    restored = WorkflowProcessStore(store.root, "parent", agent_cap=4)
+    assert restored.snapshot()["counts"]["completed"] == 1
+
+
+def test_startup_tail_is_removed_before_first_append(tmp_path):
+    from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
+
+    store = _store(tmp_path)
+    with store.events_path.open("ab") as stream:
+        stream.write(b'{"incomplete":')
+    restored = WorkflowProcessStore(store.root, "parent", agent_cap=4)
+    restored.record_task("task_terminal", _invocation())
+    again = WorkflowProcessStore(store.root, "parent", agent_cap=4)
+    assert again.snapshot()["counts"]["completed"] == 1
+
+
+@pytest.mark.parametrize("kind", ["bytes", "entries"])
+def test_append_and_reload_share_capacity_limits(tmp_path, monkeypatch, kind):
+    from nz_coder.runtime.workflows import workflow_process as module
+
+    store = _store(tmp_path)
+    before = store.events_path.read_bytes()
+    if kind == "bytes":
+        monkeypatch.setattr(module, "_MAX_JOURNAL_BYTES", len(before) + 20)
+    else:
+        monkeypatch.setattr(module, "_MAX_JOURNAL_ENTRIES", 2, raising=False)
+    with pytest.raises(ValueError, match="capacity|exceeds"):
+        store.record_event("workflow_log", data={"message": "x" * 100})
+    assert store.events_path.read_bytes() == before
+    assert module.WorkflowProcessStore(store.root, "parent", agent_cap=4).snapshot()["revision"] == 2
+
+
+def test_snapshot_failure_preserves_commit_and_can_be_repaired(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    notifications = []
+    store.set_recovery_wakeup(lambda: notifications.append("dirty"))
+    with monkeypatch.context() as fault:
+        fault.setattr(store, "_persist_snapshot", lambda: (_ for _ in ()).throw(OSError("snapshot unavailable")))
+        commit = store.commit_terminal(_invocation(), event_id="terminal-fixed")
+        assert commit.snapshot_dirty is True
+        assert store.snapshot()["counts"]["completed"] == 1
+        assert store.needs_recovery is True
+    store.recover()
+    assert store.needs_recovery is False
+    assert json.loads(store.snapshot_path.read_text())["counts"]["completed"] == 1
+    assert notifications
+    assert store.commit_terminal(_invocation(), event_id="unused-on-retry").event_id == "terminal-fixed"
+    assert len([event for event in store.events() if event["type"] == "task_terminal"]) == 1
+
+
+def test_reload_survives_snapshot_cache_failure(tmp_path, monkeypatch):
+    from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
+
+    store = _store(tmp_path)
+    store.record_task("task_terminal", _invocation())
+    with monkeypatch.context() as fault:
+        fault.setattr(WorkflowProcessStore, "_persist_snapshot", lambda self: (_ for _ in ()).throw(OSError("snapshot unavailable")))
+        restored = WorkflowProcessStore(store.root, "parent", agent_cap=4)
+        assert restored.snapshot()["counts"]["completed"] == 1
+        assert restored.needs_recovery
+    restored.recover()
+    assert not restored.needs_recovery
+
+
+def test_terminal_is_not_downgraded_by_raw_without_new_admission(tmp_path):
+    store = _store(tmp_path)
+    store.commit_terminal(_invocation(), event_id="terminal-fixed")
+    for raw in [_invocation("running"), _invocation("interrupted"), _invocation("error"), _invocation("running", "unadmitted")]:
+        raw.pop("child_result")
+        snapshot = store.reconcile([raw])
+        assert snapshot["counts"]["completed"] == 1
+        assert snapshot["tokens"]["spent"] == 18
+    assert store.current_invocation("child-1") == "round-1"
+    store.record_task("task_queued", _invocation("queued", "round-2"))
+    assert store.current_invocation("child-1") == "round-2"
+    assert store.snapshot()["counts"]["pending"] == 1
+    store.commit_terminal(_invocation(identity="round-2"), event_id="terminal-second")
+    assert len([event for event in store.events() if event["type"] == "task_terminal"]) == 2
+    assert store.committed_items()[0]["settlement_id"] == "round-2"
+
+
+def test_old_canonical_is_not_used_in_new_invocation_projection(tmp_path):
+    store = _store(tmp_path)
+    new = _invocation("queued", "round-2")
+    new["child_result_settlement_id"] = "round-1"
+    store.record_task("task_queued", new)
+    item = store.snapshot()["items"][0]
+    assert item.get("summary") != "done"
+    assert item["usage"] == {}
+
+
+def test_callback_failure_is_not_a_commit_failure(tmp_path):
+    store = _store(tmp_path)
+    store._on_event = lambda *_: (_ for _ in ()).throw(OSError("presentation unavailable"))
+    commit = store.commit_terminal(_invocation(), event_id="terminal-fixed")
+    assert commit.sequence == 3
+    assert store.snapshot()["counts"]["completed"] == 1

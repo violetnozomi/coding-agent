@@ -280,6 +280,7 @@ def test_provider_adapter_forces_only_verdict_tool_and_parses_response():
     assert request["model"] == "judge-model"
     assert request["max_tokens"] == 1024
     assert request["stream"] is False
+    assert "extra_body" not in request
     assert len(request["tools"]) == 1
     assert request["tools"][0]["function"]["name"] == "emit_sidecar_verdict"
     assert request["tool_choice"] == {
@@ -297,7 +298,8 @@ def test_provider_adapter_forces_only_verdict_tool_and_parses_response():
     assert finish[0]["purpose"] == "verifier"
 
 
-def test_deepseek_v4_verifier_disables_thinking_for_bounded_structured_output():
+@pytest.mark.parametrize("model", ["deepseek-v4-flash", "deepseek-flash"])
+def test_deepseek_verifier_disables_thinking_for_bounded_structured_output(model):
     """Prevent reasoning tokens from consuming the entire sidecar budget."""
     from types import SimpleNamespace
 
@@ -316,7 +318,7 @@ def test_deepseek_v4_verifier_disables_thinking_for_bounded_structured_output():
             self.requests.append(kwargs)
             call = SimpleNamespace(function=SimpleNamespace(
                 name="emit_sidecar_verdict",
-                arguments='{"verdict":"accept","reason":"Evidence is complete"}',
+                arguments='{"verdict":"accept","reason":"Evidence is complete","delivery_assessment":{"status":"reviewed","issues":[]}}',
             ))
             return SimpleNamespace(choices=[SimpleNamespace(
                 message=SimpleNamespace(
@@ -331,7 +333,7 @@ def test_deepseek_v4_verifier_disables_thinking_for_bounded_structured_output():
     verdict = invoke_sidecar_verifier(
         provider=provider,
         client=object(),
-        model="deepseek-v4-flash",
+        model=model,
         context=VerifierContext(("preserve compatibility",), (), (), "done"),
         timeout_seconds=1,
     )
@@ -441,9 +443,10 @@ def test_semantic_contract_forces_sidecar_with_task_and_real_diff_evidence():
         ResolvedVerifierProvider,
         create_sidecar_verifier_hook,
     )
-    from nz_coder.runtime.agent.task_contract import RequirementLedger, TaskContract
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    contract = TaskContract.from_dict({
+    contract = parse_task_contract({
         "objective": "Add named ranges while preserving numeric inputs",
         "requirements": [{
             "id": "R1",
@@ -453,9 +456,10 @@ def test_semantic_contract_forces_sidecar_with_task_and_real_diff_evidence():
         "acceptance_commands": ["pytest -q tests"],
         "contract_version": 2,
     })
-    ledger = RequirementLedger.from_contract(contract)
-    ledger.observe_mutation(1, ["parser.py"])
-    ledger.observe_verification(
+    ledger = VerificationScenario(contract)
+    ledger.runtime.reconcile_workspace = lambda: None  # 此处测试受控事实和评审协议，磁盘变化另有真实链路测试。
+    ledger.mutate(1, ["parser.py"])
+    ledger.execute(
         1,
         command="pytest -q tests",
         passed=True,
@@ -472,7 +476,7 @@ def test_semantic_contract_forces_sidecar_with_task_and_real_diff_evidence():
             call = SimpleNamespace(function=SimpleNamespace(
                 name="emit_sidecar_verdict",
                 arguments=(
-                    '{"verdict":"accept","reason":"Compatibility evidence is present"}'
+                    '{"verdict":"accept","reason":"Compatibility evidence is present","delivery_assessment":{"status":"reviewed","issues":[]}}'
                 ),
             ))
             return SimpleNamespace(choices=[SimpleNamespace(
@@ -490,13 +494,15 @@ def test_semantic_contract_forces_sidecar_with_task_and_real_diff_evidence():
             "+if low > high and not named: raise ValueError\n"
         ),
     )
-    runtime_state = SimpleNamespace(
+    SimpleNamespace(
         observe_requirement_semantic_review=lambda **kwargs: semantic_evidence.append(kwargs),
     )
     hook = create_sidecar_verifier_hook(
         SimpleNamespace(
+            _model_gateway_observer_for_run=lambda: None,
             change_tracker=tracker,
-            runtime_state=runtime_state,
+            runtime_state=ledger.state,
+            verification_runtime=ledger.runtime,
             tracer=SimpleNamespace(log=lambda *_args, **_kwargs: None),
             _sidecar_risky_shell_ops=0,
             _sidecar_unattributed_write_ops=0,
@@ -526,18 +532,17 @@ def test_semantic_contract_forces_sidecar_with_task_and_real_diff_evidence():
     decision = asyncio.run(hook(context))
 
     assert decision.action == "complete"
-    assert hook.stats["last_gate_reason"] == "semantic-contract"
+    assert hook.stats["last_gate_reason"] == "ordinary-delivery"
     assert len(requests) == 1
     verifier_message = requests[0]["messages"][1]["content"]
     assert "Preserve numeric and Sunday compatibility" in verifier_message
     assert "Required evidence: semantic_review" in verifier_message
-    assert "Trusted exact-acceptance output: 125 passed in 0.53s" in verifier_message
+    assert "Trusted exact-acceptance output: 1 passed" in verifier_message
+    assert "125 passed in 0.53s" not in verifier_message
     assert "-if low > high: raise ValueError" in verifier_message
     assert "+if low > high and not named: raise ValueError" in verifier_message
-    assert semantic_evidence == [{
-        "accepted": True,
-        "fingerprint": "verifier_ok:compatibility",
-    }]
+    assert ledger.status("R1") == "satisfied"
+    assert any(item.type == "semantic_review_passed" for item in ledger.items["R1"].evidence)
 
 
 def test_semantic_contract_prioritizes_compatibility_delta_evidence():
@@ -550,9 +555,10 @@ def test_semantic_contract_prioritizes_compatibility_delta_evidence():
         ResolvedVerifierProvider,
         create_sidecar_verifier_hook,
     )
-    from nz_coder.runtime.agent.task_contract import RequirementLedger, TaskContract
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    contract = TaskContract.from_dict({
+    contract = parse_task_contract({
         "objective": "Add named ranges while preserving the numeric API",
         "requirements": [
             {
@@ -570,12 +576,13 @@ def test_semantic_contract_prioritizes_compatibility_delta_evidence():
         "acceptance_commands": ["pytest -q tests"],
         "contract_version": 2,
     })
-    ledger = RequirementLedger.from_contract(contract)
-    ledger.observe_mutation(
+    ledger = VerificationScenario(contract)
+    ledger.runtime.reconcile_workspace = lambda: None  # 此处测试受控事实和评审协议，磁盘变化另有真实链路测试。
+    ledger.mutate(
         1,
         ["README.md", "parser.py", "tests/test_cli.py", "tests/test_parser.py"],
     )
-    ledger.observe_verification(
+    ledger.execute(
         1,
         command="pytest -q tests",
         passed=True,
@@ -631,6 +638,7 @@ def test_semantic_contract_prioritizes_compatibility_delta_evidence():
     )
     hook = create_sidecar_verifier_hook(
         SimpleNamespace(
+            _model_gateway_observer_for_run=lambda: None,
             change_tracker=tracker,
             runtime_state=SimpleNamespace(
                 observe_requirement_semantic_review=lambda **_kwargs: None,
@@ -686,9 +694,10 @@ def test_semantic_contract_risk_respects_actual_model_verdict(verdict):
         ResolvedVerifierProvider,
         create_sidecar_verifier_hook,
     )
-    from nz_coder.runtime.agent.task_contract import RequirementLedger, TaskContract
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    contract = TaskContract.from_dict({
+    contract = parse_task_contract({
         "objective": "Add named ranges while preserving numeric ranges",
         "requirements": [{
             "id": "R1",
@@ -699,9 +708,10 @@ def test_semantic_contract_risk_respects_actual_model_verdict(verdict):
         "acceptance_commands": ["pytest -q tests"],
         "contract_version": 2,
     })
-    ledger = RequirementLedger.from_contract(contract)
-    ledger.observe_mutation(1, ["parser.py"])
-    ledger.observe_verification(
+    ledger = VerificationScenario(contract)
+    ledger.runtime.reconcile_workspace = lambda: None  # 此处测试受控事实和评审协议，磁盘变化另有真实链路测试。
+    ledger.mutate(1, ["parser.py"])
+    ledger.execute(
         1,
         command="pytest -q tests",
         passed=True,
@@ -718,7 +728,7 @@ def test_semantic_contract_risk_respects_actual_model_verdict(verdict):
             call = SimpleNamespace(function=SimpleNamespace(
                 name="emit_sidecar_verdict",
                 arguments=(
-                    '{"verdict":"' + verdict + '","reason":"controlled judgment"}'
+                    '{"verdict":"' + verdict + '","reason":"controlled judgment","delivery_assessment":{"status":"reviewed","issues":[]}}'
                 ),
             ))
             return SimpleNamespace(choices=[SimpleNamespace(
@@ -744,16 +754,14 @@ def test_semantic_contract_risk_respects_actual_model_verdict(verdict):
     )
     hook = create_sidecar_verifier_hook(
         SimpleNamespace(
+            _model_gateway_observer_for_run=lambda: None,
             change_tracker=SimpleNamespace(
                 current_changed_paths=lambda: ["parser.py"],
                 current_deleted_paths=lambda: [],
                 render_current_diff=lambda: diff,
             ),
-            runtime_state=SimpleNamespace(
-                observe_requirement_semantic_review=lambda **kwargs: recorded.append(
-                    kwargs
-                ),
-            ),
+            runtime_state=ledger.state,
+            verification_runtime=ledger.runtime,
             tracer=SimpleNamespace(log=lambda *_args, **_kwargs: None),
             _sidecar_risky_shell_ops=0,
             _sidecar_unattributed_write_ops=0,
@@ -788,7 +796,8 @@ def test_semantic_contract_risk_respects_actual_model_verdict(verdict):
     assert "NON-AUTHORITATIVE COMPATIBILITY HYPOTHESES" in str(provider_calls[0])
     if verdict == "accept":
         assert decision.action == "complete"
-        assert recorded and recorded[0]["accepted"] is True
+        assert ledger.status("R1") == "satisfied"
+        assert any(item.type == "semantic_review_passed" for item in ledger.items["R1"].evidence)
     else:
         assert decision.action == ("abort" if verdict == "blocked" else "reanimate")
         assert recorded == []
@@ -1105,9 +1114,10 @@ def test_fail_open_accept_does_not_create_semantic_evidence():
         ResolvedVerifierProvider,
         create_sidecar_verifier_hook,
     )
-    from nz_coder.runtime.agent.task_contract import RequirementLedger, TaskContract
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    contract = TaskContract.from_dict({
+    contract = parse_task_contract({
         "objective": "Preserve compatibility",
         "requirements": [{
             "id": "R1",
@@ -1115,9 +1125,10 @@ def test_fail_open_accept_does_not_create_semantic_evidence():
             "kind": "compatibility",
         }],
     })
-    ledger = RequirementLedger.from_contract(contract)
-    ledger.observe_mutation(1, ["a.py"])
-    ledger.observe_verification(
+    ledger = VerificationScenario(contract)
+    ledger.runtime.reconcile_workspace = lambda: None  # 此处测试受控事实和评审协议，磁盘变化另有真实链路测试。
+    ledger.mutate(1, ["a.py"])
+    ledger.execute(
         1,
         command="pytest -q tests",
         passed=True,
@@ -1134,6 +1145,7 @@ def test_fail_open_accept_does_not_create_semantic_evidence():
             )])
 
     loop = SimpleNamespace(
+        _model_gateway_observer_for_run=lambda: None,
         change_tracker=SimpleNamespace(
             current_changed_paths=lambda: ["a.py"],
             current_deleted_paths=lambda: [],
@@ -1164,7 +1176,7 @@ def test_fail_open_accept_does_not_create_semantic_evidence():
         },
     )))
 
-    assert decision.action == "complete"
+    assert decision.action == "complete_unverified"
     assert hook.stats["last_trace"] == "no_tool_call"
     assert recorded == []
 
@@ -1214,6 +1226,7 @@ def test_sidecar_hook_builds_live_evidence_traces_and_maps_verdict():
 
     tracer = Tracer()
     loop = SimpleNamespace(
+        _model_gateway_observer_for_run=lambda: None,
         change_tracker=Tracker(),
         tracer=tracer,
         _sidecar_risky_shell_ops=0,
@@ -1252,6 +1265,7 @@ def test_sidecar_hook_builds_live_evidence_traces_and_maps_verdict():
         "sidecar_started",
         "sidecar_finished",
     ]
+    assert tracer.events[-1][1]["suggested_fix"] == "Add regression coverage"
     assert tracer.events[-1][1]["provider"] == "judge"
     assert tracer.events[-1][1]["model"] == "judge-model"
 
@@ -1276,7 +1290,7 @@ def test_sidecar_reuses_accepted_verdict_for_unchanged_mutation_evidence():
             requests.append(kwargs)
             tool_call = SimpleNamespace(function=SimpleNamespace(
                 name="emit_sidecar_verdict",
-                arguments='{"verdict":"accept","reason":"Patch is sound"}',
+                arguments='{"verdict":"accept","reason":"Patch is sound","delivery_assessment":{"status":"reviewed","issues":[]}}',
             ))
             return SimpleNamespace(choices=[SimpleNamespace(
                 message=SimpleNamespace(content="", tool_calls=[tool_call])
@@ -1285,6 +1299,7 @@ def test_sidecar_reuses_accepted_verdict_for_unchanged_mutation_evidence():
     events = []
     hook = create_sidecar_verifier_hook(
         SimpleNamespace(
+            _model_gateway_observer_for_run=lambda: None,
             change_tracker=SimpleNamespace(
                 current_changed_paths=lambda: ["pkg/parser.py"],
                 current_deleted_paths=lambda: [],
@@ -1319,12 +1334,13 @@ def test_sidecar_reuses_accepted_verdict_for_unchanged_mutation_evidence():
         )
 
     first = asyncio.run(hook(context(1, "Implemented and verified.")))
-    cached = asyncio.run(hook(context(1, "Here is a shorter final summary.")))
+    cached = asyncio.run(hook(context(1, "Implemented and verified.")))
+    revised_summary = asyncio.run(hook(context(1, "Here is a shorter final summary.")))
     changed = asyncio.run(hook(context(2, "Adjusted the implementation.")))
 
-    assert first.action == cached.action == changed.action == "complete"
-    assert len(requests) == 2
-    assert hook.stats["fire_count"] == 2
+    assert first.action == cached.action == changed.action == revised_summary.action == "complete"
+    assert len(requests) == 3
+    assert hook.stats["fire_count"] == 3
     assert hook.stats["skip_count"] == 1
     assert any(
         name == "sidecar_gate_decision"
@@ -1354,7 +1370,7 @@ def test_sidecar_prompt_preserves_complete_medium_single_file_diff():
             requests.append(kwargs)
             call = SimpleNamespace(function=SimpleNamespace(
                 name="emit_sidecar_verdict",
-                arguments='{"verdict":"accept","reason":"Patch is complete"}',
+                arguments='{"verdict":"accept","reason":"Patch is complete","delivery_assessment":{"status":"reviewed","issues":[]}}',
             ))
             return SimpleNamespace(choices=[SimpleNamespace(
                 message=SimpleNamespace(content="", tool_calls=[call])
@@ -1374,6 +1390,7 @@ def test_sidecar_prompt_preserves_complete_medium_single_file_diff():
     )
     hook = create_sidecar_verifier_hook(
         SimpleNamespace(
+            _model_gateway_observer_for_run=lambda: None,
             change_tracker=SimpleNamespace(
                 current_changed_paths=lambda: ["pkg/visitor.py"],
                 current_deleted_paths=lambda: [],
@@ -1451,7 +1468,7 @@ def test_sidecar_receives_persisted_current_round_instruction(tmp_path):
             requests.append(kwargs)
             call = SimpleNamespace(function=SimpleNamespace(
                 name="emit_sidecar_verdict",
-                arguments='{"verdict":"accept","reason":"Complete"}',
+                arguments='{"verdict":"accept","reason":"Complete","delivery_assessment":{"status":"reviewed","issues":[]}}',
             ))
             return SimpleNamespace(choices=[SimpleNamespace(
                 message=SimpleNamespace(content="", tool_calls=[call])
@@ -1464,6 +1481,7 @@ def test_sidecar_receives_persisted_current_round_instruction(tmp_path):
     )
     hook = create_sidecar_verifier_hook(
         SimpleNamespace(
+            _model_gateway_observer_for_run=lambda: None,
             change_tracker=SimpleNamespace(
                 current_changed_paths=lambda: [],
                 current_deleted_paths=lambda: [],
@@ -1497,8 +1515,8 @@ def test_sidecar_receives_persisted_current_round_instruction(tmp_path):
     )
 
 
-def test_sidecar_hook_skips_trivial_observed_work_without_provider_call():
-    """Catches the gate charging a verifier call for a one-line trivial edit."""
+def test_sidecar_hook_reviews_trivial_observed_work_and_reports_provider_unavailable():
+    """普通候选不按行数免审；调用不可用时如实保留未验证。"""
     import asyncio
     from types import SimpleNamespace
 
@@ -1512,7 +1530,7 @@ def test_sidecar_hook_skips_trivial_observed_work_without_provider_call():
         name = "judge"
 
         def create_completion(self, _client, **_kwargs):
-            raise AssertionError("trivial work must not call the verifier")
+            raise RuntimeError("controlled offline provider unavailable")
 
     tracker = SimpleNamespace(
         current_changed_paths=lambda: ["a.py"],
@@ -1522,6 +1540,7 @@ def test_sidecar_hook_skips_trivial_observed_work_without_provider_call():
     tracer = SimpleNamespace(log=lambda *_args, **_kwargs: None)
     hook = create_sidecar_verifier_hook(
         SimpleNamespace(
+            _model_gateway_observer_for_run=lambda: None,
             change_tracker=tracker,
             tracer=tracer,
             _sidecar_risky_shell_ops=0,
@@ -1537,9 +1556,9 @@ def test_sidecar_hook_skips_trivial_observed_work_without_provider_call():
         runtime_state={"edits_this_run": 1, "turn_count": 2},
     )))
 
-    assert decision.action == "complete"
-    assert hook.stats["fire_count"] == 0
-    assert hook.stats["skip_count"] == 1
+    assert decision.action == "complete_unverified"
+    assert hook.stats["fire_count"] == 1
+    assert hook.stats["skip_count"] == 0
 
 
 def test_sidecar_defers_to_pending_strict_verification_without_provider_call():
@@ -1563,6 +1582,7 @@ def test_sidecar_defers_to_pending_strict_verification_without_provider_call():
     events = []
     hook = create_sidecar_verifier_hook(
         SimpleNamespace(
+            _model_gateway_observer_for_run=lambda: None,
             change_tracker=SimpleNamespace(
                 current_changed_paths=lambda: ["pkg/parser.py", "tests/test_parser.py"],
                 current_deleted_paths=lambda: [],
@@ -1632,7 +1652,7 @@ def test_sidecar_receives_strict_environment_blocker_authority(tmp_path):
             requests.append(kwargs)
             call = SimpleNamespace(function=SimpleNamespace(
                 name="emit_sidecar_verdict",
-                arguments='{"verdict":"accept","reason":"Patch is coherent"}',
+                arguments='{"verdict":"accept","reason":"Patch is coherent","delivery_assessment":{"status":"reviewed","issues":[]}}',
             ))
             return SimpleNamespace(choices=[SimpleNamespace(
                 message=SimpleNamespace(content="", tool_calls=[call])
@@ -1654,6 +1674,7 @@ def test_sidecar_receives_strict_environment_blocker_authority(tmp_path):
     )
     hook = create_sidecar_verifier_hook(
         SimpleNamespace(
+            _model_gateway_observer_for_run=lambda: None,
             workdir=tmp_path,
             change_tracker=SimpleNamespace(
                 current_changed_paths=lambda: ["pylint/lint/pylinter.py"],
@@ -1731,7 +1752,7 @@ def test_strict_environment_blocker_bypasses_trivial_sidecar_skip():
             requests.append(kwargs)
             call = SimpleNamespace(function=SimpleNamespace(
                 name="emit_sidecar_verdict",
-                arguments='{"verdict":"accept","reason":"Patch is coherent"}',
+                arguments='{"verdict":"accept","reason":"Patch is coherent","delivery_assessment":{"status":"reviewed","issues":[]}}',
             ))
             return SimpleNamespace(choices=[SimpleNamespace(
                 message=SimpleNamespace(content="", tool_calls=[call])
@@ -1739,6 +1760,7 @@ def test_strict_environment_blocker_bypasses_trivial_sidecar_skip():
 
     hook = create_sidecar_verifier_hook(
         SimpleNamespace(
+            _model_gateway_observer_for_run=lambda: None,
             change_tracker=SimpleNamespace(
                 current_changed_paths=lambda: ["pkg/parser.py"],
                 current_deleted_paths=lambda: [],
@@ -1805,7 +1827,7 @@ def test_persistent_data_deletion_risk_bypasses_trivial_sidecar_skip():
             requests.append(kwargs)
             call = SimpleNamespace(function=SimpleNamespace(
                 name="emit_sidecar_verdict",
-                arguments='{"verdict":"accept","reason":"Deletion is justified"}',
+                arguments='{"verdict":"accept","reason":"Deletion is justified","delivery_assessment":{"status":"reviewed","issues":[]}}',
             ))
             return SimpleNamespace(choices=[SimpleNamespace(
                 message=SimpleNamespace(content="", tool_calls=[call])
@@ -1813,6 +1835,7 @@ def test_persistent_data_deletion_risk_bypasses_trivial_sidecar_skip():
 
     hook = create_sidecar_verifier_hook(
         SimpleNamespace(
+            _model_gateway_observer_for_run=lambda: None,
             change_tracker=SimpleNamespace(
                 current_changed_paths=lambda: [
                     "django/contrib/auth/migrations/0011_permissions.py"
@@ -1857,4 +1880,219 @@ def test_persistent_data_deletion_risk_bypasses_trivial_sidecar_skip():
     assert decision.action == "complete"
     assert len(requests) == 1
     assert hook.stats["fire_count"] == 1
-    assert hook.stats["last_gate_reason"] == "data-integrity-risk"
+    assert hook.stats["last_gate_reason"] == "ordinary-delivery"
+
+
+def test_existing_sidecar_request_receives_full_run_tool_results(tmp_path):
+    import asyncio
+    import json
+    from pathlib import Path
+    from types import SimpleNamespace
+    from nz_coder.runtime.verification.hooks import StopHookContext
+    from nz_coder.runtime.verification.sidecar_verifier import create_sidecar_verifier_hook,ResolvedVerifierProvider
+    transcript=json.loads((Path(__file__).parent/'fixtures/delivery_followup/session-history.json').read_text())
+    requests=[]
+    class Provider:
+        name='judge'
+        def create_completion(self,_client,**kwargs):
+            requests.append(kwargs)
+            content='\n'.join(str(m.get('content','')) for m in kwargs['messages'])
+            assert '"doing": 0' in content
+            assert 'HTTP/1.1 200 OK' in content
+            assert 'HTTP/1.1 404 Not Found' in content
+            assert 'OBSERVED TOOL RESULTS' in content
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='',tool_calls=[
+                SimpleNamespace(function=SimpleNamespace(name='emit_sidecar_verdict',arguments='{"verdict":"accept","reason":"Evidence visible","delivery_assessment":{"status":"reviewed","issues":[]}}'))]))])
+    hook=create_sidecar_verifier_hook(SimpleNamespace(workdir=tmp_path,change_tracker=None,
+        tracer=SimpleNamespace(log=lambda *_args,**_kwargs:None),_model_gateway_observer_for_run=lambda:None,
+        _sidecar_risky_shell_ops=0,_sidecar_unattributed_write_ops=0),
+        ResolvedVerifierProvider(Provider(),object(),'judge-model','judge','inherit-main'),env={'KODAX_VERIFIER_ALWAYS':'1'})
+    result=asyncio.run(hook(StopHookContext(transcript=tuple(transcript),last_assistant_text='review actual results',
+        runtime_state={'turn_count':29,'verification':{'verification_needed':True}})))
+    assert result.action=='complete'
+    assert len(requests)==1
+
+
+def test_revise_reason_and_fix_share_existing_guidance_budget():
+    from types import SimpleNamespace
+    from nz_coder.runtime.verification.hooks import AgentHooks
+    from nz_coder.runtime.verification.sidecar_verifier import (
+        parse_verifier_report, map_verdict_to_stop_decision,
+    )
+
+    for reason, fix in (("Short finding", "Short correction"),
+                        ("Finding start " + "r" * 6000, "Correction start " + "f" * 1500)):
+        verdict = parse_verifier_report({"input": {"verdict": "revise",
+            "reason": reason, "suggestedFix": fix}}, True)
+        decision = map_verdict_to_stop_decision(verdict)
+        messages = []
+        assert AgentHooks()._apply_stop_hook_decision(
+            SimpleNamespace(), messages, decision, budget=2) == "continue"
+        guidance = messages[0]
+        assert guidance["_nz_synthetic"] and guidance["_nz_stop_hook"]
+        assert reason[:13] in guidance["content"]
+        assert fix[:16] in guidance["content"]
+        assert len(decision.message) <= 4000
+        if len(reason) > 4000:
+            assert "[truncated]" in guidance["content"]
+        else:
+            assert reason in guidance["content"] and fix in guidance["content"]
+
+
+@pytest.mark.parametrize('reason, fix', [
+    ('Finding start ' + 'r' * 6000, 'Correction start ' + 'f' * 1500),
+    ('Finding start short', 'Correction start short'),
+])
+def test_long_sidecar_reason_and_fix_reach_next_model_request(monkeypatch, tmp_path, reason, fix):
+    import asyncio
+    from nz_coder.runtime.core.request import RunOptions
+    from nz_coder.runtime.execution import native_sdk
+    from nz_coder.runtime.verification.sidecar_verifier import (
+        parse_verifier_report, map_verdict_to_stop_decision,
+    )
+    from tests.runtime.test_native_product_runtime import _completion, _install_runtime, _request
+
+    class Provider:
+        name = 'offline'
+        def __init__(self):
+            self.requests = []
+        def create_completion(self, _client, **kwargs):
+            self.requests.append(kwargs['messages'])
+            return _completion('draft')
+
+    provider = Provider()
+    _install_runtime(monkeypatch, provider)
+    request, options = _request(tmp_path), RunOptions()
+    environment = native_sdk.build_product_run_environment(request, options)
+    verdict = parse_verifier_report({'input': {'verdict': 'revise',
+        'reason': reason, 'suggestedFix': fix}}, True)
+    decisions = iter((map_verdict_to_stop_decision(verdict), None))
+    environment.hooks.register_stop_hook(lambda context: next(decisions))
+    try:
+        asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request, options))
+    finally:
+        environment.close()
+    guidance = next(message['content'] for message in provider.requests[1]
+                    if 'Finding start' in str(message.get('content', '')))
+    assert 'Correction start' in guidance
+    if len(reason) > 4000:
+        assert '[truncated]' in guidance
+    else:
+        assert reason in guidance and fix in guidance
+
+@pytest.mark.parametrize('reason', ['Fine.', 'Completely different wording.'])
+def test_delivery_issue_overrides_accept_through_real_hook(reason):
+    import asyncio
+    import json
+    import re
+    from types import SimpleNamespace
+    from nz_coder.runtime.verification.hooks import StopHookContext
+    from nz_coder.runtime.verification.sidecar_verifier import ResolvedVerifierProvider, create_sidecar_verifier_hook
+
+    class Provider:
+        name = 'offline'
+        def create_completion(self, _client, **kwargs):
+            message = kwargs['messages'][1]['content']
+            match = re.search(r'^user: (user-[0-9a-f]+)$', message, re.MULTILINE)
+            reference = match.group(1) if match else 'missing-host-reference'
+            report = {'verdict': 'accept', 'reason': reason, 'delivery_assessment': {
+                'status': 'reviewed', 'issues': [{'candidate_excerpt': 'run --wrong',
+                'evidence_reference': reference, 'mismatch': 'The documented option differs from the implementation.'}]}}
+            call = SimpleNamespace(function=SimpleNamespace(name='emit_sidecar_verdict', arguments=json.dumps(report)))
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='', tool_calls=[call]), finish_reason='tool_calls')])
+
+    loop = SimpleNamespace(_model_gateway_observer_for_run=lambda: None, change_tracker=None,
+        runtime_state=None, tracer=None, _sidecar_risky_shell_ops=0, _sidecar_unattributed_write_ops=0)
+    hook = create_sidecar_verifier_hook(loop, ResolvedVerifierProvider(Provider(), object(), 'judge-model', 'offline', 'inherit-main'), env={'KODAX_VERIFIER_ALWAYS': '1'})
+    decision = asyncio.run(hook(StopHookContext(transcript=({'role': 'user', 'content': 'Explain how to run it'},),
+        last_assistant_text='run --wrong', runtime_state={})))
+    assert decision.action == 'reanimate'
+    assert 'documented option differs' in decision.message
+    assert hook.stats['verdict_counts']['revise'] == 1
+
+
+def test_complete_length_response_is_unavailable_through_real_hook():
+    import asyncio
+    import json
+    from types import SimpleNamespace
+    from nz_coder.runtime.verification.hooks import StopHookContext
+    from nz_coder.runtime.verification.sidecar_verifier import ResolvedVerifierProvider, create_sidecar_verifier_hook
+
+    class Provider:
+        name = 'offline'
+        def create_completion(self, _client, **kwargs):
+            report = {'verdict': 'accept', 'reason': 'ok', 'delivery_assessment': {'status': 'reviewed', 'issues': []}}
+            call = SimpleNamespace(function=SimpleNamespace(name='emit_sidecar_verdict', arguments=json.dumps(report)))
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='', tool_calls=[call]), finish_reason='length')])
+
+    loop = SimpleNamespace(_model_gateway_observer_for_run=lambda: None, change_tracker=None,
+        runtime_state=None, tracer=None, _sidecar_risky_shell_ops=0, _sidecar_unattributed_write_ops=0)
+    hook = create_sidecar_verifier_hook(loop, ResolvedVerifierProvider(Provider(), object(), 'judge-model', 'offline', 'inherit-main'), env={'KODAX_VERIFIER_ALWAYS': '1'})
+    decision = asyncio.run(hook(StopHookContext(transcript=({'role': 'user', 'content': 'Explain how to run it'},), last_assistant_text='run it', runtime_state={})))
+    assert decision.action == 'complete_unverified'
+    assert hook.stats['verdict_counts']['unavailable'] == 1
+
+@pytest.mark.parametrize('assessment,expected', [
+    ({'status': 'reviewed', 'issues': []}, 'accept'),
+    ({'status': 'not_applicable', 'issues': []}, 'accept'),
+    ({'status': 'unknown', 'issues': []}, 'unavailable'),
+    (None, 'unavailable'),
+    ({'status': 'not_applicable', 'issues': [{'candidate_excerpt': 'run it', 'evidence_reference': 'bad', 'mismatch': 'wrong'}]}, 'unavailable'),
+    ({'status': 'reviewed', 'issues': [{'candidate_excerpt': 'not present', 'evidence_reference': 'bad', 'mismatch': 'wrong'}]}, 'unavailable'),
+])
+def test_delivery_assessment_requires_current_valid_evidence(assessment, expected):
+    from nz_coder.runtime.verification.sidecar_verifier import VerifierContext, parse_verifier_report
+    context = VerifierContext(('explain',), (), (), 'run it')
+    verdict = parse_verifier_report({'input': {'verdict': 'accept', 'reason': 'ok', 'delivery_assessment': assessment}}, True, context=context)
+    assert verdict.verdict == expected
+
+
+def test_negative_action_survives_length_and_bad_assessment():
+    from nz_coder.runtime.verification.sidecar_verifier import parse_verifier_report
+    for value in ('revise', 'blocked'):
+        verdict = parse_verifier_report({'input': {'verdict': value, 'reason': 'A concrete problem', 'delivery_assessment': None}, '_finish_reason': 'length'}, True)
+        assert verdict.verdict == value
+        assert verdict.reason == 'A concrete problem'
+
+
+def test_bad_reference_or_candidate_does_not_create_accept():
+    from nz_coder.runtime.verification.sidecar_verifier import VerifierContext, parse_verifier_report, _material_ids
+    context = VerifierContext(('requested API',), (), (), 'call(x)')
+    reference = _material_ids(context)['user']
+    for excerpt, ref in [('call(x)', 'not-a-current-id'), ('call(y)', reference)]:
+        report = {'verdict': 'accept', 'reason': 'ok', 'delivery_assessment': {'status': 'reviewed', 'issues': [{'candidate_excerpt': excerpt, 'evidence_reference': ref, 'mismatch': 'different'}]}}
+        assert parse_verifier_report({'input': report}, True, context=context).verdict == 'unavailable'
+
+
+def test_provider_failure_is_unavailable_and_not_cached():
+    import asyncio
+    from types import SimpleNamespace
+    from nz_coder.runtime.verification.hooks import StopHookContext
+    from nz_coder.runtime.verification.sidecar_verifier import ResolvedVerifierProvider, create_sidecar_verifier_hook
+    class Provider:
+        name = 'offline'
+        calls = 0
+        def create_completion(self, _client, **kwargs):
+            self.calls += 1
+            raise RuntimeError('offline failure')
+    provider = Provider()
+    loop = SimpleNamespace(_model_gateway_observer_for_run=lambda: None, change_tracker=None,
+        runtime_state=None, tracer=None, _sidecar_risky_shell_ops=0, _sidecar_unattributed_write_ops=0)
+    hook = create_sidecar_verifier_hook(loop, ResolvedVerifierProvider(provider, object(), 'judge-model', 'offline', 'inherit-main'), env={'KODAX_VERIFIER_ALWAYS': '1'})
+    context = StopHookContext(transcript=({'role': 'user', 'content': 'Explain this'},), last_assistant_text='Answer', runtime_state={})
+    assert asyncio.run(hook(context)).action == 'complete_unverified'
+    first_calls = provider.calls
+    assert asyncio.run(hook(context)).action == 'complete_unverified'
+    assert provider.calls > first_calls
+    assert hook.stats['verdict_counts']['unavailable'] == 2
+
+
+def test_material_reference_uses_only_displayed_bare_id():
+    from nz_coder.runtime.verification.sidecar_verifier import VerifierContext, build_verifier_user_message, parse_verifier_report, _material_ids
+    context = VerifierContext(('requested interface',), (), (), 'candidate')
+    reference = _material_ids(context)['user']
+    assert f'user: {reference}' in build_verifier_user_message(context)
+    report = {'verdict': 'accept', 'reason': 'ok', 'delivery_assessment': {'status': 'reviewed', 'issues': [{'candidate_excerpt': 'candidate', 'evidence_reference': reference, 'mismatch': 'different interface'}]}}
+    assert parse_verifier_report({'input': report}, True, context=context).verdict == 'revise'
+    report['delivery_assessment']['issues'][0]['evidence_reference'] = f'[material:{reference}]'
+    assert parse_verifier_report({'input': report}, True, context=context).verdict == 'unavailable'

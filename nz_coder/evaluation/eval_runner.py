@@ -338,11 +338,8 @@ async def _run_agent(task: Task, repo: Path, mode: str) -> tuple[dict, Any | Non
             "last_verification": None,
         }, None
 
-    from nz_coder.state.memory import memory_mgr
     from nz_coder.runtime.execution.composition import build_product_environment
 
-    memory_mgr.memory_dir = repo / ".nz-coder" / "memory"
-    memory_mgr.load_all()
     agent = build_product_environment(
         build_prompt(), permission_mode="auto", trace_enabled=True,
     )

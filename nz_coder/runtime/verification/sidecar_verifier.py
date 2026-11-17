@@ -9,7 +9,7 @@ import os
 import re
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,6 +18,7 @@ from nz_coder.runtime.verification.reference_evidence import (
     RetainedTaskReference, reference_digest, render_references, sanitize_references,
 )
 from nz_coder.runtime.verification.read_test_evidence import project_read_tests
+from nz_coder.runtime.verification.report_evidence import project_reporting_evidence
 from nz_coder.runtime.core.execution_context import strict_local_tools
 from nz_coder.runtime.verification.hooks import StopHookDecision
 from nz_coder.runtime.verification.llm_judge import (
@@ -33,6 +34,7 @@ ROUNDS_VERIFY_THRESHOLD = 10
 TRIVIAL_LINES = 20
 VERIFIER_DIFF_MAX_EACH = 8000
 VERIFIER_DIFF_MAX_TOTAL = 12000
+VERIFIER_OUTPUT_TOKENS = 1024
 
 SEMANTIC_CONTRACT_CERTIFICATION = """SEMANTIC CONTRACT CERTIFICATION MODE
 - Audit every explicit requirement and constraint independently against the actual diff. An explicit compatibility, preservation, regression, security, or data-integrity promise is a blocking requirement, not optional hardening.
@@ -41,6 +43,7 @@ SEMANTIC_CONTRACT_CERTIFICATION = """SEMANTIC CONTRACT CERTIFICATION MODE
 - A newly added test cannot prove compatibility when it assigns new behavior to a legacy input; that is regression evidence unless the user requested the semantic change.
 - Check interactions between explicitly requested syntaxes or behaviors, not only each feature in isolation.
 - An `Exact acceptance (passed-current-generation)` line and its trusted output are Runtime-owned execution facts. Do not request that command be re-run or re-shown. This fact proves execution only; continue auditing semantic compatibility from the diff and targeted evidence.
+- A `Related targeted test (passed-current-generation)` line records a successful test associated by name. It is not user-declared acceptance and does not establish complete coverage. Audit the associated requirements against the code and tests.
 - If the evidence is insufficient to prove every hard requirement, return revise with one concrete counterexample or missing check."""
 
 VERIFIER_SYSTEM_PROMPT = """You are a verification sidecar for an autonomous coding agent. A DIFFERENT agent (the "main agent") has just emitted what it considers its final answer for the user's current request. Your job is to do a second-pass judgment by reading the main agent's recent transcript + the file edits it made + the user's original ask.
@@ -105,6 +108,14 @@ When you choose blocked, populate `reason` with what the user needs to do to unb
 
 # Output format
 
+Assess the delivered answer against the actual displayed materials. Report delivery_assessment
+with status reviewed, unknown, or not_applicable. For reviewed, report at most two
+functional mismatches; each must quote an exact nonempty candidate_excerpt from the
+final text, the exact displayed bare material ID copied verbatim as evidence_reference,
+and a specific mismatch. Do not add brackets, prefixes, or other characters to the ID.
+Use unknown when evidence is insufficient; not_applicable only when no delivery
+interface or steps need checking. Empty issues do not prove execution.
+
 Output ONLY the `emit_sidecar_verdict` tool call — no narration, no other tool calls, no free-form text."""
 
 VERIFIER_REPORT_TOOL = {
@@ -119,8 +130,22 @@ VERIFIER_REPORT_TOOL = {
             },
             "reason": {"type": "string"},
             "suggestedFix": {"type": "string"},
+            "delivery_assessment": {
+                "type": "object", "additionalProperties": False,
+                "properties": {
+                    "status": {"type": "string", "enum": ["reviewed", "unknown", "not_applicable"]},
+                    "issues": {"type": "array", "maxItems": 2, "items": {
+                        "type": "object", "additionalProperties": False,
+                        "properties": {
+                            "candidate_excerpt": {"type": "string", "maxLength": 160},
+                            "evidence_reference": {"type": "string", "maxLength": 512, "description": "Copy the displayed bare material ID verbatim."},
+                            "mismatch": {"type": "string", "maxLength": 320},
+                        }, "required": ["candidate_excerpt", "evidence_reference", "mismatch"],
+                    }},
+                }, "required": ["status", "issues"],
+            },
         },
-        "required": ["verdict", "reason"],
+        "required": ["verdict", "reason", "delivery_assessment"],
         "additionalProperties": False,
     },
 }
@@ -150,6 +175,8 @@ class VerifierContext:
     supporting_repository_digest: str = ""
     observed_test_evidence: str = ""
     observed_test_digest: str = ""
+    reporting_evidence: str = ""
+    reporting_evidence_digest: str = ""
 
 
 @dataclass(frozen=True)
@@ -238,9 +265,13 @@ def build_verifier_context(
     supporting_repository_evidence: str = "",
     supporting_repository_digest: str = "",
     workspace: Path | str | None = None,
-    verification_command: str = "",
+    verification_commands: tuple[str, ...] = (),
+    runtime_state: dict | None = None,
 ) -> VerifierContext:
     """Build the last-turn query, rolling transcript, and actual edit evidence."""
+    reporting, reporting_digest = project_reporting_evidence(
+        transcript, runtime_state or {}, final_text=last_assistant_text,
+    )
     filtered = [dict(message) for message in transcript if message.get("role") != "system"]
     recent = tuple(filtered[-ROLLING_BUFFER_SIZE:])
     edits = tuple(
@@ -251,13 +282,18 @@ def build_verifier_context(
         for item in file_edits
         if str(item.get("path") or "").strip()
     )
+    queries = _extract_current_turn_user_queries(transcript)
+    original = str(((runtime_state or {}).get("task_contract") or {}).get("objective")
+                   or (runtime_state or {}).get("initial_task_text") or "")
+    if original and original not in queries:
+        queries = (original, *queries)
     tests, tests_digest = project_read_tests(
-        filtered, "\n".join(_extract_current_turn_user_queries(transcript)),
+        filtered, "\n".join(queries),
         workspace=workspace, changed_paths=[path for path, _ in edits],
-        verification_command=verification_command,
+        verification_commands=verification_commands,
     )
     return VerifierContext(
-        current_turn_user_queries=_extract_current_turn_user_queries(transcript),
+        current_turn_user_queries=queries,
         recent_transcript=recent,
         file_edit_summary=edits,
         last_assistant_text=str(last_assistant_text or ""),
@@ -268,6 +304,8 @@ def build_verifier_context(
         supporting_repository_digest=supporting_repository_digest,
         observed_test_evidence=tests,
         observed_test_digest=tests_digest,
+        reporting_evidence=reporting,
+        reporting_evidence_digest=reporting_digest,
     )
 
 
@@ -309,6 +347,34 @@ def _render_transcript(messages: tuple[dict[str, Any], ...]) -> str:
     return "\n".join(lines)
 
 
+def _render_edits(context: VerifierContext) -> list[str]:
+    lines = []
+    remaining = VERIFIER_DIFF_MAX_TOTAL
+    for path, hint in context.file_edit_summary:
+        if remaining <= 0:
+            lines.append(f"- {path}: (diff evidence omitted: budget exhausted)")
+            continue
+        bounded = _truncate_inside_budget(hint, min(VERIFIER_DIFF_MAX_EACH, remaining), "…[truncated]")
+        lines.append(f"- {path}: {bounded}")
+        remaining -= len(bounded)
+    return lines
+
+
+def _material_ids(context: VerifierContext) -> dict[str, str]:
+    # 引用只标识本次展示的来源，不能证明模型判断正确。
+    materials = {
+        "user": "\n".join(context.current_turn_user_queries),
+        "transcript": _render_transcript(context.recent_transcript),
+        "edits": "\n".join(_render_edits(context)),
+        "repository": context.supporting_repository_evidence,
+        "tests": context.observed_test_evidence,
+        "reporting": context.reporting_evidence,
+        "retained": render_references(context.authoritative_references, context.omitted_reference_count) if context.authoritative_references else "",
+    }
+    return {name: name + "-" + hashlib.sha256(value.encode()).hexdigest()[:16]
+            for name, value in materials.items() if value.strip()}
+
+
 def build_verifier_user_message(context: VerifierContext) -> str:
     """Render one third-person verifier message instead of prior assistant history."""
     sections = ["=== USER REQUEST (CURRENT TURN) ==="]
@@ -321,15 +387,7 @@ def build_verifier_user_message(context: VerifierContext) -> str:
     sections.append(_render_transcript(context.recent_transcript) or "(empty)")
     sections.extend(("", "=== FILE EDITS PERFORMED THIS TURN ==="))
     if context.file_edit_summary:
-        remaining = VERIFIER_DIFF_MAX_TOTAL
-        for path, hint in context.file_edit_summary:
-            if remaining <= 0:
-                sections.append(f"- {path}: (diff evidence omitted: budget exhausted)")
-                continue
-            limit = min(VERIFIER_DIFF_MAX_EACH, remaining)
-            bounded = _truncate_inside_budget(hint, limit, "…[truncated]")
-            sections.append(f"- {path}: {bounded}")
-            remaining -= len(bounded)
+        sections.extend(_render_edits(context))
     else:
         sections.append(
             "(no file edits — text-only response, OR the agent did not actually "
@@ -339,6 +397,8 @@ def build_verifier_user_message(context: VerifierContext) -> str:
         sections.extend(("", context.supporting_repository_evidence))
     if context.observed_test_evidence:
         sections.extend(("", context.observed_test_evidence))
+    if context.reporting_evidence:
+        sections.extend(("", context.reporting_evidence))
     sections.extend((
         "",
         "=== MAIN AGENT FINAL TEXT (the answer the agent is delivering) ===",
@@ -350,6 +410,8 @@ def build_verifier_user_message(context: VerifierContext) -> str:
             "=== ADDITIONAL VERIFICATION CRITERIA ===",
             context.additional_criteria.strip(),
         ))
+    sections.extend(("", "=== MATERIAL REFERENCE IDS (sources displayed above) ==="))
+    sections.extend(f"{name}: {identifier}" for name, identifier in _material_ids(context).items())
     sections.extend((
         "",
         "Now call `emit_sidecar_verdict` exactly once with verdict ∈ "
@@ -393,13 +455,21 @@ _HISTORY_REFERENCE = re.compile(
 )
 
 
+def _has_substantive_tool_call(message: dict) -> bool:
+    """模型判断和路线均是元数据，当前与历史窗口都不能把它们当工作证据。"""
+    return message.get("role") == "assistant" and any(
+        call.get("function", {}).get("name") not in {"update_task_assessment", "update_working_plan"}
+        for call in message.get("tool_calls", [])
+    )
+
+
 def _transcript_has_tool_use(transcript: tuple[dict[str, Any], ...]) -> bool:
     last_real_user = -1
     for index, message in enumerate(transcript):
         if message.get("role") == "user" and not is_synthetic_user_message(message):
             last_real_user = index
     return any(
-        message.get("role") == "assistant" and bool(message.get("tool_calls"))
+        _has_substantive_tool_call(message)
         for message in transcript[last_real_user + 1:]
     )
 
@@ -416,7 +486,7 @@ def _is_grounded_history_report(
     if last_real_user < 0:
         return False
     prior_tool_evidence = any(
-        message.get("role") == "assistant" and bool(message.get("tool_calls"))
+        _has_substantive_tool_call(message)
         for message in transcript[:last_real_user]
     )
     return bool(
@@ -477,32 +547,69 @@ def compose_gate_decision(
     return True, "default-fire"
 
 
-def parse_verifier_report(block: dict[str, Any], exact: bool) -> VerifierVerdict:
-    """Parse strict report input and degrade unsafe malformed verdicts to accept."""
-    raw_input = block.get("input", {})
-    tool_input = raw_input if isinstance(raw_input, dict) else {}
-    raw_verdict = str(tool_input.get("verdict") or "").strip().lower()
-    if raw_verdict not in {"accept", "revise", "blocked"}:
-        return VerifierVerdict("accept", "", trace="invalid_verdict_value")
-    reason = str(tool_input.get("reason") or "").strip()
-    if raw_verdict in {"revise", "blocked"} and not reason:
-        return VerifierVerdict("accept", "", trace="missing_reason")
-    return VerifierVerdict(
-        raw_verdict,
-        reason,
-        suggested_fix=str(
-            tool_input.get("suggestedFix") or tool_input.get("suggested_fix") or ""
-        ).strip(),
-        trace="verifier_ok" if exact else "fuzzy_tool_match",
-    )
+def parse_verifier_report(block: dict[str, Any], exact: bool, *, context: VerifierContext | None = None) -> VerifierVerdict:
+    """Normalize one report; preserve valid negative actions before other checks."""
+    raw = block.get("input")
+    data = raw if isinstance(raw, dict) else {}
+    raw_verdict = data.get("verdict")
+    verdict = raw_verdict.strip().lower() if isinstance(raw_verdict, str) else ""
+    if verdict not in {"accept", "revise", "blocked"}:
+        return VerifierVerdict("unavailable", "", trace="invalid_verdict_value")
+    reason = data.get("reason")
+    if not isinstance(reason, str) or (verdict != "accept" and not reason.strip()):
+        return VerifierVerdict("unavailable", "", trace="missing_reason")
+    reason = reason.strip()
+    fix = data.get("suggestedFix", "")
+    if not isinstance(fix, str):
+        if verdict == "accept":
+            return VerifierVerdict("unavailable", "", trace="invalid_suggested_fix")
+        fix = ""
+    trace = "verifier_ok" if exact else "fuzzy_tool_match"
+    if verdict in {"revise", "blocked"}:
+        return VerifierVerdict(verdict, reason, fix.strip(), trace)
+    if block.get("_finish_reason") == "length":
+        return VerifierVerdict("unavailable", "", trace="length")
+    assessment = data.get("delivery_assessment")
+    if not isinstance(assessment, dict) or set(assessment) != {"status", "issues"}:
+        return VerifierVerdict("unavailable", "", trace="invalid_assessment")
+    status, issues = assessment["status"], assessment["issues"]
+    if status not in ("reviewed", "not_applicable") or not isinstance(issues, list) or len(issues) > 2 or (status == "not_applicable" and issues):
+        return VerifierVerdict("unavailable", "", trace="invalid_assessment")
+    references = set(_material_ids(context).values()) if context is not None else set()
+    findings = []
+    for issue in issues:
+        if not isinstance(issue, dict) or set(issue) != {"candidate_excerpt", "evidence_reference", "mismatch"}:
+            return VerifierVerdict("unavailable", "", trace="invalid_assessment")
+        excerpt, reference, mismatch = (issue[k] for k in ("candidate_excerpt", "evidence_reference", "mismatch"))
+        if (not all(isinstance(x, str) and x.strip() for x in (excerpt, reference, mismatch))
+            or len(excerpt) > 160 or len(reference) > 512 or len(mismatch) > 320
+            or context is None or excerpt not in context.last_assistant_text or reference not in references):
+            return VerifierVerdict("unavailable", "", trace="invalid_assessment")
+        findings.append(f"Candidate: {excerpt}\nEvidence: {reference}\nMismatch: {mismatch}")
+    if findings:
+        return VerifierVerdict("revise", "\n\n".join(findings), fix.strip(), trace)
+    return VerifierVerdict("accept", reason, fix.strip(), trace)
 
 
-def map_verdict_to_stop_decision(verdict: VerifierVerdict) -> StopHookDecision:
+def map_verdict_to_stop_decision(verdict: VerifierVerdict, *, mandatory: bool = False) -> StopHookDecision:
     """Land accept/revise/blocked on the Agent Core three-state StopHook surface."""
+    if verdict.verdict == "unavailable":
+        # 服务或材料不可用不是模型可执行的修复，不消耗空转补救；硬要求由域结清。
+        return StopHookDecision(action="complete_unverified", message="Semantic review was unavailable.", source="sidecar-verifier")
     if verdict.verdict == "revise":
+        marker = "... [truncated]"
+
+        def bounded(text: str, limit: int) -> str:
+            return text if len(text) <= limit else text[:limit - len(marker)] + marker
+
+        prefix = f"{REVISE_RETROSPECTIVE}\n\nReview finding: "
+        correction = ""
+        if verdict.suggested_fix:
+            correction = "\n\nSuggested correction: " + bounded(verdict.suggested_fix, 1000)
+        reason = bounded(verdict.reason, 4000 - len(prefix) - len(correction))
         return StopHookDecision(
             action="reanimate",
-            message=f"{REVISE_RETROSPECTIVE}\n\nReview finding: {verdict.reason}",
+            message=prefix + reason + correction,
             source="sidecar-verifier",
         )
     if verdict.verdict == "blocked":
@@ -579,7 +686,7 @@ def _default_verifier_verdict(reason: str) -> VerifierVerdict:
         "cancelled",
         "no_tool_call",
     } else "no_tool_call"
-    return VerifierVerdict("accept", "", trace=trace)
+    return VerifierVerdict("unavailable", "", trace=trace)
 
 
 def _verifier_capability_options(runtime: Any) -> dict[str, Any]:
@@ -588,9 +695,32 @@ def _verifier_capability_options(runtime: Any) -> dict[str, Any]:
     capabilities = getattr(runtime, "capabilities", None)
     family = str(getattr(capabilities, "family", "") or "").casefold()
     model_id = str(getattr(runtime, "model_id", "") or "").casefold()
-    if family == "deepseek" and "deepseek-v4" in model_id:
+    # 当前 Flash 别名沿用既有非思考审查配置，保证强制判定工具可用。
+    if family == "deepseek" and ("deepseek-v4" in model_id or model_id == "deepseek-flash"):
         options["extra_body"] = {"thinking": {"type": "disabled"}}
     return options
+
+
+def _verifier_request(context: VerifierContext) -> JudgeRequest:
+    return JudgeRequest(
+        system_prompt=VERIFIER_SYSTEM_PROMPT,
+        user_message=build_verifier_user_message(context),
+        report_tool={"type": "function", "function": VERIFIER_REPORT_TOOL},
+        report_tool_name="emit_sidecar_verdict",
+        max_output_tokens=VERIFIER_OUTPUT_TOKENS,
+    )
+
+
+def _check_verifier_request_budget(request: JudgeRequest, capabilities) -> None:
+    from nz_coder.state.context import estimate_request_tokens, prompt_budget
+
+    budget = prompt_budget(capabilities.context_tokens, request.max_output_tokens)
+    estimated = estimate_request_tokens([
+        {"role": "system", "content": request.system_prompt},
+        {"role": "user", "content": request.user_message},
+    ], [request.report_tool])
+    if not budget.context_metadata_missing and estimated > budget.soft_preflight_tokens:
+        raise ValueError(f"Complete review request exceeds input budget: {estimated} > {budget.soft_preflight_tokens} estimated tokens")
 
 
 def invoke_sidecar_verifier(
@@ -602,6 +732,8 @@ def invoke_sidecar_verifier(
     timeout_seconds: float = 15.0,
     cancel_event=None,
     observer: Callable[[str, dict], None] | None = None,
+    model_runtime=None,
+    start_worker=None,
 ) -> VerifierVerdict:
     """Invoke one isolated forced verdict request through the NZ Provider."""
     from nz_coder.runtime.model_gateway import (
@@ -613,23 +745,15 @@ def invoke_sidecar_verifier(
         resolve_model_runtime,
     )
 
-    request = JudgeRequest(
-        system_prompt=VERIFIER_SYSTEM_PROMPT,
-        user_message=build_verifier_user_message(context),
-        report_tool={
-            "type": "function",
-            "function": VERIFIER_REPORT_TOOL,
-        },
-        report_tool_name="emit_sidecar_verdict",
-        max_output_tokens=1024,
-    )
-    runtime = resolve_model_runtime(ModelSelectionRequest(
+    request = _verifier_request(context)
+    runtime = model_runtime or resolve_model_runtime(ModelSelectionRequest(
         provider_name=str(getattr(provider, "name", "") or ""),
         model_id=model,
         provider=provider,
         client=client,
         owns_client=False,
     ))
+    _check_verifier_request_budget(request, runtime.capabilities)
     gateway = ProductionModelGateway(
         runtime,
         max_retries=1,
@@ -674,15 +798,17 @@ def invoke_sidecar_verifier(
                     "name": judge_request.report_tool_name,
                     "input": payload,
                 },)
+        tool_blocks = tuple({**block, "_finish_reason": outcome.finish_reason} for block in tool_blocks)
         return JudgeResponse(tool_blocks=tool_blocks, text=content)
 
     return invoke_llm_judge(
         request=request,
         invoke=invoke,
-        parse_tool_call=parse_verifier_report,
+        parse_tool_call=lambda block, exact: parse_verifier_report(block, exact, context=context),
         default_verdict=_default_verifier_verdict,
         timeout_seconds=timeout_seconds,
         cancel_event=cancel_event,
+        start_worker=start_worker,
     )
 
 
@@ -755,9 +881,13 @@ def _semantic_review_pending(runtime_state: dict[str, Any]) -> bool:
     if not isinstance(raw, dict) or not raw:
         return False
     try:
-        from nz_coder.runtime.agent.task_contract import RequirementLedger
+        from nz_coder.runtime.verification.domain.requirements import RequirementLedgerView
 
-        return RequirementLedger.from_dict(raw).semantic_review_pending_only()
+        acceptance_required = bool(runtime_state.get("verification_contract"))
+        return RequirementLedgerView.from_dict(raw).semantic_review_pending_only(
+            acceptance_required=acceptance_required,
+            generation=effective_acceptance_generation(runtime_state),
+        )
     except (TypeError, ValueError):
         return False
 
@@ -792,9 +922,7 @@ def _render_contract_criteria(runtime_state: dict[str, Any]) -> list[str]:
         )
     contract = runtime_state.get("task_contract")
     if isinstance(contract, dict):
-        objective = str(contract.get("objective") or "").strip()
-        if objective:
-            lines.append(f"Task objective: {objective}")
+        # 完整用户正文已经进入 USER REQUEST，不再重复一个截断目标。
         for raw in contract.get("requirements") or []:
             if not isinstance(raw, dict):
                 continue
@@ -813,23 +941,33 @@ def _render_contract_criteria(runtime_state: dict[str, Any]) -> list[str]:
             value = str(constraint or "").strip()
             if value:
                 lines.append(f"Constraint: {value}")
-    verification = runtime_state.get("verification_contract")
-    if isinstance(verification, dict):
-        command = str(verification.get("command") or "").strip()
-        generation = effective_acceptance_generation(runtime_state)
-        if command:
-            current = bool(
-                verification.get("passed") is True
-                and int(verification.get("attempted_generation", -1)) == generation
-            )
-            state = "passed-current-generation" if current else "not-current"
-            lines.append(f"Exact acceptance ({state}): {command}")
-            output = str(verification.get("output") or "").strip()
-            if current and output:
-                lines.append(
-                    "Trusted exact-acceptance output: "
-                    + _truncate(output, 1200)
-                )
+    from nz_coder.runtime.verification.verification_contract import declared_acceptance
+    for check in declared_acceptance(runtime_state):
+        current = check["status"] == "passed"
+        state = "passed-current-generation" if current else "not-current"
+        lines.append(f"Exact acceptance ({state}): {check['command']}; cwd={check['cwd']}")
+        if current and check.get("output"):
+            lines.append("Trusted exact-acceptance output: " + _truncate(check["output"], 1200))
+    from nz_coder.runtime.verification.domain.requirements import RequirementLedgerView
+
+    try:
+        ledger = RequirementLedgerView.from_dict(runtime_state.get("requirement_ledger") or {})
+    except (TypeError, ValueError):
+        return lines
+    generation = effective_acceptance_generation(runtime_state)
+    related: dict[str, list[str]] = {}
+    for progress in ledger.items.values():
+        for evidence in progress.evidence:
+            if evidence.type == "command_passed" and evidence.generation == generation:
+                ids = related.setdefault(str(evidence.command), [])
+                if progress.requirement.id not in ids:
+                    ids.append(progress.requirement.id)
+    for command, ids in list(related.items())[:8]:
+        lines.append(
+            f"Related targeted test (passed-current-generation): {_truncate(command, 600)}; "
+            f"requirements={','.join(ids)}; generation={generation}. "
+            "Association is by name; semantic coverage still needs independent review."
+        )
     return lines
 
 
@@ -1548,19 +1686,47 @@ class SidecarVerifierHook:
         *,
         env: dict[str, str] | None = None,
         timeout_seconds: float = 15.0,
+        model_runtime=None,
     ) -> None:
         self._loop = loop
         self._resolved = resolved
+        from nz_coder.runtime.model_gateway import ModelSelectionRequest, resolve_model_runtime
+        self._owns_runtime = model_runtime is None or resolved.source != "inherit-main"
+        self._runtime = (model_runtime if not self._owns_runtime else resolve_model_runtime(ModelSelectionRequest(
+            provider_name=resolved.provider_name, model_id=resolved.model,
+            provider=resolved.provider, client=resolved.client, owns_client=resolved.owns_client,
+        )))
+        self._lifecycle_lock = threading.RLock()
+        self._retiring = False
+        self._calls = {}
+        self._workers = set()
         self._env = dict(os.environ) if env is None else dict(env)
         self._timeout_seconds = timeout_seconds
         self._accepted_evidence_key: tuple[Any, ...] | None = None
         self.stats: dict[str, Any] = {
             "fire_count": 0,
             "skip_count": 0,
-            "verdict_counts": {"accept": 0, "revise": 0, "blocked": 0},
+            "verdict_counts": {"accept": 0, "revise": 0, "blocked": 0, "unavailable": 0},
             "last_gate_reason": "",
             "last_trace": "",
         }
+
+    def _start_judge_worker(self, worker) -> None:
+        with self._lifecycle_lock:
+            if self._retiring:
+                raise RuntimeError("Sidecar verifier is retired")
+            self._workers.add(worker)
+            worker.start()
+
+    def _invoke_owned(self, cancel_event, finished, **kwargs):
+        try:
+            return invoke_sidecar_verifier(
+                **kwargs, cancel_event=cancel_event, model_runtime=self._runtime,
+                start_worker=self._start_judge_worker,
+            )
+        finally:
+            # 这是原同步调用实际退出的回执，不以 asyncio Future 的取消代替。
+            finished.set()
 
     @staticmethod
     def _accepted_cache_key(
@@ -1568,7 +1734,7 @@ class SidecarVerifierHook:
         metrics: VerifierGateMetrics,
         state: dict[str, Any],
     ) -> tuple[Any, ...]:
-        """Identify semantic evidence while excluding final-answer wording."""
+        """终稿文字和实际工具来源变化均需重新审查。"""
         try:
             contract = json.dumps(
                 state.get("task_contract") or {},
@@ -1585,6 +1751,10 @@ class SidecarVerifierHook:
             context.file_edit_summary,
             context.supporting_repository_digest,
             context.observed_test_digest,
+            context.reporting_evidence_digest,
+            hashlib.sha256(context.last_assistant_text.encode()).hexdigest(),
+            str((state.get("verification") or {}).get("candidate_fingerprint") or ""),
+            str(state.get("_review_basis") or ""),
             str(state.get("current_round_instruction_text") or ""),
             contract,
             metrics.risky_shell_ops,
@@ -1594,6 +1764,8 @@ class SidecarVerifierHook:
     def _evidence(
         self,
         context,
+        *,
+        runtime_state: dict | None = None,
     ) -> tuple[VerifierContext, VerifierGateMetrics, str]:
         tracker = getattr(self._loop, "change_tracker", None)
         changed: list[str] = []
@@ -1608,7 +1780,8 @@ class SidecarVerifierHook:
                 changed, deleted, diff = [], [], ""
         paths = list(dict.fromkeys(changed + deleted))
         changed_lines = _changed_line_count(diff)
-        state = context.runtime_state if isinstance(context.runtime_state, dict) else {}
+        state = runtime_state if runtime_state is not None else (
+            context.runtime_state if isinstance(context.runtime_state, dict) else {})
         semantic_pending = _semantic_review_pending(state)
         data_integrity_signals = _persistent_data_deletion_signals(state)
         verification = state.get("verification") or {}
@@ -1756,9 +1929,12 @@ class SidecarVerifierHook:
                 tracer.log("sidecar_dependency_evidence", **dependency_trace)
             except Exception:
                 pass
+        from nz_coder.runtime.verification.verification_contract import declared_acceptance
+
         verifier_context = build_verifier_context(
             context.transcript,
             context.last_assistant_text,
+            runtime_state=state,
             file_edits=file_edits,
             authoritative_references=state.get("task_reference_evidence", []),
             omitted_reference_count=state.get("task_reference_omitted_count", 0),
@@ -1766,7 +1942,7 @@ class SidecarVerifierHook:
             supporting_repository_evidence=supporting_text,
             supporting_repository_digest=supporting_digest,
             workspace=getattr(self._loop, "workdir", None),
-            verification_command=str((state.get("verification_contract") or {}).get("command") or ""),
+            verification_commands=tuple(item["command"] for item in declared_acceptance(state)),
         )
         metrics = VerifierGateMetrics(
             risky_shell_ops=max(
@@ -1787,8 +1963,56 @@ class SidecarVerifierHook:
         return verifier_context, metrics, compatibility_risk
 
     async def __call__(self, context) -> StopHookDecision:
-        verifier_context, metrics, compatibility_risk = self._evidence(context)
-        state = context.runtime_state if isinstance(context.runtime_state, dict) else {}
+        with self._lifecycle_lock:
+            if self._retiring:
+                return StopHookDecision()
+        from nz_coder.providers.capabilities import capabilities_for_provider
+        from nz_coder.state.context import prompt_budget
+        from nz_coder.runtime.verification.artifact_evidence import generic_requirement_materials
+        from nz_coder.runtime.verification.domain.requirements import RequirementLedgerView, requires_semantic_review
+
+        state = dict(context.runtime_state) if isinstance(context.runtime_state, dict) else {}
+        capabilities = capabilities_for_provider(self._resolved.provider, self._resolved.model)
+        budget = prompt_budget(capabilities.context_tokens, VERIFIER_OUTPUT_TOKENS)
+        # 字符上限只约束采集资源；最终完整请求仍按同源 token 预算单独预检。
+        material_maximum = 64000 if budget.context_metadata_missing else budget.soft_preflight_tokens * 4
+        verification_runtime = getattr(self._loop, "verification_runtime", None)
+        domain = verification_runtime.domain if verification_runtime is not None else None
+        generic_materials, generic_digest = "", ""
+        if domain is not None:
+            from nz_coder.runtime.verification.domain.models import candidate_fingerprint
+            structured = getattr(self._loop, "_structured_outputs", {}).get(getattr(self._loop, "current_agent_name", ""))
+            domain.set_completion_candidate(candidate_fingerprint(context.last_assistant_text, structured))
+            # 先冻结材料归属，再在锁外回读；不能把旧材料认证到回读之后的新状态。
+            with domain._lock:
+                review_snapshot = domain.snapshot()
+                review_basis = domain.review_basis()
+                contract = domain.task_definition.contract
+            state.update(requirement_ledger=RequirementLedgerView.from_snapshot(review_snapshot).to_dict(),
+                mutation_generation=review_snapshot.version.generation,
+                acceptance_mutation_generation=review_snapshot.version.acceptance_generation,
+                verification=review_snapshot.to_dict())
+            state["_review_basis"] = review_basis
+            if contract is not None:
+                state["task_contract"] = contract.to_dict()
+            try:
+                generic_materials, generic_digest = generic_requirement_materials(
+                    review_snapshot, Path(review_snapshot.scope.task.workspace), maximum=material_maximum)
+            except (OSError, ValueError, RuntimeError) as error:
+                return StopHookDecision(action="abort", message=f"Runtime review evidence unavailable: {error}", source="verification-evidence")
+        verifier_context, metrics, compatibility_risk = self._evidence(context, runtime_state=state)
+        if domain is not None and structured is not None:
+            verifier_context = replace(verifier_context, additional_criteria=verifier_context.additional_criteria
+                + "\nCandidate structured delivery (model-authored, not execution evidence): "
+                + json.dumps(structured, ensure_ascii=False, sort_keys=True, allow_nan=False))
+        if generic_materials:
+            verifier_context = replace(verifier_context,
+                supporting_repository_evidence=verifier_context.supporting_repository_evidence + "\n" + generic_materials,
+                supporting_repository_digest=hashlib.sha256(
+                    (verifier_context.supporting_repository_digest + generic_digest).encode()).hexdigest())
+        if domain is not None and (domain.review_basis() != review_basis
+                or domain.snapshot().candidate_fingerprint != review_snapshot.candidate_fingerprint):
+            return StopHookDecision(action="abort", message="Runtime review evidence changed during collection.", source="verification-evidence")
         accepted_cache_key = self._accepted_cache_key(
             verifier_context,
             metrics,
@@ -1809,14 +2033,17 @@ class SidecarVerifierHook:
             in {"unverified", "verifying", "failed_repairable"}
         )
         mandatory_review = (
-            deterministic_verification_pending
+            not strict_local_tools()
+            or deterministic_verification_pending
             or blocked_environment
             or semantic_pending
             or data_integrity_risk
+            or domain is not None and review_snapshot.review_pending
         )
         if (
-            not mandatory_review
-            and accepted_cache_key == self._accepted_evidence_key
+            accepted_cache_key == self._accepted_evidence_key
+            and (domain is None or review_snapshot.latest_review is not None
+                 and review_snapshot.latest_review.accepted and not review_snapshot.review_pending)
         ):
             self.stats["last_gate_reason"] = "accepted-evidence-cache"
             self.stats["skip_count"] += 1
@@ -1836,12 +2063,16 @@ class SidecarVerifierHook:
             # paying for semantic review; the Sidecar will run on the next
             # natural stop once current-generation evidence has settled.
             fire, gate_reason = False, "deterministic-verification-pending"
+        elif not strict_local_tools():
+            fire, gate_reason = True, "ordinary-delivery"
         elif blocked_environment:
             fire, gate_reason = True, "blocked-environment-semantic-review"
         elif semantic_pending:
             fire, gate_reason = True, "semantic-contract"
         elif data_integrity_risk:
             fire, gate_reason = True, "data-integrity-risk"
+        elif domain is not None and review_snapshot.review_pending:
+            fire, gate_reason = True, "observed-behavior-failure"
         else:
             fire, gate_reason = compose_gate_decision(
                 context.transcript,
@@ -1862,6 +2093,11 @@ class SidecarVerifierHook:
             self.stats["skip_count"] += 1
             return StopHookDecision()
 
+        try:
+            _check_verifier_request_budget(_verifier_request(verifier_context), capabilities)
+        except ValueError as error:
+            return StopHookDecision(action="abort", message=f"Runtime review evidence unavailable: {error}", source="verification-evidence")
+
         self.stats["fire_count"] += 1
         started = time.monotonic()
         if tracer is not None:
@@ -1871,59 +2107,99 @@ class SidecarVerifierHook:
                 model=self._resolved.model,
                 source=self._resolved.source,
             )
+        if domain is not None:
+            review_materials = hashlib.sha256(repr(verifier_context).encode()).hexdigest()
         cancel_event = threading.Event()
+        finished = threading.Event()
+        with self._lifecycle_lock:
+            if self._retiring:
+                return StopHookDecision()
+            self._calls[cancel_event] = finished
         try:
             verdict = await asyncio.to_thread(
-                invoke_sidecar_verifier,
+                self._invoke_owned,
+                cancel_event,
+                finished,
                 provider=self._resolved.provider,
                 client=self._resolved.client,
                 model=self._resolved.model,
                 context=verifier_context,
                 timeout_seconds=self._timeout_seconds,
-                cancel_event=cancel_event,
-                observer=getattr(self._loop, "_model_gateway_observer", None),
+                observer=self._loop._model_gateway_observer_for_run(),
             )
         except asyncio.CancelledError:
             cancel_event.set()
             raise
         except Exception:
-            verdict = VerifierVerdict("accept", "", trace="provider_error")
+            verdict = VerifierVerdict("unavailable", "", trace="provider_error")
+        with self._lifecycle_lock:
+            if self._retiring or cancel_event.is_set():
+                return StopHookDecision()
         if semantic_pending:
             verdict = _merge_compatibility_risk(verdict, compatibility_risk)
         self.stats["last_trace"] = verdict.trace
         self.stats["verdict_counts"][verdict.verdict] += 1
         if (
-            verdict.verdict == "accept"
+            verdict.verdict in {"accept", "revise", "blocked"}
             and verdict.trace in {"verifier_ok", "fuzzy_tool_match"}
         ):
-            self._accepted_evidence_key = accepted_cache_key
-            state = getattr(self._loop, "runtime_state", None)
-            observe = getattr(state, "observe_requirement_semantic_review", None)
-            if callable(observe):
-                observe(
-                    accepted=True,
-                    fingerprint=f"{verdict.trace}:compatibility",
-                )
+            if domain is not None:
+                from uuid import uuid4
+                from nz_coder.runtime.verification.domain.models import ReviewFact
+                verification_runtime.reconcile_workspace()
+                try:
+                    _, current_digest = generic_requirement_materials(
+                        review_snapshot, Path(review_snapshot.scope.task.workspace), maximum=material_maximum)
+                except (OSError, ValueError, RuntimeError) as error:
+                    return StopHookDecision(action="abort", message=f"Runtime review evidence unavailable: {error}", source="verification-evidence")
+                with domain._lock:
+                    if (domain.review_basis() != review_basis or current_digest != generic_digest
+                            or domain.snapshot().candidate_fingerprint != review_snapshot.candidate_fingerprint):
+                        return StopHookDecision(action="abort", message="Runtime review evidence changed before acceptance.", source="verification-evidence")
+                    domain.observe_review(ReviewFact(uuid4().hex, domain.scope.task,
+                        tuple(item.requirement.id for item in review_snapshot.requirements
+                              if requires_semantic_review(item.requirement)),
+                        review_snapshot.version, review_materials, verdict.verdict == "accept", basis_fingerprint=review_basis,
+                        candidate_fingerprint=review_snapshot.candidate_fingerprint))
+                    domain.rebuild_from_current_acceptance()
+            if verdict.verdict == "accept":
+                self._accepted_evidence_key = accepted_cache_key
         if tracer is not None:
             tracer.log(
                 "sidecar_finished",
                 verdict=verdict.verdict,
                 trace=verdict.trace,
                 reason=verdict.reason,
+                suggested_fix=verdict.suggested_fix,
                 elapsed_ms=round((time.monotonic() - started) * 1000, 3),
                 provider=self._resolved.provider_name,
                 model=self._resolved.model,
                 source=self._resolved.source,
             )
-        return map_verdict_to_stop_decision(verdict)
+        return map_verdict_to_stop_decision(verdict, mandatory=mandatory_review)
 
     def close(self) -> None:
-        """Close only a verifier client created by an explicit env override."""
-        if not self._resolved.owns_client:
-            return
-        close = getattr(self._resolved.client, "close", None)
-        if callable(close):
-            close()
+        """借用主 client 也必须确认自己的监督线程与 Provider 实际退出。"""
+        with self._lifecycle_lock:
+            self._retiring = True
+            calls = list(self._calls.items())
+            workers = list(self._workers)
+            for cancel, _finished in calls:
+                cancel.set()
+        current = threading.current_thread()
+        for worker in workers:
+            if worker is not current and worker.ident is not None:
+                worker.join(.25)
+        status = self._runtime.inflight_status()
+        if (any(worker.is_alive() for worker in workers)
+                or any(not finished.is_set() for _cancel, finished in calls)
+                or status["inflight_calls"]):
+            raise RuntimeError("Sidecar verifier cleanup is incomplete")
+        if self._owns_runtime:
+            self._runtime.close()
+        with self._lifecycle_lock:
+            self._calls.clear()
+            self._workers.clear()
 
 
 def create_sidecar_verifier_hook(
@@ -1932,6 +2208,7 @@ def create_sidecar_verifier_hook(
     *,
     env: dict[str, str] | None = None,
     timeout_seconds: float = 15.0,
+    model_runtime=None,
 ) -> SidecarVerifierHook:
     """Create the production StopHook while retaining a direct test seam."""
     return SidecarVerifierHook(
@@ -1939,6 +2216,7 @@ def create_sidecar_verifier_hook(
         resolved,
         env=env,
         timeout_seconds=timeout_seconds,
+        model_runtime=model_runtime,
     )
 
 

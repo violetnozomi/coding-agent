@@ -1187,9 +1187,10 @@ def test_prepare_repo_uses_local_cache_when_present(tmp_path, monkeypatch):
     monkeypatch.setattr(orch_mod, "_run", fake_run)
 
     result = orch_mod._prepare_repo(
-        {"repo": "django/django", "base_commit": "abc123"},
+        {"instance_id": "django__django-11797", "repo": "django/django", "base_commit": "abc123"},
         tmp_path / "work" / "django__django-11797",
         timeout=10,
+        work_root=tmp_path / "work",
     )
 
     assert result["returncode"] == 0
@@ -1217,9 +1218,10 @@ def test_prepare_repo_populates_missing_cache_before_checkout(tmp_path, monkeypa
     monkeypatch.setattr(orch_mod, "_run", fake_run)
 
     result = orch_mod._prepare_repo(
-        {"repo": "pylint-dev/pylint", "base_commit": "abc123"},
+        {"instance_id": "pylint-dev__pylint-5859", "repo": "pylint-dev/pylint", "base_commit": "abc123"},
         repo_dir,
         timeout=10,
+        work_root=tmp_path / "work",
     )
 
     assert result["returncode"] == 0
@@ -1258,9 +1260,10 @@ def test_prepare_repo_falls_back_when_initial_mirror_clone_fails(
     monkeypatch.setattr(orch_mod, "_run", fake_run)
 
     result = orch_mod._prepare_repo(
-        {"repo": "pylint-dev/pylint", "base_commit": "abc123"},
+        {"instance_id": "pylint-dev__pylint-5859", "repo": "pylint-dev/pylint", "base_commit": "abc123"},
         repo_dir,
         timeout=10,
+        work_root=tmp_path / "work",
     )
 
     assert result["returncode"] == 0
@@ -1293,9 +1296,10 @@ def test_prepare_repo_falls_back_to_remote_when_cache_clone_fails(tmp_path, monk
     monkeypatch.setattr(orch_mod, "_run", fake_run)
 
     result = orch_mod._prepare_repo(
-        {"repo": "django/django", "base_commit": "abc123"},
+        {"instance_id": "django__django-11797", "repo": "django/django", "base_commit": "abc123"},
         tmp_path / "work" / "django__django-11797",
         timeout=10,
+        work_root=tmp_path / "work",
     )
 
     assert result["returncode"] == 0

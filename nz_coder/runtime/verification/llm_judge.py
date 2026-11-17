@@ -77,6 +77,7 @@ def invoke_llm_judge(
     default_verdict: Callable[[str], VerdictT],
     timeout_seconds: float = 15.0,
     cancel_event: threading.Event | None = None,
+    start_worker: Callable[[threading.Thread], None] | None = None,
 ) -> VerdictT:
     """Run one bounded structured consult and never raise into the Main Agent."""
     if cancel_event is not None and cancel_event.is_set():
@@ -98,7 +99,7 @@ def invoke_llm_judge(
         name="nz-llm-judge",
         daemon=True,
     )
-    worker_thread.start()
+    (start_worker or (lambda worker: worker.start()))(worker_thread)
 
     def cancelled_verdict() -> VerdictT:
         # Cooperative Provider adapters settle in one poll interval.  The

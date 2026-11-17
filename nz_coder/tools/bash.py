@@ -3,46 +3,33 @@
 import codecs
 from collections import deque
 import os
-import queue
 import re
 import shlex
 import shutil
-import subprocess
 import tempfile
-import threading
 import time
 from itertools import islice
 from pathlib import Path
 
 from nz_coder.foundation import config
-from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.foundation.workspace_paths import (
     WorkspacePathError,
     WorkspacePathPolicy,
-    model_command_private_path,
 )
-from nz_coder.protocol.public_error import format_public_error
+from nz_coder.protocol.public_error import PublicRuntimeError, format_public_error
 from nz_coder.runtime.core.execution_context import (
-    broad_tests_blocked,
-    declared_test_scopes,
     strict_local_tools,
 )
 from nz_coder.runtime.process.platform_runtime import (
     select_shell,
-    terminate_process_tree,
 )
+from nz_coder.runtime.process.bash_execution import BashExecution
+from nz_coder.runtime.process.command_channel import current_command_client
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.state.sessions import active_session_id
-from nz_coder.tool_platform.command_policy import (
-    classify_bash,
-    external_workspace_path,
-    is_known_read_only_command,
-)
 from nz_coder.tool_platform.artifacts import ArtifactError, ArtifactStore
-from nz_coder.runtime.execution.runtime_state import _is_broad_test_command
-from nz_coder.runtime.agent.task_policy import test_command_within_scopes
 from nz_coder.tools import (
     ToolOutput,
     current_tool_cancel_event,
@@ -204,124 +191,22 @@ def _command_title(command: str) -> str:
     return compact[:120] + ("…" if len(compact) > 120 else "")
 
 
-def _stop_process(process: subprocess.Popen) -> None:
-    """Best-effort terminate the shell and its child process group."""
-    terminate_process_tree(process, force=True)
-
-
-# ── sed -i interception ───────────────────────────────────────────────────────
-# When the model uses `sed -i 's/old/new/' file`, we intercept and route it
-# through edit_file so the change is:
-#   - visible as a diff in tool output
-#   - tracked by the change tracker
-#   - covered by transaction rollback
-#   - subject to the same permission checks as other file edits
-# Only simple single-file substitution commands (s/…/…/) are intercepted;
-# complex sed scripts fall through to normal bash execution.
-
-_SED_INPLACE_RE = re.compile(
-    r"""^\s*sed\s+                   # sed command
-    (?P<flags>(?:-[iEr]\S*\s+)*)     # optional flags like -i -E -r -i.bak
-    (?P<expr>'[^']*'|"[^"]*"|\S+)    # the sed expression (quoted or bare)
-    \s+(?P<file>\S+)\s*$             # the file path
-    """,
-    re.VERBOSE,
-)
-
-
-def _parse_sed_inplace(command: str):
-    """Return (file_path, pattern, replacement, global_flag) or None.
-
-    Only handles: sed [-i[.bak]] [-E] 's/PAT/REPL/[g]' FILE
-    Multi-file, -e, piped, and non-substitution sed commands return None.
-    """
-    m = _SED_INPLACE_RE.match(command)
-    if not m:
-        return None
-
-    flags_str = m.group("flags") or ""
-    if "-i" not in flags_str and not re.search(r"-i\S*", flags_str):
-        return None  # no in-place flag
-
-    expr_raw = m.group("expr").strip("'\"")
-    file_path = m.group("file")
-
-    # Only handle substitution: s/PAT/REPL/[flags]
-    sub_m = re.match(r"^s(.)(.+?)\1(.*?)\1([giIM]*)$", expr_raw)
-    if not sub_m:
-        return None
-
-    pattern = sub_m.group(2)
-    replacement = sub_m.group(3)
-    sub_flags = sub_m.group(4)
-    global_flag = "g" in sub_flags
-
-    return file_path, pattern, replacement, global_flag
-
-
-def _apply_sed_via_edit(command: str) -> str | None:
-    """Try to intercept a sed -i command and apply it via edit_file.
-
-    Returns the edit_file output string on success, or None if the command
-    should fall through to normal bash execution.
-    """
-    parsed = _parse_sed_inplace(command)
-    if parsed is None:
-        return None
-
-    file_path, pattern, replacement, global_flag = parsed
-
-    fp = (current_workdir() / file_path).resolve()
-    try:
-        fp.relative_to(current_workdir().resolve())
-    except ValueError:
-        return None  # path escapes workspace, let bash handle (and block) it
-
-    if not fp.exists():
-        return None  # file doesn't exist, let bash produce the real error
-
-    try:
-        content = WorkspaceFileAccess(current_workdir()).read_text(
-            file_path, errors="replace",
-        )
-    except OSError:
-        return None
-
-    # Apply substitution
-    try:
-        new_content = re.sub(
-            pattern,
-            replacement.replace("\\n", "\n"),
-            content,
-            count=0 if global_flag else 1,
-        )
-    except re.error:
-        return None  # invalid regex, fall through to bash
-
-    if new_content == content:
-        return f"(sed: no changes — pattern not found in {file_path})"
-
-    # Delegate to edit_file to get diff output + change tracking
-    from nz_coder.tools.files import write_file
-    rel = str(fp.relative_to(current_workdir()))
-    result = write_file(rel, new_content)
-    return f"[sed intercepted → edit_file]\n{result}"
-
-
-def _resolve_bash_workdir(workdir: str | None) -> tuple[Path | None, str]:
+def _resolve_bash_workdir(workdir: str | None, *, workspace: Path | None = None) -> tuple[Path | None, str]:
     """Resolve an optional command cwd without permitting workspace escape."""
-    workspace = current_workdir().resolve()
+    workspace = workspace or current_workdir()
     value = str(workdir or "").strip()
     try:
         candidate = WorkspacePathPolicy(workspace).validate_model_execute(value or ".")
+        if not candidate.exists():
+            return None, f"Error: workdir does not exist: {workdir}"
+        if not candidate.is_dir():
+            return None, f"Error: workdir is not a directory: {workdir}"
     except WorkspacePathError as exc:
         if "escapes workspace" in str(exc):
             return None, "Error: workdir escapes workspace"
         return None, format_public_error(exc)
-    if not candidate.exists():
-        return None, f"Error: workdir does not exist: {workdir}"
-    if not candidate.is_dir():
-        return None, f"Error: workdir is not a directory: {workdir}"
+    except (OSError, RuntimeError, ValueError):
+        return None, "Error: Cannot resolve command workdir."
     return candidate, ""
 
 
@@ -364,25 +249,61 @@ def _contains_python_source(root: Path) -> bool:
     return False
 
 
-def run_bash(
+def validate_bash_timeout(timeout: object, maximum: int) -> str | None:
+    """在审批及创建命令资源前统一校验本次运行的超时参数。"""
+    if timeout is None:
+        return None
+    if isinstance(timeout, bool) or not isinstance(timeout, int):
+        return "Error: timeout must be an integer"
+    if not 1 <= timeout <= maximum:
+        return f"Error: timeout must be between 1 and {maximum}s"
+    return None
+
+
+def normalize_bash_command(command: str) -> str:
+    """审批和实际启动复用同一个严格模式规范化，避免批准旧命令后再改写。"""
+    if strict_local_tools():
+        from nz_coder.swebench.policy import normalize_strict_bash_command
+
+        return normalize_strict_bash_command(command)
+    return command
+
+
+def execute_bash_local(
     command: str,
     read_only: bool = False,
     timeout: int = None,
     workdir: str | None = None,
+    *, create_execution=BashExecution, environment=None,
 ) -> str:
-    requested_command = command
-    strict_output_filter_removed = False
-    if strict_local_tools():
-        from nz_coder.swebench.policy import normalize_strict_bash_command
+    from nz_coder.tool_platform.command_policy import assess_shell_command
+    from nz_coder.tool_platform.permissioning.command_authorization import (
+        authorization_failure, command_authorization_present, command_is_authorized,
+    )
 
-        command = normalize_strict_bash_command(command)
-        strict_output_filter_removed = command != requested_command
-    escaped = external_workspace_path(command, current_workdir())
-    if escaped is not None:
-        return f"Error: Command path escapes workspace: {escaped}"
-    private_path = model_command_private_path(command, current_workdir())
-    if private_path is not None:
-        return f"Error: Model access blocked for shell path: {private_path}"
+    settings = current_run_settings()
+    timeout_error = validate_bash_timeout(timeout, settings.bash_timeout)
+    if timeout_error:
+        return timeout_error
+    timeout_seconds = settings.bash_timeout if timeout is None else timeout
+    requested_command = command
+    command = normalize_bash_command(command)
+    strict_output_filter_removed = command != requested_command
+    resolved_workdir, workdir_error = _resolve_bash_workdir(workdir)
+    if workdir_error:
+        return workdir_error
+    assert resolved_workdir is not None
+    assessment = assess_shell_command(
+        command, current_workdir(), command_cwd=resolved_workdir,
+        read_only=read_only, allow_package_installs=settings.allow_package_installs,
+    )
+    if assessment.rejection:
+        return f"Error: {assessment.rejection}"
+    if (assessment.requires_approval or command_authorization_present()) and not command_is_authorized("bash", {
+        "command": requested_command, "read_only": read_only,
+        "timeout": timeout, "workdir": workdir,
+    }):
+        return authorization_failure("Denied: Command authorization is missing or no longer matches this invocation.")
     if strict_local_tools():
         from nz_coder.swebench.policy import strict_bash_guidance, strict_bash_violation
 
@@ -390,51 +311,6 @@ def run_bash(
         if violation:
             guidance = strict_bash_guidance(command, violation)
             return f"Error: {violation}. {guidance}"
-    # Block sed -i: it silently writes files, bypassing transaction tracking,
-    # verification gate, and RuntimeState edit counting.  Force the model to
-    # use edit_file or replace_lines instead.
-    if not read_only and _parse_sed_inplace(command) is not None:
-        return (
-            "Error: sed -i is blocked. It modifies files outside the edit-tool "
-            "pipeline (transaction, verification, change tracking). "
-            "Use edit_file with old_string/new_string for exact text replacement, "
-            "or replace_lines for line-range edits."
-        )
-
-    settings = current_run_settings()
-    classification = classify_bash(command)
-    if classification["dangerous"]:
-        return f"Error: Dangerous command blocked ({classification['reason']})"
-    if classification["reason"] in {"package install", "package manager write"} and not settings.allow_package_installs:
-        return (
-            "Error: Package install blocked. The agent must not modify the Python/"
-            "Node/Ruby environment during benchmark repair. Use existing dependencies, "
-            "py_compile, or a narrower in-repo verification command instead."
-        )
-    # ── Broad test blocking（当已有 source diff 时阻止跑全套测试）───────────
-    if (
-        _is_broad_test_command(command)
-        and broad_tests_blocked()
-        and not test_command_within_scopes(command, declared_test_scopes())
-    ):
-        return (
-            "Error: Broad test runner blocked. A source diff already exists. "
-            "Use verify_changed_files or run an exact/narrow test command "
-            "if the task points to a specific failure."
-        )
-
-    if read_only and (classification["mutating"] or not is_known_read_only_command(command)):
-        return f"Error: Read-only shell blocked ({classification['reason']})"
-    try:
-        timeout_seconds = int(timeout or settings.bash_timeout)
-    except (TypeError, ValueError, OverflowError):
-        return "Error: timeout must be an integer"
-    if timeout_seconds < 1 or timeout_seconds > settings.bash_timeout:
-        return f"Error: timeout must be between 1 and {settings.bash_timeout}s"
-    resolved_workdir, workdir_error = _resolve_bash_workdir(workdir)
-    if workdir_error:
-        return workdir_error
-    assert resolved_workdir is not None
     try:
         tokens = shlex.split(command)
     except ValueError:
@@ -454,7 +330,12 @@ def run_bash(
             if not runner.is_file():
                 return "Error: bin/test is not a workspace file in bash.workdir"
     pythonpath_root = _strict_pytest_source_root(command, resolved_workdir)
-    process_environment = build_sanitized_subprocess_env()
+    from nz_coder.runtime.process.execution_environment import current_execution_environment
+    selected_environment = environment or current_execution_environment()
+    try:
+        process_environment = selected_environment.as_dict() if selected_environment else build_sanitized_subprocess_env()
+    except PublicRuntimeError as exc:
+        return format_public_error(exc)
     if pythonpath_root is not None:
         inherited = str(process_environment.get("PYTHONPATH") or "").strip()
         process_environment["PYTHONPATH"] = os.pathsep.join(filter(None, (
@@ -501,51 +382,6 @@ def run_bash(
         },
     )
 
-    try:
-        process = subprocess.Popen(
-            shell.argv(command),
-            shell=False,
-            cwd=resolved_workdir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            start_new_session=(os.name != "nt"),
-            creationflags=(
-                getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-                if os.name == "nt"
-                else 0
-            ),
-            env=process_environment,
-        )
-    except (FileNotFoundError, OSError) as e:
-        return format_public_error(e)
-
-    output_queue: queue.Queue = queue.Queue(maxsize=64)
-    finished = object()
-    reader_stop = threading.Event()
-
-    def read_output() -> None:
-        try:
-            if process.stdout is not None:
-                while not reader_stop.is_set():
-                    chunk = process.stdout.read(8192)
-                    if not chunk:
-                        break
-                    while not reader_stop.is_set():
-                        try:
-                            output_queue.put(chunk, timeout=0.1)
-                            break
-                        except queue.Full:
-                            continue
-        finally:
-            while not reader_stop.is_set():
-                try:
-                    output_queue.put(finished, timeout=0.1)
-                    break
-                except queue.Full:
-                    continue
-
-    reader = threading.Thread(target=read_output, name="nz-bash-output", daemon=True)
-    reader.start()
     output_buffer = _BoundedCommandOutput(
         settings.process_buffer_bytes,
         settings.bash_output_hard_limit_bytes,
@@ -554,84 +390,46 @@ def run_bash(
     recoverable_output = _RecoverableCommandOutput(
         encoding=settings.process_output_encoding or "utf-8",
     )
-    deadline = time.monotonic() + timeout_seconds
     last_report = 0.0
-    timed_out = False
-    cancelled = False
-    stream_complete = False
-    cancel_event = current_tool_cancel_event()
-    while True:
-        if cancel_event is not None and cancel_event.is_set():
-            cancelled = True
-            _stop_process(process)
-            break
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            timed_out = True
-            _stop_process(process)
-            break
-        try:
-            item = output_queue.get(timeout=min(0.1, remaining))
-        except queue.Empty:
-            if process.poll() is not None and not reader.is_alive():
-                break
-            continue
-        if item is finished:
-            stream_complete = True
-            break
-        # Production ``Popen`` is binary.  Keep compatibility with lightweight
-        # embedders/tests that inject a text stream without weakening the real
-        # raw-byte decoding contract.
-        chunk = item if isinstance(item, bytes) else str(item).encode("utf-8")
+
+    def on_output(chunk: bytes) -> bool:
+        nonlocal last_report
         recoverable_output.feed(chunk)
-        output_buffer.feed(chunk)
-        if output_buffer.limit_exceeded:
-            _stop_process(process)
-            break
+        if not output_buffer.limit_exceeded:
+            output_buffer.feed(chunk)
         now = time.monotonic()
         if now - last_report >= 0.1:
-            preview = output_buffer.render(progress_limit).strip()
             report_tool_metadata(
                 title=title,
                 metadata={
-                    "output": preview,
+                    **command_identity,
+                    "output": output_buffer.render(progress_limit).strip(),
                     "description": description,
-                    "workdir": str(resolved_workdir),
                     "shell_kind": shell.kind.value,
-                    "executed_command": command,
-                    "requested_command": requested_command,
                     "strict_output_filter_removed": strict_output_filter_removed,
                     "strict_pythonpath_injected": strict_pythonpath_injected,
                     "pythonpath_root": str(pythonpath_root or ""),
                 },
             )
             last_report = now
+        return not output_buffer.limit_exceeded
 
-    reader_stop.set()
+    execution = create_execution(
+        tuple(shell.argv(command, login=selected_environment is None)), cwd=resolved_workdir, env=process_environment,
+        deadline=time.monotonic() + timeout_seconds,
+        kill_grace=settings.process_kill_grace, on_output=on_output,
+    )
     try:
-        process.wait(timeout=1)
-    except subprocess.TimeoutExpired:
-        _stop_process(process)
-        process.wait()
-    reader.join(timeout=1)
-    if reader.is_alive() and process.stdout is not None:
-        try:
-            process.stdout.close()
-        except OSError:
-            pass
-        reader.join(timeout=1)
-    while True:
-        try:
-            item = output_queue.get_nowait()
-        except queue.Empty:
-            break
-        if item is finished:
-            stream_complete = True
-            continue
-        chunk = item if isinstance(item, bytes) else str(item).encode("utf-8")
-        recoverable_output.feed(chunk)
-        if not output_buffer.limit_exceeded:
-            output_buffer.feed(chunk)
+        outcome = execution.run(cancel_event=current_tool_cancel_event())
+    except (FileNotFoundError, OSError) as exc:
+        recoverable_output.close()
+        return format_public_error(exc)
+    except BaseException:
+        recoverable_output.close()
+        raise
+    timed_out = outcome.timed_out
+    cancelled = outcome.cancelled
+    stream_complete = outcome.stream_complete
     output_buffer.finish()
 
     recoverable_text, recoverable_complete = recoverable_output.finish(
@@ -664,12 +462,24 @@ def run_bash(
             "raw_artifact_error": "No recoverable output was captured",
         }
 
+    from nz_coder.runtime.adapters.verification_facts import command_receipt
+
+    receipt = command_receipt(
+        "bash", requested_command, str(resolved_workdir),
+        outcome=("timed_out" if timed_out else "cancelled" if cancelled
+                 else "failed" if outcome.exit_code != 0 else "succeeded"),
+        exit_code=outcome.exit_code, output=recoverable_text,
+        output_complete=bool(stream_complete and recoverable_complete
+                             and not output_buffer.limit_exceeded and not timed_out and not cancelled),
+        pipefail=shell.kind.value == "bash",
+    )
     if timed_out:
         evidence = output_buffer.render(progress_limit).strip()
         suffix = f"\n{evidence}" if evidence else ""
         return ToolOutput(
             f"Error: Command timed out ({timeout_seconds}s){suffix}",
             title=title,
+            execution_facts=(receipt,),
             metadata={
                 **command_identity,
                 "exit": None,
@@ -686,6 +496,7 @@ def run_bash(
         return ToolOutput(
             f"Error: Command cancelled{suffix}",
             title=title,
+            execution_facts=(receipt,),
             metadata={
                 **command_identity,
                 "exit": None,
@@ -703,8 +514,8 @@ def run_bash(
             "Command output limit exceeded; process terminated after "
             f"{output_buffer.total_bytes} bytes.\n{output}"
         )
-    if process.returncode != 0:
-        prefix = f"Command exited with code {process.returncode}"
+    if outcome.exit_code != 0:
+        prefix = f"Command exited with code {outcome.exit_code}"
         output = f"{prefix}\n{output}" if output else prefix
     if not output:
         output = f"({command.split()[0] if command.split() else 'bash'} completed with no output)"
@@ -712,10 +523,11 @@ def run_bash(
     return ToolOutput(
         output,
         title=title,
+        execution_facts=(receipt,),
         metadata={
             **command_identity,
             "output": _truncate_output(output, progress_limit),
-            "exit": int(process.returncode or 0),
+            "exit": int(outcome.exit_code or 0),
             "description": description,
             "workdir": str(resolved_workdir),
             "shell_kind": shell.kind.value,
@@ -737,6 +549,22 @@ def run_bash(
             **recovery_metadata,
         },
     )
+
+
+def run_bash(
+    command: str, read_only: bool = False, timeout: int = None,
+    workdir: str | None = None,
+) -> str:
+    timeout_error = validate_bash_timeout(timeout, current_run_settings().bash_timeout)
+    if timeout_error:
+        return timeout_error
+    client = current_command_client()
+    if client is not None:
+        return client.call("bash", {
+            "command": command, "read_only": read_only,
+            "timeout": timeout, "workdir": workdir,
+        }, cancel_event=current_tool_cancel_event())
+    return execute_bash_local(command, read_only, timeout, workdir)
 
 
 register(

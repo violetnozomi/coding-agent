@@ -25,6 +25,7 @@ class ProcessBackendSession(Protocol):
     pid: int
     tty: bool
     lifecycle_mode: str
+    pipefail: bool
 
     def read_bytes(self, size: int) -> bytes: ...
     def write_bytes(self, data: bytes) -> None: ...
@@ -43,14 +44,15 @@ class PipeBackend:
     """Portable binary pipe fallback with explicit shell invocation."""
 
     tty = False
+    pipefail = False
 
-    def __init__(self, process: subprocess.Popen, *, os_name: str) -> None:
+    def __init__(
+        self, process: subprocess.Popen, *, os_name: str, windows_job=None
+    ) -> None:
         self.process = process
         self.pid = int(process.pid)
         self.os_name = os_name
-        self._windows_job = (
-            _WindowsJob.bind(self.pid, os_name=os_name) if os_name == "nt" else None
-        )
+        self._windows_job = windows_job
         self.lifecycle_mode = (
             "windows-job-object"
             if self._windows_job is not None
@@ -88,25 +90,35 @@ class PipeBackend:
                 self.process.wait(timeout=grace_seconds)
             except subprocess.TimeoutExpired:
                 pass
-        if self.process.poll() is None or self.os_name == "nt":
-            terminate_process_tree(self.process, os_name=self.os_name, force=True)
+        # 组长退出后仍可能有忽略 SIGTERM 的后代，最后一次终止覆盖整组。
+        swept = terminate_process_tree(self.process, os_name=self.os_name, force=True)
+        if self.os_name != "nt" and not swept:
+            raise OSError("process group termination is still pending")
 
     def close(self) -> None:
+        failures = []
         if self._windows_job is not None:
-            self._windows_job.close()
-            self._windows_job = None
+            try:
+                self._windows_job.close()
+            except Exception as exc:
+                failures.append(exc)
+            else:
+                self._windows_job = None
         for stream in (self.process.stdin, self.process.stdout, self.process.stderr):
-            if stream is not None:
+            if stream is not None and not stream.closed:
                 try:
                     stream.close()
-                except OSError:
-                    pass
+                except Exception as exc:
+                    failures.append(exc)
+        if failures:
+            raise failures[0]
 
 
 class PosixPtyBackend:
     """POSIX PTY adapter."""
 
     tty = True
+    pipefail = False
 
     def __init__(self, process: subprocess.Popen, master_fd: int) -> None:
         self.process = process
@@ -141,19 +153,20 @@ class PosixPtyBackend:
                 self.process.wait(timeout=grace_seconds)
             except subprocess.TimeoutExpired:
                 pass
-        terminate_process_tree(self.process, os_name="posix", force=True)
+        if not terminate_process_tree(self.process, os_name="posix", force=True):
+            raise OSError("process group termination is still pending")
 
     def close(self) -> None:
-        try:
+        if self.master_fd is not None:
             os.close(self.master_fd)
-        except OSError:
-            pass
+            self.master_fd = None
 
 
 class ConPtyBackend:
     """pywinpty adapter; no product state or events are owned here."""
 
     tty = True
+    pipefail = False
 
     _TERMINAL_QUERY_RESPONSES = {
         "\x1b[c": "\x1b[?1;2c",
@@ -184,6 +197,7 @@ class ConPtyBackend:
         self._windows_job = windows_job
         self._rows, self._cols = _size(rows, cols)
         self._terminal_control_tail = ""
+        self._closed = False
         self.lifecycle_mode = (
             "windows-job-object"
             if windows_job is not None
@@ -247,15 +261,20 @@ class ConPtyBackend:
         self.process.setwinsize(selected_rows, selected_cols)
 
     def poll(self) -> int | None:
-        return None if self.process.isalive() else int(self.process.exitstatus or 0)
+        if self.process.isalive() or self.process.exitstatus is None:
+            return None
+        return int(self.process.exitstatus)
 
     def wait(self, timeout: float | None = None) -> int:
         deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
-        while self.process.isalive():
-            if deadline is not None and time.monotonic() >= deadline:
+        while True:
+            code = self.poll()
+            if code is not None:
+                return code
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if remaining is not None and remaining <= 0:
                 raise subprocess.TimeoutExpired("ConPTY", timeout)
-            time.sleep(0.02)
-        return int(self.process.exitstatus or 0)
+            time.sleep(0.02 if remaining is None else min(0.02, remaining))
 
     def terminate_tree(self, *, grace_seconds: float) -> None:
         if self._windows_job is not None and self._windows_job.terminate():
@@ -282,10 +301,9 @@ class ConPtyBackend:
         if self._windows_job is not None:
             self._windows_job.close()
             self._windows_job = None
-        try:
+        if not self._closed:
             self.process.close(force=self.process.isalive())
-        except (OSError, RuntimeError):
-            pass
+            self._closed = True
 
 
 def _taskkill_pid_tree(pid: int) -> bool:
@@ -314,14 +332,15 @@ def create_process_backend(
     os_name: str | None = None,
     which: Callable[[str], str | None] | None = None,
     winpty_module=None,
+    environment=None,
 ) -> ProcessBackendSession:
     """Create the best backend available without changing service ownership."""
     import shutil
 
     selected_os = os.name if os_name is None else os_name
     shell = select_shell(os_name=selected_os, which=which or shutil.which)
-    argv = shell.argv(command)
-    env = build_sanitized_subprocess_env()
+    argv = shell.argv(command, login=environment is None)
+    env = environment.as_dict() if environment else build_sanitized_subprocess_env()
     env.setdefault("PYTHONIOENCODING", "utf-8")
     selected_rows, selected_cols = _size(rows, cols)
 
@@ -339,17 +358,26 @@ def create_process_backend(
                 env=env,
                 dimensions=(selected_rows, selected_cols),
             )
-            return ConPtyBackend(
-                process,
-                windows_job=_WindowsJob.bind(int(process.pid), os_name=selected_os),
-                rows=selected_rows,
-                cols=selected_cols,
-            )
+            job = None
+            try:
+                job = _WindowsJob.bind(int(process.pid), os_name=selected_os)
+                backend = ConPtyBackend(
+                    process,
+                    windows_job=job,
+                    rows=selected_rows,
+                    cols=selected_cols,
+                )
+                backend.pipefail = shell.kind.value == "bash"
+                return backend
+            except BaseException:
+                _retire_failed_start(process, os_name=selected_os, conpty=True, job=job)
+                raise
 
     if tty and selected_os != "nt":
         import pty
 
         master_fd, slave_fd = pty.openpty()
+        process = None
         try:
             _set_posix_terminal_size(slave_fd, rows=selected_rows, cols=selected_cols)
             env.setdefault("TERM", "xterm-256color")
@@ -364,12 +392,18 @@ def create_process_backend(
                 start_new_session=True,
                 env=env,
             )
-        except BaseException:
-            os.close(master_fd)
-            raise
-        finally:
             os.close(slave_fd)
-        return PosixPtyBackend(process, master_fd)
+            slave_fd = None
+            backend = PosixPtyBackend(process, master_fd)
+            backend.pipefail = shell.kind.value == "bash"
+            return backend
+        except BaseException:
+            _retire_failed_start(
+                process,
+                os_name=selected_os,
+                fds=[fd for fd in (master_fd, slave_fd) if fd is not None],
+            )
+            raise
 
     creationflags = (
         getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -388,7 +422,62 @@ def create_process_backend(
         creationflags=creationflags,
         env=env,
     )
-    return PipeBackend(process, os_name=selected_os)
+    job = None
+    try:
+        if selected_os == "nt":
+            job = _WindowsJob.bind(int(process.pid), os_name=selected_os)
+        backend = PipeBackend(process, os_name=selected_os, windows_job=job)
+        backend.pipefail = shell.kind.value == "bash"
+        return backend
+    except BaseException:
+        _retire_failed_start(process, os_name=selected_os, job=job)
+        raise
+
+
+def _retire_failed_start(process, *, os_name, conpty=False, job=None, fds=()) -> None:
+    """包装失败仍由创建者持有资源；确认退出和句柄释放前不交还调用方。"""
+    retry_delays = iter((0.05, 0.1, 0.2, 0.5))
+    while process is not None:
+        try:
+            if job is not None:
+                job.terminate()
+            if conpty:
+                if process.isalive():
+                    process.terminate(force=True)
+                if not process.isalive() and process.exitstatus is not None:
+                    break
+                time.sleep(0.05)
+            else:
+                terminate_process_tree(process, os_name=os_name, force=True)
+                if process.wait(timeout=0.05) is not None:
+                    break
+        except subprocess.TimeoutExpired:
+            continue
+        except Exception:
+            time.sleep(next(retry_delays, 1.0))
+    pending = []
+    if job is not None:
+        pending.append(job.close)
+    if process is not None:
+        if conpty:
+            pending.append(lambda: process.close(force=False))
+        else:
+            pending.extend(
+                stream.close
+                for stream in (process.stdin, process.stdout, process.stderr)
+                if stream is not None
+            )
+    pending.extend(lambda fd=fd: os.close(fd) for fd in fds)
+    while pending:
+        failures = []
+        for close in pending:
+            try:
+                close()
+            except Exception:
+                failures.append(close)
+        pending = failures
+        if pending:
+            time.sleep(next(retry_delays, 1.0))
 
 
 def _set_posix_terminal_size(fd: int, *, rows: int, cols: int) -> None:
@@ -415,6 +504,8 @@ class _WindowsJob:
         selected_os = os.name if os_name is None else os_name
         if selected_os != "nt":
             return None
+        handle = process_handle = None
+        selected_kernel = None
         try:
             import ctypes
             from ctypes import wintypes
@@ -502,20 +593,30 @@ class _WindowsJob:
                 ctypes.sizeof(limits),
             )
             if not configured:
-                selected_kernel.CloseHandle(handle)
                 return None
             process_handle = selected_kernel.OpenProcess(0x0101, False, int(pid))
             if not process_handle:
-                selected_kernel.CloseHandle(handle)
                 return None
             assigned = selected_kernel.AssignProcessToJobObject(handle, process_handle)
-            selected_kernel.CloseHandle(process_handle)
             if not assigned:
-                selected_kernel.CloseHandle(handle)
                 return None
-            return cls(handle, selected_kernel)
+            job = cls(handle, selected_kernel)
+            handle = None
+            return job
         except (AttributeError, OSError, ValueError):
             return None
+        finally:
+            # 尚未交接给 backend 的句柄仍归创建者，关闭失败不能丢弃引用。
+            for acquired in (process_handle, handle):
+                if acquired:
+                    owned = cls(acquired, selected_kernel)
+                    retry_delays = iter((0.05, 0.1, 0.2, 0.5))
+                    while True:
+                        try:
+                            owned.close()
+                            break
+                        except Exception:
+                            time.sleep(next(retry_delays, 1.0))
 
     def terminate(self) -> bool:
         try:
@@ -524,10 +625,10 @@ class _WindowsJob:
             return False
 
     def close(self) -> None:
-        try:
-            self.kernel32.CloseHandle(self.handle)
-        except (AttributeError, OSError, ValueError):
-            pass
+        if self.handle is not None:
+            if not self.kernel32.CloseHandle(self.handle):
+                raise OSError("CloseHandle failed")
+            self.handle = None
 
 
 __all__ = [

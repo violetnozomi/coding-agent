@@ -357,7 +357,7 @@ def test_bash_blocks_package_install_by_default(monkeypatch):
     old_allow = config.ALLOW_BASH_PACKAGE_INSTALLS
     config.ALLOW_BASH_PACKAGE_INSTALLS = False
     monkeypatch.setattr(
-        "nz_coder.tools.bash.subprocess.run",
+        "nz_coder.runtime.process.bash_execution.subprocess.Popen",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not run")),
     )
     try:
@@ -368,9 +368,10 @@ def test_bash_blocks_package_install_by_default(monkeypatch):
     assert result.startswith("Error: Package install blocked")
 
 
-def test_subagent_stops_after_configured_turn_budget(monkeypatch):
-    from nz_coder.foundation import config
+def test_subagent_stops_after_configured_turn_budget(monkeypatch, tmp_path):
+    from nz_coder.foundation.workspace_trust import load_config_snapshot, scoped_config_snapshot
     from nz_coder.runtime.agent import subagent
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     class FakeFunction:
         name = "grep_search"
@@ -405,7 +406,10 @@ def test_subagent_stops_after_configured_turn_budget(monkeypatch):
         choices = [FakeChoice()]
 
     class FakeCompletions:
+        calls = 0
+
         def create(self, **kwargs):
+            self.calls += 1
             return FakeResponse()
 
     class FakeChat:
@@ -414,18 +418,15 @@ def test_subagent_stops_after_configured_turn_budget(monkeypatch):
     class FakeClient:
         chat = FakeChat()
 
-    old_turns = config.SUBAGENT_MAX_TURNS
-    old_timeout = config.SUBAGENT_TIMEOUT_SECONDS
-    config.SUBAGENT_MAX_TURNS = 1
-    config.SUBAGENT_TIMEOUT_SECONDS = 30
-    monkeypatch.setattr(subagent, "OpenAI", lambda **kwargs: FakeClient())
-    try:
+    monkeypatch.setenv("SUBAGENT_MAX_TURNS", "1")
+    monkeypatch.setenv("SUBAGENT_TIMEOUT_SECONDS", "30")
+    client = FakeClient()
+    monkeypatch.setattr(subagent, "OpenAI", lambda **kwargs: client)
+    with scoped_workdir(tmp_path), scoped_config_snapshot(load_config_snapshot(tmp_path)):
         result = subagent.run_subagent("find a symbol")
-    finally:
-        config.SUBAGENT_MAX_TURNS = old_turns
-        config.SUBAGENT_TIMEOUT_SECONDS = old_timeout
 
     assert result.startswith("Subagent stopped: max turns reached")
+    assert client.chat.completions.calls == 1
 
 
 def test_change_tracker_diff_and_revert():
@@ -1075,12 +1076,12 @@ def test_scratchpad_isolated_by_session_id():
     try:
         activate_session("session-one")
         scratchpad.clear()
-        scratchpad.update("finding", "one")
+        scratchpad.update_section('focus', [{"summary": "one", "details": ""}])
 
         activate_session("session-two")
         scratchpad.clear()
         assert scratchpad.read() == "Scratchpad is empty."
-        scratchpad.update("finding", "two")
+        scratchpad.update_section('focus', [{"summary": "two", "details": ""}])
 
         activate_session("session-one")
         assert "one" in scratchpad.read()

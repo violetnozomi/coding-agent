@@ -7,6 +7,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from nz_coder.foundation.process_runner import ProcessRunner
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.protocol.public_error import format_public_error
@@ -17,6 +18,7 @@ from nz_coder.capabilities.ripgrep import (
     list_ripgrep_files,
     search_ripgrep,
 )
+from nz_coder.runtime.process.command_channel import current_command_client
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import ToolOutput, current_tool_cancel_event, register
 
@@ -117,6 +119,7 @@ def _run_rg_search(
     files: list[str] | None = None,
     case_insensitive: bool = False,
     use_default_ignores: bool = True,
+    runner: ProcessRunner | None = None,
 ) -> tuple[list[_RGMatch], bool]:
     """Compatibility adapter around the shared Ripgrep.search producer."""
     try:
@@ -130,6 +133,7 @@ def _run_rg_search(
             files=tuple(files) if files is not None else None,
             case_insensitive=case_insensitive,
             cancel_event=current_tool_cancel_event(),
+            runner=runner,
         )
     except RipgrepCancelled as error:
         raise _SearchInterrupted from error
@@ -200,6 +204,7 @@ def _search_matches(
     path: str,
     include: str | None,
     case_insensitive: bool,
+    *, runner: ProcessRunner | None = None,
 ) -> tuple[list[_SearchMatch], bool]:
     search = _safe_path(path)
     cwd = search if search.is_dir() else search.parent
@@ -213,6 +218,7 @@ def _search_matches(
             files=files,
             case_insensitive=case_insensitive,
             use_default_ignores=use_default_ignores,
+            runner=runner,
         )
     except FileNotFoundError:
         rows, partial = _python_rg_search(
@@ -329,6 +335,27 @@ def grep_search(
     context: int = 0,
     case_insensitive: bool = False,
 ) -> str:
+    client = current_command_client()
+    if client is not None:
+        return client.call('grep_search', {
+            'pattern': pattern, 'path': path, 'include': include, 'output_mode': output_mode,
+            'head_limit': head_limit, 'offset': offset, 'context': context,
+            'case_insensitive': case_insensitive,
+        }, cancel_event=current_tool_cancel_event())
+    return execute_grep_search_local(pattern, path, include, output_mode, head_limit, offset, context, case_insensitive, runner=None)
+
+
+def execute_grep_search_local(
+    pattern: str,
+    path: str = ".",
+    include: str = None,
+    output_mode: str = "content",
+    head_limit: int = None,
+    offset: int = 0,
+    context: int = 0,
+    case_insensitive: bool = False,
+    *, runner: ProcessRunner | None,
+) -> str:
     """Search file contents through ripgrep JSON match events.
 
     Args:
@@ -351,6 +378,7 @@ def grep_search(
             path,
             include,
             bool(case_insensitive),
+            runner=runner,
         )
         if not matches:
             return ToolOutput(
@@ -486,6 +514,7 @@ def _run_rg_files(
     limit: int,
     *,
     use_default_ignores: bool = True,
+    runner: ProcessRunner | None = None,
 ) -> tuple[list[str], bool]:
     """Compatibility wrapper around the shared Ripgrep.files producer."""
     try:
@@ -497,6 +526,7 @@ def _run_rg_files(
             limit=limit,
             exclude=_default_repo_excluded if use_default_ignores else None,
             cancel_event=current_tool_cancel_event(),
+            runner=runner,
         )
     except RipgrepCancelled as error:
         raise _SearchInterrupted from error
@@ -504,6 +534,13 @@ def _run_rg_files(
 
 
 def glob_search(pattern: str, path: str = ".") -> str:
+    client = current_command_client()
+    if client is not None:
+        return client.call('glob_search', {'pattern': pattern, 'path': path}, cancel_event=current_tool_cancel_event())
+    return execute_glob_search_local(pattern, path, runner=None)
+
+
+def execute_glob_search_local(pattern: str, path: str = ".", *, runner: ProcessRunner | None) -> str:
     try:
         raw = pattern or "*"
         absolute = _split_absolute_glob(raw)
@@ -518,13 +555,14 @@ def glob_search(pattern: str, path: str = ".") -> str:
             return f"Error: No such directory: {base}"
         use_default_ignores = _default_ignores_enabled(base, raw)
         files, truncated = (
-            _run_rg_files(base, raw, _GLOB_LIMIT)
+            _run_rg_files(base, raw, _GLOB_LIMIT, runner=runner)
             if use_default_ignores
             else _run_rg_files(
                 base,
                 raw,
                 _GLOB_LIMIT,
                 use_default_ignores=False,
+                runner=runner,
             )
         )
         entries: list[tuple[str, float]] = []

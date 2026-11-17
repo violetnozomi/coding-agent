@@ -48,6 +48,12 @@ class ArtifactChunk:
     total_bytes: int
 
 
+@dataclass(frozen=True)
+class ArtifactReferenceScan:
+    references: frozenset[str]
+    complete: bool
+
+
 class ArtifactStore:
     """Persist and read only model-safe artifacts owned by one Session."""
 
@@ -193,9 +199,20 @@ class ArtifactStore:
                 payload = os.read(descriptor, limit)
             finally:
                 os.close(descriptor)
+            try:
+                text = payload.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                if exc.reason == "unexpected end of data" and exc.start == 0:
+                    lead = payload[0]
+                    required = 2 if lead < 0xE0 else 3 if lead < 0xF0 else 4
+                    raise ArtifactAccessError(f"Artifact character requires at least {required} bytes") from exc
+                if exc.reason != "unexpected end of data":
+                    raise ArtifactAccessError("Artifact offset is not a UTF-8 character boundary") from exc
+                payload = payload[:exc.start]
+                text = payload.decode("utf-8")
             next_offset = offset + len(payload)
             return ArtifactChunk(
-                payload.decode("utf-8", errors="replace"),
+                text,
                 next_offset,
                 next_offset < total,
                 total,
@@ -276,6 +293,8 @@ class ArtifactStore:
         root = self.artifact_root
         now = float(self._clock())
         durable_references = self._durable_artifact_references()
+        if not durable_references.complete:
+            return []
         candidates: list[tuple[float, Path, str, dict[str, object]]] = []
         for manifest_path in root.glob("*/runtime/tool-results/manifest.json"):
             owner = manifest_path.parents[2].name
@@ -307,7 +326,7 @@ class ArtifactStore:
             expired = now - created >= self.ttl_seconds
             if not over_quota and not expired:
                 continue
-            if artifact_id in durable_references:
+            if artifact_id in durable_references.references:
                 continue
             event = self._remove_workspace_entry(
                 manifest_path,
@@ -387,28 +406,49 @@ class ArtifactStore:
             total += max(0, int(info.st_size))
         return files, total
 
-    def _durable_artifact_references(self) -> set[str]:
+    def _durable_artifact_references(self) -> ArtifactReferenceScan:
         """Collect opaque handles retained by saved Session transcripts."""
         references: set[str] = set()
-        candidates = list(self.sessions_root.glob("*.json"))
-        candidates.extend(self.artifact_root.glob("*/runtime/transcripts/*"))
+        try:
+            candidates = list(self.sessions_root.glob("*.json"))
+            candidates.extend(self.artifact_root.glob("*/runtime/transcripts/*"))
+        except OSError:
+            return ArtifactReferenceScan(frozenset(), False)
         remaining = 16 * 1024 * 1024
         for path in sorted(candidates, key=lambda item: item.as_posix()):
             if remaining <= 0:
-                break
+                return ArtifactReferenceScan(frozenset(references), False)
             try:
-                path.lstat()
-                if path.is_symlink() or not path.is_file():
-                    continue
-                payload = path.read_bytes()[:remaining]
+                descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+                try:
+                    before = os.fstat(descriptor)
+                    if not stat.S_ISREG(before.st_mode):
+                        return ArtifactReferenceScan(frozenset(references), False)
+                    with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                        payload = handle.read(remaining + 1)
+                    after = os.fstat(descriptor)
+                    current = path.lstat()
+                    if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) or (after.st_dev, after.st_ino) != (current.st_dev, current.st_ino):
+                        return ArtifactReferenceScan(frozenset(references), False)
+                finally:
+                    os.close(descriptor)
             except OSError:
-                continue
+                return ArtifactReferenceScan(frozenset(references), False)
+            if len(payload) > remaining:
+                return ArtifactReferenceScan(frozenset(references), False)
+            if len(payload) != after.st_size:
+                return ArtifactReferenceScan(frozenset(references), False)
+            if path.suffix == ".json":
+                try:
+                    json.loads(payload.decode("utf-8"))
+                except (UnicodeError, json.JSONDecodeError, RecursionError, ValueError):
+                    return ArtifactReferenceScan(frozenset(references), False)
             remaining -= len(payload)
             references.update(
                 match.decode("ascii")
                 for match in re.findall(rb"artifact_[a-f0-9]{32}", payload)
             )
-        return references
+        return ArtifactReferenceScan(frozenset(references), True)
 
     def _validated_artifact_path(self, path: Path) -> Path:
         target = path.absolute()

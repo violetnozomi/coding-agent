@@ -20,6 +20,10 @@ def _stat_tuple(info) -> tuple[int, int, int, int]:
     )
 
 
+def _stable_stat_tuple(info):
+    return (*_stat_tuple(info), int(info.st_ctime_ns), int(info.st_mode))
+
+
 @dataclass(frozen=True)
 class WorkspaceFileStat:
     """Public metadata captured from the same opened object used for I/O."""
@@ -77,12 +81,17 @@ class WorkspaceFileAccess:
         return data
 
     def read_bytes_with_identity(
-        self, path: str, *, maximum: int | None = None,
+        self, path: str, *, maximum: int | None = None, check_cancelled=None,
     ) -> tuple[bytes, WorkspaceFileIdentity]:
         """Read bytes and capture mutation identity from the same file handle."""
+        if check_cancelled is not None:
+            check_cancelled()
         relative = self._relative(path, write=False)
         if os.name == "nt":
-            return self._read_windows_with_identity(relative, maximum=maximum)
+            result = self._read_windows_with_identity(relative, maximum=maximum, check_cancelled=check_cancelled)
+            if check_cancelled is not None:
+                check_cancelled()
+            return result
         parent, name = self._open_parent_posix(relative, create=False)
         try:
             metadata = os.stat(name, dir_fd=parent, follow_symlinks=False)
@@ -100,7 +109,14 @@ class WorkspaceFileAccess:
                 chunks: list[bytes] = []
                 total = 0
                 while True:
-                    chunk = os.read(descriptor, 1024 * 1024)
+                    if check_cancelled is not None:
+                        check_cancelled()
+                    remaining = 1024 * 1024 if maximum is None else min(1024 * 1024, maximum - total)
+                    if remaining <= 0:
+                        break
+                    chunk = os.read(descriptor, remaining)
+                    if check_cancelled is not None:
+                        check_cancelled()
                     if not chunk:
                         break
                     total += len(chunk)
@@ -109,7 +125,7 @@ class WorkspaceFileAccess:
                     chunks.append(chunk)
                 data = b"".join(chunks)
                 after = os.fstat(descriptor)
-                if _stat_tuple(after) != _stat_tuple(before):
+                if _stable_stat_tuple(after) != _stable_stat_tuple(before) or len(data) != after.st_size:
                     raise PublicInputError("Workspace file changed while it was read")
                 return data, WorkspaceFileIdentity(
                     True, int(after.st_dev), int(after.st_ino), int(after.st_size),
@@ -207,6 +223,7 @@ class WorkspaceFileAccess:
         try:
             self._walk_posix(
                 descriptor,
+                relative,
                 Path(),
                 0,
                 max_depth,
@@ -275,13 +292,20 @@ class WorkspaceFileAccess:
         overwrite: bool = True,
     ) -> None:
         """Atomically replace a file beneath a verified, held parent handle."""
+        self.write_bytes(path, content.encode("utf-8"), transaction=transaction,
+                         expected=expected, overwrite=overwrite)
+
+    def write_bytes(
+        self, path: str, content: bytes, *, mode: int | None = None,
+        transaction=None, expected: ExpectedFileIdentity | None = None,
+        expected_mode: int | None = None, overwrite: bool = True,
+    ) -> WorkspaceFileIdentity:
         relative = self._relative(path, write=True)
         if os.name == "nt":
-            self._write_windows(
-                relative, content.encode("utf-8"), transaction,
-                expected=expected, overwrite=overwrite,
+            return self._write_windows(
+                relative, content, transaction,
+                expected=expected, expected_mode=expected_mode, mode=mode, overwrite=overwrite,
             )
-            return
         parent, name = self._open_parent_posix(relative, create=True)
         temporary = f".nzcoder-{uuid.uuid4().hex}.tmp"
         receipt = None
@@ -298,7 +322,11 @@ class WorkspaceFileAccess:
                 if current_info is not None else WorkspaceFileIdentity.missing()
             )
             current_mode = current_info.st_mode if current_info is not None else 0o600
+            if current_info is not None and expected is not None and expected.content_hash:
+                current, current_mode = self._identity_at_posix(parent, name)
             self._validate_expected(current, expected)
+            if expected_mode is not None and (current_info is None or stat.S_IMODE(current_mode) != expected_mode):
+                raise PublicInputError("File mode changed after it was read; re-read before editing.")
             if current.expected_exists and not overwrite:
                 raise PublicInputError("target already exists and overwrite=false")
             if transaction is not None and getattr(transaction, "active", False):
@@ -311,22 +339,20 @@ class WorkspaceFileAccess:
             )
             descriptor = os.open(temporary, flags, 0o600, dir_fd=parent)
             try:
-                if receipt is not None:
-                    candidate = type(receipt)()
-                    candidate.capture(descriptor)
-                    published_identity = candidate.identity
-                data = content.encode("utf-8")
+                from nz_coder.state.transaction import MutationReceipt
+                candidate = MutationReceipt()
+                candidate.capture(descriptor)
+                published_identity = candidate.identity
+                data = content
                 view = memoryview(data)
                 while view:
                     written = os.write(descriptor, view)
                     if written <= 0:
                         raise OSError("workspace write made no progress")
                     view = view[written:]
-                if current.expected_exists:
-                    os.fchmod(descriptor, stat.S_IMODE(current_mode))
+                os.fchmod(descriptor, mode if mode is not None else stat.S_IMODE(current_mode))
                 os.fsync(descriptor)
-                if receipt is not None:
-                    candidate.capture(descriptor, content=data)
+                candidate.capture(descriptor, content=data)
             finally:
                 os.close(descriptor)
             if overwrite:
@@ -339,12 +365,12 @@ class WorkspaceFileAccess:
             if receipt is not None:
                 receipt.identity = published_identity
                 receipt.applied = True
-                receipt.published_version = None
+                receipt.published_version = candidate.published_version
+                receipt.published_mode = candidate.published_mode
             if not overwrite:
                 os.unlink(temporary, dir_fd=parent)
             os.fsync(parent)
-            if receipt is not None:
-                receipt.published_version = candidate.published_version
+            return candidate.published_version
         finally:
             try:
                 os.unlink(temporary, dir_fd=parent)
@@ -355,11 +381,12 @@ class WorkspaceFileAccess:
     def delete(
         self, path: str, *, transaction=None,
         expected: ExpectedFileIdentity | None = None,
+        expected_mode: int | None = None,
     ) -> None:
         """Delete relative to a verified, held workspace parent handle."""
         relative = self._relative(path, write=True)
         if os.name == "nt":
-            self._delete_windows(relative, transaction, expected=expected)
+            self._delete_windows(relative, transaction, expected=expected, expected_mode=expected_mode)
             return
         parent, name = self._open_parent_posix(relative, create=False)
         receipt = None
@@ -367,7 +394,13 @@ class WorkspaceFileAccess:
             info = os.stat(name, dir_fd=parent, follow_symlinks=False)
             if not stat.S_ISREG(info.st_mode):
                 raise ValueError("Workspace target is not a regular file")
-            self._validate_expected(self._identity_from_stat(info), expected)
+            current = self._identity_from_stat(info)
+            current_mode = info.st_mode
+            if expected is not None and expected.content_hash:
+                current, current_mode = self._identity_at_posix(parent, name)
+            self._validate_expected(current, expected)
+            if expected_mode is not None and stat.S_IMODE(current_mode) != expected_mode:
+                raise PublicInputError("File mode changed after it was read; re-read before editing.")
             if transaction is not None and getattr(transaction, "active", False):
                 receipt = transaction.track_anchored(
                     relative.as_posix(), parent_fd=parent,
@@ -376,10 +409,8 @@ class WorkspaceFileAccess:
             if receipt is not None:
                 receipt.identity = None
                 receipt.applied = True
-                receipt.published_version = None
-            os.fsync(parent)
-            if receipt is not None:
                 receipt.published_version = WorkspaceFileIdentity.missing()
+            os.fsync(parent)
         finally:
             os.close(parent)
 
@@ -435,6 +466,7 @@ class WorkspaceFileAccess:
     def _walk_posix(
         self,
         descriptor: int,
+        listing_root: Path,
         prefix: Path,
         level: int,
         max_depth: int,
@@ -456,7 +488,7 @@ class WorkspaceFileAccess:
                 if level == 0 and name.startswith(".") and not include_hidden_root:
                     continue
                 relative = prefix / name
-                if not self.policy.is_model_visible(self.root / relative):
+                if not self.policy.is_model_visible(self.root / listing_root / relative):
                     continue
                 try:
                     if entry.is_symlink():
@@ -492,6 +524,7 @@ class WorkspaceFileAccess:
                     raise ValueError("Workspace directory entry changed type")
                 self._walk_posix(
                     child,
+                    listing_root,
                     relative,
                     level + 1,
                     max_depth,
@@ -530,6 +563,23 @@ class WorkspaceFileAccess:
             raise
 
     @staticmethod
+    def _identity_at_posix(parent: int, name: str) -> tuple[WorkspaceFileIdentity, int]:
+        descriptor = os.open(name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0), dir_fd=parent)
+        try:
+            before = os.fstat(descriptor)
+            if not stat.S_ISREG(before.st_mode):
+                raise ValueError("Workspace target is not a regular file")
+            digest = hashlib.sha256()
+            while chunk := os.read(descriptor, 1024 * 1024):
+                digest.update(chunk)
+            after = os.fstat(descriptor)
+            if _stable_stat_tuple(before) != _stable_stat_tuple(after):
+                raise PublicInputError("Workspace file changed while it was read")
+            return WorkspaceFileIdentity(True, int(after.st_dev), int(after.st_ino), int(after.st_size), int(after.st_mtime_ns), digest.hexdigest()), int(after.st_mode)
+        finally:
+            os.close(descriptor)
+
+    @staticmethod
     def _identity_from_stat(info) -> WorkspaceFileIdentity:
         return WorkspaceFileIdentity(
             True, int(info.st_dev), int(info.st_ino), int(info.st_size),
@@ -551,7 +601,7 @@ class WorkspaceFileAccess:
             expected.expected_exists, expected.device, expected.inode,
             expected.size, expected.mtime_ns,
         )
-        if comparable_current != comparable_expected:
+        if comparable_current != comparable_expected or (expected.content_hash and current.content_hash != expected.content_hash):
             raise PublicInputError(
                 "File changed after it was read; re-read before editing."
             )
@@ -679,7 +729,7 @@ class WorkspaceFileAccess:
                 relative = prefix / entry.name
                 if level == 0 and entry.name.startswith(".") and not include_hidden_root:
                     continue
-                if not self.policy.is_model_visible(self.root / relative):
+                if not self.policy.is_model_visible(directory_path / entry.name):
                     continue
                 try:
                     if entry.is_symlink():
@@ -778,8 +828,14 @@ class WorkspaceFileAccess:
                 _windows_close(handle)
 
     def _read_windows_with_identity(
-        self, relative: Path, *, maximum: int | None,
+        self, relative: Path, *, maximum: int | None, check_cancelled=None,
     ) -> tuple[bytes, WorkspaceFileIdentity]:
+        data, identity, _mode = self._read_windows_with_identity_and_mode(relative, maximum=maximum, check_cancelled=check_cancelled)
+        return data, identity
+
+    def _read_windows_with_identity_and_mode(
+        self, relative: Path, *, maximum: int | None, check_cancelled=None,
+    ) -> tuple[bytes, WorkspaceFileIdentity, int]:
         from nz_coder.foundation.project_control import (
             UnsafeProjectControl,
             _windows_close,
@@ -816,20 +872,37 @@ class WorkspaceFileAccess:
                 raise PublicInputError("Workspace file exceeds the allowed size")
             import msvcrt
 
-            source_fd = msvcrt.open_osfhandle(target, os.O_RDONLY)
+            source_fd = msvcrt.open_osfhandle(target, os.O_RDONLY | os.O_BINARY)
             handles.pop()
-            with os.fdopen(source_fd, "rb", closefd=True) as stream:
+            with os.fdopen(source_fd, "rb", closefd=True, buffering=0) as stream:
                 before = os.fstat(stream.fileno())
-                data = stream.read(maximum + 1 if maximum is not None else -1)
+                if maximum is not None and before.st_size > maximum:
+                    raise PublicInputError("Workspace file exceeds the allowed size")
+                chunks = []
+                total = 0
+                while True:
+                    if check_cancelled is not None:
+                        check_cancelled()
+                    remaining = 1024 * 1024 if maximum is None else min(1024 * 1024, maximum - total)
+                    if remaining <= 0:
+                        break
+                    chunk = stream.read(remaining)
+                    if check_cancelled is not None:
+                        check_cancelled()
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    total += len(chunk)
+                data = b"".join(chunks)
                 after = os.fstat(stream.fileno())
-                if _stat_tuple(after) != _stat_tuple(before):
+                if _stable_stat_tuple(after) != _stable_stat_tuple(before) or len(data) != after.st_size:
                     raise PublicInputError("Workspace file changed while it was read")
             if maximum is not None and len(data) > maximum:
                 raise PublicInputError("Workspace file exceeds the allowed size")
             return data, WorkspaceFileIdentity(
-                True, int(device), int(inode), int(size), int(after.st_mtime_ns),
+                True, int(device), int(inode), int(after.st_size), int(after.st_mtime_ns),
                 hashlib.sha256(data).hexdigest(),
-            )
+            ), int(after.st_mode)
         except UnsafeProjectControl as exc:
             raise ValueError("Workspace file boundary is unsafe") from exc
         finally:
@@ -838,8 +911,9 @@ class WorkspaceFileAccess:
 
     def _write_windows(
         self, relative: Path, data: bytes, transaction,
-        *, expected: ExpectedFileIdentity | None, overwrite: bool,
-    ) -> None:
+        *, expected: ExpectedFileIdentity | None, expected_mode: int | None,
+        mode: int | None, overwrite: bool,
+    ) -> WorkspaceFileIdentity:
         # Windows directory handles are retained and verified by the project
         # control helper; replacement still has a documented final path/rename
         # TOCTOU window because Python exposes no handle-relative ReplaceFile.
@@ -864,7 +938,12 @@ class WorkspaceFileAccess:
                 self._identity_from_stat(current_info)
                 if current_info is not None else WorkspaceFileIdentity.missing()
             )
+            current_mode = current_info.st_mode if current_info is not None else 0o600
+            if current_info is not None and expected is not None and expected.content_hash:
+                _data, current, current_mode = self._read_windows_with_identity_and_mode(relative, maximum=None)
             self._validate_expected(current, expected)
+            if expected_mode is not None and (current_info is None or stat.S_IMODE(current_mode) != expected_mode):
+                raise PublicInputError("File mode changed after it was read; re-read before editing.")
             if current.expected_exists and not overwrite:
                 raise PublicInputError("target already exists and overwrite=false")
             if transaction is not None and getattr(transaction, "active", False):
@@ -873,6 +952,8 @@ class WorkspaceFileAccess:
                 )
             if not overwrite:
                 descriptor = os.open(target_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                from nz_coder.state.transaction import MutationReceipt
+                candidate = MutationReceipt()
                 if receipt is not None:
                     receipt.applied = True
                     receipt.identity = None
@@ -885,31 +966,31 @@ class WorkspaceFileAccess:
                     with stream:
                         stream.write(data)
                         stream.flush()
+                        if mode is not None:
+                            os.chmod(target_path, mode)
                         os.fsync(stream.fileno())
-                        if receipt is not None:
-                            receipt.capture(stream.fileno(), content=data)
-                            candidate_version = receipt.published_version
-                            receipt.published_version = None
+                        candidate.capture(stream.fileno(), content=data)
                 finally:
                     if descriptor >= 0:
                         os.close(descriptor)
                 if receipt is not None:
-                    receipt.published_version = candidate_version
-                return
+                    receipt.identity = candidate.identity
+                    receipt.published_version = candidate.published_version
+                    receipt.published_mode = candidate.published_mode
+                return candidate.published_version
             descriptor, raw = tempfile.mkstemp(prefix=".nzcoder-", suffix=".tmp", dir=parent_path)
             temporary = Path(raw)
             with os.fdopen(descriptor, "wb") as stream:
-                if receipt is not None:
-                    candidate = type(receipt)()
-                    candidate.capture(stream.fileno())
-                    published_identity = candidate.identity
+                from nz_coder.state.transaction import MutationReceipt
+                candidate = MutationReceipt()
+                candidate.capture(stream.fileno())
+                published_identity = candidate.identity
                 stream.write(data)
                 stream.flush()
+                if mode is not None or current_info is not None:
+                    os.chmod(temporary, mode if mode is not None else stat.S_IMODE(current_mode))
                 os.fsync(stream.fileno())
-                if receipt is not None:
-                    candidate.capture(stream.fileno(), content=data)
-            if current_info is not None:
-                os.chmod(temporary, stat.S_IMODE(current_info.st_mode))
+                candidate.capture(stream.fileno(), content=data)
             if Path(_windows_final_path(handle)) != parent_path.resolve():
                 raise ValueError("Workspace parent identity changed")
             os.replace(temporary, parent_path / relative.name)
@@ -917,6 +998,8 @@ class WorkspaceFileAccess:
                 receipt.identity = published_identity
                 receipt.applied = True
                 receipt.published_version = candidate.published_version
+                receipt.published_mode = candidate.published_mode
+            return candidate.published_version
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
@@ -926,7 +1009,7 @@ class WorkspaceFileAccess:
 
     def _delete_windows(
         self, relative: Path, transaction,
-        *, expected: ExpectedFileIdentity | None,
+        *, expected: ExpectedFileIdentity | None, expected_mode: int | None,
     ) -> None:
         import ctypes
         from ctypes import wintypes
@@ -985,6 +1068,15 @@ class WorkspaceFileAccess:
             ):
                 raise ValueError("Workspace parent identity changed")
             current_info = os.stat(target_path, follow_symlinks=False)
+            current_mode = current_info.st_mode
+            content_hash = ""
+            if expected is not None and expected.content_hash:
+                _data, identity, current_mode = self._read_windows_with_identity_and_mode(relative, maximum=None)
+                if (identity.device, identity.inode) != (int(device), int(inode)):
+                    raise PublicInputError("File changed after it was read; re-read before editing.")
+                content_hash = identity.content_hash
+            if expected_mode is not None and stat.S_IMODE(current_mode) != expected_mode:
+                raise PublicInputError("File mode changed after it was read; re-read before editing.")
             self._validate_expected(
                 WorkspaceFileIdentity(
                     True,
@@ -992,7 +1084,7 @@ class WorkspaceFileAccess:
                     int(inode),
                     int(size),
                     int(current_info.st_mtime_ns),
-                    "",
+                    content_hash,
                 ),
                 expected,
             )

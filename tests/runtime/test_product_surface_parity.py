@@ -38,7 +38,7 @@ def test_product_resource_scope_binds_runtime_capabilities_once():
         "scoped_mcp_runtime", "bind_skill_loader", "bind_memory_manager",
         "scoped_dynamic_tool_provider", "scoped_background_agent_manager",
         "scoped_question_asker", "scoped_workflow_approval_asker",
-        "bind_tool_state", "scoped_declared_test_scopes",
+        "bind_tool_state",
     ):
         assert binding in source
 

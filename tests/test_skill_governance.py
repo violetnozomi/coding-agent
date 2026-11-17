@@ -30,7 +30,7 @@ def _policy_context() -> ToolPolicyContext:
     return ToolPolicyContext(
         agent_name="worker", agent_graph=None, tool_allowlist=None,
         admission_handle=None, runtime_state=_RuntimeState(), recovery=RecoveryState(),
-        permissions=_Permissions(), stall_orchestrator=None,
+        permissions=_Permissions(),
         parse_input=lambda value: value if isinstance(value, dict) else {},
         trace=lambda *_args, **_kwargs: None,
     )

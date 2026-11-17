@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import locale
-import threading
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -77,64 +76,16 @@ def read_text_lines_bytes(
     )
 
 
-_WARM_LOCK = threading.Lock()
-_WARM_CAPACITY = threading.BoundedSemaphore(2)
-_WARM_PENDING: set[tuple[Path, Path]] = set()
-
-
 def warm_lsp(path: Path, workspace: Path) -> None:
-    """Best-effort asynchronous equivalent of InfCode's forked LSP touch."""
-    from nz_coder.foundation.workspace_trust import current_config_snapshot
-
-    config_snapshot = current_config_snapshot(workspace)
-    key = (path.resolve(), workspace.resolve())
-    with _WARM_LOCK:
-        if key in _WARM_PENDING:
-            return
-        _WARM_PENDING.add(key)
-    if not _WARM_CAPACITY.acquire(blocking=False):
-        with _WARM_LOCK:
-            _WARM_PENDING.discard(key)
-        return
-
-    def run() -> None:
-        try:
-            from nz_coder.lsp import get_client_for_file
-
-            try:
-                client = get_client_for_file(
-                    key[0], key[1], config_snapshot=config_snapshot,
-                )
-            except TypeError as exc:
-                if "config_snapshot" not in str(exc):
-                    raise
-                client = get_client_for_file(key[0], key[1])
-            if client is not None:
-                from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
-
-                relative = key[0].relative_to(key[1]).as_posix()
-                text, identity = WorkspaceFileAccess(key[1]).read_text_with_identity(
-                    relative, errors="replace",
-                )
-                client.open_document(key[0], text, identity)
-        except Exception:
-            pass
-        finally:
-            with _WARM_LOCK:
-                _WARM_PENDING.discard(key)
-            _WARM_CAPACITY.release()
-
-    worker = threading.Thread(
-        target=run,
-        name="nz-lsp-warm",
-        daemon=True,
-    )
+    """由 manager 捕获当前可信上下文并拥有启动，不预先同步旧字节。"""
+    from nz_coder.foundation.workspace_trust import active_config_snapshot, current_config_snapshot
+    from nz_coder.lsp.manager import prewarm_client_for_file
     try:
-        worker.start()
-    except RuntimeError:
-        with _WARM_LOCK:
-            _WARM_PENDING.discard(key)
-        _WARM_CAPACITY.release()
+        snapshot = active_config_snapshot(workspace) or current_config_snapshot(workspace)
+        prewarm_client_for_file(path,workspace,config_snapshot=snapshot)
+    except Exception:
+        # 预热是提示性操作，真实查询仍返回明确启动状态。
+        return
 
 
 def _read_stream(stream, *, offset: int, limit: int, encoding: str) -> TextReadResult:

@@ -265,13 +265,13 @@ def test_digest_and_accepted_cache_follow_delivered_evidence_only(tmp_path):
     old, initial = key([]), key(read)
     assert old != initial
     again = _read(tmp_path, call_id='reread')
-    assert key([*read, *again], answer='Short summary') == initial
+    assert key([*read, *again], answer='Short summary') != initial
     _file(tmp_path, 'unrelated = 3\n', 'other.py')
-    assert key([*read, *_read(tmp_path, 'other.py', call_id='noise')]) == initial
+    assert key([*read, *_read(tmp_path, 'other.py', call_id='noise')]) != initial
     stub = copy.deepcopy(again)
     stub[0]['_nz_parts'][0]['state']['metadata'] = {'read_cache_hit': True}
     stub[1]['content'] = 'unchanged'
-    assert key([*read, *stub]) == initial
+    assert key([*read, *stub]) != initial
     _file(tmp_path, 'fixture = 4\n')
     assert key(read) != initial
     assert key([*read, *_read(tmp_path, call_id='latest')]) != key(read)
@@ -294,11 +294,11 @@ def test_actual_hook_reuses_cache_until_test_basis_changes(tmp_path):
         def create_completion(self, _client, **kwargs):
             requests.append(json.loads(json.dumps(kwargs)))
             call = SimpleNamespace(function=SimpleNamespace(
-                name='emit_sidecar_verdict', arguments='{"verdict":"accept","reason":"Controlled verdict"}'))
+                name='emit_sidecar_verdict', arguments=json.dumps({'verdict': 'accept', 'reason': 'Controlled verdict', 'delivery_assessment': {'status': 'reviewed', 'issues': []}})))
             return SimpleNamespace(choices=[SimpleNamespace(
                 message=SimpleNamespace(content='', tool_calls=[call]))])
 
-    loop = SimpleNamespace(workdir=tmp_path, change_tracker=None, tracer=None)
+    loop = SimpleNamespace(workdir=tmp_path, change_tracker=None, tracer=None, _model_gateway_observer_for_run=lambda: None)
     hook = SidecarVerifierHook(loop, ResolvedVerifierProvider(
         Provider(), object(), 'offline', 'offline', 'test'), env={'KODAX_VERIFIER_ALWAYS': '1'})
     _file(tmp_path)
@@ -313,13 +313,13 @@ def test_actual_hook_reuses_cache_until_test_basis_changes(tmp_path):
     assert review(read).action == 'complete'
     assert len(requests) == 2, hook.stats  # 新正文不可沿用缺正文的批准。
     assert review([*read, *_read(tmp_path, call_id='again')]).action == 'complete'
-    assert len(requests) == 2
+    assert len(requests) == 3  # 新的真实工具来源也会改变审查材料。
     _file(tmp_path, 'fixture = 4\n')
     assert review(read).action == 'complete'
-    assert len(requests) == 3
+    assert len(requests) == 4
     (tmp_path / 'tests/spec.py').unlink()
     assert review(read).action == 'complete'
-    assert len(requests) == 4
+    assert len(requests) == 5
 
 
 def test_very_old_body_is_not_recreated_from_current_disk(tmp_path):
@@ -383,3 +383,51 @@ def test_current_diff_is_not_relabelled_as_successful_read(tmp_path):
     assert _records(context.observed_test_evidence)[0]['version'] == 'historical_changed'
     assert _records(context.observed_test_evidence)[0]['content_hash'] == hashlib.sha256(
         b'fixture = 3\ndef check(): assert fixture == 3\n').hexdigest()
+
+
+@pytest.mark.parametrize('source', ['task', 'verification_command'])
+def test_explicit_unittest_method_keeps_only_related_observed_test_source(tmp_path, source):
+    related = 'tests/test_core.py'
+    unrelated = 'tests/test_other.py'
+    _file(tmp_path, 'class lowercase_case:\n def test_x(self): assert True\n', related)
+    _file(tmp_path, 'unrelated = True\n', unrelated)
+    reads = [*_read(tmp_path, related, call_id='related'), *_read(tmp_path, unrelated, call_id='unrelated')]
+    command = 'python -m unittest tests.test_core.lowercase_case.test_x -v'
+    task = f'Run `{command}`.' if source == 'task' else 'Report observed checks.'
+    kwargs = {'verification_commands': (command,)} if source == 'verification_command' else {}
+    text, _ = _project(reads, tmp_path, task=task, **kwargs)
+    assert [record['path'] for record in _records(text)] == [related]
+    assert 'def test_x(self): assert True' in text
+
+
+def test_pytest_dotted_directory_is_not_reinterpreted_as_unittest_module(tmp_path):
+    _file(tmp_path, path='checks/spec.py')
+    reads = _read(tmp_path, 'checks/spec.py')
+    text, _ = _project(reads, tmp_path, task='Run pytest checks.spec')
+    assert not _records(text)
+
+
+def test_declared_discovery_command_keeps_matching_observed_source_only(tmp_path):
+    related = 'tests/test_core.py'
+    unrelated = 'other/test_other.py'
+    _file(tmp_path, 'def test_x(): assert True\n', related)
+    _file(tmp_path, 'unrelated = True\n', unrelated)
+    reads = [*_read(tmp_path, related, call_id='related'), *_read(tmp_path, unrelated, call_id='unrelated')]
+    command = 'python -m unittest discover -s tests -p test_core.py -v'
+    text, _ = _project(reads, tmp_path, task=f'Run `{command}`.')
+    assert [record['path'] for record in _records(text)] == [related]
+
+
+def test_partial_unittest_selection_does_not_become_complete_read_scope(tmp_path):
+    _file(tmp_path, 'class Case:\n def test_x(self): assert True\n', 'tests/test_core.py')
+    reads = _read(tmp_path, 'tests/test_core.py')
+    command = 'python -m unittest tests.test_core.Case.test_x && pytest'
+    text, _ = _project(reads, tmp_path, task='Report observed checks.', verification_commands=(command,))
+    assert not _records(text)
+
+
+def test_pytest_node_id_keeps_its_file_in_observed_test_projection(tmp_path):
+    _file(tmp_path, 'def test_x(): assert True\n', 'checks/behavior.py')
+    reads = _read(tmp_path, 'checks/behavior.py')
+    text, _ = _project(reads, tmp_path, task='Run `pytest checks/behavior.py::test_x`.')
+    assert [record['path'] for record in _records(text)] == ['checks/behavior.py']

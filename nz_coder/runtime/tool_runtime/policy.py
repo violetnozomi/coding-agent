@@ -1,6 +1,12 @@
 """Tool admission, scheduling, convergence, and observability policy."""
 from __future__ import annotations
 
+from contextlib import nullcontext
+
+import asyncio
+from nz_coder.runtime.tool_runtime.scheduler import _execute_with_tool_cancellation, _new_tool_cancellation_scope
+from nz_coder.tool_platform.permissioning.interaction import PermissionInteractionError
+
 import json
 import time
 
@@ -18,14 +24,6 @@ from nz_coder.tool_platform.execution import (
 )
 from nz_coder.tools import get_execution_mode
 from nz_coder.state.skills import current_skill_allowed_tools
-
-
-_STALL_SIDECAR_EXEMPT_TOOLS = frozenset({
-    "diff_status",
-    "verify_changed_files",
-    # Its empty input is stable even when the Runtime facts being reviewed change.
-    "review_run_evidence",
-})
 
 
 class ProductionToolPolicy:
@@ -479,7 +477,7 @@ class ProductionToolPolicy:
     def find_repeated_tool_calls(
         self, context: ToolPolicyContext, tool_calls: list,
     ) -> dict[int, ToolExecutionResult]:
-        """Compose InfCode's immediate guard with InfCodeX's async sidecar."""
+        """只为相同候选达到资源阈值生成真实授权请求。"""
         blocked: dict[int, ToolExecutionResult] = {}
         recovery = context.recovery
         if recovery is None:
@@ -497,12 +495,7 @@ class ProductionToolPolicy:
                 except json.JSONDecodeError:
                     signature_input = {"invalid_json": raw_arguments}
 
-            # Runtime-owned verification calls are synthesized by the
-            # scheduler, not selected by the model.  InfCodeX wires its
-            # detector at the assistant tool-use boundary, so these calls
-            # never enter either L1 repeat tracking or the L2 stall sidecar.
-            # Keep any pending model nudge queued for the next actual model
-            # tool call as well.
+            # 仅可信调度器合成的验证调用不计入模型候选；参数标记本身没有权限。
             tool_call_id = str(tool_call.get("id") or "")
             runtime_owned_contract = bool(
                 isinstance(signature_input, dict)
@@ -523,71 +516,18 @@ class ProductionToolPolicy:
                 )
                 continue
 
-            orchestrator = context.stall_orchestrator
-            pending_nudge = (
-                orchestrator.consume_pending_nudge()
-                if orchestrator is not None
-                else None
-            )
-            if pending_nudge is not None:
-                blocked[index] = ToolExecutionResult(
-                    name=fn_name,
-                    tool_input=tool_input,
-                    output=pending_nudge,
-                    executed=False,
-                    dispatch_failed=True,
-                    command_failed=False,
-                    is_write=is_transactional_write_tool(fn_name),
-                    permission_denied=False,
-                    metadata={"stall_nudge": True, "stall_kind": "sidecar"},
-                )
-                if context.trace is not None:
-                    context.trace(
-                        "stall_sidecar_nudge_consumed",
-                        name=fn_name,
-                        tool_call_id=str(tool_call.get("id") or ""),
-                    )
-                continue
-
-            observation = recovery.observe_tool_call(
-                fn_name,
-                signature_input,
-                threshold=threshold,
-            )
-            if orchestrator is not None and fn_name in _STALL_SIDECAR_EXEMPT_TOOLS:
-                context.trace(
-                    "stall_sidecar_observation_skipped",
-                    name=fn_name,
-                    reason="deterministic_closure_tool",
-                )
-            elif orchestrator is not None:
-                stall_call = {
-                    "id": str(tool_call.get("id") or ""),
-                    "name": fn_name,
-                    "input": signature_input,
-                }
-                try:
-                    signaled = orchestrator.record_tool_use(
-                        stall_call, scope=recovery.stall_scope_token(),
-                    )
-                except TypeError as exc:
-                    # Preserve compatibility with narrow test/integration
-                    # adapters that predate scoped verdicts.
-                    if "scope" not in str(exc):
-                        raise
-                    signaled = orchestrator.record_tool_use(stall_call)
-                if signaled:
-                    context.trace("stall_l1_signal", name=fn_name)
+            run = getattr(context.runtime_state, "_verification_context", None)
+            with run._state_lock if run is not None else nullcontext():
+                observation = recovery.observe_tool_call(fn_name, signature_input, threshold=threshold)
             self.trace_tool_streak_reset(context)
             if not observation["should_block"]:
                 continue
             count = observation["count"]
             effective_threshold = max(2, threshold)
             output = (
-                "Denied: Doom loop detected: identical call to "
-                f"`{fn_name}` repeated {count} times in the recent tool window "
-                f"(threshold {effective_threshold}). Use the evidence already returned; "
-                "stop re-reading and synthesize the answer or change the approach."
+                f"Repeated execution approval required: identical call to `{fn_name}` "
+                f"reached {count} candidates (threshold {effective_threshold}). "
+                "This count does not establish a lack of progress. Execution requires user approval."
             )
             blocked[index] = ToolExecutionResult(
                 name=fn_name,
@@ -613,6 +553,21 @@ class ProductionToolPolicy:
         return blocked
 
 
+    @staticmethod
+    def _ask_doom_loop(context, metadata, result) -> bool:
+        try:
+            allowed = context.permissions.ask_special("doom_loop", metadata)
+            if not allowed:
+                result.output = "Permission approval rejected; this action was not executed."
+                result.metadata.update(permission_source="approval_reply", permission_reason="rejected")
+            return allowed
+        except PermissionInteractionError as exc:
+            if exc.reason == "cancelled":
+                raise asyncio.CancelledError from None
+            result.output = str(exc)
+            result.metadata.update(permission_source="interaction_failure", permission_reason=exc.reason)
+            return False
+
     def resolve_doom_loop_permissions(
         self,
         context: ToolPolicyContext,
@@ -623,16 +578,22 @@ class ProductionToolPolicy:
         remaining = dict(blocked)
         for index in tuple(remaining):
             result = remaining[index]
+            if (result.metadata or {}).get("stall_kind") != "consecutive":
+                continue
             metadata = {"tool": result.name, "input": result.tool_input}
-            if context.permissions.ask_special("doom_loop", metadata):
+            if self._ask_doom_loop(context, metadata, result):
                 remaining.pop(index, None)
-                context.recovery.reset_tool_call_history(reason="doom_loop_approved")
+                run = getattr(context.runtime_state, "_verification_context", None)
+                with run._state_lock if run is not None else nullcontext():
+                    context.recovery.reset_tool_call_history(reason="doom_loop_approved")
                 self.trace_tool_streak_reset(context)
                 context.trace(
                     "doom_loop_approved",
                     name=result.name,
                     tool_call_id=str(tool_calls[index].get("id") or ""),
                 )
+            if result.approval_stopped:
+                break
         return remaining
 
 
@@ -646,21 +607,32 @@ class ProductionToolPolicy:
         remaining = dict(blocked)
         for index in tuple(remaining):
             result = remaining[index]
+            if (result.metadata or {}).get("stall_kind") != "consecutive":
+                continue
             metadata = {"tool": result.name, "input": result.tool_input}
+            cancel_event = _new_tool_cancellation_scope()
             allowed = await _to_thread_settled(
-                context.permissions.ask_special,
-                "doom_loop",
+                _execute_with_tool_cancellation,
+                cancel_event,
+                self._ask_doom_loop,
+                context,
                 metadata,
+                result,
+                cancel_callback=cancel_event.set,
             )
             if allowed:
                 remaining.pop(index, None)
-                context.recovery.reset_tool_call_history(reason="doom_loop_approved")
+                run = getattr(context.runtime_state, "_verification_context", None)
+                with run._state_lock if run is not None else nullcontext():
+                    context.recovery.reset_tool_call_history(reason="doom_loop_approved")
                 self.trace_tool_streak_reset(context)
                 context.trace(
                     "doom_loop_approved",
                     name=result.name,
                     tool_call_id=str(tool_calls[index].get("id") or ""),
                 )
+            if result.approval_stopped:
+                break
         return remaining
 
 

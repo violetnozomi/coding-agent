@@ -17,6 +17,7 @@ class SessionStatus(str, Enum):
     RUNNING = "running"
     COMPACTING = "compacting"
     COMPLETED = "completed"
+    COMPLETED_UNVERIFIED = "completed_unverified"
     INTERRUPTED = "interrupted"
     CANCELLED = "cancelled"
     BLOCKED = "blocked"

@@ -1,4 +1,5 @@
 """Protocol, safety, and tool-level tests for optional LSP support."""
+
 from __future__ import annotations
 
 import json
@@ -11,6 +12,113 @@ import pytest
 
 from nz_coder.lsp import close_all_clients
 from nz_coder.runtime.process.workdir import scoped_workdir
+
+
+def _inert_client():
+    from nz_coder.lsp.client import LSPClient
+
+    client = LSPClient(
+        server_id="inert",
+        command=(sys.executable,),
+        root=Path.cwd(),
+        language_id="python",
+    )
+    client.capabilities = {
+        "capabilities": {"textDocumentSync": 1, "diagnosticProvider": {}}
+    }
+    return client
+
+
+def _registered_client(root, client, key=None, lease_id=""):
+    import contextvars
+    from nz_coder.lsp import manager
+    from nz_coder.lsp.servers import ResolvedServer
+    from nz_coder.foundation.workspace_trust import current_config_snapshot
+
+    key = key or (str(root.resolve()), "fake", str(root.resolve()))
+    entry = manager._Entry(
+        key,
+        ResolvedServer("fake", "python", (sys.executable,), root),
+        root / "a.py",
+        root,
+        current_config_snapshot(root),
+        contextvars.copy_context(),
+    )
+    entry.client = client
+    entry.state = "ready"
+    entry.done.set()
+    entry.lease_id = lease_id
+    manager._ENTRIES[key] = entry
+    return entry
+
+
+def test_lsp_temp_files_stay_private_without_changing_user_tmpdir(
+    tmp_path, monkeypatch
+):
+    from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+    from nz_coder.foundation.user_paths import user_storage_layout
+    from nz_coder.lsp.client import LSPClient
+    from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
+
+    workspace = tmp_path / "workspace"
+    user_tmp = workspace / ".tmp"
+    user_tmp.mkdir(parents=True)
+    for key in ("TMPDIR", "TMP", "TEMP"):
+        monkeypatch.setenv(key, str(user_tmp))
+    script = tmp_path / "temp_lsp_server.py"
+    server = _FAKE_SERVER.replace(
+        "import json\nimport sys",
+        "import json\nimport sys\nimport tempfile\n"
+        "created_tmp = tempfile.mkdtemp(prefix='pyright-regression-')",
+        1,
+    ).replace(
+        '"capabilities": {', '"capabilities": {"createdTempDirectory": created_tmp,', 1
+    )
+    script.write_text(server)
+    store = WorkspaceSnapshotStore(workspace, tmp_path / "snapshots")
+    before = store.verification_snapshot()
+    client = LSPClient(
+        server_id="temp-test",
+        command=(sys.executable, str(script)),
+        root=workspace,
+        language_id="python",
+    )
+    client.start()
+    try:
+        created = Path(client.capabilities["capabilities"]["createdTempDirectory"])
+        assert created.is_relative_to(user_storage_layout(workspace).workspace_cache)
+        assert store.verification_snapshot() == before
+        user_environment = build_sanitized_subprocess_env(profile="strict-service")
+        assert all(
+            user_environment[key] == str(user_tmp) for key in ("TMPDIR", "TMP", "TEMP")
+        )
+    finally:
+        client.close()
+
+
+def test_lsp_rejects_workspace_owned_internal_storage_before_spawn(
+    tmp_path, monkeypatch
+):
+    from nz_coder.foundation.user_paths import UnsafeUserStorage
+    from nz_coder.lsp.client import LSPClient
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local-app-data"))
+    spawned = []
+
+    def forbidden_spawn(*_args, **_kwargs):
+        spawned.append(True)
+        raise AssertionError("unsafe internal storage must fail before spawn")
+
+    monkeypatch.setattr(subprocess, "Popen", forbidden_spawn)
+    with pytest.raises(UnsafeUserStorage):
+        LSPClient(
+            server_id="unsafe-temp",
+            command=(sys.executable, "unused.py"),
+            root=tmp_path,
+            language_id="python",
+        )
+    assert not spawned
 
 
 _FAKE_SERVER = r"""
@@ -70,7 +178,7 @@ while True:
                     "hoverProvider": True,
                     "documentSymbolProvider": True,
                     "workspaceSymbolProvider": True,
-                    "diagnosticProvider": True,
+                    "diagnosticProvider": {},
                 }
             },
         })
@@ -157,7 +265,9 @@ while True:
 
 
 @pytest.mark.parametrize("timeout", [0, -1, True, float("inf"), float("nan")])
-def test_lsp_client_rejects_invalid_timeout_before_spawn(tmp_path, monkeypatch, timeout):
+def test_lsp_client_rejects_invalid_timeout_before_spawn(
+    tmp_path, monkeypatch, timeout
+):
     from nz_coder.lsp.client import LSPClient
 
     monkeypatch.setattr(
@@ -231,7 +341,8 @@ def test_typescript_lsp_command_loads_from_user_config(tmp_path):
     workspace = tmp_path / "repo"
     workspace.mkdir()
     snapshot = _lsp_config_snapshot(
-        tmp_path, workspace,
+        tmp_path,
+        workspace,
         user_text="NZ_LSP_TYPESCRIPT_COMMAND=typescript-language-server --stdio\n",
     )
     assert snapshot.get("NZ_LSP_TYPESCRIPT_COMMAND") == (
@@ -312,7 +423,7 @@ def test_close_workspace_clients_preserves_other_workspaces(tmp_path):
         def __init__(self):
             self.closed = False
 
-        def close(self):
+        def close(self, **kwargs):
             self.closed = True
 
     first = Client()
@@ -321,21 +432,15 @@ def test_close_workspace_clients_preserves_other_workspaces(tmp_path):
     second_key = (str(second_root), "python", str(second_root))
     manager.close_all_clients()
     try:
-        manager._CLIENTS[first_key] = first
-        manager._CLIENTS[second_key] = second
-        manager._BROKEN.update((first_key, second_key))
-        manager._ERRORS.update({first_key: "first", second_key: "second"})
+        _registered_client(first_root, first, first_key)
+        _registered_client(second_root, second, second_key)
 
         manager.close_workspace_clients(first_root)
 
         assert first.closed is True
         assert second.closed is False
-        assert first_key not in manager._CLIENTS
-        assert second_key in manager._CLIENTS
-        assert first_key not in manager._BROKEN
-        assert second_key in manager._BROKEN
-        assert first_key not in manager._ERRORS
-        assert second_key in manager._ERRORS
+        assert first_key not in manager._ENTRIES
+        assert second_key in manager._ENTRIES
     finally:
         manager.close_all_clients()
 
@@ -348,31 +453,37 @@ def test_lsp_tool_roundtrip_normalizes_paths_and_positions(tmp_path, monkeypatch
         "NZ_LSP_PYTHON_COMMAND",
         f"{sys.executable} -u {server}",
     )
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='demo'\n", encoding="utf-8"
+    )
     (tmp_path / "app.py").write_text("answer = 42\n", encoding="utf-8")
     _trust_test_lsp(tmp_path, monkeypatch)
 
     close_all_clients()
     try:
         with scoped_workdir(tmp_path):
-            definition = json.loads(lsp(
-                "goToDefinition",
-                "app.py",
-                line=1,
-                character=3,
-            ))
-            references = json.loads(lsp(
-                "findReferences",
-                "app.py",
-                line=1,
-                character=3,
-            ))
+            definition = json.loads(
+                lsp(
+                    "goToDefinition",
+                    "app.py",
+                    line=1,
+                    character=3,
+                )
+            )
+            references = json.loads(
+                lsp(
+                    "findReferences",
+                    "app.py",
+                    line=1,
+                    character=3,
+                )
+            )
             diagnostics = json.loads(lsp("diagnostics", "app.py"))
 
-        assert definition["path"] == "app.py"
-        assert definition["range"]["start"] == {"line": 0, "character": 2}
-        assert len(references) == 2
-        assert diagnostics[0]["message"] == "fake warning"
+        assert definition["items"][0]["path"] == "app.py"
+        assert definition["items"][0]["range"]["start"] == {"line": 0, "character": 2}
+        assert len(references["items"]) == 2
+        assert diagnostics["items"][0]["message"] == "fake warning"
     finally:
         close_all_clients()
 
@@ -393,17 +504,19 @@ def test_lsp_tool_supports_symbols_hover_and_call_hierarchy(tmp_path, monkeypatc
         with scoped_workdir(tmp_path):
             hover = json.loads(lsp("hover", "app.py"))
             symbols = json.loads(lsp("documentSymbol", "app.py"))
-            workspace = json.loads(lsp(
-                "workspaceSymbol",
-                "app.py",
-                query="answer",
-            ))
+            workspace = json.loads(
+                lsp(
+                    "workspaceSymbol",
+                    "app.py",
+                    query="answer",
+                )
+            )
             calls = json.loads(lsp("incomingCalls", "app.py"))
 
-        assert hover["contents"]["value"] == "`int`"
-        assert symbols[0]["name"] == "answer"
-        assert workspace[0]["location"]["path"] == "app.py"
-        assert calls[0]["from"]["path"] == "app.py"
+        assert hover["items"][0]["contents"]["value"] == "`int`"
+        assert symbols["items"][0]["name"] == "answer"
+        assert workspace["items"][0]["location"]["path"] == "app.py"
+        assert calls["items"][0]["from"]["path"] == "app.py"
     finally:
         close_all_clients()
 
@@ -502,10 +615,13 @@ def test_lsp_optional_pack_is_unloaded_until_requested():
 def test_lsp_is_classified_as_safe_read_only_tool():
     from nz_coder.permissions import PermissionManager
 
-    decision = PermissionManager("default").check("lsp", {
-        "operation": "hover",
-        "file_path": "app.py",
-    })
+    decision = PermissionManager("default").check(
+        "lsp",
+        {
+            "operation": "hover",
+            "file_path": "app.py",
+        },
+    )
 
     assert decision == {"behavior": "allow", "reason": "Safe tool"}
 
@@ -517,7 +633,9 @@ def test_python_package_project_root_promotes_parent_import_path(tmp_path, monke
     tests = package / "tests"
     tests.mkdir(parents=True)
     (package / "__init__.py").write_text("", encoding="utf-8")
-    (package / "pyproject.toml").write_text("[project]\nname='cron-engine'\n", encoding="utf-8")
+    (package / "pyproject.toml").write_text(
+        "[project]\nname='cron-engine'\n", encoding="utf-8"
+    )
     target = tests / "test_parser.py"
     target.write_text("from cron_engine.parser import parse\n", encoding="utf-8")
     monkeypatch.setenv("NZ_LSP_PYTHON_COMMAND", sys.executable)
@@ -530,7 +648,8 @@ def test_python_package_project_root_promotes_parent_import_path(tmp_path, monke
 
 
 def test_write_diagnostics_use_real_protocol_and_normalize_locations(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     from nz_coder.foundation import config
     from nz_coder.lsp.write_diagnostics import collect_write_diagnostics
@@ -550,10 +669,13 @@ def test_write_diagnostics_use_real_protocol_and_normalize_locations(
 
     close_all_clients()
     try:
-        block = collect_write_diagnostics(
+        batch = collect_write_diagnostics(
             ["app.py", "app.py", "../outside.py"],
             tmp_path,
         )
+        from nz_coder.lsp.write_diagnostics import format_write_diagnostics
+
+        block = format_write_diagnostics(batch)
         assert block.startswith("<lsp-diagnostics>")
         assert "app.py:1:1 [warning] fake warning (fake)" in block
         assert block.count("fake warning") == 1
@@ -562,7 +684,7 @@ def test_write_diagnostics_use_real_protocol_and_normalize_locations(
         close_all_clients()
 
 
-def test_write_diagnostics_silently_skip_missing_server(tmp_path, monkeypatch):
+def test_write_diagnostics_reports_missing_server(tmp_path, monkeypatch):
     from nz_coder.foundation import config
     from nz_coder.lsp.write_diagnostics import collect_write_diagnostics
 
@@ -575,25 +697,26 @@ def test_write_diagnostics_silently_skip_missing_server(tmp_path, monkeypatch):
 
     close_all_clients()
     try:
-        assert collect_write_diagnostics(["app.py"], tmp_path) == ""
+        assert (
+            collect_write_diagnostics(["app.py"], tmp_path)["reports"][0]["status"]
+            == "unavailable"
+        )
     finally:
         close_all_clients()
 
 
 def test_lsp_open_document_uses_anchored_source_bytes(tmp_path):
     from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
-    from nz_coder.lsp.client import LSPClient
 
     source = tmp_path / "source.py"
     source.write_text("anchored = 1\n", encoding="utf-8")
     text, identity = WorkspaceFileAccess(tmp_path).read_text_with_identity("source.py")
     source.write_text("swapped = 2\n", encoding="utf-8")
     sent = []
-    client = object.__new__(LSPClient)
+    client = _inert_client()
     client.root = tmp_path.resolve()
     client.language_id = "python"
-    client._documents = {}
-    client.notify = lambda method, params: sent.append((method, params))
+    client.notify = lambda method, params, **kwargs: sent.append((method, params))
 
     client.open_document(source, text, identity)
 
@@ -602,25 +725,22 @@ def test_lsp_open_document_uses_anchored_source_bytes(tmp_path):
 
 def test_lsp_diagnostics_does_not_reread_source_path(tmp_path):
     from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
-    from nz_coder.lsp.client import LSPClient, LSPResponseError
+    from nz_coder.lsp.client import LSPResponseError
 
     source = tmp_path / "source.py"
     source.write_text("anchored = 1\n", encoding="utf-8")
     text, identity = WorkspaceFileAccess(tmp_path).read_text_with_identity("source.py")
-    client = object.__new__(LSPClient)
+    client = _inert_client()
     client.root = tmp_path.resolve()
     client.language_id = "python"
-    client._documents = {}
-    client._diagnostics = {}
-    client._diagnostic_events = {}
-    client.diagnostic_wait = 0
+    client.diagnostic_wait = 0.02
     client.notify = lambda *_args, **_kwargs: None
     client.request = lambda *_args, **_kwargs: (_ for _ in ()).throw(
         LSPResponseError({"code": -1}),
     )
     source.unlink()
 
-    assert client.diagnostics(source, text, identity) == []
+    assert client.diagnostics(source, text, identity).to_dict()["items"] == []
 
 
 def test_lsp_outside_and_private_uris_are_redacted(tmp_path):
@@ -632,9 +752,10 @@ def test_lsp_outside_and_private_uris_are_redacted(tmp_path):
     assert _normalize_result({"uri": private.as_uri()}, tmp_path)["path"] == (
         "private-workspace"
     )
-    assert _normalize_result({"targetUri": outside.as_uri()}, tmp_path)[
-        "targetPath"
-    ] == "outside-workspace"
+    assert (
+        _normalize_result({"targetUri": outside.as_uri()}, tmp_path)["targetPath"]
+        == "outside-workspace"
+    )
 
 
 def test_lsp_outside_uri_does_not_expose_absolute_path(tmp_path):
@@ -657,7 +778,6 @@ def test_lsp_private_uri_is_redacted(tmp_path):
 
 def test_lsp_source_change_is_observed_only_on_next_request(tmp_path):
     from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
-    from nz_coder.lsp.client import LSPClient
 
     source = tmp_path / "source.py"
     source.write_text("first = 1\n", encoding="utf-8")
@@ -665,11 +785,10 @@ def test_lsp_source_change_is_observed_only_on_next_request(tmp_path):
     first_text, first_identity = access.read_text_with_identity("source.py")
     source.write_text("second = 2\n", encoding="utf-8")
     sent = []
-    client = object.__new__(LSPClient)
+    client = _inert_client()
     client.root = tmp_path.resolve()
     client.language_id = "python"
-    client._documents = {}
-    client.notify = lambda method, params: sent.append((method, params))
+    client.notify = lambda method, params, **kwargs: sent.append((method, params))
 
     client.open_document(source, first_text, first_identity)
     second_text, second_identity = access.read_text_with_identity("source.py")
@@ -704,3 +823,461 @@ def test_lsp_parent_swap_after_tool_validation_cannot_escape(tmp_path, monkeypat
 
     assert str(result).startswith("Error: ")
     assert "SENTINEL-LSP-OUTSIDE" not in str(result)
+
+
+def test_lsp_reads_complete_fragmented_content_length_frame():
+    import os
+    import threading
+    from types import SimpleNamespace
+
+    read_fd, write_fd = os.pipe()
+    reader = os.fdopen(read_fd, "rb", buffering=0)
+    client = _inert_client()
+    client.process = SimpleNamespace(stdout=reader)
+    body = json.dumps({"jsonrpc": "2.0", "result": "fragmented"}).encode()
+    first_fragment_written = threading.Event()
+    release = threading.Event()
+
+    def write_fragments():
+        try:
+            os.write(
+                write_fd, f"Content-Length: {len(body)}\r\n\r\n".encode() + body[:7]
+            )
+            first_fragment_written.set()
+            release.wait(1)
+            os.write(write_fd, body[7:])
+        finally:
+            os.close(write_fd)
+
+    worker = threading.Thread(target=write_fragments)
+    worker.start()
+    assert first_fragment_written.wait(1)
+    timer = threading.Timer(0.05, release.set)
+    timer.start()
+    try:
+        assert client._read_message() == {"jsonrpc": "2.0", "result": "fragmented"}
+    finally:
+        release.set()
+        worker.join(1)
+        timer.join(1)
+        reader.close()
+
+
+def test_lsp_request_timeout_covers_blocked_stdin_write(tmp_path):
+    import os
+    import threading
+    from nz_coder.lsp.client import LSPTimeoutError
+
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=0,
+        start_new_session=(os.name != "nt"),
+    )
+    client = _inert_client()
+    client.process = process
+    client.server_id = "blocked"
+    client.request_timeout = 0.05
+    client._closed = False
+    errors = []
+
+    def send():
+        try:
+            client.request("blocked", {"data": "x" * (1024 * 1024)}, timeout=0.05)
+        except Exception as exc:
+            errors.append(exc)
+
+    worker = threading.Thread(target=send)
+    worker.start()
+    try:
+        worker.join(1)
+        assert not worker.is_alive()
+        assert len(errors) == 1 and isinstance(errors[0], LSPTimeoutError)
+        assert not client._pending
+    finally:
+        process.kill()
+        process.wait(timeout=2)
+        worker.join(2)
+        for stream in (process.stdin, process.stdout, process.stderr):
+            stream.close()
+
+
+def test_lsp_cleanup_failure_keeps_manager_owner_retryable(tmp_path):
+    from nz_coder.lsp import manager
+    from nz_coder.lsp.client import LSPError
+    from nz_coder.foundation.capability_lease import capability_leases
+
+    key = (str(tmp_path.resolve()), "test", str(tmp_path))
+
+    class Client:
+        failed = True
+
+        def close(self, force=False, **kwargs):
+            if self.failed:
+                raise LSPError("cleanup pending")
+
+    client = Client()
+    lease = capability_leases().create(
+        kind="lsp-client",
+        resource_id="test",
+        workspace=tmp_path,
+        control_fingerprint="test",
+        run_id="test",
+        interaction_id="test",
+        owner_session="test",
+        revoke=lambda: None,
+    )
+    with manager._LOCK:
+        _registered_client(tmp_path, client, key, lease.lease_id)
+    try:
+        with pytest.raises(LSPError, match="cleanup pending"):
+            manager.close_workspace_clients(tmp_path)
+        assert manager._ENTRIES[key].client is client
+        assert capability_leases().get(lease.lease_id) is not None
+        client.failed = False
+        manager.close_workspace_clients(tmp_path)
+        assert key not in manager._ENTRIES
+        assert capability_leases().get(lease.lease_id) is None
+    finally:
+        with manager._LOCK:
+            manager._ENTRIES.pop(key, None)
+        capability_leases().release(lease.lease_id)
+
+
+def test_lsp_close_after_protocol_failure_still_reaps_process():
+    import os
+    import threading
+
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=0,
+        start_new_session=(os.name != "nt"),
+    )
+    client = _inert_client()
+    client.process = process
+    client.server_id = "closed"
+    client._closed = True
+    client._close_complete = False
+    client._reader = threading.Thread()
+    client._stderr_reader = threading.Thread()
+    try:
+        client.close(force=True)
+        assert process.poll() is not None
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=2)
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if not stream.closed:
+                stream.close()
+
+
+def test_lsp_diagnostics_rejects_delayed_old_document_version(tmp_path):
+    from nz_coder.lsp.client import LSPResponseError
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+
+    source = tmp_path / "source.py"
+    source.write_text("first")
+    access = WorkspaceFileAccess(tmp_path)
+    text, identity = access.read_text_with_identity("source.py")
+    client = _inert_client()
+    client.root = tmp_path.resolve()
+    client.language_id = "python"
+    client.diagnostic_wait = 0.02
+    client.notify = lambda *_args, **_kwargs: None
+    client.request = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        LSPResponseError({"code": -1})
+    )
+    old_version = client.open_document(source, text, identity)
+    source.write_text("second")
+    text, identity = access.read_text_with_identity("source.py")
+    client.open_document(source, text, identity)
+    client._handle_message(
+        {
+            "method": "textDocument/publishDiagnostics",
+            "params": {
+                "uri": source.as_uri(),
+                "version": old_version,
+                "diagnostics": [{"message": "stale error"}],
+            },
+        }
+    )
+    assert client.diagnostics(source, text, identity).to_dict()["items"] == []
+
+
+def test_lsp_current_push_before_notify_returns_and_reopen_version(tmp_path):
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+
+    source = tmp_path / "source.py"
+    source.write_text("hello")
+    text, identity = WorkspaceFileAccess(tmp_path).read_text_with_identity("source.py")
+    client = _inert_client()
+    client.root = tmp_path.resolve()
+    client.language_id = "python"
+
+    def notify(method, params, **kwargs):
+        if method == "textDocument/didOpen":
+            document = params["textDocument"]
+            client._handle_message(
+                {
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": document["uri"],
+                        "version": document["version"],
+                        "diagnostics": [{"message": "current"}],
+                    },
+                }
+            )
+
+    client.notify = notify
+    first = client.open_document(source, text, identity)
+    assert json.loads(client._diagnostics[source.as_uri()]["current"][2]) == [
+        {"message": "current"}
+    ]
+    client.close_document(source)
+    second = client.open_document(source, text, identity)
+    assert second > first
+    client._handle_message(
+        {
+            "method": "textDocument/publishDiagnostics",
+            "params": {
+                "uri": source.as_uri(),
+                "version": first,
+                "diagnostics": [{"message": "stale"}],
+            },
+        }
+    )
+    client._handle_message(
+        {
+            "method": "textDocument/publishDiagnostics",
+            "params": {
+                "uri": source.as_uri(),
+                "diagnostics": [{"message": "unversioned"}],
+            },
+        }
+    )
+    assert json.loads(client._diagnostics[source.as_uri()]["current"][2]) == [
+        {"message": "current"}
+    ]
+
+
+def test_lsp_send_timeout_includes_write_lock_wait():
+    import os
+    from nz_coder.lsp.client import LSPTimeoutError
+
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=0,
+        start_new_session=(os.name != "nt"),
+    )
+    client = _inert_client()
+    client.process, client.server_id, client.request_timeout = process, "lock", 0.05
+    client._closed = False
+    client._write_lock.acquire()
+    try:
+        with pytest.raises(LSPTimeoutError):
+            client.request("blocked", timeout=0.05)
+        assert not client._pending
+    finally:
+        client._write_lock.release()
+        process.kill()
+        process.wait(timeout=2)
+        for stream in (process.stdin, process.stdout, process.stderr):
+            stream.close()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process group")
+def test_lsp_force_close_kills_descendant_after_leader_exit(tmp_path):
+    import os
+    import signal
+    import threading
+    import time
+
+    pidfile = tmp_path / "child.pid"
+    script = (
+        "import subprocess,sys; "
+        'p=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"]); '
+        'open(sys.argv[1],"w").write(str(p.pid))'
+    )
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(pidfile)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=0,
+        start_new_session=True,
+    )
+    client = _inert_client()
+    client.process, client.server_id = process, "orphan"
+    client._closed, client._close_complete = False, False
+    client._reader = threading.Thread(target=lambda: process.stdout.read())
+    client._stderr_reader = threading.Thread(target=lambda: process.stderr.read())
+    client._reader.start()
+    client._stderr_reader.start()
+    child = None
+    try:
+        process.wait(timeout=2)
+        child = int(pidfile.read_text())
+        client.close(force=True)
+        deadline = time.monotonic() + 1
+        while time.monotonic() < deadline:
+            try:
+                state = Path(f"/proc/{child}/stat").read_text().split()[2]
+            except (FileNotFoundError, ProcessLookupError):
+                break
+            if state == "Z":
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("descendant is still running")
+        assert not client._reader.is_alive() and not client._stderr_reader.is_alive()
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=2)
+        client._reader.join(2)
+        client._stderr_reader.join(2)
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if not stream.closed:
+                stream.close()
+
+
+def test_lsp_pull_response_is_fenced_by_current_document_identity(tmp_path):
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+
+    source = tmp_path / "source.py"
+    source.write_text("old")
+    access = WorkspaceFileAccess(tmp_path)
+    old_text, old_identity = access.read_text_with_identity("source.py")
+    client = _inert_client()
+    client.root, client.language_id = tmp_path.resolve(), "python"
+    client._next_document_version, client.diagnostic_wait = 0, 0.02
+    client.notify = lambda *_args, **_kwargs: None
+
+    def delayed_pull(*_args, **_kwargs):
+        source.write_text("new")
+        text, identity = access.read_text_with_identity("source.py")
+        client.open_document(source, text, identity)
+        return {"kind": "full", "items": [{"message": "old pull"}]}
+
+    client.request = delayed_pull
+    assert client.diagnostics(source, old_text, old_identity).status == "superseded"
+    assert source.as_uri() not in client._diagnostics
+
+
+def test_lsp_reader_cannot_complete_its_own_cleanup():
+    import os
+    import threading
+    from nz_coder.lsp.client import LSPError
+
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=0,
+        start_new_session=(os.name != "nt"),
+    )
+    client = _inert_client()
+    client.process, client.server_id = process, "self-close"
+    client._closed, client._close_complete = False, False
+    client._stderr_reader = threading.Thread()
+    errors = []
+
+    def reader_close():
+        try:
+            client.close(force=True)
+        except LSPError as exc:
+            errors.append(exc)
+
+    client._reader = threading.Thread(target=reader_close)
+    client._reader.start()
+    try:
+        client._reader.join(2)
+        assert not client._reader.is_alive()
+        assert errors and not client._close_complete
+        client.close(force=True)
+        assert client._close_complete
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=2)
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if not stream.closed:
+                stream.close()
+
+
+def test_lsp_cleanup_failure_keeps_live_process_and_lease_for_retry(
+    monkeypatch, tmp_path
+):
+    import os
+    import threading
+    import nz_coder.lsp.client as client_module
+    from nz_coder.foundation.capability_lease import capability_leases
+    from nz_coder.lsp import manager
+
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=0,
+        start_new_session=(os.name != "nt"),
+    )
+    client = _inert_client()
+    client.process, client.server_id = process, "retry"
+    client._closed, client._close_complete = False, False
+    client._reader = threading.Thread(target=lambda: process.stdout.read())
+    client._stderr_reader = threading.Thread(target=lambda: process.stderr.read())
+    client._reader.start()
+    client._stderr_reader.start()
+    key = (str(tmp_path.resolve()), "retry", str(tmp_path))
+    lease = capability_leases().create(
+        kind="lsp-client",
+        resource_id="retry",
+        workspace=tmp_path,
+        control_fingerprint="test",
+        run_id="test",
+        interaction_id="test",
+        owner_session="test",
+        revoke=lambda: None,
+    )
+    entry = _registered_client(tmp_path, client, key, lease.lease_id)
+    terminate = client_module.terminate_process_tree
+    try:
+        monkeypatch.setattr(
+            client_module, "terminate_process_tree", lambda *args, **kwargs: False
+        )
+        with pytest.raises(client_module.LSPError, match="cleanup pending"):
+            manager._close_entry(entry, force=True)
+        assert process.poll() is None
+        assert manager._ENTRIES[key].client is client
+        assert capability_leases().get(lease.lease_id) is not None
+        monkeypatch.setattr(client_module, "terminate_process_tree", terminate)
+        manager._close_entry(entry, force=True)
+        assert process.poll() is not None
+        assert not client._reader.is_alive() and not client._stderr_reader.is_alive()
+        assert key not in manager._ENTRIES
+        assert capability_leases().get(lease.lease_id) is None
+    finally:
+        monkeypatch.setattr(client_module, "terminate_process_tree", terminate)
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=2)
+        client._reader.join(2)
+        client._stderr_reader.join(2)
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if not stream.closed:
+                stream.close()
+        manager._ENTRIES.pop(key, None)
+        capability_leases().release(lease.lease_id)

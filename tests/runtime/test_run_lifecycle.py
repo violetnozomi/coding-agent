@@ -5,6 +5,7 @@ import asyncio
 from types import SimpleNamespace
 
 from nz_coder.protocol.message_schema import ASSISTANT_FINISH_KEY, COMPACTION_KEY, PARTS_KEY
+from nz_coder.runtime.verification.recovery import RecoveryState
 from nz_coder.runtime.core.lifecycle_context import LifecycleRunState
 from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
@@ -21,10 +22,19 @@ class _EmptyEvidence:
 
 
 def _lifecycle_context(events: list[str], runtime_state=None, run_evidence=None):
+    from tests.verification_scenarios import VerificationScenario
+    scenario = VerificationScenario(plan={"stages": []})
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+    if isinstance(runtime_state, RuntimeState):
+        runtime_state.bind_run_context(scenario.context)
+        scenario.state = runtime_state
+        scenario.runtime.state = runtime_state
+        scenario.runtime.host.runtime_state = runtime_state
+        scenario.runtime.synchronize_task()
     host = SimpleNamespace(
         _emit_session_event=lambda *_args, **_kwargs: events.append("message-event"),
         _checkpoint_messages=lambda *_args, **_kwargs: events.append("checkpoint"),
-        runtime_state=runtime_state,
+        runtime_state=scenario.state,
         run_evidence=run_evidence,
     )
 
@@ -36,9 +46,12 @@ def _lifecycle_context(events: list[str], runtime_state=None, run_evidence=None)
 
     return SimpleNamespace(
         run_state=LifecycleRunState(),
-        stall_orchestrator=None,
-        recovery=SimpleNamespace(consecutive_errors=0, last_error=""),
-        vm=SimpleNamespace(status=lambda: {}),
+        _scenario=scenario,
+
+        recovery=RecoveryState(),
+        verification_runtime=scenario.runtime,
+        output_schema_requested=lambda: False,
+        runtime_state=runtime_state or scenario.state,
         assert_terminal=lambda status: status,
         finish_lineage=lambda *_args: None,
         persist_assistant_end=persist_assistant_end,
@@ -49,7 +62,6 @@ def _lifecycle_context(events: list[str], runtime_state=None, run_evidence=None)
         run_evidence=lambda: _EmptyEvidence(),
         trace_evidence_summary=lambda: {},
         trace=lambda *_args, **_kwargs: None,
-        publish_event=lambda *_args, **_kwargs: events.append("publish"),
         persist_runtime_state=lambda **_kwargs: None,
         save_learnings=lambda _messages: None,
     )
@@ -57,20 +69,25 @@ def _lifecycle_context(events: list[str], runtime_state=None, run_evidence=None)
 
 def test_lifecycle_clears_read_cache_at_each_run_boundary():
     events: list[str] = []
-    runtime_state = SimpleNamespace(turn_count=0, replan_count=0)
+    verification_context = _lifecycle_context(events)
+    verification_runtime = verification_context.verification_runtime
+    run_context = verification_runtime.run_context
+    # 场景夹具已绑定真实验证域；只隔离重复初始化，保留判断绑定所需的运行身份。
+    verification_runtime.initialize = lambda **_kwargs: None
+    runtime_state = verification_context.runtime_state
     context = SimpleNamespace(
         run_state=LifecycleRunState(),
         clear_reverter=lambda: None,
-        vm=SimpleNamespace(reset=lambda: None),
+        verification_runtime=verification_runtime,
         recovery=SimpleNamespace(start_tool_call_run=lambda: None),
         clear_read_cache=lambda: events.append("read-cache-cleared"),
-        stall_orchestrator=None,
+
         admission_handle=None,
         reset_hooks=lambda: None,
         clear_reasoning_escalation=lambda: None,
         commit=lambda: None,
         restore_agent_role=lambda: None,
-        session_id="read-cache-run-boundary",
+        session_id=run_context.request.session_id,
         bind_user_messages=lambda _messages: None,
         prepare_runtime_state=(
             lambda _task, _turns, _timeout, _resume, _round: False
@@ -110,9 +127,9 @@ def test_lifecycle_persists_boundary_content_before_completion(tmp_path):
         content_text="Completed the requested changes in app.py.",
     )
 
-    assert result["content"] == "Completed the requested changes in app.py."
+    assert result["content"].endswith("Completed the requested changes in app.py.")
     assert messages[-1]["content"] == result["content"]
-    assert events.index("persist") < events.index("commit") < events.index("publish")
+    assert events.index("persist") < events.index("commit")
 
     request = RunRequest(
         agent=AgentDefinition(name="worker", instructions="update the file"),
@@ -126,6 +143,9 @@ def test_lifecycle_persists_boundary_content_before_completion(tmp_path):
         Session.create(request.session_id, messages, workspace=tmp_path),
         request.agent.name,
     )
+    from nz_coder.runtime.core.result import freeze_terminal_result, normalize_run_status
+    run_context.freeze_execution(normalize_run_status(result['status']))
+    freeze_terminal_result(run_context, result)
     typed = _typed_result(request, run_context, result)
     assert typed.final_text == result["content"]
 
@@ -156,7 +176,8 @@ def test_lifecycle_closes_sync_runtime_accounting_after_terminal_learning():
     run_end = next(payload for event, payload in traces if event == "run_end")
     assert result["runtime"]["provider_calls"] == 1
     assert run_end["runtime"]["provider_calls"] == 1
-    assert events.index("learn") < events.index("publish")
+    assert events.index("learn") < len(events) - 1
+    assert events[-1] == "commit"
 
 
 def test_lifecycle_closes_async_runtime_accounting_after_terminal_learning():
@@ -185,7 +206,8 @@ def test_lifecycle_closes_async_runtime_accounting_after_terminal_learning():
     run_end = next(payload for event, payload in traces if event == "run_end")
     assert result["runtime"]["provider_calls"] == 1
     assert run_end["runtime"]["provider_calls"] == 1
-    assert events.index("learn") < events.index("publish")
+    assert events.index("learn") < len(events) - 1
+    assert events[-1] == "commit"
 
 
 def test_aborted_lifecycle_preserves_runtime_accounting():
@@ -199,7 +221,7 @@ def test_aborted_lifecycle_preserves_runtime_accounting():
         "provider_calls": 4,
         "provider_usage": {"total": 1200},
     }
-    context.vm.status = lambda: {"vm_state": "idle"}
+
     context.trace = lambda event, **payload: traces.append((event, payload))
 
     result = ProductionRunLifecycle().finalize_sync(
@@ -211,9 +233,9 @@ def test_aborted_lifecycle_preserves_runtime_accounting():
 
     run_end = next(payload for event, payload in traces if event == "run_end")
     assert result["runtime"]["provider_calls"] == 4
-    assert result["vm_state"] == "idle"
+    assert result["verification"]["domain_revision"] >= 1
     assert run_end["runtime"] == result["runtime"]
-    assert run_end["vm_state"] == "idle"
+    assert run_end["domain_revision"] == result["domain_revision"]
 
 
 def test_cancelled_lifecycle_does_not_start_terminal_memory_work():
@@ -286,44 +308,17 @@ def test_terminal_memory_failure_is_observable_but_non_fatal():
         content_text="Repair complete.",
     ))
 
-    assert sync_result["status"] == "completed"
-    assert async_result["status"] == "completed"
+    assert sync_result["status"] == "completed_unverified"
+    assert async_result["status"] == "completed_unverified"
     assert any(event == "terminal_learning_failed" for event, _ in sync_traces)
     assert any(event == "terminal_learning_failed" for event, _ in async_traces)
     assert any(event == "run_end" for event, _ in sync_traces)
     assert any(event == "run_end" for event, _ in async_traces)
 
 
-def test_terminal_boundary_cancels_stall_sidecar_before_runtime_summary():
-    """A late L2 observer must settle inside the run that launched it."""
-    events: list[str] = []
-    context = _lifecycle_context(events)
-
-    class Stall:
-        def cancel_and_settle(self, timeout=0):
-            events.append(f"stall-settled:{timeout}")
-            return True
-
-    context.stall_orchestrator = Stall()
-
-    def runtime_summary():
-        assert any(item.startswith("stall-settled:") for item in events)
-        return {"provider_calls": 2}
-
-    context.runtime_summary = runtime_summary
-
-    result = ProductionRunLifecycle().finalize_sync(
-        context,
-        [{"role": "user", "content": "finish"}],
-        "completed",
-        stream=False,
-        content_text="Done.",
-    )
-
-    assert result["runtime"]["provider_calls"] == 2
 
 
-def test_lifecycle_preserves_nonempty_provider_content():
+def test_lifecycle_publishes_one_authoritative_boundary_content():
     events: list[str] = []
     context = _lifecycle_context(events)
     messages = [
@@ -343,8 +338,8 @@ def test_lifecycle_preserves_nonempty_provider_content():
         content_text="deterministic fallback",
     )
 
-    assert result["content"] == "deterministic fallback"
-    assert messages[-1]["content"] == "provider summary"
+    assert result["content"].endswith("deterministic fallback")
+    assert messages[-1]["content"] == result["content"]
 
 
 def test_lifecycle_surfaces_factual_max_turns_content_instead_of_generic_notice():
@@ -539,29 +534,13 @@ def test_max_turns_persists_deterministic_continuation_boundary():
         + "detail " * 500
         + f"Finally run the exact acceptance command {acceptance}."
     )
-    runtime_state = SimpleNamespace(
-        # Legacy sessions may already contain the old 300-character policy
-        # projection.  The durable real User message remains authoritative.
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.runtime.verification.domain.requirements import TaskContract, Requirement
+    runtime_state = RuntimeState(
         initial_task_text=task[:300],
         changed_files=["cron_engine/parser.py", "cron_engine/README.md"],
         acceptance_criteria=["numeric expressions remain compatible"],
         requested_paths=["cron_engine/README.md"],
-        task_contract={"objective": "Finish named weekday range support"},
-        requirement_ledger={
-            "items": [{
-                "requirement": {
-                    "id": "R3",
-                    "description": "Run focused regression tests",
-                },
-                "status": "pending",
-            }],
-        },
-        verification_contract={
-            "command": acceptance,
-            "passed": False,
-            "output": "1 failed",
-        },
-        last_verification_failure="1 failed",
         recovery_repair_targets=["cron_engine/parser.py"],
         open_todo_items=1,
     )
@@ -575,6 +554,11 @@ def test_max_turns_persists_deterministic_continuation_boundary():
         tool_failures=[],
     )
     context = _lifecycle_context(events, runtime_state, evidence)
+    runtime_state.set_task_contract(TaskContract(
+        objective="Finish named weekday range support",
+        requirements=(Requirement("R3", "Run focused regression tests", "test"),),
+        acceptance_commands=(acceptance,),
+    ))
     messages = [{"role": "user", "content": task}]
 
     ProductionRunLifecycle().finalize_sync(

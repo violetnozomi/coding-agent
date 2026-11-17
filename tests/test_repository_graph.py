@@ -113,3 +113,59 @@ def test_process_capsule_contains_definition_nodes_and_reverse_callers(tmp_path)
 
     assert {item["name"] for item in process["nodes"]} == {"entry", "leaf", "middle"}
     assert process["incoming_edges"][0]["caller"] == "entry"
+
+
+def test_python_import_lookup_is_shared_within_each_full_graph_operation(tmp_path, monkeypatch):
+    _assert_python_lookup_operation_is_shared_and_fresh(tmp_path, monkeypatch, incremental=False)
+
+
+def test_python_import_lookup_is_shared_and_refreshed_after_incremental_changes(tmp_path, monkeypatch):
+    _assert_python_lookup_operation_is_shared_and_fresh(tmp_path, monkeypatch, incremental=True)
+
+
+def _assert_python_lookup_operation_is_shared_and_fresh(tmp_path, monkeypatch, *, incremental):
+    from nz_coder.intelligence.code_index import PersistentCodeIndex
+
+    package = tmp_path / 'pkg'
+    package.mkdir()
+    (package / '__init__.py').write_text('')
+    (package / 'base.py').write_text('VALUE = 1\n')
+    sources = ['pkg/a.py', 'pkg/b.py', 'pkg/c.py']
+    for source in sources:
+        (tmp_path / source).write_text('from .base import VALUE\nfrom .added import EXTRA\n')
+    index = PersistentCodeIndex(tmp_path)
+    index.scan(tmp_path, max_files=20)
+    graph = RepositoryGraph(tmp_path, index=index)
+    graph.build(snapshot=index.snapshot())
+    for source in sources:
+        assert graph._graph[source] == ('pkg/base.py',)
+
+    original_lookup = PersistentCodeIndex._module_lookup
+    lookup_inputs = []
+
+    def observed_lookup(paths):
+        lookup_inputs.append(frozenset(paths))
+        return original_lookup(paths)
+
+    monkeypatch.setattr(PersistentCodeIndex, '_module_lookup', staticmethod(observed_lookup))
+    for added in (True, False):
+        target = package / 'added.py'
+        if added:
+            target.write_text('EXTRA = 2\n')
+        else:
+            target.unlink()
+        index.update_paths(['pkg/added.py'])
+        snapshot = index.snapshot()
+        lookup_inputs.clear()
+        if incremental:
+            graph.update_paths(
+                ['pkg/added.py'] if added else [],
+                [] if added else ['pkg/added.py'], snapshot=snapshot,
+            )
+        else:
+            graph.build(snapshot=snapshot)
+        for source in sources:
+            expected = ('pkg/added.py', 'pkg/base.py') if added else ('pkg/base.py',)
+            assert graph._graph[source] == expected
+        # 计数真实的全模块映射构造操作；不依赖运行机器的耗时阈值。
+        assert lookup_inputs == [frozenset(entry.path for entry in snapshot.files)]

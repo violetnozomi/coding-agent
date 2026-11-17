@@ -604,3 +604,11 @@ def test_tool_executor_publishes_started_event_from_active_session_context(monke
         "summary": "bash: pwd",
         "is_write": False,
     }
+
+
+def test_unverified_completion_is_not_rendered_as_verified_success():
+    view, output, _ = _view()
+    view.finish({'status': 'completed_unverified'})
+    rendered = output.getvalue()
+    assert '✓' not in rendered
+    assert 'unverified' in rendered

@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import copy
+from dataclasses import asdict, dataclass
 import hmac
+import logging
 import math
 import re
 import threading
@@ -20,6 +22,7 @@ from nz_coder.protocol.message_schema import (
     MESSAGE_SCHEMA_VERSION,
     attach_message_identity,
     ensure_message_identities,
+    is_synthetic_user_message,
     legacy_messages,
     message_records,
     settle_interrupted_parts,
@@ -30,9 +33,10 @@ from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.session.lifecycle import delete_session
+from nz_coder.runtime.session.store import _valid_persisted_parts
 from nz_coder.sdk import AgentClient
 from nz_coder.protocol.session_events import SessionEventBus
-from nz_coder.protocol.public_error import public_error_message, to_public_error
+from nz_coder.protocol.public_error import public_error_message, public_error_from_wire, to_public_error
 from nz_coder.state.sessions import (
     create_session_id,
     list_sessions,
@@ -41,6 +45,11 @@ from nz_coder.state.sessions import (
     save_session,
     session_snapshot_dir,
     session_runtime_dir,
+    _read_saved_session,
+    _file_identity,
+    _exact_session_id,
+    session_dir,
+    SessionReadError,
 )
 from nz_coder.tool_platform.permissioning.modes import MODES
 
@@ -48,7 +57,23 @@ from .interactions import InteractionBroker
 from .workspaces import WorkspaceRegistry
 
 _SAFE_SESSION_ID = re.compile(r"^[A-Za-z0-9_-]+$")
-_MAX_SAVED_SESSION_BYTES = 16 * 1024 * 1024
+@dataclass(frozen=True)
+class SessionCandidate:
+    session_id: str
+    workspace_id: str
+    path: Path
+    file_identity: tuple
+
+_HTTP_TERMINAL_RESULT_KEY = "_nz_http_terminal_result"
+_LOGGER = logging.getLogger(__name__)
+
+
+def _valid_session_identity(session_id: str) -> bool:
+    try:
+        _exact_session_id(session_id)
+        return True
+    except ValueError:
+        return False
 
 
 class SessionNotFoundError(LookupError):
@@ -103,6 +128,57 @@ def _interaction_records(
     ]
 
 
+def _saved_terminal_result(payload: dict, status: str) -> dict | None:
+    """只恢复与最后一次真实请求、同次终态提交相符的结果。"""
+    if status in {"running", "idle", "dormant"}:
+        return None
+    from nz_coder.runtime.core.result import saved_terminal_result
+    canonical = saved_terminal_result(payload)
+    if canonical is not None:
+        return canonical
+    metadata = payload.get("metadata")
+    record = metadata.get(_HTTP_TERMINAL_RESULT_KEY) if isinstance(metadata, dict) else None
+    if not isinstance(record, dict):
+        return None
+    run_id = record.get("interaction_run_id")
+    result = record.get("last_result")
+    if (
+        not isinstance(run_id, str)
+        or not run_id.strip()
+        or record.get("status") != status
+        or not isinstance(record.get("last_error"), str)
+        or not isinstance(result, dict)
+    ):
+        return None
+    user = next(
+        (message for message in reversed(payload["messages"])
+         if message.get("role") == "user" and not is_synthetic_user_message(message)),
+        None,
+    )
+    if user is None or user.get(INTERACTION_RUN_ID_KEY) != run_id:
+        return None
+    for key in ("status", "answer", "active_agent", "error", "last_error"):
+        if key in result and not isinstance(result[key], str):
+            return None
+    if "metadata" in result:
+        result_metadata = result["metadata"]
+        if not isinstance(result_metadata, dict):
+            return None
+        if "interaction_run_id" in result_metadata and result_metadata["interaction_run_id"] != run_id:
+            return None
+    return copy.deepcopy(record)
+
+
+def _canonical_terminal_record(payload: dict) -> dict:
+    from nz_coder.runtime.core.result import saved_terminal_result
+    record = saved_terminal_result(payload)
+    if record is not None:
+        return record
+    # 旧快照没有正式投影时只显示已提交状态，不从全历史猜测本次答案。
+    return {"interaction_run_id": payload["metadata"]["active_interaction_run_id"],
+            "status": payload["run_status"], "last_error": "", "last_result": {}}
+
+
 def build_http_agent(session_id: str, permission_mode: str):
     """Build an AgentLoop with a conservative pre-broker permission fallback."""
     from nz_coder.state.memory import (
@@ -111,12 +187,13 @@ def build_http_agent(session_id: str, permission_mode: str):
     )
     from nz_coder.runtime.conversation.prompt import build
     from nz_coder.runtime.execution.composition import build_coding_agent
-    from nz_coder.runtime.process.workdir import current_derived_path, current_workdir
+    from nz_coder.runtime.process.workdir import current_workdir
+    from nz_coder.state.memory_scope import session_memory_binding, scoped_memory_scope
     from nz_coder.state.skills import SkillLoader, bind_skill_loader, current_skill_loader
     from nz_coder.foundation.workspace_trust import load_config_snapshot
 
-    memory_dir = current_derived_path("MEMORY_DIR")
-    memory_manager = workspace_memory_manager(memory_dir)
+    memory_scope, _capability = session_memory_binding(session_id, current_workdir())
+    memory_manager = workspace_memory_manager(scope=memory_scope)
     workspace_snapshot = load_config_snapshot(current_workdir())
     project_skills = current_workdir() / ".nz-coder" / "skills"
     default_skills = current_skill_loader()
@@ -138,7 +215,7 @@ def build_http_agent(session_id: str, permission_mode: str):
     # HTTP Session.  AgentLoop.prepare_run_control() appends the descriptions
     # captured from the same snapshot used by every other run control.
     system_prompt = build(memory_block="", skill_descriptions="")
-    with bind_memory_manager(memory_manager), bind_skill_loader(skill_manager):
+    with bind_memory_manager(memory_manager), bind_skill_loader(skill_manager), scoped_memory_scope(memory_scope):
         agent = build_coding_agent(
             system_prompt,
             permission_mode=permission_mode,
@@ -174,6 +251,8 @@ class ManagedSession:
         restored: bool = False,
         initial_status: str = "idle",
         last_error: str = "",
+        last_result: dict | None = None,
+        active_interaction_run_id: str = "",
         title: str = "New Session",
         model: str = "unknown",
         parent_session_id: str | None = None,
@@ -202,19 +281,23 @@ class ManagedSession:
         self.title = str(title or "New Session")
         self.model = str(model or "unknown")
         self.parent_session_id = parent_session_id
-        self.last_result: dict = {}
+        self.last_result: dict = copy.deepcopy(last_result) if last_result is not None else {}
         self._lock = threading.RLock()
         self._run_thread: threading.Thread | None = None
         self._run_loop: asyncio.AbstractEventLoop | None = None
         self._run_task: asyncio.Task | None = None
         self._run_phase = "idle"
         self._run_event_floor = 0
-        self._active_interaction_run_id = ""
+        self._active_interaction_run_id = active_interaction_run_id
         self._active_event_publisher = None
         self._cancel_requested = False
         self._disposed = False
+        self._closing = False
+        self._dispose_lock = threading.Lock()
+        self._dispose_completed: set[str] = set()
         self._run_gate = run_gate
         self._gate_acquired = False
+        self._session_lease = None
         self._event_bus = event_bus or agent.event_bus
         self.interactions = InteractionBroker(
             session_id=session_id,
@@ -297,37 +380,41 @@ class ManagedSession:
 
     def info(self) -> dict:
         with self._lock:
-            runtime_status = self.status
-            pending = self.interactions.list()
-            kinds = {str(item.get("kind") or "") for item in pending}
-            if self._run_thread is not None and "permission" in kinds:
-                runtime_status = "waiting_permission"
-            elif self._run_thread is not None and "question" in kinds:
-                runtime_status = "waiting_question"
-            provider, _model, variant = self._model_identity()
-            return {
-                "id": self.session_id,
-                "status": self.status,
-                "runtime_status": runtime_status,
-                "title": self.title,
-                "model": self.model,
-                "provider": provider,
-                "reasoning_effort": variant,
-                "mode": self.permission_mode,
-                "parent_session_id": self.parent_session_id,
-                "permission_mode": self.permission_mode,
-                "workspace_id": self.workspace_id,
-                "workspace": str(self.workspace),
-                "restored": self.restored,
-                "message_count": len(self.history),
-                "created_at": self.created_at,
-                "updated_at": self.updated_at,
-                "running": self._run_thread is not None,
-                "pending_interaction_count": len(pending),
-                "last_error": self.last_error,
-                "last_result": copy.deepcopy(self.last_result),
-                "active_interaction_run_id": self._active_interaction_run_id,
-            }
+            return self._info_from_pending(self.interactions.list())
+
+    def _info_from_pending(self, pending: list[dict]) -> dict:
+        """调用方持会话锁，以同一份交互清单派生状态，避免快照回调反取审批锁。"""
+        self._refresh_committed_result()
+        runtime_status = self.status
+        kinds = {str(item.get("kind") or "") for item in pending}
+        if self._run_thread is not None and "permission" in kinds:
+            runtime_status = "waiting_permission"
+        elif self._run_thread is not None and "question" in kinds:
+            runtime_status = "waiting_question"
+        provider, _model, variant = self._model_identity()
+        return {
+            "id": self.session_id,
+            "status": self.status,
+            "runtime_status": runtime_status,
+            "title": self.title,
+            "model": self.model,
+            "provider": provider,
+            "reasoning_effort": variant,
+            "mode": self.permission_mode,
+            "parent_session_id": self.parent_session_id,
+            "permission_mode": self.permission_mode,
+            "workspace_id": self.workspace_id,
+            "workspace": str(self.workspace),
+            "restored": self.restored,
+            "message_count": len(self.history),
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "running": self._run_thread is not None,
+            "pending_interaction_count": len(pending),
+            "last_error": self.last_error,
+            "last_result": copy.deepcopy(self.last_result),
+            "active_interaction_run_id": self._active_interaction_run_id,
+        }
 
     def rename(self, title: str) -> str:
         """Persist a Session title without introducing a remote-side state copy."""
@@ -343,48 +430,75 @@ class ManagedSession:
     def _reverter(self):
         from nz_coder.runtime.session.session_revert import SessionReverter
         from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
+        from nz_coder.runtime.agent.planning_runtime import invalidate_working_plan
+        from nz_coder.state.sessions import session_runtime_state_path
 
         with scoped_workdir(self.workspace):
             snapshot_root = session_snapshot_dir(self.session_id)
             state_path = session_runtime_dir(self.session_id) / "message_revert.json"
+            runtime_path = session_runtime_state_path(self.session_id)
         return SessionReverter(
             WorkspaceSnapshotStore(self.workspace, snapshot_root),
             state_path,
+            before_transition=lambda: invalidate_working_plan(
+                getattr(self.agent, "runtime_state", None), path=runtime_path),
         )
 
     def undo(self) -> dict:
-        with self._lock:
-            if self._run_thread is not None:
-                raise SessionBusyError("cannot undo during an active session run")
-            result = self._reverter().revert(self.history)
-            self._persist_transition_locked()
-            return {"message_id": result.message_id, "files": list(result.files), "removed_messages": result.removed_messages}
+        return self._transition_history(undo=True)
 
     def redo(self) -> dict:
+        return self._transition_history(undo=False)
+
+    def _transition_history(self, *, undo: bool) -> dict:
+        from nz_coder.runtime.session.model import SessionIdentity
+        from nz_coder.runtime.session.store import LegacyJsonSessionStore
         with self._lock:
             if self._run_thread is not None:
-                raise SessionBusyError("cannot redo during an active session run")
-            result = self._reverter().unrevert(self.history)
-            self._persist_transition_locked()
-            return {"message_id": result.message_id, "files": list(result.files), "removed_messages": result.removed_messages}
+                raise SessionBusyError("cannot change history during an active session run")
+            if not self._run_gate.acquire(blocking=False):
+                raise SessionBusyError("another session already has an active run in this workspace")
+            lease = None
+            try:
+                store = LegacyJsonSessionStore()
+                identity = SessionIdentity(self.session_id, self.parent_session_id)
+                lease = store.acquire(identity, self.workspace)
+                session = store.load_session(identity, self.workspace)
+                if session is None:
+                    raise SessionNotFoundError(self.session_id)
+                candidate = copy.deepcopy(session.transcript)
+                write = store.prepare_history_transition(session)
+                def commit(messages):
+                    session.replace_transcript(messages, allow_terminal=True)
+                    session.metadata.pop("_nz_terminal_result", None)
+                    session.metadata.pop(_HTTP_TERMINAL_RESULT_KEY, None)
+                    write.commit(session)
+                reverter = self._reverter()
+                result = (reverter.revert if undo else reverter.unrevert)(candidate, commit_history=commit)
+                self.history = candidate
+                self.last_result = {}
+                self.last_error = ""
+                self.updated_at = time.time()
+                return {"message_id": result.message_id, "files": list(result.files),
+                        "removed_messages": result.removed_messages}
+            finally:
+                if lease is not None:
+                    lease.close_hold()
+                self._run_gate.release()
 
-    def _persist_transition_locked(self) -> None:
+    def _result_metadata(self, record: dict | None = None) -> dict:
+        """在同一工作区保留 Native 元数据，只更新管理器专属结果。"""
         with scoped_workdir(self.workspace):
-            save_session(
-                self._persistence_messages(),
-                mode=self.permission_mode,
-                session_id=self.session_id,
-                activate=False,
-                run_status=self.status,
-                require_aliases=False,
-                title=self.title,
-                parent_session_id=self.parent_session_id,
-                model=self.model,
-            )
-        self.updated_at = time.time()
+            metadata = load_session(self.session_id).get("metadata")
+        metadata = copy.deepcopy(metadata) if isinstance(metadata, dict) else {}
+        metadata.pop(_HTTP_TERMINAL_RESULT_KEY, None)
+        if record is not None:
+            metadata[_HTTP_TERMINAL_RESULT_KEY] = copy.deepcopy(record)
+        return metadata
 
     def messages(self) -> list[dict]:
         with self._lock:
+            self._refresh_committed_result()
             return legacy_messages(self.history)
 
     def diff(self) -> list[dict]:
@@ -404,24 +518,27 @@ class ManagedSession:
                 raise SessionBusyError("session snapshot requires an idle run")
             snapshot_id = f"snap-{uuid.uuid4().hex}"
 
-            def capture() -> dict:
-                return {
-                    "schema_version": MESSAGE_SCHEMA_VERSION,
-                    "snapshot_id": snapshot_id,
-                    "session": self.info(),
-                    "summary": session_summary(self.history),
-                    "messages": message_records(self.history, self.session_id),
-                    "pending": {"permissions": [], "questions": []},
-                }
+            with self.interactions.pending_snapshot() as pending:
+                info = self._info_from_pending(pending)
 
-            result, cursor = self.event_bus.checkpoint(
-                capture,
-                event_type="session.snapshot.created",
-                properties={
-                    "snapshot_id": snapshot_id,
-                    "message_count": len(self.history),
-                },
-            )
+                def capture() -> dict:
+                    return {
+                        "schema_version": MESSAGE_SCHEMA_VERSION,
+                        "snapshot_id": snapshot_id,
+                        "session": copy.deepcopy(info),
+                        "summary": session_summary(self.history),
+                        "messages": message_records(self.history, self.session_id),
+                        "pending": {"permissions": [], "questions": []},
+                    }
+
+                result, cursor = self.event_bus.checkpoint(
+                    capture,
+                    event_type="session.snapshot.created",
+                    properties={
+                        "snapshot_id": snapshot_id,
+                        "message_count": len(self.history),
+                    },
+                )
             result["cursor"] = {
                 "event_id": cursor.event_id,
                 "sequence": cursor.sequence,
@@ -439,60 +556,59 @@ class ManagedSession:
         """
         with self._lock:
             snapshot_id = f"attach-{uuid.uuid4().hex}"
-            pending = {
-                "permissions": self.interactions.list("permission"),
-                "questions": self.interactions.list("question"),
-            }
-
-            def capture() -> dict:
-                timeline_messages = message_records(
-                    self.history,
-                    self.session_id,
-                )
-                run_messages = _interaction_records(
-                    timeline_messages,
-                    self._active_interaction_run_id,
-                )
-                return {
-                    "schema_version": MESSAGE_SCHEMA_VERSION,
-                    "snapshot_id": snapshot_id,
-                    "settled": self._run_thread is None and self.status != "running",
-                    "session": self.info(),
-                    "summary": session_summary(self.history),
-                    "messages": timeline_messages,
-                    "active_interaction_run_id": self._active_interaction_run_id,
-                    "run": {
-                        "interaction_run_id": self._active_interaction_run_id,
-                        "status": self.info()["runtime_status"],
-                        "message_ids": [
-                            record["info"]["id"] for record in run_messages
-                        ],
-                        "messages": run_messages,
-                        "parts": [
-                            copy.deepcopy(part)
-                            for record in run_messages
-                            for part in record.get("parts", [])
-                        ],
-                        "pending": copy.deepcopy(pending),
-                    },
-                    "timeline": {"messages": timeline_messages},
-                    "pending": copy.deepcopy(pending),
+            # 与交互发布保持同一锁序；清单冻结到游标生成，不能靠有限重放修补。
+            with self.interactions.pending_snapshot() as pending_items:
+                pending = {
+                    "permissions": [item for item in pending_items if item["kind"] == "permission"],
+                    "questions": [item for item in pending_items if item["kind"] == "question"],
                 }
+                info = self._info_from_pending(pending_items)
 
-            result, cursor, replay_events = self.event_bus.checkpoint_with_replay(
-                capture,
-                event_type="session.attach.snapshot.created",
-                properties={
-                    "snapshot_id": snapshot_id,
-                    "message_count": len(self.history),
-                },
-                replay=256,
-                publisher=self._active_event_publisher,
-            )
-            result["pending"] = _merge_replayed_interactions(
-                result["pending"], replay_events
-            )
-            result["run"]["pending"] = copy.deepcopy(result["pending"])
+                def capture() -> dict:
+                    timeline_messages = message_records(
+                        self.history,
+                        self.session_id,
+                    )
+                    run_messages = _interaction_records(
+                        timeline_messages,
+                        self._active_interaction_run_id,
+                    )
+                    return {
+                        "schema_version": MESSAGE_SCHEMA_VERSION,
+                        "snapshot_id": snapshot_id,
+                        "settled": self._run_thread is None and self.status != "running",
+                        "session": copy.deepcopy(info),
+                        "summary": session_summary(self.history),
+                        "messages": timeline_messages,
+                        "active_interaction_run_id": self._active_interaction_run_id,
+                        "run": {
+                            "interaction_run_id": self._active_interaction_run_id,
+                            "status": info["runtime_status"],
+                            "message_ids": [
+                                record["info"]["id"] for record in run_messages
+                            ],
+                            "messages": run_messages,
+                            "parts": [
+                                copy.deepcopy(part)
+                                for record in run_messages
+                                for part in record.get("parts", [])
+                            ],
+                            "pending": copy.deepcopy(pending),
+                        },
+                        "timeline": {"messages": timeline_messages},
+                        "pending": copy.deepcopy(pending),
+                    }
+
+                result, cursor, replay_events = self.event_bus.checkpoint_with_replay(
+                    capture,
+                    event_type="session.attach.snapshot.created",
+                    properties={
+                        "snapshot_id": snapshot_id,
+                        "message_count": len(self.history),
+                    },
+                    replay=256,
+                    publisher=self._active_event_publisher,
+                )
             result["run"]["snapshot_sequence"] = cursor.sequence
             if self._run_thread is not None or self.status == "running":
                 result["events"] = [
@@ -694,48 +810,90 @@ class ManagedSession:
             )
         return handle.wait_started(10.0)
 
-    def memory_control(self):  # noqa: ANN202
-        from nz_coder.state.memory_control import MemoryControlPlane
-
+    def memory_manager(self):
         manager = getattr(self.agent, "_mm", None)
-        if manager is None:
-            raise ValueError("Session Memory manager is unavailable")
-        return MemoryControlPlane(manager.memory_dir, manager)
+        if manager is not None:
+            return manager
+        from nz_coder.state.memory import workspace_memory_manager
+        from nz_coder.state.memory_scope import MemoryScope
 
-    @staticmethod
-    def _memory_proposal_dict(proposal) -> dict:  # noqa: ANN001
-        from dataclasses import asdict
+        # 原生会话尚未开始模型运行时也能管理记忆；身份只来自宿主持久资料。
+        with scoped_workdir(self.workspace):
+            metadata = load_session(self.session_id).get("metadata") or {}
+            value = metadata.get("memory_scope")
+            scope = MemoryScope.from_dict(value) if value is not None else MemoryScope.for_workspace(self.workspace)
+            return workspace_memory_manager(scope=scope)
 
-        value = asdict(proposal)
-        value["source_message_ids"] = list(value.get("source_message_ids") or [])
-        return value
+    def _memory_context(self, operation_id=None):
+        manager = self.memory_manager()
+        context = {"capability": "manage", "scope_id": manager.scope_id,
+                   "session_id": self.session_id, "actor_id": "remote-user",
+                   "operation_namespace": f"{manager.scope_id}:user:{self.session_id}"}
+        if operation_id is not None:
+            if not isinstance(operation_id, str) or not operation_id.strip():
+                raise ValueError("operation_id must be a nonempty string")
+            context["operation_id"] = operation_id
+        return context
+
+    def memory_control(self):
+        from nz_coder.state.memory_control import MemoryControlPlane
+        return MemoryControlPlane(self.memory_manager(), trusted_context=self._memory_context())
+
+    def lsp_status(self) -> dict:
+        from nz_coder.lsp.manager import client_status_summary
+        return {'entries':client_status_summary(self.workspace),
+                'process_children':'owner_unavailable'}
+
+    def lsp_control(self, entry_id: str, action: str) -> dict:
+        from nz_coder.lsp.manager import control_client
+        return control_client(self.workspace,entry_id,action)
 
     def memory_status(self) -> dict:
         control = self.memory_control()
-        return {
-            "pending": [self._memory_proposal_dict(item) for item in control.pending()],
-            "ledger": control.ledger()[-100:],
-        }
+        return {"pending": control.pending(), "ledger": control.ledger(),
+                "generation": self.memory_manager().generation()}
 
-    def memory_proposal(self, fingerprint: str) -> dict:
-        proposal = self.memory_control().get(str(fingerprint))
-        if proposal is None:
-            raise ValueError(f"memory proposal was not found: {fingerprint}")
-        return self._memory_proposal_dict(proposal)
+    def memory_records(self, *, type=None, status="active", limit=50, cursor=None) -> dict:
+        if status not in {"active", "archived", "all"}:
+            raise ValueError("memory status must be active, archived, or all")
+        return self.memory_manager().list_records(type=type, status=None if status == "all" else status,
+                                                  limit=limit, cursor=cursor)
 
-    def review_memory(self, fingerprint: str, action: str, reason: str = "") -> dict:
+    def memory_search(self, query: str, *, limit=5) -> dict:
+        from nz_coder.runtime.core.run_settings import RunSettings, scoped_run_settings
+
+        # HTTP工作线程使用目标会话快照，避免借用其他请求或全局的检索设置。
+        with scoped_run_settings(RunSettings.from_snapshot(self.config_snapshot)):
+            return self.memory_manager().search_result(query, limit=limit)
+
+    def memory_record(self, memory_id: str, *, revision=None) -> dict:
+        record = self.memory_manager().read(memory_id, revision=revision)
+        return record if record is not None else {"status": "not_found", "memory_id": memory_id}
+
+    def memory_history(self, memory_id: str) -> list:
+        return self.memory_manager().history(memory_id)
+
+    def mutate_memory(self, command: dict, *, operation_id: str) -> dict:
+        return self.memory_manager().mutate(command, trusted_context=self._memory_context(operation_id))
+
+    def memory_proposal(self, proposal_id: str) -> dict:
+        proposal = self.memory_control().get(proposal_id)
+        return proposal if proposal is not None else {"status": "not_found", "proposal_id": proposal_id}
+
+    def review_memory(self, proposal_id: str, action: str, *, expected_proposal_revision: int,
+                      operation_id: str, expected_revision=None, related_records=None, reason="") -> dict:
+        if not isinstance(expected_proposal_revision, int) or isinstance(expected_proposal_revision, bool) or expected_proposal_revision < 1:
+            raise ValueError("expected_proposal_revision must be a positive integer")
+        self._memory_context(operation_id)
         control = self.memory_control()
+        arguments = {"expected_proposal_revision": expected_proposal_revision,
+                     "operation_id": operation_id, "reviewer": "remote-user"}
         if action == "approve":
-            proposal = control.approve(str(fingerprint), reviewer="remote-user")
-        elif action == "reject":
-            proposal = control.reject(
-                str(fingerprint),
-                reviewer="remote-user",
-                reason=str(reason or "rejected by remote user"),
-            )
-        else:
-            raise ValueError("memory action must be approve or reject")
-        return self._memory_proposal_dict(proposal)
+            return control.approve(proposal_id, expected_revision=expected_revision,
+                                   related_records=related_records, **arguments)
+        if action == "reject":
+            return control.reject(proposal_id, reason=reason or "rejected by remote user", **arguments)
+        raise ValueError("memory action must be approve or reject")
 
     def expand_command(self, name: str, arguments: str = "") -> dict:
         from nz_coder.interface.custom_commands import default_command_catalog
@@ -813,6 +971,7 @@ class ManagedSession:
             raise ValueError("command digest is invalid")
         from nz_coder.foundation.workspace_trust import load_config_snapshot
 
+        self._retry_client_cleanup()
         run_snapshot = load_config_snapshot(self.workspace)
         if provided_command_digest:
             expected_command_digest = self._command_execution_digest(
@@ -828,7 +987,7 @@ class ManagedSession:
                     "custom command expansion is stale; expand it again"
                 )
         with self._lock:
-            if self._disposed:
+            if self._disposed or self._closing:
                 raise SessionNotFoundError(self.session_id)
             if self._run_thread is not None:
                 raise SessionBusyError("session already has an active run")
@@ -839,6 +998,20 @@ class ManagedSession:
             self._gate_acquired = True
             previous_history = copy.deepcopy(self.history)
             try:
+                self._settle_previous_result()
+                from nz_coder.runtime.session.model import SessionIdentity
+                from nz_coder.runtime.session.store import LegacyJsonSessionStore
+
+                self._session_lease = LegacyJsonSessionStore().acquire(
+                    SessionIdentity(self.session_id, self.parent_session_id),
+                    self.workspace, outer_hold=True,
+                )
+                # 缓存可能早于另一客户端已完成的运行，须在获得写权后重读原件。
+                with scoped_workdir(self.workspace):
+                    canonical = load_session(self.session_id)
+                if canonical:
+                    self.history = copy.deepcopy(canonical['messages'])
+                previous_history = copy.deepcopy(self.history)
                 self.config_snapshot = run_snapshot
                 self._active_interaction_run_id = (
                     f"interaction-{uuid.uuid4().hex}"
@@ -882,6 +1055,12 @@ class ManagedSession:
                 user_message[INTERACTION_RUN_ID_KEY] = (
                     self._active_interaction_run_id
                 )
+                from nz_coder.runtime.adapters.verification_runtime import preflight_runtime_restore
+                from nz_coder.runtime.core.run_settings import RunSettings
+                from nz_coder.runtime.core.execution_context import command_activation
+                activation = command_activation([*self.history, user_message])
+                preflight_runtime_restore(session_id=self.session_id, workspace=self.workspace,
+                    activation=activation, settings=RunSettings.from_snapshot(run_snapshot))
                 self.history.append(user_message)
                 run_messages = copy.deepcopy(self.history)
                 with scoped_workdir(self.workspace):
@@ -893,6 +1072,7 @@ class ManagedSession:
                         run_status="running",
                         require_aliases=False,
                         model=self.model,
+                        session_metadata=self._result_metadata(),
                     )
                 self.status = "running"
                 self.last_error = ""
@@ -918,26 +1098,33 @@ class ManagedSession:
                 self._run_thread = thread
                 thread.start()
             except Exception as exc:
+                from nz_coder.runtime.verification.domain.checkpoint import CheckpointRestoreError
                 self._run_thread = None
                 self._run_phase = "idle"
                 self._run_event_floor = 0
                 self.status = "failed"
                 self.last_error = to_public_error(exc).message
+                self.last_result = {}
                 self.history = previous_history
-                try:
-                    with scoped_workdir(self.workspace):
-                        save_session(
-                            self._persistence_messages(),
-                            mode=self.permission_mode,
-                            session_id=self.session_id,
-                            activate=False,
-                            run_status="failed",
-                            require_aliases=False,
-                            model=self.model,
-                        )
-                except Exception:
-                    pass
+                if (self._session_lease is not None
+                        and not isinstance(exc, CheckpointRestoreError)
+                        and not self._client_settlement_pending()):
+                    try:
+                        with scoped_workdir(self.workspace):
+                            save_session(
+                                self._persistence_messages(),
+                                mode=self.permission_mode,
+                                session_id=self.session_id,
+                                activate=False,
+                                run_status="failed",
+                                require_aliases=False,
+                                model=self.model,
+                                session_metadata=self._result_metadata(),
+                            )
+                    except Exception:
+                        pass
                 self.interactions.cancel_all("start_failed", block_new=True)
+                self._close_session_hold()
                 self._release_run_gate()
                 raise
             return self.info()
@@ -971,23 +1158,104 @@ class ManagedSession:
         thread.join(timeout=wait_timeout)
         return not thread.is_alive()
 
-    def dispose(self, *, force: bool = False) -> None:
+    def _request_close(self) -> None:
         with self._lock:
-            if self._disposed:
-                return
-            if self._run_thread is not None and not force:
-                raise SessionBusyError("abort the active run before deleting the session")
-            self._disposed = True
-            self.status = "disposed"
-            self.updated_at = time.time()
-        self.interactions.close()
+            self._closing = True
+        runner = getattr(self.client, "_native_runner", None)
+        notify = getattr(runner, "request_retirement", None)
+        if callable(notify):
+            notify(self.workspace, self.session_id)
+        self.abort()
+
+    def _client_settlement_pending(self) -> bool:
+        if self.client is None:
+            return bool(getattr(self.agent, "has_pending_settlement", False))
+        runner = getattr(self.client, "_native_runner", None)
+        pending = getattr(runner, "_has_pending_settlement", None)
+        return bool(pending(self.workspace, self.session_id)) if callable(pending) else False
+
+    def _settle_previous_result(self) -> None:
+        if self._client_settlement_pending():
+            operation = (self.client.retry_settlement(self.workspace, self.session_id)
+                         if self.client is not None else self.agent.retry_settlement())
+            result = asyncio.run(operation)
+            if result.state in {"pending", "conflict"}:
+                from nz_coder.protocol.public_error import PublicRuntimeError
+                raise PublicRuntimeError(result.error)
+        self._refresh_committed_result()
+
+    def _refresh_committed_result(self) -> None:
+        # 只在失败缓存与已确认原件之间重建显示；运行中和待结算时不读写竞争。
+        if (self._run_thread is not None or self.status != "failed"
+                or self._client_settlement_pending()):
+            return
+        with scoped_workdir(self.workspace):
+            payload = load_session(self.session_id)
+        from nz_coder.runtime.session.store import confirms_terminal_commit
+        if not confirms_terminal_commit(payload, self.workspace, self.session_id, self._active_interaction_run_id):
+            return
+        record = _canonical_terminal_record(payload)
+        self.history = copy.deepcopy(payload["messages"])
+        self.status = record["status"]
+        self.last_result, self.last_error = record["last_result"], record["last_error"]
+        self.updated_at = time.time()
+
+    def _retry_client_cleanup(self) -> None:
+        runner = getattr(self.client, "_native_runner", None)
+        retry = getattr(runner, "retry_cleanup", None)
+        if callable(retry) and not retry(self.workspace, self.session_id):
+            raise SessionBusyError("agent resource cleanup is incomplete")
+
+    def _close_agent(self) -> None:
+        if self.agent is None:
+            self._retry_client_cleanup()
+            self.event_bus.close()
+            return
+        self.agent.close()
+        # Agent.close 会记录阶段失败而不抛错，必须读取其实际清理状态。
+        if getattr(self.agent, "environment_cleanup_complete", True) is False:
+            raise SessionBusyError("agent resource cleanup is incomplete")
+
+    def dispose(self, *, force: bool = False, deadline: float | None = None) -> None:
+        if force:
+            self._request_close()
         from nz_coder.runtime.process.process_service import dispose_session_processes
 
-        dispose_session_processes(self.workspace, self.session_id)
-        if self.agent is not None:
-            self.agent.close()
-        else:
-            self.event_bus.close()
+        with self._dispose_lock:
+            with self._lock:
+                if self._disposed:
+                    return
+                if self._run_thread is not None:
+                    raise SessionBusyError("wait for the active run before disposing the session")
+                self._closing = True
+            stages = (
+                ("interactions", self.interactions.close),
+                (
+                    "processes",
+                    lambda: dispose_session_processes(
+                        self.workspace,
+                        self.session_id,
+                        deadline=deadline,
+                    ),
+                ),
+                ("agent", self._close_agent),
+            )
+            failures = []
+            for label, close in stages:
+                if label in self._dispose_completed:
+                    continue
+                try:
+                    close()
+                except Exception as exc:
+                    failures.append(exc)
+                else:
+                    self._dispose_completed.add(label)
+            if failures:
+                raise failures[0]
+            with self._lock:
+                self._disposed = True
+                self.status = "disposed"
+                self.updated_at = time.time()
 
     def delete_persisted(self) -> bool:
         """Atomically reject active runs, delete owned state, then dispose."""
@@ -996,6 +1264,7 @@ class ManagedSession:
                 return False
             if self._run_thread is not None:
                 raise SessionBusyError("abort the active run before deleting the session")
+            self._closing = True
             with scoped_workdir(self.workspace):
                 deleted = delete_session(self.session_id)
             try:
@@ -1005,17 +1274,7 @@ class ManagedSession:
                 )
             except RuntimeError:
                 pass
-            self._disposed = True
-            self.status = "disposed"
-            self.updated_at = time.time()
-        self.interactions.close()
-        from nz_coder.runtime.process.process_service import dispose_session_processes
-
-        dispose_session_processes(self.workspace, self.session_id)
-        if self.agent is not None:
-            self.agent.close()
-        else:
-            self.event_bus.close()
+        self.dispose()
         return deleted
 
     def _run_agent(
@@ -1031,41 +1290,58 @@ class ManagedSession:
         from nz_coder.foundation.workspace_trust import scoped_config_snapshot
 
         snapshot = run_snapshot or self.config_snapshot
-        with scoped_workdir(self.workspace), scoped_config_snapshot(snapshot):
-            if self.client is None:
-                # The legacy Agent adapter must not infer an interaction identity
-                # from the session-long EventBus. Bind the request-scoped identity
-                # explicitly for this invocation only.
-                self.agent._requested_interaction_run_id = (
-                    self._active_interaction_run_id
-                )
-                run_kwargs = {"stream": True}
-                if callable(getattr(self.agent, "prepare_run_control", None)):
-                    run_kwargs["config_snapshot"] = snapshot
-                task = loop.create_task(self.agent.run(run_messages, **run_kwargs))
-            else:
-                task = loop.create_task(self.client.run(
-                    run_request or self._run_request(
-                        run_messages, allowed_tools, model_override, snapshot,
-                    ),
-                    permission_asker=self.interactions.ask_permission,
-                    question_asker=self.interactions.ask_question,
-                    workflow_approval_asker=lambda _summary: "reject",
-                    event_bus=self.event_bus,
-                    config_snapshot=snapshot,
-                ))
-        with self._lock:
-            self._run_loop = loop
-            self._run_task = task
-            self._run_phase = "running"
-            cancel_requested = self._cancel_requested
-        if cancel_requested:
-            task.cancel()
+        try:
+            with scoped_workdir(self.workspace), scoped_config_snapshot(snapshot):
+                if self.client is None:
+                    # The legacy Agent adapter must not infer an interaction identity
+                    # from the session-long EventBus. Bind the request-scoped identity
+                    # explicitly for this invocation only.
+                    self.agent._requested_interaction_run_id = (
+                        self._active_interaction_run_id
+                    )
+                    self.agent._requested_session_lease = self._session_lease
+                    run_kwargs = {"stream": True}
+                    if callable(getattr(self.agent, "prepare_run_control", None)):
+                        run_kwargs["config_snapshot"] = snapshot
+                    task = loop.create_task(self.agent.run(run_messages, **run_kwargs))
+                else:
+                    task = loop.create_task(self.client.run(
+                        run_request or self._run_request(
+                            run_messages, allowed_tools, model_override, snapshot,
+                        ),
+                        permission_asker=self.interactions.ask_permission,
+                        question_asker=self.interactions.ask_question,
+                        workflow_approval_asker=lambda _summary: "reject",
+                        event_bus=self.event_bus,
+                        config_snapshot=snapshot,
+                        session_lease=self._session_lease,
+                    ))
+            with self._lock:
+                self._run_loop = loop
+                self._run_task = task
+                self._run_phase = "running"
+                cancel_requested = self._cancel_requested
+            if cancel_requested:
+                task.cancel()
+
+        except BaseException as exc:
+            # 线程已启动但协程尚未进入 Runner，未 claim 的外层写权仍须归还。
+            loop.close()
+            with self._lock:
+                self.status = "failed"
+                self.last_error = to_public_error(exc).message
+                self._run_loop = self._run_task = self._run_thread = None
+                self._run_phase = "idle"
+                self.interactions.cancel_all("start_failed", block_new=True)
+                self._close_session_hold()
+                self._release_run_gate()
+            return
 
         status = "completed"
         error = ""
         result: dict = {}
         persisted = False
+        preserve_canonical = False
         try:
             value = loop.run_until_complete(task)
             if self.client is not None:
@@ -1081,6 +1357,7 @@ class ManagedSession:
                         else ""
                     ),
                     "metadata": copy.deepcopy(value.metadata),
+                    "usage": asdict(value.usage),
                 }
             else:
                 result = copy.deepcopy(value) if isinstance(value, dict) else {"result": value}
@@ -1089,18 +1366,76 @@ class ManagedSession:
                     for key in ("error", "last_error"):
                         if result.get(key):
                             result[key] = public_error_message(result[key])
+            if status in {"error", "failed", "aborted"}:
+                metadata = result.get("metadata") or {}
+                public = public_error_from_wire(metadata.get("public_error"))
+                if public is None and self.client is None:
+                    # 旧宿主返回值在上面已投影，不能把投影后的普通字符串再次信任。
+                    raw_result = value if isinstance(value, dict) else {}
+                    public = (public_error_from_wire(raw_result.get("public_error"))
+                              or public_error_from_wire(raw_result.get("error"))
+                              or public_error_from_wire(raw_result.get("last_error")))
+                if public is None:
+                    public = to_public_error(None)
+                error = public.message
+                result["error"] = error
+                result.setdefault("metadata", {})["public_error"] = public.to_dict()
+                if "last_error" in result:
+                    result["last_error"] = error
         except asyncio.CancelledError:
             status = "cancelled"
         except Exception as exc:
+            from nz_coder.runtime.verification.domain.checkpoint import CheckpointRestoreError
+            preserve_canonical = isinstance(exc, CheckpointRestoreError) or self._client_settlement_pending()
             status = "failed"
             error = to_public_error(exc).message
+            if self._client_settlement_pending():
+                error = "The original result is waiting for Session storage."
         finally:
             if self.client is None:
                 self.agent._requested_interaction_run_id = None
+                self.agent._requested_session_lease = None
+            if self.client is not None or callable(getattr(self.agent, "prepare_run_control", None)):
+                # SDK可能已按冻结结果提交后仍传播原异常；宿主不能另写一份取消/失败。
+                if self._client_settlement_pending():
+                    preserve_canonical = True
+                    status = "failed"
+                    error = "The original result is waiting for Session storage."
+                else:
+                    from nz_coder.runtime.session.store import confirms_terminal_commit
+                    try:
+                        with scoped_workdir(self.workspace):
+                            canonical = load_session(self.session_id)
+                    except (OSError, ValueError):
+                        preserve_canonical = True
+                    else:
+                        if confirms_terminal_commit(canonical, self.workspace, self.session_id, self._active_interaction_run_id):
+                            record = _canonical_terminal_record(canonical)
+                            run_messages[:] = copy.deepcopy(canonical["messages"])
+                            late = {key: copy.deepcopy(result.get("metadata", {})[key])
+                                    for key in ("changed_files", "environment_cleanup_complete", "environment_cleanup_failures")
+                                    if key in result.get("metadata", {})
+                                    and result.get("metadata", {}).get("interaction_run_id") == self._active_interaction_run_id}
+                            status, error, result = record["status"], record["last_error"], record["last_result"]
+                            if result:
+                                result["metadata"].update(late)
+                            preserve_canonical = True
+                            persisted = True
             with self._lock:
                 self._run_phase = "committing"
-                if self._cancel_requested:
+                if self._cancel_requested and not preserve_canonical:
                     status = "cancelled"
+                if status == "cancelled":
+                    # 沿用已接受的取消结果，不能同时发布另一份 error 状态和原因。
+                    error = ""
+                    result["status"] = status
+                    result["error"] = ""
+                    result.pop("public_error", None)
+                    if "last_error" in result:
+                        result["last_error"] = ""
+                    metadata = result.get("metadata")
+                    if isinstance(metadata, dict):
+                        metadata.pop("public_error", None)
             try:
                 loop.run_until_complete(loop.shutdown_asyncgens())
             except Exception:
@@ -1114,28 +1449,38 @@ class ManagedSession:
                 self.updated_at = time.time()
                 self._run_loop = None
                 self._run_task = None
+                persisted_messages = self._persistence_messages()
+                terminal_record = {
+                    "interaction_run_id": self._active_interaction_run_id,
+                    "status": status,
+                    "last_error": error,
+                    "last_result": copy.deepcopy(result),
+                }
             try:
-                with scoped_workdir(self.workspace):
-                    save_session(
-                        self._persistence_messages(),
-                        mode=self.permission_mode,
-                        session_id=self.session_id,
-                        activate=False,
-                        run_status=status,
-                        require_aliases=False,
-                        model=self.model,
-                    )
-                persisted = True
-                try:
-                    payload = load_session(self.session_id)
-                    with self._lock:
-                        self.title = str(payload.get("title") or self.title)
-                        # A custom-command override is immutable per RunRequest;
-                        # it never becomes the Session's configured model.
-                        self.model = str(payload.get("model") or self.model)
-                        self.parent_session_id = payload.get("parent_session_id") or self.parent_session_id
-                except Exception:
-                    pass
+                if not preserve_canonical:
+                    with scoped_workdir(self.workspace):
+                        save_session(
+                            persisted_messages,
+                            mode=self.permission_mode,
+                            session_id=self.session_id,
+                            activate=False,
+                            run_status=status,
+                            require_aliases=False,
+                            model=self.model,
+                            session_metadata=self._result_metadata(terminal_record),
+                        )
+                    persisted = True
+                    try:
+                        with scoped_workdir(self.workspace):
+                            payload = load_session(self.session_id)
+                        with self._lock:
+                            self.title = str(payload.get("title") or self.title)
+                            # A custom-command override is immutable per RunRequest;
+                            # it never becomes the Session's configured model.
+                            self.model = str(payload.get("model") or self.model)
+                            self.parent_session_id = payload.get("parent_session_id") or self.parent_session_id
+                    except Exception:
+                        pass
             except Exception:
                 pass
             finally:
@@ -1146,6 +1491,7 @@ class ManagedSession:
                     self._run_thread = None
                     self._run_phase = "idle"
                     self._run_event_floor = 0
+                    self._close_session_hold()
                     self._release_run_gate()
                     try:
                         (self._active_event_publisher or self.event_bus).publish(
@@ -1155,49 +1501,16 @@ class ManagedSession:
                     except RuntimeError:
                         pass
 
+    def _close_session_hold(self) -> None:
+        lease, self._session_lease = self._session_lease, None
+        if lease is not None:
+            lease.close_hold()
+
     def _release_run_gate(self) -> None:
         if not self._gate_acquired:
             return
         self._gate_acquired = False
         self._run_gate.release()
-
-
-def _merge_replayed_interactions(pending: dict, events: list) -> dict:
-    """Fold the atomic replay suffix into a pre-checkpoint pending snapshot."""
-    values = {
-        "permission": {
-            str(item.get("id")): copy.deepcopy(item)
-            for item in pending.get("permissions", [])
-            if isinstance(item, dict) and item.get("id")
-        },
-        "question": {
-            str(item.get("id")): copy.deepcopy(item)
-            for item in pending.get("questions", [])
-            if isinstance(item, dict) and item.get("id")
-        },
-    }
-    for event in events:
-        props = event.properties
-        if event.type in {"permission.asked", "question.asked"}:
-            kind = event.type.split(".", 1)[0]
-            request_id = str(props.get("id") or "")
-            if request_id:
-                values[kind][request_id] = copy.deepcopy(props)
-        elif event.type in {
-            "permission.replied", "question.replied", "question.rejected",
-        }:
-            kind = event.type.split(".", 1)[0]
-            values[kind].pop(str(props.get("request_id") or ""), None)
-    return {
-        "permissions": sorted(
-            values["permission"].values(),
-            key=lambda item: (item.get("created_at", 0), item.get("id", "")),
-        ),
-        "questions": sorted(
-            values["question"].values(),
-            key=lambda item: (item.get("created_at", 0), item.get("id", "")),
-        ),
-    }
 
 
 class SessionManager:
@@ -1226,7 +1539,7 @@ class SessionManager:
         self.workspaces = WorkspaceRegistry(workspace_roots)
         self._lock = threading.RLock()
         self._sessions: dict[str, ManagedSession] = {}
-        self._saved: dict[str, dict] = {}
+        self._saved: list[SessionCandidate] = []
         self._closed = False
         self._run_gates = {
             item["id"]: threading.Lock() for item in self.workspaces.list()
@@ -1249,7 +1562,7 @@ class SessionManager:
                 raise RuntimeError("session manager is closed")
             while True:
                 session_id = create_session_id("http")
-                if session_id not in self._sessions and session_id not in self._saved:
+                if session_id not in self._sessions and not self._find_candidates(session_id):
                     break
             session = self._build_session(
                 session_id=session_id,
@@ -1274,48 +1587,101 @@ class SessionManager:
                 raise
             return session.info()
 
-    def list(self) -> list[dict]:
+    @staticmethod
+    def _summary(info: dict) -> dict:
+        keys = ("id", "workspace_id", "title", "status", "runtime_status", "parent_session_id", "created_at", "updated_at", "message_count", "running")
+        summary = {key: info.get(key) for key in keys}
+        title = str(summary["title"] or "New Session")
+        summary["title"] = title if len(title) <= 160 else title[:157] + "..."
+        return summary
+
+    def _find_candidates(self, session_id: str) -> list[SessionCandidate]:
+        try:
+            _exact_session_id(session_id)
+        except ValueError:
+            return []
+        found = []
+        for item in self.workspaces.list():
+            with scoped_workdir(Path(item["path"])):
+                path = session_dir() / f"{session_id}.json"
+            try:
+                identity = _file_identity(path.stat(follow_symlinks=False))
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise SessionReadError("unreadable", path) from exc
+            found.append(SessionCandidate(session_id, item["id"], path, identity))
+        return found
+
+    def _read_candidate(self, candidate: SessionCandidate) -> dict:
+        workspace = self.workspaces.get(candidate.workspace_id)
+        with scoped_workdir(workspace):
+            payload = _read_saved_session(candidate.path, expected_id=candidate.session_id, expected_identity=candidate.file_identity)
+        if payload is None:
+            raise SessionReadError("changed", candidate.path)
+        saved = self._validated_saved(payload, filename_id=candidate.session_id, workspace_id=candidate.workspace_id, workspace=workspace, modified_at=candidate.file_identity[3] / 1_000_000_000)
+        if saved is None:
+            raise SessionReadError("corrupt", candidate.path)
+        parent = saved["info"].get("parent_session_id")
+        if parent is not None and parent != "":
+            try:
+                if not isinstance(parent, str):
+                    raise ValueError()
+                _exact_session_id(parent)
+            except (ValueError, TypeError):
+                raise SessionReadError("corrupt", candidate.path)
+        if parent == "":
+            saved["info"]["parent_session_id"] = None
+        return saved
+
+    def _resolve_candidate(self, session_id: str) -> SessionCandidate:
+        candidates = self._find_candidates(session_id)
+        if not candidates:
+            raise SessionNotFoundError(session_id)
+        if len(candidates) > 1:
+            raise SessionReadError("ambiguous", candidates[0].path)
+        return candidates[0]
+
+    def list(self) -> dict:
         with self._lock:
-            sessions = list(self._sessions.values())
-            saved = [copy.deepcopy(item["info"]) for item in self._saved.values()]
-        return sorted(
-            [*(session.info() for session in sessions), *saved],
-            key=lambda item: item["created_at"],
-            reverse=True,
-        )
+            live = dict(self._sessions)
+            candidates = list(self._saved)
+        summaries = [self._summary(session.info()) for session in live.values()]
+        unavailable = []
+        for candidate in candidates:
+            if candidate.session_id in live:
+                continue
+            try:
+                matches = self._find_candidates(candidate.session_id)
+                if len(matches) > 1:
+                    raise SessionReadError("ambiguous", candidate.path)
+                saved = self._read_candidate(candidate)
+                summaries.append(self._summary(saved["info"]))
+            except SessionReadError as exc:
+                _LOGGER.warning("Cannot discover Session %s: %s", candidate.session_id, exc.kind)
+                unavailable.append({"candidate_id": candidate.session_id, "workspace_id": candidate.workspace_id, "code": exc.kind, "size_bytes": exc.size_bytes, "limit_bytes": exc.limit_bytes})
+        summaries.sort(key=lambda item: item["created_at"], reverse=True)
+        return {"sessions": summaries, "unavailable": unavailable}
 
     def get(self, session_id: str) -> ManagedSession:
         with self._lock:
             session = self._sessions.get(session_id)
             if session is not None:
                 return session
-            saved = self._saved.get(session_id)
-            if saved is None:
-                raise SessionNotFoundError(session_id)
             if self._closed:
                 raise RuntimeError("session manager is closed")
-            info = saved["info"]
-            payload = saved["payload"]
+            candidate = self._resolve_candidate(session_id)
+            saved = self._read_candidate(candidate)
+            info, payload = saved["info"], saved["payload"]
             workspace = self.workspaces.get(info["workspace_id"])
             session = self._build_session(
-                session_id=session_id,
-                mode=info["permission_mode"],
-                workspace_id=info["workspace_id"],
-                workspace=workspace,
-                history=payload["messages"],
-                created_at=info["created_at"],
-                updated_at=info["updated_at"],
-                restored=True,
-                initial_status=(
-                    "idle" if info["status"] == "dormant" else info["status"]
-                ),
-                last_error=info["last_error"],
-                title=info.get("title", "New Session"),
-                model=info.get("model", "unknown"),
-                parent_session_id=info.get("parent_session_id"),
-            )
+                session_id=session_id, mode=info["permission_mode"], workspace_id=info["workspace_id"], workspace=workspace,
+                history=payload["messages"], created_at=info["created_at"], updated_at=info["updated_at"], restored=True,
+                initial_status="idle" if info["status"] == "dormant" else info["status"], last_error=info["last_error"],
+                last_result=info["last_result"], active_interaction_run_id=info["active_interaction_run_id"],
+                title=info.get("title", "New Session"), model=info.get("model", "unknown"), parent_session_id=info.get("parent_session_id"))
             self._sessions[session_id] = session
-            self._saved.pop(session_id, None)
+            self._saved = [item for item in self._saved if item.session_id != session_id]
             return session
 
     def start_run(
@@ -1337,12 +1703,17 @@ class SessionManager:
         )
 
     def info(self, session_id: str) -> dict:
-        session = self.get(session_id)
-        result = session.info()
-        result["children"] = [
-            item["id"] for item in self.list()
-            if item.get("parent_session_id") == session_id
-        ]
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is not None:
+                result = session.info()
+            else:
+                result = self._read_candidate(self._resolve_candidate(session_id))["info"]
+                from nz_coder.providers.models import active_model_selection
+                selected = active_model_selection(Path(result["workspace"]))
+                result.update(mode=result["permission_mode"], provider=selected.provider,
+                              reasoning_effort=selected.variant)
+        result["children"] = [item["id"] for item in self.list()["sessions"] if item.get("parent_session_id") == session_id]
         return result
 
     def rename(self, session_id: str, title: str) -> dict:
@@ -1353,6 +1724,7 @@ class SessionManager:
     def fork(self, session_id: str, turn_number: int | None = None) -> dict:
         from nz_coder.interface.timeline import fork_history, forked_session_title, conversation_turns
         from nz_coder.protocol.message_schema import rebind_fork_history
+        from nz_coder.runtime.session.session_revert import copy_fork_snapshots
 
         parent = self.get(session_id)
         with parent._lock:
@@ -1374,9 +1746,10 @@ class SessionManager:
                 raise RuntimeError("session manager is closed")
             while True:
                 new_id = create_session_id("fork")
-                if new_id not in self._sessions and new_id not in self._saved:
+                if new_id not in self._sessions and not self._find_candidates(new_id):
                     break
             history = rebind_fork_history(fork_history(parent_history, selected), new_id)
+            copy_fork_snapshots(workspace, session_id, new_id, history)
             child = self._build_session(
                 session_id=new_id,
                 mode=mode,
@@ -1411,14 +1784,13 @@ class SessionManager:
         with self._lock:
             session = self._sessions.get(session_id)
             if session is None:
-                saved = self._saved.get(session_id)
-                if saved is not None:
-                    workspace = self.workspaces.get(saved["info"]["workspace_id"])
-                    with scoped_workdir(workspace):
-                        delete_session(session_id)
-                    self._saved.pop(session_id, None)
-                    return True
-                raise SessionNotFoundError(session_id)
+                candidate = self._resolve_candidate(session_id)
+                self._read_candidate(candidate)
+                workspace = self.workspaces.get(candidate.workspace_id)
+                with scoped_workdir(workspace):
+                    delete_session(session_id)
+                self._saved = [item for item in self._saved if item != candidate]
+                return True
         session.delete_persisted()
         with self._lock:
             self._sessions.pop(session_id, None)
@@ -1431,17 +1803,35 @@ class SessionManager:
     def close(self, timeout: float = 5.0) -> None:
         close_timeout = _validated_wait_timeout(timeout, "close", allow_none=False)
         with self._lock:
-            if self._closed:
+            if self._closed and not self._sessions:
                 return
             self._closed = True
             sessions = list(self._sessions.values())
-            self._sessions.clear()
+        failures: dict[str, Exception] = {}
         for session in sessions:
-            session.abort()
+            try:
+                session._request_close()
+            except Exception as exc:
+                failures[session.session_id] = exc
         deadline = time.monotonic() + close_timeout
         for session in sessions:
-            session.wait(max(0.0, deadline - time.monotonic()))
-            session.dispose(force=True)
+            try:
+                if not session.wait(max(0.0, deadline - time.monotonic())):
+                    raise SessionBusyError("session execution has not settled")
+                session.dispose(deadline=deadline)
+            except Exception as exc:
+                failures[session.session_id] = exc
+            else:
+                # 只有实际清理成功才移除登记，未完成对象留给下一次关闭重试。
+                with self._lock:
+                    if self._sessions.get(session.session_id) is session:
+                        self._sessions.pop(session.session_id)
+                failures.pop(session.session_id, None)
+        if failures:
+            raise SessionBusyError(
+                "session cleanup incomplete: " + ", ".join(failures)
+            ) from next(iter(failures.values()))
+
     def _build_session(
         self,
         *,
@@ -1455,6 +1845,8 @@ class SessionManager:
         restored: bool = False,
         initial_status: str = "idle",
         last_error: str = "",
+        last_result: dict | None = None,
+        active_interaction_run_id: str = "",
         title: str = "New Session",
         model: str = "unknown",
         parent_session_id: str | None = None,
@@ -1496,6 +1888,8 @@ class SessionManager:
             restored=restored,
             initial_status=initial_status,
             last_error=last_error,
+            last_result=last_result,
+            active_interaction_run_id=active_interaction_run_id,
             title=title,
             model=model,
             parent_session_id=parent_session_id,
@@ -1504,38 +1898,15 @@ class SessionManager:
         )
 
     def _discover_saved(self, limit: int) -> None:
-        ambiguous_ids: set[str] = set()
         for workspace_info in self.workspaces.list():
             workspace = Path(workspace_info["path"])
             with scoped_workdir(workspace):
-                paths = list_sessions(limit=limit)
-                for path in paths:
+                for path in list_sessions(limit=limit):
                     try:
-                        stat = path.stat()
+                        identity = _file_identity(path.stat(follow_symlinks=False))
                     except OSError:
                         continue
-                    if stat.st_size > _MAX_SAVED_SESSION_BYTES:
-                        continue
-                    payload = load_session(path.stem)
-                    saved = self._validated_saved(
-                        payload,
-                        filename_id=path.stem,
-                        workspace_id=workspace_info["id"],
-                        workspace=workspace,
-                        modified_at=stat.st_mtime,
-                    )
-                    if saved is None:
-                        continue
-                    session_id = saved["info"]["id"]
-                    if session_id in ambiguous_ids:
-                        continue
-                    if session_id in self._saved:
-                        # Session IDs are global API identities. Ambiguous copies
-                        # are not exposed from either workspace.
-                        self._saved.pop(session_id, None)
-                        ambiguous_ids.add(session_id)
-                        continue
-                    self._saved[session_id] = saved
+                    self._saved.append(SessionCandidate(path.stem, workspace_info["id"], path, identity))
 
     @staticmethod
     def _validated_saved(
@@ -1552,7 +1923,7 @@ class SessionManager:
         if (
             not isinstance(session_id, str)
             or session_id != filename_id
-            or not _SAFE_SESSION_ID.fullmatch(session_id)
+            or not _valid_session_identity(session_id)
         ):
             return None
         messages = payload.get("messages")
@@ -1560,8 +1931,10 @@ class SessionManager:
             isinstance(message, dict) for message in messages
         ):
             return None
+        if any(not _valid_persisted_parts(message) for message in messages):
+            return None
         mode = payload.get("mode") or config.PERMISSION_MODE
-        if mode not in MODES:
+        if not isinstance(mode, str) or mode not in MODES:
             return None
         persisted_workspace_text = payload.get("workspace")
         if not isinstance(persisted_workspace_text, str) or not persisted_workspace_text:
@@ -1574,6 +1947,7 @@ class SessionManager:
             return None
         persisted_status = str(payload.get("run_status") or "dormant")
         if persisted_status not in {
+            "blocked",
             "cancelled",
             "completed",
             "completed_unverified",
@@ -1589,6 +1963,12 @@ class SessionManager:
         interrupted = persisted_status == "running"
         if interrupted:
             settle_interrupted_parts(messages)
+        terminal_record = _saved_terminal_result(payload, persisted_status)
+        if terminal_record is None:
+            from nz_coder.runtime.session.store import confirms_terminal_commit
+            interaction = (payload.get("metadata") or {}).get("active_interaction_run_id", "")
+            if confirms_terminal_commit(payload, workspace, session_id, interaction):
+                terminal_record = _canonical_terminal_record(payload)
         info = {
             "id": session_id,
             "status": "interrupted" if interrupted else persisted_status,
@@ -1605,11 +1985,14 @@ class SessionManager:
             "last_error": (
                 "service stopped before the accepted run settled"
                 if interrupted
-                else ""
+                else terminal_record["last_error"] if terminal_record is not None else ""
             ),
-            "last_result": {},
+            "last_result": terminal_record["last_result"] if terminal_record is not None else {},
+            "active_interaction_run_id": (
+                terminal_record["interaction_run_id"] if terminal_record is not None else ""
+            ),
             "title": str(payload.get("title") or "New Session"),
             "model": str(payload.get("model") or "unknown"),
             "parent_session_id": payload.get("parent_session_id"),
         }
-        return {"info": info, "payload": copy.deepcopy(payload)}
+        return {"info": info, "payload": payload}

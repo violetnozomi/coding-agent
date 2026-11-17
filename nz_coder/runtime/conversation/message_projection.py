@@ -31,6 +31,7 @@ def project_provider_messages(
     target_provider_id: str = "",
     target_provider_instance_id: str = "",
     target_model_id: str = "",
+    authoritative_state: bool = False,
 ) -> list:
     """Normalize Session history without exposing durable NZ-only fields."""
     target_provider_id = str(
@@ -43,7 +44,16 @@ def project_provider_messages(
         or getattr(capabilities, "model_id", "")
         or ""
     )
-    messages = project_continuation_messages(messages)
+    messages = project_continuation_messages(messages, authoritative_state=authoritative_state)
+    projected_history = []
+    for message in messages:
+        marker = message.get("_nz_compaction")
+        if isinstance(marker, dict) and message.get("role") == "user":
+            message = copy.deepcopy(message)
+            message["content"] = ("Historical continuity background; current verification unknown here. "
+                                  "Use current-task-facts for current status.\n" + str(message.get("content") or ""))
+        projected_history.append(message)
+    messages = projected_history
     empty_tool_assistant_ordinals = _empty_tool_assistant_ordinals(messages)
     calls_before, results_before = _tool_envelope_counts(messages)
     messages = cleanup_incomplete_tool_history(messages)
@@ -79,8 +89,6 @@ def project_provider_messages(
     image_description_by_message: dict[str, list[str]] = {}
     document_read_by_message: dict[str, list[str]] = {}
     latest_write_generation: dict[str, int] = {}
-    latest_pass_generation: dict[str, int] = {}
-    latest_acceptance_generation = -1
 
     for owner in messages:
         if not isinstance(owner, dict):
@@ -94,19 +102,6 @@ def project_provider_messages(
                         latest_write_generation[path] = max(
                             latest_write_generation.get(path, -1), generation,
                         )
-            if (
-                owner.get("_nz_evidence_kind") == "verification"
-                and owner.get("_nz_verification_passed") is True
-            ):
-                resource = str(owner.get("_nz_resource") or "")
-                if resource:
-                    latest_pass_generation[resource] = max(
-                        latest_pass_generation.get(resource, -1), generation,
-                    )
-                if resource == "acceptance":
-                    latest_acceptance_generation = max(
-                        latest_acceptance_generation, generation,
-                    )
         for part in owner.get(PARTS_KEY, []):
             if not isinstance(part, dict):
                 continue
@@ -212,14 +207,10 @@ def project_provider_messages(
             replacement = _superseded_tool_marker(
                 message,
                 latest_write_generation=latest_write_generation,
-                latest_pass_generation=latest_pass_generation,
-                latest_acceptance_generation=latest_acceptance_generation,
             )
             reason = ""
             if replacement.startswith("[Earlier read of "):
                 reason = "superseded_file_reads"
-            elif replacement.startswith("[Earlier "):
-                reason = "superseded_verification_failures"
             if not replacement and observed_by_provider[message_index]:
                 replacement = _acknowledged_write_marker(message)
                 if replacement:
@@ -444,8 +435,6 @@ def _superseded_tool_marker(
     message: dict,
     *,
     latest_write_generation: dict[str, int],
-    latest_pass_generation: dict[str, int],
-    latest_acceptance_generation: int,
 ) -> str:
     kind = str(message.get("_nz_evidence_kind") or "")
     resource = str(message.get("_nz_resource") or "")
@@ -456,21 +445,6 @@ def _superseded_tool_marker(
             return (
                 f"[Earlier read of {resource} omitted: file changed in mutation "
                 f"generation {changed_generation}.]"
-            )
-    if (
-        kind == "verification"
-        and resource
-        and message.get("_nz_verification_passed") is False
-    ):
-        passed_generation = max(
-            latest_pass_generation.get(resource, -1),
-            latest_acceptance_generation,
-        )
-        if passed_generation > generation:
-            return (
-                f"[Earlier {resource} verification failure from generation "
-                f"{generation} omitted; superseded by a passing generation "
-                f"{passed_generation} result.]"
             )
     return ""
 

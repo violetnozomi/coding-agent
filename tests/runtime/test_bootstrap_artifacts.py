@@ -89,7 +89,7 @@ def test_contract_splits_requested_test_files_into_distinct_requirements(tmp_pat
             "完善 cron_engine：parser 支持 JAN-DEC 月份名称；保持现有数字 API "
             "兼容；补充 parser、scheduler、CLI 测试并更新 README。"
         ),
-        acceptance_command="python -m pytest -q cron_engine/tests",
+        acceptance_commands=("python -m pytest -q cron_engine/tests",),
         workspace=tmp_path,
     )
 
@@ -113,7 +113,7 @@ def test_real_cron_contract_binds_behavior_to_parser_not_slash_prose(tmp_path):
             "支持 SUN-SAT；保持现有数字 API 与 0/7 周日兼容。补充 parser、"
             "scheduler、CLI 测试并更新 README。"
         ),
-        acceptance_command="python -m pytest -q cron_engine/tests",
+        acceptance_commands=("python -m pytest -q cron_engine/tests",),
         workspace=tmp_path,
     )
 

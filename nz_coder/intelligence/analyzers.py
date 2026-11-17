@@ -7,8 +7,11 @@ index resolves those raw targets after the affected files have been committed.
 from __future__ import annotations
 
 import ast
+import io
 import json
 import re
+import tokenize
+import unicodedata
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -38,6 +41,7 @@ class SymbolRecord:
     source: str
     capability_tier: str
     source_start_line: int | None = None
+    selection: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +82,7 @@ class RawCallRecord:
     source: str
     usage_role: str = "unknown"
     lexical_binding: dict | None = None
+    selection: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -221,6 +226,14 @@ def _attribute_parts(node: ast.AST) -> list[str] | None:
     return None
 
 
+def _name_selection(start, end, encoding: str) -> dict:
+    return {
+        "start": {"line": int(start[0]), "character": int(start[1])},
+        "end": {"line": int(end[0]), "character": int(end[1])},
+        "encoding": encoding,
+    }
+
+
 def _python_binding_lookup(tree, symbols):
     """在已有 AST 上记录词法根绑定；不做类型推断或执行顺序猜测。"""
     parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
@@ -325,10 +338,48 @@ class PythonAstAnalyzer:
     def analyze_file(
         self, *, path: Path, relative: str, source: str, language: str,
     ) -> AnalysisResult:
+        # 统一解析器的物理换行；Unicode行分隔符不是LSP换行。
+        source = source.replace("\r\n", "\n").replace("\r", "\n")
         tree = ast.parse(source, filename=str(path))
         module_name = module_name_for_path(relative)
         module_id = module_id_for_path(relative)
-        lines = source.splitlines()
+        lines = source.split("\n")
+        tokens = tuple(tokenize.generate_tokens(io.StringIO(source).readline))
+        # AST 使用 UTF-8 字节列；tokenize 使用 Unicode 字符列，先按 AST 端点证明 token。
+        names_by_end = {
+            (token.end[0], len(lines[token.end[0] - 1][:token.end[1]].encode("utf-8"))): token
+            for token in tokens if token.type == tokenize.NAME
+        }
+        tokens_by_start = {
+            (token.start[0], len(lines[token.start[0] - 1][:token.start[1]].encode("utf-8"))): index
+            for index, token in enumerate(tokens)
+            if token.type == tokenize.NAME
+        }
+
+        def token_selection(token) -> dict:
+            return _name_selection(
+                (token.start[0] - 1, token.start[1]),
+                (token.end[0] - 1, token.end[1]), "utf-32",
+            )
+
+        def callee_selection(node) -> dict | None:
+            name = node.id if isinstance(node, ast.Name) else node.attr if isinstance(node, ast.Attribute) else None
+            token = names_by_end.get((node.end_lineno, node.end_col_offset))
+            if token is not None and unicodedata.normalize("NFKC", token.string) == name:
+                return token_selection(token)
+            return None
+
+        def declaration_selection(node) -> dict | None:
+            index = tokens_by_start[(node.lineno, node.col_offset)]
+            if tokens[index].string == "async":
+                index += 1
+            keyword = "class" if isinstance(node, ast.ClassDef) else "def"
+            name_token = tokens[index + 1]
+            if (tokens[index].string == keyword and name_token.type == tokenize.NAME
+                    and unicodedata.normalize("NFKC", name_token.string) == node.name):
+                return token_selection(name_token)
+            return None
+
         symbols: list[SymbolRecord] = []
         node_symbols: dict[ast.AST, SymbolRecord] = {}
         owner_class: dict[ast.AST, str] = {}
@@ -385,6 +436,7 @@ class PythonAstAnalyzer:
                     source="python-ast",
                     capability_tier=self.capability_tier.value,
                     source_start_line=certified_start(node),
+                    selection=declaration_selection(node),
                 )
                 symbols.append(record)
                 node_symbols[node] = record
@@ -536,6 +588,7 @@ class PythonAstAnalyzer:
                     source="python-ast",
                     usage_role=usage_role,
                     lexical_binding=binding_lookup(call, parts[0]),
+                    selection=callee_selection(call.func),
                 ))
 
         return AnalysisResult(
@@ -548,6 +601,9 @@ _IDENTIFIER_RE = re.compile(r"\b[A-Za-z_$][\w$]*\b")
 _CALL_RE = re.compile(r"\b((?:[A-Za-z_$][\w$]*\.)*)([A-Za-z_$][\w$]*)\s*\(")
 _CALL_KEYWORDS = frozenset({
     "if", "for", "while", "switch", "catch", "return", "sizeof", "typeof",
+})
+_TREE_NAME_TYPES = frozenset({
+    "identifier", "property_identifier", "field_identifier", "type_identifier",
 })
 
 
@@ -677,11 +733,12 @@ class TreeSitterAnalyzer:
         parser = self._parsers.get(language)
         if parser is None:
             raise RuntimeError(f"tree-sitter parser unavailable for {language}")
+        source = source.replace("\r\n", "\n").replace("\r", "\n")
         content = source.encode("utf-8")
         tree = parser.parse(content)
         module_name = module_name_for_path(relative)
         module_id = module_id_for_path(relative)
-        lines = source.splitlines()
+        lines = source.split("\n")
         symbols: list[SymbolRecord] = []
         symbol_nodes: list[tuple[object, object, SymbolRecord]] = []
         imports: list[ImportRecord] = []
@@ -714,6 +771,10 @@ class TreeSitterAnalyzer:
                 relative, module_id, language, line, int(node.end_point[0]) + 1,
                 _compact(signature or "") or None, exported, 0.92,
                 f"tree-sitter-{language}", self.capability_tier.value,
+                selection=(
+                    _name_selection(name_node.start_point, name_node.end_point, "utf-8")
+                    if name_node.type in _TREE_NAME_TYPES else None
+                ),
             )
             symbols.append(record)
             if kind in {"function", "method"}:
@@ -832,14 +893,19 @@ class TreeSitterAnalyzer:
                 if node.type not in {"call_expression", "new_expression"}:
                     return
                 function = node.child_by_field_name("function") or node.child_by_field_name("constructor")
-                raw = self._text(content, function).strip()
-                match = re.search(r"([A-Za-z_$][\w$]*)$", raw)
-                if not match or match.group(1) in _CALL_KEYWORDS:
+                name_node = function
+                if function is not None and function.type in {"member_expression", "selector_expression"}:
+                    name_node = function.child_by_field_name("property") or function.child_by_field_name("field")
+                if name_node is None or name_node.type not in _TREE_NAME_TYPES:
                     return
+                name = self._text(content, name_node)
+                if name in _CALL_KEYWORDS:
+                    return
+                prefix = content[function.start_byte:name_node.start_byte].decode("utf-8").strip().rstrip(".")
                 calls.append(RawCallRecord(
-                    caller.symbol_id, caller.name, match.group(1),
-                    raw[:match.start()].rstrip("."), relative,
+                    caller.symbol_id, caller.name, name, prefix, relative,
                     int(node.start_point[0]) + 1, 0.9, f"tree-sitter-{language}",
+                    selection=_name_selection(name_node.start_point, name_node.end_point, "utf-8"),
                 ))
             walk(body, collect_call)
 

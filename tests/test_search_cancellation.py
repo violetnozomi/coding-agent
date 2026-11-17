@@ -238,7 +238,7 @@ def test_glob_truncates_first_producer_window_then_sorts_it(tmp_path, monkeypatc
     os.utime(omitted, (10_000, 10_000))
     monkeypatch.setattr(
         "nz_coder.tools.search._run_rg_files",
-        lambda _base, _pattern, _limit: (selected, True),
+        lambda _base, _pattern, _limit, *, runner=None: (selected, True),
     )
 
     with scoped_workdir(tmp_path):

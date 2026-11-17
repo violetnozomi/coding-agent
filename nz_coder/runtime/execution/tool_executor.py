@@ -14,6 +14,8 @@
 """
 from __future__ import annotations
 
+import asyncio
+from contextlib import nullcontext
 import json
 import threading
 import time
@@ -30,7 +32,7 @@ from nz_coder.runtime.agent.agent_resilience import (
     is_tool_result_error_content,
 )
 from nz_coder.protocol.session_events import publish_session_event
-from nz_coder.protocol.public_error import format_public_error
+from nz_coder.protocol.public_error import format_public_error, to_public_error
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess, WorkspaceFileIdentity
 from nz_coder.tool_platform.execution import (
@@ -40,11 +42,12 @@ from nz_coder.tool_platform.execution import (
     is_transactional_write_tool,
     is_write_tool,
 )
-from nz_coder.tool_platform.permissioning.interaction import format_tool_summary
+from nz_coder.tool_platform.permissioning.interaction import PermissionInteractionError, format_tool_summary
 from nz_coder.tools import (
     ToolOutput,
     collect_filesystem_mutation_paths,
     dispatch,
+    get_dynamic_tool_binding_identity,
     get_tool_side_effect,
     scoped_dynamic_tool_snapshot,
     scoped_tool_call,
@@ -447,6 +450,7 @@ class ToolExecutor:
                 is_write=False,
             )
         result.duration_ms = round((time.perf_counter() - started) * 1000, 3)
+        result.execution_id = str(envelope.get("id") or "")
         result.category = category
         return result
 
@@ -497,18 +501,54 @@ class ToolExecutor:
                 fn_name, {}, output, False, True, False, is_write,
             )
 
+        if fn_name == "bash":
+            from nz_coder.tools.bash import validate_bash_timeout
+
+            error = validate_bash_timeout(tool_input.get("timeout"), settings.bash_timeout)
+            if error:
+                return ToolExecutionResult(fn_name, tool_input, error, False, True, False, is_write)
+
+        from nz_coder.tool_platform.permissioning.command_authorization import (
+            command_authorization_identity, consume_permission_approval,
+            permission_approval_invalidated, permission_approval_present,
+            permission_approval_was_human, scoped_command_authorization,
+        )
+        if permission_approval_invalidated():
+            return ToolExecutionResult(fn_name, tool_input,
+                "Denied: Approved command identity changed before execution", False, True, False, is_write,
+                permission_denied=True, metadata={"permission_source": "policy"})
+        approved = consume_permission_approval(self._permissions, fn_name, tool_input)
+        if permission_approval_present() and not approved:
+            return ToolExecutionResult(fn_name, tool_input,
+                "Denied: Approval belongs to a different execution owner or was consumed", False, True, False, is_write,
+                permission_denied=True, metadata={"permission_source": "policy"})
         decision = self._permissions.check(fn_name, tool_input)
         if decision["behavior"] == "deny":
             output = f"Denied: {decision['reason']}"
             return ToolExecutionResult(
                 fn_name, tool_input, output, False, True, False, is_write,
-                permission_denied=True,
+                permission_denied=True, metadata={"permission_source": "policy"},
             )
-        if decision["behavior"] == "ask":
-            if not self._permissions.ask_user(fn_name, tool_input):
+        command_identity = command_authorization_identity(fn_name, tool_input) if fn_name in {"bash", "process"} else None
+        # 文件等事实变化后，旧自动允许不能升级成对新未知动作的人工批准。
+        if decision["behavior"] == "ask" and not (approved and permission_approval_was_human()):
+            try:
+                allowed = self._permissions.ask_user(fn_name, tool_input)
+            except PermissionInteractionError as exc:
+                if exc.reason == "cancelled":
+                    raise asyncio.CancelledError from None
                 return ToolExecutionResult(
-                    fn_name, tool_input, "Denied by user", False, True, False, is_write,
-                    permission_denied=True,
+                    fn_name, tool_input, str(exc), False, True, False, is_write,
+                    permission_denied=True, metadata={
+                        "permission_source": "interaction_failure", "permission_reason": exc.reason,
+                    },
+                )
+            if not allowed:
+                return ToolExecutionResult(
+                    fn_name, tool_input, "Permission approval rejected; this action was not executed.", False, True, False, is_write,
+                    permission_denied=True, metadata={
+                        "permission_source": "approval_reply", "permission_reason": "rejected",
+                    },
                 )
 
         if is_write:
@@ -544,12 +584,23 @@ class ToolExecutor:
                 )
 
         # ── 执行 ───────────────────────────────────────────────────────────
+        if command_identity is not None:
+            try:
+                unchanged = command_identity == command_authorization_identity(fn_name, tool_input)
+            except (OSError, ValueError, TypeError, RuntimeError):
+                unchanged = False
+            if not unchanged:
+                return ToolExecutionResult(fn_name, tool_input,
+                    "Denied: Command execution identity changed during approval", False, True, False, is_write,
+                    permission_denied=True, metadata={"permission_source": "policy"})
         try:
             from nz_coder.intelligence.reviewer import scoped_runtime_review
 
             with (
                 scoped_tool_call(str(tool_call.get("id") or "")),
                 scoped_runtime_review(self._runtime_review),
+                scoped_command_authorization(fn_name, tool_input, expected_identity=command_identity)
+                if command_identity is not None else nullcontext(),
             ):
                 raw_output = dispatch(fn_name, tool_input)
         except Exception as exc:
@@ -567,11 +618,14 @@ class ToolExecutor:
                 command_failed=False,
                 is_write=is_write,
                 metadata={"error_type": type(exc).__name__},
+                public_error=to_public_error(exc),
             )
         try:
             output = str(raw_output)
             title = raw_output.title if isinstance(raw_output, ToolOutput) else ""
             metadata = dict(raw_output.metadata) if isinstance(raw_output, ToolOutput) else {}
+            # 公开原因的保留字段归宿主所有，扩展工具不能从 metadata 注入 wire。
+            metadata.pop("public_error", None)
             attachments = raw_output.attachments if isinstance(raw_output, ToolOutput) else []
         except Exception as exc:
             return ToolExecutionResult(
@@ -585,8 +639,18 @@ class ToolExecutor:
                 command_failed=False,
                 is_write=is_write,
                 metadata={"error_type": type(exc).__name__, "malformed_result": True},
+                public_error=to_public_error(exc),
             )
-        dispatch_failed = is_tool_result_error_content(output)
+        from nz_coder.runtime.adapters.verification_facts import host_execution_receipts
+
+        execution_facts = host_execution_receipts(fn_name, raw_output)
+        # 只有内置命令边界能声明未执行，外部工具 metadata 不能伪造权限结果。
+        admission_failed = (
+            fn_name in {"bash", "process"} and get_dynamic_tool_binding_identity(fn_name) is None
+            and metadata.get("command_not_executed") is True
+            and metadata.get("permission_denied") is True
+        )
+        dispatch_failed = admission_failed or is_tool_result_error_content(output) and not execution_facts
         error_code = extract_structured_tool_error_code(output)
         if error_code is not None:
             metadata["error_code"] = error_code
@@ -617,12 +681,13 @@ class ToolExecutor:
             name=fn_name,
             tool_input=tool_input,
             output=output,
-            executed=True,
+            executed=not admission_failed,
             dispatch_failed=dispatch_failed,
             command_failed=command_failed,
             is_write=is_write,
-            permission_denied=output.startswith("Denied"),
+            permission_denied=admission_failed or output.startswith("Denied"),
             title=title,
             metadata=metadata,
             attachments=attachments,
+            execution_facts=execution_facts,
         )

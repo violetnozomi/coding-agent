@@ -97,7 +97,14 @@ def test_semantic_cache_invalidates_on_index_generation(tmp_path) -> None:
         service.close()
 
 
-def test_policy_routes_vocabulary_mismatch_to_optional_semantic(tmp_path) -> None:
+@pytest.mark.parametrize("query", [
+    "After a customer has paid, find how the transaction is durably retained and how the customer is notified.",
+    "fix duplicate invoice retries",
+    "hello",
+    "解释登录调用链",
+    "Review the error handling; do not change any files.",
+])
+def test_natural_language_offers_discovery_without_automatic_retrieval(tmp_path, query):
     from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
 
     _semantic_fixture(tmp_path)
@@ -105,37 +112,16 @@ def test_policy_routes_vocabulary_mismatch_to_optional_semantic(tmp_path) -> Non
     try:
         service.configure_semantic(_FixtureEmbeddingProvider())
         decision = RepoRetrievalPolicy(hot_path_ms=500).decide(
-            "After a customer has paid, find how the transaction is durably retained "
-            "and how the customer is notified without using implementation names.",
-            service=service, strategy="policy", semantic_available=True,
+            query, service=service, strategy="policy", semantic_available=True,
+            changed_paths=("archive/store.py",),
         )
-
-        assert decision.signal.task_class == "business-intent"
-        assert decision.signal.recommended_operation == "semantic_search"
-        assert decision.signal.candidate_files[0] == "archive/store.py"
-        assert "High-confidence bounded semantic_search candidates" in decision.auto_context
+        assert decision.signal.task_class == "unknown-location"
+        assert decision.signal.recommended_operation == "lookup"
+        assert decision.signal.candidate_files == ()
+        assert decision.auto_context == ""
         assert "semantic_search" in decision.guidance
-        assert decision.signal.routing_confidence >= 0.8
-        assert decision.signal.evidence_confidence > 0
-        assert decision.signal.candidate_count == len(decision.signal.candidate_files)
-    finally:
-        service.close()
-
-
-def test_policy_routes_short_business_intent_without_identifier_threshold(tmp_path) -> None:
-    from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
-
-    _semantic_fixture(tmp_path)
-    service = _service(tmp_path)
-    try:
-        service.configure_semantic(_FixtureEmbeddingProvider())
-        decision = RepoRetrievalPolicy(hot_path_ms=500).decide(
-            "fix duplicate invoice retries",
-            service=service, strategy="guidance", semantic_available=True,
-        )
-        assert decision.signal.task_class == "business-intent"
-        assert decision.signal.recommended_operation == "semantic_search"
-        assert decision.signal.routing_confidence > decision.signal.evidence_confidence
+        assert "repo_context" in decision.signal.recommended_tools
+        assert service.metrics()["semantic_builds"] == 0
     finally:
         service.close()
 
@@ -214,39 +200,41 @@ def test_policy_routes_declared_contract_artifacts_as_known_locations(tmp_path) 
 
 @pytest.mark.parametrize(("query", "expected"), [
     ("fix src/auth/api.py", "known-location"),
+    ("inspect `src/auth/api.py`", "known-location"),
+    ("解释foo.py、bar.py职责", "known-location"),
     ("update packages/billing/service.ts", "known-location"),
     ("inspect cmd/server/main.go", "known-location"),
     ("rename `format_product`", "known-symbol"),
     ("find callers of `login`", "known-symbol"),
     ("change `TokenCache.refresh`", "known-symbol"),
     ("find the literal `token expired`", "exact-literal"),
-    ("find callers of login", "structural"),
-    ("explain the call chain for login", "structural"),
-    ("show module dependencies for auth", "structural"),
-    ("what is the impact of changing login", "structural"),
-    ("locate the service entrypoint", "structural"),
-    ("fix duplicate invoice retries", "business-intent"),
-    ("where is account recovery handled?", "business-intent"),
-    ("websocket reconnect loses pending jobs", "business-intent"),
-    ("change token refresh behavior", "business-intent"),
-    ("why do child changes conflict when applied?", "business-intent"),
-    ("fix duplicate payment retries", "business-intent"),
-    ("find failed order recovery logic", "business-intent"),
-    ("customer notification stops after checkout", "business-intent"),
-    ("stale authorization remains cached", "business-intent"),
-    ("restore disconnected client work", "business-intent"),
-    ("billing reconciliation sometimes duplicates records", "business-intent"),
-    ("where is user onboarding handled?", "business-intent"),
-    ("find session expiry behavior", "business-intent"),
-    ("why are delivery receipts missing?", "business-intent"),
-    ("format output", "simple"),
-    ("hello", "simple"),
-    ("list files", "simple"),
-    ("run tests", "simple"),
-    ("check style", "simple"),
-    ("修复重复支付重试", "business-intent"),
-    ("账号恢复在哪里处理？", "business-intent"),
-    ("解释登录调用链", "structural"),
+    ("find callers of login", "unknown-location"),
+    ("explain the call chain for login", "unknown-location"),
+    ("show module dependencies for auth", "unknown-location"),
+    ("what is the impact of changing login", "unknown-location"),
+    ("locate the service entrypoint", "unknown-location"),
+    ("fix duplicate invoice retries", "unknown-location"),
+    ("where is account recovery handled?", "unknown-location"),
+    ("websocket reconnect loses pending jobs", "unknown-location"),
+    ("change token refresh behavior", "unknown-location"),
+    ("why do child changes conflict when applied?", "unknown-location"),
+    ("fix duplicate payment retries", "unknown-location"),
+    ("find failed order recovery logic", "unknown-location"),
+    ("customer notification stops after checkout", "unknown-location"),
+    ("stale authorization remains cached", "unknown-location"),
+    ("restore disconnected client work", "unknown-location"),
+    ("billing reconciliation sometimes duplicates records", "unknown-location"),
+    ("where is user onboarding handled?", "unknown-location"),
+    ("find session expiry behavior", "unknown-location"),
+    ("why are delivery receipts missing?", "unknown-location"),
+    ("format output", "unknown-location"),
+    ("hello", "unknown-location"),
+    ("list files", "unknown-location"),
+    ("run tests", "unknown-location"),
+    ("check style", "unknown-location"),
+    ("修复重复支付重试", "unknown-location"),
+    ("账号恢复在哪里处理？", "unknown-location"),
+    ("解释登录调用链", "unknown-location"),
     ("修改 src/auth/api.py", "known-location"),
 ])
 def test_retrieval_policy_confusion_matrix(query, expected) -> None:
@@ -263,14 +251,14 @@ def test_retrieval_policy_confusion_matrix(query, expected) -> None:
     "what is impacted by this refactor?",
     "fix the regression in the edited code",
 ])
-def test_retrieval_policy_routes_changed_scope_when_changes_exist(query) -> None:
+def test_changed_paths_do_not_classify_natural_language(query) -> None:
     from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
 
     actual, operation, _tools, _confidence = RepoRetrievalPolicy._route(
         query, changed_paths=("src/auth/api.py",), semantic_available=True,
     )
-    assert actual == "changed-code"
-    assert operation == "changed_scope"
+    assert actual == "unknown-location"
+    assert operation == "lookup"
 
 
 def test_policy_does_not_inject_low_confidence_structural_candidates(tmp_path) -> None:
@@ -303,7 +291,7 @@ def test_auto_context_respects_hot_path_wait_budget(tmp_path, monkeypatch) -> No
     monkeypatch.setattr(service, "submit_bounded_query", lambda _callback: pending)
     try:
         decision = RepoRetrievalPolicy(hot_path_ms=10).decide(
-            "Explain the complete call chain and module dependency for this behavior",
+            "Inspect `run`",
             service=service, strategy="auto-context",
         )
 
@@ -314,76 +302,21 @@ def test_auto_context_respects_hot_path_wait_budget(tmp_path, monkeypatch) -> No
         service.close()
 
 
-def test_semantic_query_receives_capacity_from_outer_hot_path(tmp_path, monkeypatch) -> None:
+def test_policy_cache_invalidates_when_task_context_changes(tmp_path):
     from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
 
     (tmp_path / "app.py").write_text("def run(): return 1\n", encoding="utf-8")
     service = _service(tmp_path)
-    captured = {}
-
-    def semantic_search(_query, **options):
-        captured.update(options)
-        return {"items": [], "embedding": True}
-
-    monkeypatch.setattr(service, "semantic_search", semantic_search)
     try:
-        RepoRetrievalPolicy(hot_path_ms=250).decide(
-            "fix duplicate invoice retries", service=service,
-            strategy="policy", semantic_available=True,
-        )
-        assert captured["wait_budget_ms"] == 112.5
-    finally:
-        service.close()
-
-
-def test_semantic_auto_context_uses_relative_score_separation(tmp_path, monkeypatch) -> None:
-    from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
-
-    (tmp_path / "app.py").write_text("def run(): return 1\n", encoding="utf-8")
-    service = _service(tmp_path)
-
-    def separated(_query, **_options):
-        return {"items": [
-            {"file": "ledger/reservation.py", "score": 0.123},
-            {"file": "domains/unrelated.py", "score": 0.102},
-            {"file": "ledger/intake.py", "score": 0.099},
-        ], "embedding": True}
-
-    monkeypatch.setattr(service, "semantic_search", separated)
-    try:
-        decision = RepoRetrievalPolicy(hot_path_ms=250).decide(
-            "fix duplicate invoice retries", service=service,
-            strategy="policy", semantic_available=True,
-        )
-        assert decision.signal.candidate_files == ("ledger/reservation.py",)
-        assert decision.signal.candidate_count == 1
-        assert decision.signal.evidence_confidence > 0.72
-        assert decision.auto_context
-    finally:
-        service.close()
-
-
-def test_semantic_auto_context_rejects_close_runner_up(tmp_path, monkeypatch) -> None:
-    from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
-
-    (tmp_path / "app.py").write_text("def run(): return 1\n", encoding="utf-8")
-    service = _service(tmp_path)
-
-    def ambiguous(_query, **_options):
-        return {"items": [
-            {"file": "maybe/one.py", "score": 0.123},
-            {"file": "maybe/two.py", "score": 0.115},
-        ], "embedding": True}
-
-    monkeypatch.setattr(service, "semantic_search", ambiguous)
-    try:
-        decision = RepoRetrievalPolicy(hot_path_ms=250).decide(
-            "fix duplicate invoice retries", service=service,
-            strategy="policy", semantic_available=True,
-        )
-        assert decision.signal.candidate_count == 0
-        assert decision.signal.evidence_confidence == 0.0
-        assert decision.auto_context == ""
+        policy = RepoRetrievalPolicy()
+        first = policy.decide("Inspect `run`", service=service, task_context=("task", 0, 1))
+        cached = policy.decide("Inspect `run`", service=service, task_context=("task", 0, 1))
+        revised = policy.decide("Inspect `run`", service=service, task_context=("task", 0, 2))
+        new_instruction = policy.decide("Inspect `run`", service=service, task_context=("task", 1, 0))
+        assert cached is first
+        assert revised is not first
+        assert new_instruction is not revised
+        assert new_instruction.signal.task_class == "known-symbol"
     finally:
         service.close()
 
@@ -492,7 +425,7 @@ def test_explicit_semantic_tool_uses_query_budget_not_hot_path_budget(monkeypatc
     assert captured["wait_budget_ms"] == 2_000
 
 
-def test_auto_context_expands_changed_candidate_into_traceable_evidence(tmp_path) -> None:
+def test_auto_context_expands_explicit_symbol_into_traceable_evidence(tmp_path) -> None:
     """Automatic routing must expose bounded graph/test facts, not only a score."""
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "pricing.py").write_text(
@@ -505,8 +438,8 @@ def test_auto_context_expands_changed_candidate_into_traceable_evidence(tmp_path
         encoding="utf-8",
     )
     (tmp_path / "test_checkout.py").write_text(
-        "from checkout import checkout\n\n"
-        "def test_checkout_total():\n    assert checkout(10) == 15\n",
+        "from src.pricing import calculate_total\n\n"
+        "def test_pricing_total():\n    assert calculate_total(10) == 15\n",
         encoding="utf-8",
     )
     from nz_coder.intelligence.retrieval_policy import RepoRetrievalPolicy
@@ -514,7 +447,7 @@ def test_auto_context_expands_changed_candidate_into_traceable_evidence(tmp_path
     service = _service(tmp_path)
     try:
         decision = RepoRetrievalPolicy(hot_path_ms=500).decide(
-            "review the current changes",
+            "Inspect `calculate_total`",
             service=service,
             strategy="auto-context",
             changed_paths=("src/pricing.py",),
@@ -525,12 +458,12 @@ def test_auto_context_expands_changed_candidate_into_traceable_evidence(tmp_path
     assert "freshness=indexed" in decision.auto_context
     assert "confidence=" in decision.auto_context
     assert "related_tests=test_checkout.py" in decision.auto_context
-    assert "dependents=checkout.py" in decision.auto_context
+    assert "callers=checkout" in decision.auto_context
     assert "read_file" in decision.auto_context
 
 
-def test_auto_context_expands_unknown_structural_candidates(tmp_path) -> None:
-    """Unknown structural work receives module and symbol evidence in the request block."""
+def test_auto_context_uses_symbol_literal_without_semantic_classification(tmp_path) -> None:
+    """Explicit symbols provide bounded evidence without interpreting the prose."""
     (tmp_path / "billing").mkdir()
     (tmp_path / "billing" / "api.py").write_text(
         "def charge(order):\n    return order\n",
@@ -546,7 +479,7 @@ def test_auto_context_expands_unknown_structural_candidates(tmp_path) -> None:
     service = _service(tmp_path)
     try:
         decision = RepoRetrievalPolicy(hot_path_ms=500).decide(
-            "module billing",
+            "Inspect `charge`",
             service=service,
             strategy="auto-context",
             semantic_available=False,
@@ -554,7 +487,44 @@ def test_auto_context_expands_unknown_structural_candidates(tmp_path) -> None:
     finally:
         service.close()
 
-    assert "module:billing" in decision.auto_context
+    assert "symbol:" in decision.auto_context
     assert "definition=billing/api.py:1" in decision.auto_context
     assert "callers=checkout" in decision.auto_context
     assert "Next read: read_file path=billing/api.py" in decision.auto_context
+
+
+def test_semantic_chunks_require_indexed_content_hash(tmp_path):
+    from nz_coder.intelligence.semantic import RepositorySemanticIndex
+    source = tmp_path / "app.py"
+    source.write_text("def one(): return 1\n", encoding="utf-8")
+    service = _service(tmp_path)
+    try:
+        snapshot = service.index.snapshot()
+        source.write_text("def two(): return 2\n", encoding="utf-8")
+        semantic = RepositorySemanticIndex(tmp_path, service.index, _FixtureEmbeddingProvider())
+        assert not semantic._chunks(snapshot.files)
+    finally:
+        service.close()
+
+
+def test_semantic_stale_content_is_not_embedded_or_published(tmp_path):
+    from nz_coder.intelligence.semantic import RepositorySemanticIndex
+    source = tmp_path / "app.py"
+    source.write_text("def one(): return 1\n", encoding="utf-8")
+    service = _service(tmp_path)
+    class CapturingProvider(_FixtureEmbeddingProvider):
+        def __init__(self):
+            self.calls = []
+        def embed(self, texts):
+            self.calls.append(list(texts))
+            return super().embed(texts)
+    try:
+        source.write_text("def two(): return 2\n", encoding="utf-8")
+        provider = CapturingProvider()
+        semantic = RepositorySemanticIndex(tmp_path, service.index, provider)
+        with pytest.raises(RuntimeError, match="stale"):
+            semantic._ensure_generation()
+        assert provider.calls == []
+        assert semantic.generation == -1
+    finally:
+        service.close()

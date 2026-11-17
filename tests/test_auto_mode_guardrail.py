@@ -512,7 +512,7 @@ def test_auto_admission_settles_batch_serially_before_scheduling() -> None:
             runtime_state=None,
             recovery=RecoveryState(),
             permissions=PermissionManager("auto"),
-            stall_orchestrator=None,
+
             parse_input=lambda raw: dict(raw) if isinstance(raw, dict) else {},
             trace=lambda *_args, **_kwargs: None,
         )
@@ -543,7 +543,7 @@ def test_auto_admission_settles_batch_serially_before_scheduling() -> None:
             signal_from_metadata=lambda _metadata: None,
             record_result=lambda _result: False,
             trace_result=lambda *_args, **_kwargs: None,
-            stall_orchestrator=None,
+
             after_result=lambda *_args: None,
         )
         calls = [

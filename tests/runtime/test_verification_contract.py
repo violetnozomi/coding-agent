@@ -1,6 +1,8 @@
 """Tests for run-local deterministic verification contracts."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from nz_coder.runtime.verification.verification_contract import (
@@ -91,7 +93,7 @@ def test_contract_runs_once_per_mutation_generation_and_rearms_after_edit():
     assert contract.is_due(zone="red", has_diff=True, mutation_generation=1) is True
     assert contract.is_due(zone="completion", has_diff=True, mutation_generation=1) is True
 
-    contract.record_attempt(1, passed=False, output="1 failed")
+    contract = replace(contract, attempted_generation=1, attempts=1, passed=False, output="1 failed")
 
     assert contract.is_due(zone="red", has_diff=True, mutation_generation=1) is False
     assert contract.is_due(zone="red", has_diff=True, mutation_generation=2) is True
@@ -102,13 +104,8 @@ def test_contract_round_trip_preserves_attempt_evidence():
         command="python -m pytest -q tests",
         targets=("tests",),
     )
-    contract.record_attempt(
-        3,
-        passed=True,
-        output="42 passed",
-        source="runtime",
-        zone="completion",
-    )
+    contract = replace(contract, attempted_generation=3, attempts=1,
+                       passed=True, output="42 passed", source="runtime", zone="completion")
 
     restored = VerificationContract.from_dict(contract.to_dict())
 

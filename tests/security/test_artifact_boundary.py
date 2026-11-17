@@ -236,3 +236,35 @@ def test_artifact_store_rejects_workspace_local_configured_session_directory(
     with scoped_workdir(tmp_path):
         with pytest.raises(ArtifactAccessError, match="outside the workspace"):
             ArtifactStore(tmp_path, "session-a")
+
+
+def test_utf8_artifact_chunks_reassemble_original(tmp_path):
+    from nz_coder.tool_platform.artifacts import ArtifactStore, ArtifactAccessError
+    store = ArtifactStore(tmp_path, "utf8")
+    text = "中文数据😀abc"
+    artifact_id = store.put(text, kind="user-input")
+    parts, offset = [], 0
+    while True:
+        chunk = store.read_chunk(artifact_id, offset=offset, max_bytes=4)
+        parts.append(chunk.text)
+        offset = chunk.next_offset
+        if not chunk.has_more:
+            break
+    assert "".join(parts) == text
+    assert offset == len(text.encode())
+    with pytest.raises(ArtifactAccessError):
+        store.read_chunk(artifact_id, offset=1, max_bytes=4)
+    with pytest.raises(ArtifactAccessError, match="3 bytes"):
+        store.read_chunk(artifact_id, offset=0, max_bytes=1)
+
+
+def test_incomplete_durable_reference_scan_preserves_user_input(tmp_path):
+    from nz_coder.tool_platform.artifacts import ArtifactStore, ArtifactQuotaError
+    owner = ArtifactStore(tmp_path, "old", max_workspace_files=1, clock=lambda: 1.0)
+    artifact_id = owner.put("important user input", kind="user-input")
+    owner.sessions_root.mkdir(parents=True, exist_ok=True)
+    (owner.sessions_root / "oversized.json").write_bytes(b"x" * (16 * 1024 * 1024 + 1))
+    other = ArtifactStore(tmp_path, "new", max_workspace_files=1, ttl_seconds=1, clock=lambda: 100.0)
+    with pytest.raises(ArtifactQuotaError):
+        other.put("new", kind="tool-result")
+    assert owner.read(artifact_id) == "important user input"

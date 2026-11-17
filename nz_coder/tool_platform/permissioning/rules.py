@@ -24,41 +24,70 @@ class PermissionRule(NamedTuple):
             return False
         if not self.content:
             return True
-        if self.content.startswith("prefix:"):
-            prefix = self.content[len("prefix:"):]
-            if tool_name.lower() == "bash":
-                cmd = str(tool_input.get("command") or "")
-                if _has_shell_composition(cmd):
-                    return False
-                return cmd.startswith(prefix)
         if self.content.startswith("input-sha256:"):
             expected = self.content[len("input-sha256:"):]
             return expected == _input_fingerprint(tool_input)
-        if self.content.startswith("argv-prefix:") and tool_name.lower() == "bash":
-            command = str(tool_input.get("command") or "")
-            if _has_shell_composition(command):
-                return False
-            try:
-                expected = json.loads(self.content[len("argv-prefix:"):])
-                actual = shlex.split(
-                    command,
-                    posix=os.name != "nt",
-                )
-            except (json.JSONDecodeError, TypeError, ValueError):
-                return False
-            if (
-                not isinstance(expected, list)
-                or not expected
-                or any(not isinstance(item, str) for item in expected)
-            ):
-                return False
-            return actual[:len(expected)] == expected
-        if self.content == "family:pytest" and tool_name.lower() == "bash":
-            command = str(tool_input.get("command") or "")
-            if _has_shell_composition(command):
-                return False
-            return _bash_command_family(command) == "pytest"
-        return False
+        if tool_name.lower() != "bash":
+            return False
+        command = str(tool_input.get("command") or "")
+        if self.behavior == "deny":
+            candidates = _deny_command_candidates(command)
+        elif _has_shell_composition(command):
+            return False
+        else:
+            candidates = (command,)
+        return any(_matches_bash_content(self.content, candidate) for candidate in candidates)
+
+    @property
+    def allows_unknown(self) -> bool:
+        """未知动作只能使用明确的工具委托或完整输入许可。"""
+        return self.behavior == "allow" and (not self.content or self.content.startswith("input-sha256:"))
+
+
+def _matches_bash_content(content: str, command: str) -> bool:
+    if content.startswith("prefix:"):
+        return command.startswith(content[len("prefix:"):])
+    if content.startswith("argv-prefix:"):
+        try:
+            expected = json.loads(content[len("argv-prefix:"):])
+            actual = shlex.split(command, posix=os.name != "nt")
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return False
+        return (isinstance(expected, list) and bool(expected)
+                and all(isinstance(item, str) for item in expected)
+                and actual[:len(expected)] == expected)
+    return content == "family:pytest" and _bash_command_family(command) == "pytest"
+
+
+def _deny_command_candidates(command: str, *, depth: int = 0) -> tuple[str, ...]:
+    """已确认的每个执行入口都受 deny 约束；数据字符串不是子命令。"""
+    from nz_coder.foundation.shell_syntax import (
+        ShellSyntaxError, command_options, executable_words, inline_source, python_effects, shell_commands,
+        substitution_commands,
+    )
+    if depth > 8:
+        return ()
+    candidates = [command]
+    try:
+        segments = shell_commands(command, partial=True)
+    except ShellSyntaxError:
+        return tuple(candidates)
+    for segment in segments:
+        words = executable_words(segment)
+        if words and not segment.opaque:
+            candidates.append(shlex.join(word.value for word in words))
+        children = substitution_commands(segment)
+        try:
+            children += command_options(segment).commands if not segment.opaque else ()
+            program = inline_source(segment) if not segment.opaque else None
+            if program:
+                children += (python_effects(program[1]).commands if program[0] == "python"
+                             else (program[1],) if program[0] == "shell" else ())
+        except ShellSyntaxError:
+            pass
+        for child in children:
+            candidates.extend(_deny_command_candidates(child, depth=depth + 1))
+    return tuple(candidates)
 
 
 def _has_shell_composition(command: str) -> bool:
@@ -159,6 +188,13 @@ def scoped_allow_rule(tool_name: str, tool_input: dict) -> PermissionRule:
             f"input-sha256:{_input_fingerprint(tool_input)}",
         )
     command = str(tool_input.get("command") or "").strip()
+    from nz_coder.tool_platform.policies.shell_path_analysis import analyze_shell_paths
+    from nz_coder.tools.bash import _resolve_bash_workdir
+
+    cwd, error = _resolve_bash_workdir(tool_input.get("workdir"))
+    unknown = bool(error) or analyze_shell_paths(command, current_workdir(), command_cwd=cwd).kind == "unsupported"
+    if _has_shell_composition(command) or unknown:
+        return PermissionRule("bash", "allow", f"input-sha256:{_input_fingerprint(tool_input)}")
     family = _bash_command_family(command)
     if family:
         return PermissionRule("bash", "allow", f"family:{family}")

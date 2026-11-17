@@ -3,11 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from nz_coder.runtime.agent.task_contract import RequirementLedger
-from nz_coder.runtime.verification.verification_contract import (
-    VerificationContract,
-    effective_acceptance_generation,
-)
+from nz_coder.runtime.verification.domain.requirements import RequirementLedgerView
 from nz_coder.tools import is_filesystem_mutation_tool
 
 
@@ -131,20 +127,9 @@ def early_tool_completion_ready(state) -> bool:
     """
     if not bool(getattr(state, "has_diff", False)):
         return False
-    generation = effective_acceptance_generation(state)
-    raw_contract = getattr(state, "verification_contract", None)
-    if not isinstance(raw_contract, dict) or not raw_contract:
-        return False
-    try:
-        contract = VerificationContract.from_dict(raw_contract)
-    except (TypeError, ValueError):
-        return False
-    if not (
-        contract.command
-        and contract.targets
-        and contract.passed is True
-        and contract.attempted_generation == generation
-    ):
+    from nz_coder.runtime.verification.verification_contract import declared_acceptance
+    checks = declared_acceptance(state)
+    if not checks or not all(item["status"] == "passed" for item in checks):
         return False
 
     raw_ledger = getattr(state, "requirement_ledger", None)
@@ -154,7 +139,7 @@ def early_tool_completion_ready(state) -> bool:
     ):
         return False
     try:
-        ledger = RequirementLedger.from_dict(raw_ledger)
+        ledger = RequirementLedgerView.from_dict(raw_ledger)
     except (TypeError, ValueError):
         return False
     return not ledger.unresolved() or ledger.semantic_review_pending_only()

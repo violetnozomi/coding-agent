@@ -31,7 +31,6 @@ class LifecycleRunState:
     sidecar_unattributed_write_ops: int = 0
     last_status: dict = field(default_factory=lambda: {"status": "running", "errors": 0})
     restored_state: bool = False
-    replan_count: int = 0
     reflection_signature: str = ""
     reflection_attempts: int = 0
     cached_reflection_review: object | None = None
@@ -61,9 +60,8 @@ class LifecycleExecutionContext:
 
     run_state: LifecycleRunState
     session_id: str
-    vm: object
+    verification_runtime: object
     recovery: object
-    stall_orchestrator: object | None
     admission_handle: object | None
     runtime_state: object
     permissions_mode: str
@@ -79,7 +77,6 @@ class LifecycleExecutionContext:
     clear_reasoning_escalation: LifecycleCallback
     restore_agent_role: LifecycleCallback
     bind_user_messages: LifecycleCallback
-    scratchpad_plan: LifecycleCallback
     prepare_runtime_state: LifecycleCallback
     start_run_evidence: LifecycleCallback
     persist_runtime_state: LifecycleCallback
@@ -93,17 +90,17 @@ class LifecycleExecutionContext:
     run_evidence: LifecycleCallback
     trace_evidence_summary: LifecycleCallback
     trace: LifecycleCallback
-    publish_event: LifecycleCallback
     save_learnings: LifecycleCallback
     save_learnings_async: LifecycleCallback
     commit: LifecycleCallback
+    output_schema_requested: LifecycleCallback = lambda: False
 
     def __post_init__(self) -> None:
         if not self.session_id:
             raise ValueError("LifecycleExecutionContext session_id must be non-empty")
         for name, value in vars(self).items():
             if name in {
-                "run_state", "session_id", "vm", "recovery", "stall_orchestrator",
+                "run_state", "session_id", "verification_runtime", "recovery",
                 "admission_handle", "runtime_state", "permissions_mode", "provider_id",
                 "model_id", "model_variant", "model_capabilities",
             }:

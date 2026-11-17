@@ -408,6 +408,12 @@ def is_synthetic_user_message(message: dict) -> bool:
     )
 
 
+def is_user_request_message(message: dict) -> bool:
+    """识别真实提交；用户正文可以是文本或多模态内容数组。"""
+    return (message.get("role") == "user" and not is_synthetic_user_message(message)
+            and COMPACTION_KEY not in message and CONTINUATION_KEY not in message)
+
+
 def new_message_id() -> str:
     """Return one opaque public message identity."""
     return f"msg-{uuid.uuid4().hex}"
@@ -1878,7 +1884,9 @@ def _tool_part(value: dict, message_id: str) -> dict | None:
         if attachments:
             clean_state["attachments"] = attachments
     if status == "error":
-        clean_state["error"] = str(
+        # 宿主已投影的错误 wire 必须穿过持久化，不能再压成字符串丢掉原因。
+        public = public_error_from_wire(state.get("error"))
+        clean_state["error"] = public.to_dict() if public is not None else str(
             state.get("error") or "Tool execution failed"
         )[:4000]
         if isinstance(state.get("interrupted"), bool):

@@ -49,7 +49,9 @@ python -m pip install .
 
 cd /path/to/your/repository
 nz-coder init
-# use /connect (or a shell variable) for credentials, then validate offline:
+nz-coder
+# In the interactive terminal, enter /connect to configure credentials.
+# Enter /exit to return to the shell, then validate offline:
 nz-coder doctor
 nz-coder doctor --repo-intelligence-only
 ```
@@ -60,7 +62,7 @@ in the user-private NZ-Coder configuration outside the repository. Shell and
 user configuration take precedence; security-sensitive workspace values are
 ignored until their exact fingerprint is explicitly trusted. Legacy workspace
 credentials are reported by `doctor` for migration. After `doctor` has no FAIL
-rows, start:
+rows, start the terminal again:
 
 ```bash
 nz-coder
@@ -608,8 +610,11 @@ PYCODE
 
 Scratchpad plans/failures and todo items are isolated by both workspace and
 session, then atomically persisted under that session's runtime directory. A
-process restart or `/resume` can therefore restore active working state, while
-`/clear` explicitly clears both stores.
+process restart or `/resume` can therefore restore active working state.
+`/clear`, like `/new-session`, switches to a fresh session ID with empty history
+and fresh task state. The previous saved session and its working state remain
+available through `/resume <previous-session-id>`; workspace files and long-term
+memory are unchanged.
 
 Conversation compaction produces a fixed-structure, anchored continuity
 summary. Later compactions update the previous summary instead of starting
@@ -671,8 +676,10 @@ with three ordered stages: `static`, `targeted`, and `regression`. The legacy
 
 - Static commands such as `py_compile`, typecheck, `cargo check`, and Go
   compile-only checks are required when they can be inferred. Every required
-  changed-file command must pass; `verify_changed_files` can satisfy the whole
-  static stage as an aggregate check. A path-scoped `python_symbol_check`
+  changed-file command must pass. `verify_changed_files` only parses Python
+  syntax in-process and suggests other language checks; it produces no executed
+  command receipts and does not satisfy required static commands. Run those
+  commands explicitly through the existing bash/process tools. A path-scoped `python_symbol_check`
   satisfies only that file, and deleted Python files are skipped rather than
   turned into impossible `py_compile` requirements.
 - Exact tests observed failing before an edit become required targeted checks
@@ -852,7 +859,7 @@ eval/results/<timestamp>.json
 eval/results/<timestamp>.md
 ```
 
-See [EVAL.md](EVAL.md) for setup, metrics, and example result format.
+See the [evaluation runner](nz_coder/evaluation/swebench_lite.py) for configuration, metrics, and result fields.
 
 ## Safety Notes
 

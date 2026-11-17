@@ -9,16 +9,17 @@ from nz_coder.runtime.session.session_revert import SessionReverter
 from nz_coder.runtime.process.workspace_snapshot import SnapshotError, WorkspaceSnapshotStore
 
 
-def _history(tmp_path):
-    store = WorkspaceSnapshotStore(tmp_path, tmp_path / ".nz-coder" / "snapshots")
+def _history(tmp_path, *, store=None, session_id="session-a"):
+    if store is None:
+        store = WorkspaceSnapshotStore(tmp_path, tmp_path / ".nz-coder" / "snapshots")
     app = tmp_path / "app.py"
     app.write_text("before\n", encoding="utf-8")
     start = store.track()
 
     user = {"role": "user", "content": "change app"}
-    attach_message_identity(user, "msg-user", session_id="session-a")
+    attach_message_identity(user, "msg-user", session_id=session_id)
     assistant = {"role": "assistant", "content": "done"}
-    attach_message_identity(assistant, "msg-assistant", session_id="session-a")
+    attach_message_identity(assistant, "msg-assistant", session_id=session_id)
     processor = SessionProcessor(assistant)
     processor.start_step(start)
     app.write_text("after\n", encoding="utf-8")

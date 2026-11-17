@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Callable, Iterable
 
 from prompt_toolkit.application import Application
+from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.formatted_text import StyleAndTextTuples
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import FormattedTextControl, HSplit, Layout, Window
@@ -175,13 +176,13 @@ class FuzzySelector:
             if self.query.strip() and not self.filtered_options():
                 event.current_buffer.insert_text(" ")
                 return
-            self._toggle_and_reset(search, event.app)
+            self._toggle_and_reset(search.buffer, event.app)
 
         @bindings.add("c-space", eager=True)
         def _force_toggle(event) -> None:  # noqa: ANN001
             if not self.multiple:
                 return
-            self._toggle_and_reset(search, event.app)
+            self._toggle_and_reset(search.buffer, event.app)
 
         @bindings.add("escape", eager=True)
         @bindings.add("c-c", eager=True)
@@ -216,7 +217,7 @@ class FuzzySelector:
         self._application = application
         return application
 
-    def _toggle_and_reset(self, search: TextArea, application: Application) -> None:
+    def _toggle_and_reset(self, search: Buffer, application: Application) -> None:
         """Toggle the focused value and reset filtering for another choice."""
         self.toggle_current()
         search.text = ""
@@ -265,7 +266,12 @@ class FuzzySelector:
             self.selected = index
             value = self.current_value()
             if value is not None and self._application is not None:
-                self._application.exit(result=value)
+                if self.multiple:
+                    self._toggle_and_reset(
+                        self._application.layout.current_buffer, self._application,
+                    )
+                else:
+                    self._application.exit(result=value)
             return None
 
         return handle

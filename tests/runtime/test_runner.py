@@ -1,6 +1,8 @@
 """Contract tests for the single production AgentRunner state machine."""
 from __future__ import annotations
 
+import threading
+
 import asyncio
 from pathlib import Path
 
@@ -43,7 +45,7 @@ class RecordingSessionRuntime:
         self.checkpoints = []
         self.final_statuses = []
 
-    async def open(self, request: RunRequest) -> RunContext:
+    async def open(self, request: RunRequest, *, session_lease=None) -> RunContext:
         self.opened.append(request.session_id)
         session = Session.create(
             request.session_id,
@@ -52,6 +54,9 @@ class RecordingSessionRuntime:
         )
         session.begin_run()
         return RunContext(request, session, request.agent.name)
+
+    def abandon(self, context):
+        pass
 
     async def checkpoint(self, context, status):
         self.checkpoints.append((context.session.session_id, str(status)))
@@ -137,6 +142,14 @@ class NoAgentTransitions:
 
 
 class SettledHost:
+    _session_checkpoint_lock = threading.RLock()
+
+    def _begin_session_checkpoints(self, run_context):
+        return run_context
+
+    def _retire_session_checkpoints(self, writer):
+        return None
+
     def __init__(self, *, interrupt: bool = False) -> None:
         self.session_id = "runner-session"
         self.interrupt = interrupt

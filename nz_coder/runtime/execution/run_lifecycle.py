@@ -1,10 +1,14 @@
 """Run initialization lifecycle shared by every Agent profile."""
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import re
 import copy
 
 from nz_coder.protocol.message_schema import (
+    ASSISTANT_ERROR_KEY,
+    INTERACTION_RUN_ID_KEY,
     cleanup_incomplete_tool_history,
     ensure_message_identities,
     is_synthetic_user_message,
@@ -14,17 +18,17 @@ from nz_coder.runtime.agent.admission import AdmissionInvariantSession
 from nz_coder.runtime.conversation.continuation_context import (
     RESUMABLE_STATUSES,
     continuation_task_text,
-    is_continuation_activation,
-    is_pure_continuation_activation,
 )
 from nz_coder.runtime.core.lifecycle_context import LifecycleExecutionContext
+from nz_coder.protocol.public_error import PublicError, PublicRuntimeError, public_error_from_wire, to_public_error
+from nz_coder.runtime.process.command_channel import current_command_client
 from nz_coder.runtime.core.execution_context import (
+    command_activation,
+    derive_command_execution_policy,
+    strict_local_tools,
     agent_timeout_seconds,
     max_agent_turns,
-    set_broad_tests_blocked,
-    set_declared_test_scopes,
 )
-from nz_coder.runtime.agent.task_policy import declared_test_scopes
 
 
 class ProductionRunLifecycle:
@@ -36,19 +40,10 @@ class ProductionRunLifecycle:
         state = context.run_state
         state.reset()
         context.clear_reverter()
-        context.vm.reset()
-        context.recovery.start_tool_call_run()
+        run = getattr(context.runtime_state, "_verification_context", None)
+        with run._state_lock if run is not None else nullcontext():
+            context.recovery.start_tool_call_run()
         context.clear_read_cache()
-        if context.stall_orchestrator is not None:
-            cancel_and_settle = getattr(
-                context.stall_orchestrator,
-                "cancel_and_settle",
-                None,
-            )
-            if callable(cancel_and_settle):
-                cancel_and_settle(timeout=0.5)
-            else:
-                context.stall_orchestrator.reset()
         state.admission_session = (
             AdmissionInvariantSession(context.admission_handle)
             if context.admission_handle is not None else None
@@ -67,23 +62,11 @@ class ProductionRunLifecycle:
                 max_turns,
                 context.admission_handle.system_cap.max_iterations,
             )
-        task_text = last_user_text(messages)
-        resume_activation = is_continuation_activation(messages)
-        pure_continuation = is_pure_continuation_activation(messages)
-        # Only a new genuine message after prior Agent history creates round authority.
-        # Pure continuation uses the saved authority, never a summary reconstructed as new.
-        followup = None
-        if not pure_continuation:
-            for index in range(len(messages) - 1, -1, -1):
-                message = messages[index]
-                if (isinstance(message, dict) and message.get("role") == "user"
-                        and not is_synthetic_user_message(message)):
-                    if any(
-                        isinstance(m, dict) and m.get("role") == "assistant"
-                        for m in messages[:index]
-                    ):
-                        followup = message
-                    break
+        activation = command_activation(messages)
+        task_text = activation.task_text
+        resume_activation = activation.resume_activation
+        pure_continuation = activation.pure_continuation
+        followup = activation.current_user_message
         authority_kwargs = {"current_user_message": followup} if followup is not None else {}
         state.restored_state = context.prepare_runtime_state(
             task_text,
@@ -93,20 +76,29 @@ class ProductionRunLifecycle:
             task_text if resume_activation and not pure_continuation else "",
             **authority_kwargs,
         )
-        policy_task = (
-            context.runtime_state.initial_task_text
-            if state.restored_state
-            and pure_continuation
-            and context.runtime_state.initial_task_text
-            else task_text
+        from nz_coder.runtime.agent.planning_runtime import activate_execution_handoff
+        from nz_coder.runtime.process.workdir import current_workdir
+        context.verification_runtime.initialize(restored=state.restored_state, messages=messages)
+        from nz_coder.runtime.agent.task_intent import initialize_task_assessment
+        # 无新增真实指令的内部恢复，才允许沿用同来源判断；“继续”新消息也须重新核对绑定。
+        assessment_resume = state.restored_state and activation.current_user_message is None
+        initialize_task_assessment(context.runtime_state, context.verification_runtime.run_context,
+                                   messages, pure_continuation=assessment_resume)
+        activate_execution_handoff(context.runtime_state, messages, workspace=current_workdir(),
+                                   pure_continuation=pure_continuation)
+        policy = derive_command_execution_policy(
+            activation, restored=state.restored_state,
+            initial_task_text=context.runtime_state.initial_task_text if state.restored_state else "",
+            strict_local_tools=strict_local_tools(),
         )
-        set_declared_test_scopes(declared_test_scopes(policy_task))
-        if state.restored_state:
-            state.replan_count = context.runtime_state.replan_count
         context.start_run_evidence()
         context.persist_runtime_state(active=True)
-        set_broad_tests_blocked(False)
         context.commit()
+        client = current_command_client()
+        if client is not None and not client.policy_ready(policy, deadline=client.deadline):
+            raise PublicRuntimeError(PublicError(
+                "child_command_channel_error", "Child command policy initialization failed.",
+            ))
         context.publish_started(messages, stream, max_turns)
         start_turn = context.runtime_state.turn_count if state.restored_state else 0
         return max_turns, start_turn
@@ -137,7 +129,7 @@ class ProductionRunLifecycle:
             active=_resumable_terminal(context.run_state.last_status)
         )
         context.commit()
-        self._publish_terminal(context, messages)
+        self._trace_terminal(context, messages)
         return context.run_state.last_status
 
     async def finalize(
@@ -166,7 +158,7 @@ class ProductionRunLifecycle:
             active=_resumable_terminal(context.run_state.last_status)
         )
         context.commit()
-        self._publish_terminal(context, messages)
+        self._trace_terminal(context, messages)
         return context.run_state.last_status
 
     @staticmethod
@@ -177,16 +169,63 @@ class ProductionRunLifecycle:
     ) -> dict | None:
         state = context.run_state
         status = context.assert_terminal(status)
-        ProductionRunLifecycle._settle_terminal_sidecars(context)
         inject_missing_tool_results(messages)
-        context.finish_lineage(status, messages)
+        runtime = context.verification_runtime
         resolved_content, content_source = _terminal_content(messages, content_text)
+        active_agent = context.current_agent_name()
+        outputs = context.structured_outputs()
+        if status in {"completed", "completed_unverified"}:
+            from nz_coder.runtime.verification.domain.models import candidate_fingerprint
+            runtime.domain.set_completion_candidate(candidate_fingerprint(resolved_content, outputs.get(active_agent)))
+        watermark = runtime.prepare_freeze()
+        from nz_coder.runtime.core.result import normalize_run_status
+        with runtime.run_context._state_lock:
+            context.recovery.reset_tool_call_history(reason="terminal", context_changed=True)
+            status = context.assert_terminal(status)
+            snapshot = runtime.domain.snapshot()
+            status = snapshot.assess_completion(status).status
+            runtime.run_context.freeze_execution(normalize_run_status(status))
+            snapshot = runtime.domain.snapshot()
+            verification = snapshot.to_dict()
+        runtime.finish_freeze(watermark)
+        context.finish_lineage(status, messages)
         if status == "aborted" and not resolved_content:
             resolved_content = (
                 f"Agent aborted after {context.recovery.consecutive_errors} "
                 "consecutive errors"
             )
             content_source = "status"
+        authored_content = str(runtime.run_context.metadata.get("authored_content") or "")
+        terminal_error = None
+        if status == "error":
+            # 仅当前交互的宿主错误可以成为终态原因，不能捡起历史错误或原始异常文本。
+            interaction = runtime.run_context.interaction_run_id
+            for message in reversed(messages):
+                if message.get("role") != "assistant" or message.get(INTERACTION_RUN_ID_KEY) != interaction:
+                    continue
+                value = message.get(ASSISTANT_ERROR_KEY) or {}
+                terminal_error = public_error_from_wire(value.get("data", {}).get("public_error"))
+                break
+            terminal_error = terminal_error or to_public_error(None)
+            if not resolved_content:
+                resolved_content, content_source = terminal_error.message, "public_error"
+        rejected = snapshot.latest_review is not None and not snapshot.latest_review.accepted
+        if rejected:
+            from nz_coder.runtime.verification.completion_gate import verification_appendix
+            outputs.pop(active_agent, None)
+            reason = resolved_content if resolved_content != authored_content else "Delivery review identified unresolved requirements."
+            paths = sorted({fact.path for fact in snapshot.artifacts if fact.operation in {"create", "change", "delete"}})
+            changes = "\n\n已记录的文件变更：" + ", ".join(paths) if paths else ""
+            resolved_content = "本次交付尚未完成。\n\n" + reason + changes + "\n\n" + verification_appendix(verification)
+        elif (status in {"completed", "completed_unverified"}
+                and "verification_state" in verification
+                and not context.output_schema_requested()):
+            from nz_coder.runtime.verification.completion_gate import verification_appendix
+            if status == "completed_unverified":
+                resolved_content = ("本次执行已结束，验证尚未确认。\n\n" + verification_appendix(verification)
+                    + "\n\n模型交付说明（未经独立确认）：\n" + resolved_content)
+            else:
+                resolved_content = (resolved_content.rstrip() + "\n\n" + verification_appendix(verification)).lstrip()
         persisted_into_assistant = bool(
             context.persist_assistant_end(messages, status, resolved_content)
         )
@@ -197,9 +236,11 @@ class ProductionRunLifecycle:
             state.last_status = {
                 "status": "aborted",
                 "content": resolved_content,
+                "authored_content": authored_content,
                 "errors": context.recovery.consecutive_errors,
                 "last_error": context.recovery.last_error,
-                **context.vm.status(),
+                **verification,
+                "verification": verification,
                 "runtime": runtime,
             }
             context.commit()
@@ -214,11 +255,7 @@ class ProductionRunLifecycle:
                 "run_end", status="aborted",
                 errors=context.recovery.consecutive_errors,
                 runtime=runtime,
-                **context.vm.status(),
-            )
-            context.publish_event(
-                "session.run.completed",
-                {"status": "aborted", "message_count": len(messages)},
+                **context.verification_runtime.status(),
             )
             context.persist_runtime_state(active=False)
             return state.last_status
@@ -232,7 +269,7 @@ class ProductionRunLifecycle:
                     else "Agent stopped at the configured work limit."
                 )
             )
-        elif resolved_content and on_text and not stream:
+        elif resolved_content and on_text and (not stream or status == "blocked"):
             on_text(resolved_content)
         if status in {"completed", "completed_unverified"} and stream and on_token:
             if resolved_content:
@@ -243,15 +280,18 @@ class ProductionRunLifecycle:
         state.last_status = {
             "status": status,
             "content": resolved_content,
+            "authored_content": authored_content,
             "errors": (
                 context.recovery.consecutive_errors if status == "max_turns" else 0
             ),
-            **context.vm.status(),
+            **verification,
+            "verification": verification,
             "runtime": runtime,
         }
-        active_agent = context.current_agent_name()
-        outputs = context.structured_outputs()
-        if active_agent in outputs:
+        if terminal_error is not None:
+            state.last_status["public_error"] = terminal_error.to_dict()
+            state.last_status["last_error"] = terminal_error.message
+        if active_agent in outputs and status in {"completed", "completed_unverified"} and not rejected:
             state.last_status["structured"] = copy.deepcopy(outputs[active_agent])
         context.commit()
         context.trace(
@@ -270,38 +310,18 @@ class ProductionRunLifecycle:
         if isinstance(last_status, dict):
             last_status["runtime"] = context.runtime_summary()
 
-    @staticmethod
-    def _settle_terminal_sidecars(context: LifecycleExecutionContext) -> None:
-        """Cancel unconsumable L2 work before freezing the final ledger."""
-        orchestrator = context.stall_orchestrator
-        cancel_and_settle = getattr(orchestrator, "cancel_and_settle", None)
-        if not callable(cancel_and_settle):
-            return
-        if not cancel_and_settle(timeout=1.0):
-            context.trace(
-                "stall_sidecar_terminal_unsettled",
-                timeout_seconds=1.0,
-            )
 
     @staticmethod
-    def _publish_terminal(
+    def _trace_terminal(
         context: LifecycleExecutionContext, messages: list,
     ) -> None:
-        """Publish the terminal boundary only after the final ledger settles."""
+        """记录冻结结果；对外终态由 Runner 在持久会话提交后发布。"""
         last_status = context.run_state.last_status
         status = str(last_status.get("status") or "completed")
         runtime = last_status.get("runtime", {})
         context.trace(
             "run_end", status=status, message_count=len(messages),
-            runtime=runtime, **context.vm.status(),
-        )
-        context.publish_event(
-            (
-                "session.run.cancelled"
-                if status in {"cancelled", "interrupted"}
-                else "session.run.completed"
-            ),
-            {"status": status, "message_count": len(messages)},
+            runtime=runtime, **context.verification_runtime.status(),
         )
 
     @staticmethod

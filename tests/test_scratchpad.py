@@ -1,8 +1,8 @@
-"""Tests for scratchpad category simplification and compatibility."""
+"""Structured working memory and persistence."""
 from __future__ import annotations
 
 
-def test_legacy_categories_fold_into_plan(tmp_path):
+def test_findings_preserve_certainty_and_basis(tmp_path):
     from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.state.sessions import scoped_session
     from nz_coder.tools.scratchpad import Scratchpad
@@ -11,12 +11,14 @@ def test_legacy_categories_fold_into_plan(tmp_path):
     with scoped_workdir(tmp_path), scoped_session("scratchpad-test"):
         scratchpad.clear()
         try:
-            result = scratchpad.update("finding", "confirmed parser entrypoint")
+            result = scratchpad.update_section("findings", [{"summary": "confirmed parser entrypoint", "details": "", "certainty": "confirmed", "basis": "parser.py"}])
 
-            assert "[plan]" in result
+            assert "[findings]" in result
             block = scratchpad.read()
-            assert "[plan] confirmed parser entrypoint" in block
-            assert "[finding]" not in block
+            assert "confirmed parser entrypoint" in block
+            assert "parser.py" in block
+            assert "confirmed" in block
+            assert "[plan]" not in block
         finally:
             scratchpad.clear()
 
@@ -24,9 +26,9 @@ def test_legacy_categories_fold_into_plan(tmp_path):
 def test_invalid_scratchpad_category_still_errors():
     from nz_coder.tools.scratchpad import scratchpad
 
-    result = scratchpad.update("random", "note")
+    result = scratchpad.update_section('random', [{"summary": "note", "details": ""}])
 
-    assert result.startswith("Error: category must be one of")
+    assert result.startswith("Error: invalid working memory section")
 
 
 def test_scratchpad_persists_across_instances(tmp_path):
@@ -36,7 +38,7 @@ def test_scratchpad_persists_across_instances(tmp_path):
 
     with scoped_workdir(tmp_path), scoped_session("persisted-session"):
         first = Scratchpad()
-        assert not first.update("failure", "pytest failed in test_api").startswith("Error:")
+        assert not first.update_section('lessons', [{"summary": "pytest failed in test_api", "details": ""}]).startswith("Error:")
         assert session_scratchpad_path().exists()
 
         restored = Scratchpad()
@@ -90,7 +92,7 @@ def test_scratchpad_restores_in_fresh_python_process(tmp_path):
 
     with scoped_workdir(tmp_path), scoped_session("fresh-process"):
         first = Scratchpad()
-        assert not first.update("plan", "persist across process restart").startswith("Error:")
+        assert not first.update_section('focus', [{"summary": "persist across process restart", "details": ""}]).startswith("Error:")
 
     script = (
         "import sys; from pathlib import Path; from nz_coder.foundation import config; "

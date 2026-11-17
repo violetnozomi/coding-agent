@@ -367,7 +367,7 @@ def test_native_streams_emit_terminal_finish_and_cumulative_usage():
             "usageMetadata": {
                 "promptTokenCount": 18,
                 "candidatesTokenCount": 7,
-                "totalTokenCount": 25,
+                "totalTokenCount": 28,
                 "thoughtsTokenCount": 3,
                 "cachedContentTokenCount": 6,
             },
@@ -385,14 +385,13 @@ def test_native_streams_emit_terminal_finish_and_cumulative_usage():
     ))
 
     assert gemini_chunks[-1].choices[0].finish_reason == "length"
-    assert gemini_chunks[-1].usage["total_tokens"] == 25
+    assert gemini_chunks[-1].usage["total_tokens"] == 28
     assert gemini_chunks[-1].usage["reasoning_tokens"] == 3
     assert gemini_chunks[-1].usage["cache_read_input_tokens"] == 6
     assert gemini_chunks[-1].usage["uncached_input_tokens"] == 12
 
 
-def test_gemini_stream_and_agent_loop_keep_provider_metadata(monkeypatch):
-    monkeypatch.setattr(config, "MODEL_ID", "gemini-test")
+def test_gemini_stream_and_agent_loop_keep_provider_metadata(monkeypatch, tmp_path):
     signature = "stream-signature"
     transport = _FakeTransport(
         events=[
@@ -411,7 +410,8 @@ def test_gemini_stream_and_agent_loop_keep_provider_metadata(monkeypatch):
                                     "thoughtSignature": signature,
                                 },
                             ]
-                        }
+                        },
+                        "finishReason": "STOP"
                     }
                 ]
             }
@@ -420,17 +420,26 @@ def test_gemini_stream_and_agent_loop_keep_provider_metadata(monkeypatch):
     provider = GeminiProvider(api_key="key", transport=transport)
     client = provider.create_client()
 
-    class Recovery:
-        def record_success(self):
-            return None
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
-    agent = AgentLoop.__new__(AgentLoop)
-    agent.provider = provider
-    agent.client = client
-    agent.recovery = Recovery()
-    result = agent._call_streaming(
-        [{"role": "user", "content": "read"}],
-    )
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    with scoped_workdir(tmp_path):
+        from nz_coder.providers.capabilities import ModelCapabilities
+        from nz_coder.runtime.model_gateway import ResolvedModelRuntime
+
+        runtime = ResolvedModelRuntime(
+            provider_id="gemini", model_id="gemini-test", request_model_id="gemini-test",
+            variant=None, provider=provider, client=client,
+            capabilities=ModelCapabilities(provider="gemini", model_id="gemini-test"),
+        )
+        agent = AgentLoop("offline", model_runtime=runtime,
+                          trace_enabled=False, session_id="gemini-stream-metadata")
+        try:
+            result = agent._call_streaming(
+                [{"role": "user", "content": "read"}],
+            )
+        finally:
+            agent.close()
 
     assert result.content == "Calling."
     assert result.tool_calls[0]["function"]["name"] == "read_file"
@@ -611,3 +620,189 @@ def test_native_provider_usage_repairs_malformed_numeric_fields():
 
     assert anthropic_result.usage["total_tokens"] == 2
     assert gemini_result.usage["total_tokens"] == 3
+
+
+def test_provider_owner_retains_failed_close_for_retry():
+    from nz_coder.providers import http
+
+    class Raw:
+        def __init__(self):
+            self.attempts = 0
+        def close(self):
+            self.attempts += 1
+            if self.attempts == 1:
+                raise OSError("close failed")
+
+    raw = Raw()
+    stream = http.OwnedStream(iter(()), close_owner=raw.close)
+    with pytest.raises(OSError, match="close failed"):
+        stream.close()
+    stream.close()
+    stream.close()
+    assert raw.attempts == 2
+
+
+def test_native_stream_close_before_first_next_releases_or_avoids_response():
+    class Response:
+        def __init__(self):
+            self.closed = False
+        def __iter__(self):
+            return iter([b'data: {"value": 1}\n', b'\n'])
+        def close(self):
+            self.closed = True
+
+    class Transport(UrllibTransport):
+        def __init__(self):
+            super().__init__()
+            self.opened = []
+        def _open(self, *args):
+            response = Response()
+            self.opened.append(response)
+            return response
+
+    transport = Transport()
+    stream = transport.post_sse("url", {}, {})
+    stream.close()
+    assert not transport.opened
+    stream = transport.post_sse("url", {}, {})
+    assert next(stream) == {"value": 1}
+    stream.close()
+    assert transport.opened[0].closed
+
+
+@pytest.mark.parametrize("kind", ["anthropic", "gemini", "responses"])
+def test_normalized_provider_stream_close_propagates_to_raw_owner(kind):
+    from nz_coder.providers.openai_responses import _normalize_stream as responses_stream
+
+    class Raw:
+        def __init__(self):
+            self.closed = 0
+        def __iter__(self):
+            return self
+        def __next__(self):
+            raise StopIteration
+        def close(self):
+            self.closed += 1
+
+    raw = Raw()
+    normalizer = {"anthropic": AnthropicProvider._normalize_stream,
+                  "gemini": GeminiProvider._normalize_stream,
+                  "responses": responses_stream}[kind]
+    stream = normalizer(raw)
+    stream.close()
+    stream.close()
+    assert raw.closed == 1
+
+
+def test_gemini_stream_preserves_distinct_calls_and_deduplicates_snapshots():
+    def event(call_id, path):
+        return {"candidates": [{"content": {"parts": [{"functionCall": {
+            "id": call_id, "name": "read_file", "args": {"path": path}
+        }}]}}]}
+
+    events = [event("one", "a.py"), event("one", "a.py"), event("two", "b.py")]
+    calls = [call for item in GeminiProvider._normalize_stream(events)
+             for call in item.choices[0].delta.tool_calls]
+    assert [(call.index, call.id, call.function.name, json.loads(call.function.arguments))
+            for call in calls] == [
+                (0, "one", "read_file", {"path": "a.py"}),
+                (1, "two", "read_file", {"path": "b.py"}),
+            ]
+    with pytest.raises(ValueError):
+        list(GeminiProvider._normalize_stream([event("one", "a.py"), event("one", "b.py")]))
+
+
+def test_provider_owner_closes_raw_when_adapter_is_executing():
+    import threading
+    from nz_coder.providers.http import OwnedStream
+
+    entered, release = threading.Event(), threading.Event()
+    closed = []
+    def adapter():
+        entered.set()
+        release.wait(2)
+        yield 1
+    stream = OwnedStream(adapter(), close_owner=lambda: (closed.append(True), release.set()))
+    worker = threading.Thread(target=lambda: next(stream))
+    worker.start()
+    try:
+        assert entered.wait(2)
+        with pytest.raises(ValueError, match="already executing"):
+            stream.close()
+        worker.join(2)
+        assert not worker.is_alive()
+        stream.close()
+        assert closed == [True]
+    finally:
+        release.set()
+        worker.join(2)
+
+
+def test_native_owner_retries_close_after_open_finishes():
+    import threading
+    entered, release = threading.Event(), threading.Event()
+    class Response:
+        closed = False
+        def __iter__(self):
+            return iter([b'data: {"value": 1}\n', b'\n'])
+        def close(self):
+            self.closed = True
+    response = Response()
+    class Transport(UrllibTransport):
+        def _open(self, *args):
+            entered.set()
+            release.wait(2)
+            return response
+    stream = Transport().post_sse("url", {}, {})
+    worker = threading.Thread(target=lambda: next(stream, None))
+    worker.start()
+    try:
+        assert entered.wait(2)
+        with pytest.raises(BaseException):
+            stream.close()
+        release.set()
+        worker.join(2)
+        assert not worker.is_alive()
+        stream.close()
+        assert response.closed
+    finally:
+        release.set()
+        worker.join(2)
+
+
+def test_provider_iteration_does_not_retry_close_before_worker_cleanup():
+    from nz_coder.providers.http import OwnedStream
+    attempts = []
+    def close():
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise OSError("close failed")
+    stream = OwnedStream(iter(()), close_owner=close)
+    assert list(stream) == []
+    assert attempts == []
+    with pytest.raises(OSError, match="close failed"):
+        stream.close()
+    assert len(attempts) == 1
+    stream.close()
+    assert len(attempts) == 2
+
+
+def test_gemini_late_thought_signature_survives_gateway_aggregation():
+    from tests.runtime.model_gateway.test_streaming_gateway import _call, _gateway
+    def event(signature=None):
+        part = {"functionCall": {"id": "call-one", "name": "read_file", "args": {"path": "a.py"}}}
+        if signature:
+            part["thoughtSignature"] = signature
+        return {"candidates": [{"content": {"parts": [part]}}]}
+    stream = GeminiProvider._normalize_stream([event(), event("signed"), event("signed"),
+        {"candidates": [{"finishReason": "STOP"}]}])
+    gateway, _ = _gateway([stream])
+    events = []
+    outcome = gateway.complete_stream_sync(_call(), on_event=events.append)
+    assert len(outcome.tool_calls) == 1
+    call = outcome.tool_calls[0]
+    assert call["id"] == "call-one"
+    assert call["function"]["name"] == "read_file"
+    assert json.loads(call["function"]["arguments"]) == {"path": "a.py"}
+    assert call["provider_extra"]["thoughtSignature"] == "signed"
+    assert sum(event.kind == "tool_delta" for event in events) == 2

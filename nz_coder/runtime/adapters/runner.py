@@ -1,7 +1,10 @@
 """Legacy Agent host adapter for focused Runner orchestration."""
 from __future__ import annotations
 
+import copy
 from pathlib import Path
+
+from nz_coder.foundation.async_utils import to_thread_settled
 
 from nz_coder.runtime.adapters.context import context_from_legacy_host
 from nz_coder.runtime.adapters.lifecycle import lifecycle_context_from_legacy_host
@@ -53,6 +56,8 @@ def run_request_from_legacy_host(
     parent_session_id = getattr(host, "parent_session_id", None)
     metadata = {
         "suppress_runtime_events": True,
+        **({"memory_scope": host.memory_scope.to_dict(), "memory_capability": host.memory_capability}
+           if getattr(host, "memory_scope", None) is not None else {}),
         **(
             {"permission_mode": str(permission_mode)}
             if isinstance(permission_mode, str) and permission_mode
@@ -106,11 +111,12 @@ def _optional_text(value: object) -> str | None:
 
 def runner_context_from_legacy_host(host, services, run_context) -> RunnerExecutionContext:
     """Bind focused service owners once at the legacy composition boundary."""
-    return RunnerExecutionContext(
+    lifecycle = _LifecycleService(host, services, run_context)
+    context = RunnerExecutionContext(
         session_id=str(getattr(host, "session_id", "") or run_context.session.session_id),
         runtime_state=getattr(host, "runtime_state", None),
         execution=_ExecutionServices(host, services, run_context),
-        lifecycle=_LifecycleService(host, services),
+        lifecycle=lifecycle,
         policy=_PolicyService(host, services),
         planning=LegacyPlanningRuntime(host),
         control=_TurnControlService(host),
@@ -118,6 +124,15 @@ def runner_context_from_legacy_host(host, services, run_context) -> RunnerExecut
         messages=LegacyMessageRuntime(host),
         snapshots=LegacySnapshotRuntime(host),
     )
+    lifecycle._bind_session_checkpoints()
+    return context
+
+
+def lifecycle_from_legacy_host(host, services, run_context):
+    """Create the same writer owner for legacy execution overrides."""
+    lifecycle = _LifecycleService(host, services, run_context)
+    lifecycle._bind_session_checkpoints()
+    return lifecycle
 
 
 class _ExecutionServices:
@@ -126,11 +141,15 @@ class _ExecutionServices:
         self.services = services
         self.run_context = run_context
 
+    @property
+    def recovery(self):
+        return self.host.recovery
+
     def context(self):
         return context_from_legacy_host(self.host)
 
     def model(self):
-        return model_context_from_legacy_host(self.host)
+        return model_context_from_legacy_host(self.host, self.run_context)
 
     def tools(self):
         return tool_context_from_legacy_host(
@@ -139,20 +158,78 @@ class _ExecutionServices:
 
 
 class _LifecycleService:
-    def __init__(self, host, services) -> None:
+    def __init__(self, host, services, run_context) -> None:
         self.host = host
         self.services = services
+        self.run_context = run_context
+        self._writer = None
+        # Legacy Host 退出作用域后 ContextVar 已解绑，保留本轮身份明确的发布者。
+        self._publisher = host.event_publisher
+
+    def _bind_session_checkpoints(self) -> None:
+        # 最后才激活 owner；构造其它端口失败时不会遗留无屏障的 writer。
+        with self.host._session_checkpoint_lock:
+            self._writer = self.host._begin_session_checkpoints(self.run_context)
+            self.run_context._retain_terminal_commit = self._retain_terminal_commit
+
+    def _retain_terminal_commit(self) -> None:
+        from nz_coder.runtime.session.store import SessionCommitConflict
+        with self.host._session_checkpoint_lock:
+            if self._writer is not self.host._session_checkpoint_writer:
+                raise SessionCommitConflict()
+            self._writer.settle = self._retry_terminal
+
+    async def _retry_terminal(self) -> None:
+        if not self.run_context.finalized:
+            await self.services.session_runtime.finalize(self.run_context, self.run_context.terminal_status)
+        self.publish_terminal(self.run_context._terminal_error)
+
+    async def settle_session_checkpoints(self) -> None:
+        await to_thread_settled(self.host._retire_session_checkpoints, self._writer)
+
+    def publish_terminal(self, error: BaseException | None = None) -> None:
+        with self.host._session_checkpoint_lock:
+            if self._writer.terminal_published:
+                return
+            self._writer.terminal_published = True
+            self._writer.settle = None
+            self.run_context._retain_terminal_commit = None
+        self.host._complete_run_preparation(self.run_context)
+        from nz_coder.protocol.public_error import to_public_error
+        from nz_coder.runtime.core.result import normalize_run_status
+
+        status = self.run_context.session.status.value
+        raw = str(self.run_context.metadata.get("raw_status") or "")
+        # aborted 沿用既有 raw 协议，同时会话的规范状态仍是 error。
+        if raw and raw != "running" and normalize_run_status(raw).value == status:
+            status = raw
+        name = "session.run.cancelled" if status in {"cancelled", "interrupted"} else "session.run.completed"
+        payload = {"status": status, "message_count": len(self.run_context.transcript)}
+        if error is not None and status == "error":
+            name = "session.run.failed"
+            public = to_public_error(error)
+            payload.update(error_type=public.metadata.get("error_type", public.code), error=public.to_dict())
+        try:
+            self._publisher.publish(name, payload)
+        except Exception:
+            # 显示失败不能把已经持久完成的任务重新变成运行失败。
+            return
 
     def initialize(self, messages, stream):
-        return self.services.lifecycle.initialize(
+        result = self.services.lifecycle.initialize(
             _lifecycle_owner(self.host, self.services.lifecycle), messages, stream,
         )
+        self.host._complete_run_preparation(self.run_context)
+        return result
 
     async def finalize(self, messages, status, *args, **kwargs):
-        return await self.services.lifecycle.finalize(
+        await self.settle_session_checkpoints()
+        result = await self.services.lifecycle.finalize(
             _lifecycle_owner(self.host, self.services.lifecycle),
             messages, status, *args, **kwargs,
         )
+        self.run_context.metadata["raw_status"] = str(result["status"])
+        return result
 
 
 class _PolicyService:
@@ -197,67 +274,36 @@ class _PolicyService:
             status,
             content,
         )
-        if reviewed_status not in {"completed", "completed_unverified"}:
-            return reviewed_status
-        state = getattr(self.host, "runtime_state", None)
-        ledger_data = getattr(state, "requirement_ledger", None)
-        if isinstance(ledger_data, dict) and ledger_data:
-            from nz_coder.runtime.verification.completion_gate import (
-                COMPLETION_GATE_REANIMATE_BUDGET,
-                append_completion_guidance,
-            )
-
-            decision, appended = append_completion_guidance(messages, state)
-            if not decision.ready:
-                if appended:
-                    self.host.tracer.log(
-                        "requirement_completion_blocked",
-                        missing_ids=list(decision.missing_ids),
-                        prompt_count=state.completion_gate_prompts,
-                    )
-                elif (
-                    int(getattr(state, "completion_gate_prompts", 0) or 0)
-                    >= COMPLETION_GATE_REANIMATE_BUDGET
-                ):
-                    self.host.tracer.log(
-                        "requirement_completion_budget_exhausted",
-                        missing_ids=list(decision.missing_ids),
-                        prompt_count=state.completion_gate_prompts,
-                    )
-                    self.host._persist_runtime_state(active=True)
-                    return "continue"
-                self.host._persist_runtime_state(active=True)
-                return "continue"
         return reviewed_status
 
-    def observe_verification_contract(
-        self,
-        command: str,
-        output: str,
-        passed: bool,
-    ) -> None:
-        self.host.vm.observe_acceptance_contract(
-            command,
-            output,
-            passed=passed,
+    async def check_terminal_rules(self, messages, status, content):
+        return await self.host.hooks.handle_terminal_rules_async(
+            self.host, messages, message=content, status=status,
         )
-        observe = getattr(
-            getattr(self.host, "runtime_state", None),
-            "observe_requirement_verification",
-            None,
-        )
-        if callable(observe):
-            observe(command, passed=passed, acceptance=True)
+
+    def prepare_completion(self):
+        self.host.verification_runtime.reconcile_workspace()
+
+    async def settle_completion(self, messages, content, *, review: bool, guidance: str = ""):
+        return await self.host.hooks.handle_delivery_boundary_async(self.host, messages,
+            message=content, review=review, guidance=guidance)
 
     def verification_status(self) -> dict:
-        manager = getattr(self.host, "vm", None)
-        status = getattr(manager, "status", None)
-        return status() if callable(status) else {}
+        return self.host.verification_runtime.status()
 
 
 class _TurnControlService:
     def __init__(self, host) -> None:
         self.host = host
+
+    def current_agent_name(self):
+        return self.host.current_agent_name
+
+    def structured_output(self):
+        return copy.deepcopy(self.host._structured_outputs.get(self.host.current_agent_name))
+
+    def invalidate_completion_payload(self):
+        self.host._structured_outputs.pop(self.host.current_agent_name, None)
 
     def has_queued_followup(self):
         callback = getattr(self.host, "_has_queued_followup", None)

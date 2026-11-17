@@ -1,30 +1,38 @@
 """Session-owned background orchestration for isolated write-capable subagents."""
 from __future__ import annotations
 
+import asyncio
+import copy
 import hashlib
-import multiprocessing
+import uuid
 import threading
 import time
 import weakref
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from contextvars import ContextVar, copy_context
-from dataclasses import dataclass
+from concurrent.futures import CancelledError
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
-from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.runtime.core.run_settings import RunSettings, current_run_settings
 from nz_coder.runtime.agent.child_result import (
     CHILD_RESULT_KEY,
     ChildAgentResult,
     child_result_from_state,
 )
-from nz_coder.runtime.agent.child_contracts import presentation_excerpt
 from nz_coder.protocol.public_error import (
-    PublicError,
     format_public_error,
-    public_error_from_wire,
+    PublicError,
+    PublicRuntimeError,
     to_public_error,
 )
+from nz_coder.runtime.agent.child_process_result import allocate_child_process_result
+from nz_coder.runtime.agent.process_supervisor import SubagentProcessSupervisor
+from nz_coder.runtime.agent.settlement import FrozenSettlement, SettlementCoordinator, freeze_settlement, project_checkpoint
 from nz_coder.runtime.workflows.workflow_process import WorkflowProcessStore
 from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.runtime.process.command_broker import ParentCommandScope
+from nz_coder.runtime.process.command_channel import CommandChannelLimits
+from nz_coder.runtime.process.preparation import PreparationInterrupted, PreparationScope
 from nz_coder.foundation.capability_lease import capability_leases
 from nz_coder.tools import ToolOutput, dispatch, register
 
@@ -33,6 +41,7 @@ _TERMINAL_STATUSES = frozenset({
     "completed", "cancelled", "timeout", "error", "max_turns",
     "tool_error_rolled_back", "verification_failed_rolled_back", "interrupted",
     "verification_failed", "completed_unverified", "applied",
+    "needs_parent", "completed_conflicted",
 })
 _LIVE_STATUSES = frozenset({"queued", "running", "cancel_requested"})
 _STOP_SETTLE_SECONDS = 2.0
@@ -46,7 +55,6 @@ _MESSAGE_ROUTE: ContextVar[tuple[object, str] | None] = ContextVar(
 )
 _INSTANCE_LOCK = threading.Lock()
 _INSTANCES: dict[tuple[Path, str], BackgroundAgentManager] = {}
-_CHILD_PROCESS_RESULT_SCHEMA = "nz.child_result.v1"
 
 
 @dataclass
@@ -54,8 +62,21 @@ class _LiveJob:
     cancel_event: threading.Event
     done_event: threading.Event
     thread: threading.Thread
-    process: object | None = None
+    supervisor: SubagentProcessSupervisor | None = None
+    command_scope: ParentCommandScope | None = None
+    preparation_scope: PreparationScope | None = None
+    environment: object | None = None
     capability_lease_id: str = ""
+    settlement_id: str = ""
+    frozen: bool = False
+    acquired: bool = False
+    stop_reason: str = ""
+    cancel_requested_at: float = 0.0
+    cancel_diagnostic_attempted: bool = False
+
+    @property
+    def process(self):
+        return self.supervisor.process if self.supervisor is not None else None
 
 
 @dataclass
@@ -67,74 +88,6 @@ class _ManagedWorkflowRun:
     condition: threading.Condition
     ended_at: float | None = None
     error: str = ""
-
-
-def _run_subagent_process(connection, payload: dict) -> None:
-    """Run one child behind a spawn boundary and return a bounded result."""
-    try:
-        from nz_coder.runtime.agent.subagent import run_subagent, scoped_parent_context
-        from nz_coder.runtime.process.workdir import scoped_workdir
-        from nz_coder.foundation.workspace_trust import scoped_config_snapshot
-
-        snapshot = payload.pop("config_snapshot", None)
-        with (
-            scoped_workdir(payload["workspace"]),
-            scoped_config_snapshot(snapshot) if snapshot is not None else nullcontext(),
-            scoped_parent_context(
-                session_id=payload["parent_session_id"],
-                config_snapshot=snapshot,
-            ),
-        ):
-            result = run_subagent(
-                payload["prompt"],
-                agent_type=payload["agent_type"],
-                session_id=payload["session_id"],
-                allowed_tools=payload.get("allowed_tools"),
-                target_paths=payload.get("target_paths"),
-                output_schema=payload.get("output_schema"),
-                model_hint=payload.get("model_hint"),
-                evidence_refs=payload.get("evidence_refs"),
-                verification=payload.get("verification"),
-                cancel_event=threading.Event(),
-            )
-        connection.send({
-            "schema": _CHILD_PROCESS_RESULT_SCHEMA,
-            "ok": True,
-            "result": str(result)[:2_000_000],
-        })
-    except BaseException as exc:
-        connection.send({
-            "schema": _CHILD_PROCESS_RESULT_SCHEMA,
-            "ok": False,
-            "public_error": to_public_error(exc).to_dict(),
-        })
-    finally:
-        connection.close()
-
-
-def _decode_child_process_envelope(
-    envelope: object,
-) -> tuple[str, PublicError | None]:
-    """Validate the spawn wire contract and fail closed on malformed data."""
-    invalid = PublicError(
-        "child_process_protocol_error",
-        "The child process returned an invalid result.",
-    )
-    if (
-        not isinstance(envelope, dict)
-        or envelope.get("schema") != _CHILD_PROCESS_RESULT_SCHEMA
-        or not isinstance(envelope.get("ok"), bool)
-    ):
-        return invalid.message, invalid
-    if envelope["ok"] is True:
-        result = envelope.get("result")
-        if not isinstance(result, str):
-            return invalid.message, invalid
-        return result[:2_000_000], None
-    public = public_error_from_wire(envelope.get("public_error"))
-    if public is None:
-        return invalid.message, invalid
-    return public.message, public
 
 
 def _digest(path: Path) -> str | None:
@@ -156,14 +109,14 @@ def _outcome_from_background_state(state: dict) -> ChildAgentResult:
     canonical = state.get(CHILD_RESULT_KEY)
     if isinstance(canonical, dict):
         return ChildAgentResult.from_dict(canonical)
-    verification = state.get("verification_result")
+    verification = state.get("postconditions")
     if not isinstance(verification, dict):
         verification = str(state.get("verification") or "")
     return child_result_from_state(
         state,
         final_text=str(state.get("background_result") or ""),
         status=str(state.get("status") or "unknown"),
-        verification=verification,
+
     )
 
 
@@ -176,10 +129,12 @@ class BackgroundAgentManager:
         self._lock = threading.RLock()
         self._close_condition = threading.Condition(self._lock)
         self._closing = False
+        self._retiring = False
         self._closed = False
         self._jobs: dict[str, _LiveJob] = {}
         self._message_sequence = 0
         self._mailboxes: dict[str, list[dict]] = {}
+        self._worker_waiters: set[tuple[asyncio.AbstractEventLoop, asyncio.Event]] = set()
         self._event_bus = None
         self._event_publisher = None
         self._task_publishers: dict[str, object] = {}
@@ -212,11 +167,9 @@ class BackgroundAgentManager:
             concurrency_cap=self._concurrency_cap,
             on_event=self._bridge_workflow_event,
         )
+        self._settlements = SettlementCoordinator(self._workflow, lambda state: self._save(state), self._lock)
         self._restore_workflow_run_identities()
         self._reconcile_interrupted()
-        self._workflow.reconcile([
-            state for state in self._states() if state.get("background")
-        ])
         from nz_coder.runtime.workflows.workflow_sweep import sweep_workflow_worktrees
 
         stale_sweep = sweep_workflow_worktrees(
@@ -522,7 +475,7 @@ class BackgroundAgentManager:
             run.condition.notify_all()
         active = [
             str(state.get("session_id") or "")
-            for state in self._states()
+            for state in self._visible_states()
             if state.get("workflow_run_id") == run_id
             and state.get("status") in _LIVE_STATUSES
         ]
@@ -617,7 +570,7 @@ class BackgroundAgentManager:
             recipients = [resolved]
 
         recipients = list(dict.fromkeys(item for item in recipients if item))
-        if sender_id == "worker" and any(
+        if any(
             str(states_by_id.get(item, {}).get("isolation") or "thread") == "process"
             for item in recipients
         ):
@@ -635,27 +588,47 @@ class BackgroundAgentManager:
         if cycle_targets:
             return "Error: forwarding cycle detected for recipient"
 
+        message_id = self._deliver_message(
+            recipients, sender=sender_id, content=body, seen_by=chain,
+            kind="coordinator_instruction" if sender_id == "worker" else "peer_message",
+        )
+        return f"Message {message_id} delivered to {', '.join(recipients)}."
+
+    def _deliver_message(
+        self,
+        recipients: list[str],
+        *,
+        sender: str,
+        content: str,
+        seen_by: list[str],
+        kind: str,
+        status: str | None = None,
+    ) -> str:
+        """Enqueue peer/completion mail through one bounded notification path."""
         with self._lock:
             self._message_sequence += 1
             message_id = f"peer-{self._message_sequence:06d}"
             message = {
                 "id": message_id,
-                "sender": sender_id,
-                "content": body,
-                "seen_by": chain,
-                "kind": (
-                    "coordinator_instruction"
-                    if sender_id == "worker"
-                    else "peer_message"
-                ),
+                "sender": sender,
+                "content": content[:4000],
+                "seen_by": seen_by,
+                "kind": kind,
                 "created_at": time.time(),
             }
-            for item in recipients:
-                mailbox = self._mailboxes.setdefault(item, [])
-                mailbox.append(dict(message, recipient=item))
+            if status is not None:
+                message["status"] = status[:120]
+            for recipient in recipients:
+                mailbox = self._mailboxes.setdefault(recipient, [])
+                mailbox.append(dict(message, recipient=recipient))
                 if len(mailbox) > 200:
                     del mailbox[:-200]
-        return f"Message {message_id} delivered to {', '.join(recipients)}."
+            if "worker" in recipients:
+                # 消息先入箱，再跨线程通知；邮箱才是消息事实来源。
+                for loop, event in self._worker_waiters:
+                    loop.call_soon_threadsafe(event.set)
+                self._worker_waiters.clear()
+        return message_id
 
     def drain_messages(self, recipient: str) -> list[dict]:
         """Atomically consume pending in-flight messages for one Agent."""
@@ -666,45 +639,27 @@ class BackgroundAgentManager:
             messages = self._mailboxes.pop(target, [])
         return [dict(item) for item in messages]
 
-    def _enqueue_worker_wake(
-        self,
-        *,
-        sender: str,
-        content: str,
-        kind: str,
-        status: str = "",
-    ) -> None:
-        """Persist one bounded parent wake without depending on child timing."""
+    async def wait_for_worker_wake(self) -> None:
+        """Await parent mail without polling or binding the manager to one loop."""
+        event = asyncio.Event()
+        waiter = (asyncio.get_running_loop(), event)
         with self._lock:
-            self._message_sequence += 1
-            message_id = f"peer-{self._message_sequence:06d}"
-            mailbox = self._mailboxes.setdefault("worker", [])
-            mailbox.append({
-                "id": message_id,
-                "sender": str(sender or "unknown"),
-                "recipient": "worker",
-                "content": str(content or "")[:4000],
-                "kind": str(kind or "peer_message"),
-                "status": str(status or "")[:120],
-                "seen_by": [str(sender or "unknown")],
-                "created_at": time.time(),
-            })
-            if len(mailbox) > 200:
-                del mailbox[:-200]
+            # 检查与登记共用投递锁，覆盖消息先到、登记后到这两种时序。
+            if self._mailboxes.get("worker") or not self.has_worker_wake_source():
+                return
+            self._worker_waiters.add(waiter)
+        try:
+            await event.wait()
+        finally:
+            with self._lock:
+                self._worker_waiters.discard(waiter)
 
     def has_worker_wake_source(self) -> bool:
         """Return whether parent idle-yield has mail or a live child to await."""
         with self._lock:
-            if self._mailboxes.get("worker"):
-                return True
-            jobs = list(self._jobs.items())
-        for session_id, live in jobs:
-            if live.done_event.is_set():
-                continue
-            state = self._load_raw(session_id)
-            if state.get("status") in _LIVE_STATUSES:
-                return True
-        return False
+            return bool(self._mailboxes.get("worker")) or any(
+                not live.done_event.is_set() for live in self._jobs.values()
+            )
 
     def _states(self) -> list[dict]:
         from nz_coder.runtime.agent.subagent import _iter_subagent_states
@@ -716,22 +671,48 @@ class BackgroundAgentManager:
 
         return _load_subagent_state(self.parent_session_id, session_id, self.workspace)
 
-    def _load(self, session_id: str) -> dict:
-        """Hide a child terminal state until the manager publishes its result."""
-        state = self._load_raw(session_id)
+    def _project_state(self, state: dict) -> dict:
+        """Expose a terminal child only after its parent-owned handoff settles."""
         with self._lock:
-            live = self._jobs.get(session_id)
-        if (
-            live is not None
-            and not live.done_event.is_set()
-            and state.get("status") in _TERMINAL_STATUSES
-            and "background_result" not in state
-        ):
+            live = self._jobs.get(str(state.get("session_id") or ""))
+            if live is None or live.done_event.is_set():
+                return state
             state = dict(state)
-            state["status"] = (
-                "cancel_requested" if live.cancel_event.is_set() else "running"
-            )
-        return state
+            if state.get("status") in _TERMINAL_STATUSES:
+                state["status"] = "cancel_requested" if live.cancel_event.is_set() else "running"
+            state.pop(CHILD_RESULT_KEY, None)
+            state.pop("background_result", None)
+            return state
+
+    def _visible_states(self) -> list[dict]:
+        with self._lock:
+            raw = {str(state.get("session_id") or ""): state for state in self._states()}
+            items = {str(item["task_id"]): item for item in self._workflow.snapshot()["items"]}
+            committed = {str(item["task_id"]): item for item in self._workflow.committed_items()}
+            result = []
+            for task in dict.fromkeys([*raw, *items]):
+                state = raw.get(task, {})
+                live = self._jobs.get(task)
+                if live is not None and not live.done_event.is_set():
+                    if not state:
+                        state = {"session_id": task, "background": True, "status": "running", "settlement_id": live.settlement_id}
+                    result.append(self._project_state(state))
+                else:
+                    result.append(project_checkpoint(
+                        state, committed.get(task) or items.get(task), self._workflow.current_invocation(task),
+                        committed=task in committed, parent_session_id=self.parent_session_id,
+                    ))
+            return result
+
+    def _load(self, session_id: str) -> dict:
+        with self._lock:
+            return next((state for state in self._visible_states() if state.get("session_id") == session_id), {})
+
+    def _workflow_snapshot(self) -> dict:
+        with self._lock:
+            return self._workflow.project_snapshot([
+                state for state in self._visible_states() if state.get("background")
+            ])
 
     def _save(self, state: dict) -> None:
         from nz_coder.runtime.agent.subagent import _save_subagent_state
@@ -739,12 +720,42 @@ class BackgroundAgentManager:
         _save_subagent_state(self.parent_session_id, state, self.workspace)
 
     def _reconcile_interrupted(self) -> None:
-        for state in self._states():
-            if not state.get("background") or state.get("status") not in _LIVE_STATUSES:
-                continue
-            state["status"] = "interrupted"
-            state["interrupted_at"] = time.time()
-            self._save(state)
+        for state in self._visible_states():
+            if state.get("_uncommitted_invocation"):
+                identity = "checkpoint-repair-" + str(state["session_id"]) + "-" + str(state.get("settlement_id") or "history")
+                self._settlements.submit(FrozenSettlement(identity, identity, state, None, lambda: None, reconcile_only=True))
+
+    def _admit(self, state: dict) -> None:
+        """Assign one identity before checkpoint/queued publication or execution."""
+        task = str(state["session_id"])
+        if self._settlements.closing:
+            raise ValueError("Settlement recovery is closing; no new invocation can start")
+        live = self._jobs.get(task)
+        if (live is not None and not live.done_event.is_set()) or self._settlements.has_pending_task(task):
+            raise ValueError("Previous invocation must settle before another launch")
+        previous = state.get(CHILD_RESULT_KEY)
+        if isinstance(previous, dict):
+            cost = ChildAgentResult.from_dict(previous).cost
+            if cost is not None:
+                state["child_cost_baseline"] = cost
+        # 基线独立保留；上一轮展示/终态与计数不能冒充本轮执行事实。
+        for key in ("background_result", "digest", "summary_kind", "finished_at", "cancel_requested_at",
+                    "stop_reason", "run_started_at", "public_error", "structured_output", "postconditions", "execution_verification",
+                    "tokens", "cost", "cost_known", "iterations"):
+            state.pop(key, None)
+        state.update(settlement_id=uuid.uuid4().hex, status="queued", queued_at=time.time())
+        self._save(state)
+        self._workflow.record_task("task_queued", state, message=f"queued {state.get('display_name') or task}")
+
+    def _result_error_metadata(self, states: list[dict]) -> dict:
+        for state in states:
+            if state.get("_checkpoint_unavailable"):
+                return {"public_error": PublicError("child_result_unavailable", "The task is recorded, but its complete result is unavailable.", metadata={"task_id": state["session_id"]}).to_dict()}
+            live = self._jobs.get(str(state.get("session_id") or ""))
+            error = self._settlements.error_for(live.settlement_id) if live is not None else None
+            if error is not None:
+                return {"public_error": error.to_dict()}
+        return {}
 
     def _baseline(self, scopes: list[str]) -> dict[str, str | None]:
         manifest: dict[str, str | None] = {}
@@ -776,6 +787,7 @@ class BackgroundAgentManager:
         from nz_coder.runtime.agent.subagent import (
             _active_scope_conflicts,
             _new_subagent_state,
+            _parent_memory_scope,
             _normalize_scope_paths,
             _overlapping_paths,
         )
@@ -804,9 +816,9 @@ class BackgroundAgentManager:
             else current_run_settings().subagent_process_stop_grace
         )
         with self._lock:
-            if self._closing or self._closed:
+            if self._retiring or self._closing or self._closed:
                 return "Error: background Agent manager is closed"
-        if not worktree_enabled:
+        if not worktree_enabled and any(isinstance(t, dict) and not t.get("read_only") for t in (tasks or [])):
             return "Error: background write agents require SUBAGENT_WORKTREE_ENABLED=1"
         if not isinstance(tasks, list) or not tasks:
             return "Error: tasks must be a non-empty list"
@@ -817,7 +829,7 @@ class BackgroundAgentManager:
         # Concurrent callers therefore cannot both observe the same remaining
         # lifetime capacity or claim overlapping paths.
         with self._lock:
-            if self._closing or self._closed:
+            if self._retiring or self._closing or self._closed:
                 return "Error: background Agent manager is closed"
             spawned = sum(
                 1 for state in self._states() if state.get("background")
@@ -865,8 +877,14 @@ class BackgroundAgentManager:
                 if conflicts:
                     ids = ", ".join(str(item.get("session_id") or "-") for item in conflicts)
                     return f"Error: task {index} target_paths conflict with active child sessions: {ids}"
+                environment_mode = item.get('environment_mode', 'reuse')
+                if environment_mode not in {'reuse', 'private'}:
+                    return 'Error: environment_mode must be reuse or private'
                 agent_type = "explore" if read_only else "general-purpose"
-                state = _new_subagent_state(self.parent_session_id, agent_type, item.get("allowed_tools"))
+                state = _new_subagent_state(
+                    self.parent_session_id, agent_type, item.get("allowed_tools"),
+                    memory_scope=_parent_memory_scope(self.workspace),
+                )
                 state.update({
                     "background": True,
                     "display_name": str(item.get("name") or f"task-{index + 1}").strip(),
@@ -879,6 +897,7 @@ class BackgroundAgentManager:
                     "read_only": read_only,
                     "phase": str(item.get("phase") or "")[:120],
                     "isolation": isolation,
+                    "environment_mode": environment_mode,
                     "workflow_run_id": str(item.get("workflow_run_id") or "")[:200],
                 })
                 prepared.append((state, item))
@@ -901,12 +920,7 @@ class BackgroundAgentManager:
                             child_publisher.parent_agent_invocation_id
                         ),
                     })
-                self._save(state)
-                self._workflow.record_task(
-                    "task_queued",
-                    state,
-                    message=f"queued {state['display_name']}",
-                )
+                self._admit(state)
             self._workflow.agent_cap = agent_cap
             self._workflow.concurrency_cap = concurrency_cap
             for state, item in prepared:
@@ -916,6 +930,7 @@ class BackgroundAgentManager:
                     run_snapshot=run_snapshot,
                     concurrency_cap=concurrency_cap,
                     process_stop_grace=process_stop_grace,
+                    admitted=True,
                 )
 
         lines = [f"Started {len(prepared)} background write subagent(s)."]
@@ -944,87 +959,177 @@ class BackgroundAgentManager:
         run_snapshot=None,
         concurrency_cap: int | None = None,
         process_stop_grace: float | None = None,
+        admitted: bool = False,
     ) -> None:
-        from nz_coder.runtime.agent.subagent import run_subagent
+        with self._lock:
+            self._launch_registered(state, item, run_snapshot=run_snapshot, concurrency_cap=concurrency_cap,
+                                    process_stop_grace=process_stop_grace, admitted=admitted)
+
+    def _launch_registered(
+        self,
+        state: dict,
+        item: dict,
+        *,
+        run_snapshot=None,
+        concurrency_cap: int | None = None,
+        process_stop_grace: float | None = None,
+        admitted: bool = False,
+    ) -> None:
+        from nz_coder.runtime.agent.subagent import (
+            _bind_subagent_memory_scope, _subagent_model, prepare_subagent_command_context,
+            run_subagent, scoped_parent_context, current_parent_command_authorizer,
+        )
+        from nz_coder.state.memory_scope import scoped_memory_scope
+
+        state = copy.deepcopy(state)
+        memory_scope = _bind_subagent_memory_scope(state, self.workspace)
+        if not admitted:
+            self._admit(state)
 
         cancel_event = threading.Event()
         done_event = threading.Event()
         session_id = state["session_id"]
+        # spawn 不继承 ContextVar；在登记时冻结父请求模型，不能退回环境默认。
+        parent_model_id = _subagent_model("general-purpose", run_snapshot)
+        parent_command_authorizer = current_parent_command_authorizer()
+        if parent_command_authorizer is not None:
+            parent_command_authorizer = parent_command_authorizer.fork(self.workspace)
         context = copy_context()
         if concurrency_cap is None:
             _agent_cap, concurrency_cap = self._run_limits(run_snapshot)
         if process_stop_grace is None:
             process_stop_grace = current_run_settings().subagent_process_stop_grace
+        settings = RunSettings.from_snapshot(run_snapshot) if run_snapshot is not None else current_run_settings()
         live_job: _LiveJob | None = None
-
-        def persist_terminal(latest: dict, result: str) -> None:
-            """Persist one canonical result even for pre-loop failures/cancel."""
-            latest["background_result"] = result
-            metadata = getattr(result, "metadata", {})
-            canonical = (
-                metadata.get(CHILD_RESULT_KEY)
-                if isinstance(metadata, dict) else None
-            )
-            if isinstance(canonical, dict):
-                latest[CHILD_RESULT_KEY] = ChildAgentResult.from_dict(
-                    canonical
-                ).to_dict()
-            else:
-                latest["digest"], latest["summary_kind"] = presentation_excerpt(
-                    str(result)
-                )
-                latest[CHILD_RESULT_KEY] = child_result_from_state(
-                    latest,
-                    final_text=str(result),
-                    status=str(latest.get("status") or "error"),
-                    verification=str(latest.get("verification") or ""),
-                ).to_dict()
-            latest["finished_at"] = time.time()
-            self._save(latest)
-            self._workflow.record_task(
-                "task_terminal",
-                latest,
-                message=f"{session_id} settled as {latest.get('status')}",
-            )
-            self._enqueue_worker_wake(
-                sender=session_id,
-                content=str(result),
-                kind="task_completed",
-                status=str(latest.get("status") or "error"),
-            )
 
         def worker() -> None:
             acquired = False
-            process_public_error: PublicError | None = None
+            latest = state
+            result = "The child did not produce a result."
+            result_path = None
+            process_outcome = None
+            execution_error = None
+            deadline_elapsed_before_start = False
+            preparation_interrupted = ""
             try:
                 with self._capacity_condition:
                     while self._active_jobs >= concurrency_cap:
                         if cancel_event.is_set():
                             latest = self._load_raw(session_id) or state
                             latest["status"] = "cancelled"
-                            persist_terminal(
-                                latest,
-                                "Cancelled before execution started.",
-                            )
+                            result = "Cancelled before execution started."
                             return
                         self._capacity_condition.wait(0.1)
+                    if cancel_event.is_set():
+                        latest = self._load_raw(session_id) or state
+                        latest["status"] = "cancelled"
+                        result = "Cancelled before execution started."
+                        return
                     self._active_jobs += 1
                     acquired = True
+                    assert live_job is not None
+                    live_job.acquired = True
+                deadline = time.monotonic() + settings.subagent_timeout_seconds
                 latest = self._load_raw(session_id) or state
                 latest["status"] = "running"
                 latest["run_started_at"] = time.time()
                 self._save(latest)
                 self._workflow.record_task(
-                    "task_started",
-                    latest,
+                    "task_started", latest,
                     message=f"started {latest.get('display_name') or session_id}",
                 )
+                from nz_coder.runtime.agent.child_contracts import resolve_effective_evidence_refs
+                from nz_coder.runtime.agent import prepared_evidence
+                normalized_refs = resolve_effective_evidence_refs(item.get("evidence_refs"), latest.get("evidence_refs"))
+                def record_preparation_target(worktree) -> None:
+                    with self._lock:
+                        current = self._load_raw(session_id)
+                        if current.get("settlement_id") != live_job.settlement_id:
+                            raise PublicRuntimeError(PublicError(
+                                "preparation_identity_changed", "Preparation invocation identity changed.",
+                            ))
+                        current.update(worktree=asdict(worktree), worktree_preparing=True)
+                        self._save(current)
+
+                def publish_preparation_state(update):
+                    with self._lock:
+                        current = self._load_raw(session_id)
+                        if current.get('settlement_id') != live_job.settlement_id:
+                            raise PublicRuntimeError(PublicError('preparation_identity_changed', 'Preparation invocation identity changed.'))
+                        for key in ('worktree', 'worktree_rel', 'scratch_rel', 'environment_preparation', 'source_copy_manifest', 'delivery_baseline', 'baseline_hashes'):
+                            if key in update:
+                                current[key] = copy.deepcopy(update[key])
+                        if not update.get('worktree_preparing'):
+                            current.pop('worktree_preparing', None)
+                        if 'source_copy_manifest' not in update:
+                            current.pop('source_copy_manifest', None)
+                        self._save(current)
+
+                preparation = PreparationScope(
+                    self.workspace, parent_session_id=self.parent_session_id,
+                    child_session_id=session_id, settlement_id=live_job.settlement_id,
+                    config_snapshot=run_snapshot, run_settings=settings,
+                    cancel_event=cancel_event, deadline=deadline,
+                    on_target=record_preparation_target, on_state=publish_preparation_state,
+                )
+                with self._lock:
+                    live_job.preparation_scope = preparation
+                prepared, authority = prepare_subagent_command_context(
+                    str(item.get("prompt") or ""), latest,
+                    workspace=self.workspace, config_snapshot=run_snapshot,
+                    settings=settings, settlement_id=state["settlement_id"],
+                    preparation=preparation,
+                )
+                command_authorizer = parent_command_authorizer.fork(prepared.execution_root) if parent_command_authorizer is not None else None
+                # 准备工作树可能耗时；保留已经接纳的取消，不能用旧快照覆盖。
+                with self._lock:
+                    current = self._load_raw(session_id) or latest
+                    current.update({key: latest[key] for key in ("worktree", "worktree_rel", "scratch_rel") if key in latest})
+                    if current.get("settlement_id") != live_job.settlement_id:
+                        raise PublicRuntimeError(PublicError("preparation_identity_changed", "Preparation invocation identity changed."))
+                    current["evidence_refs"] = normalized_refs
+                    current.pop("worktree_preparing", None)
+                    self._save(current)
+                    publisher = self._task_publishers.get(session_id)
+                evidence = prepared_evidence.capture_diff_evidence(
+                    normalized_refs, workspace=self.workspace,
+                    parent_session_id=self.parent_session_id, child_session_id=session_id,
+                    settlement_id=live_job.settlement_id, preparation=preparation,
+                )
+                prepared = replace(prepared, diff_evidence=evidence)
+                preparation.seal()
+                if cancel_event.is_set():
+                    return
+                if time.monotonic() >= deadline:
+                    deadline_elapsed_before_start = True
+                    result = "Timed out before child execution started."
+                    return
                 if state.get("isolation") == "process":
-                    spawn = multiprocessing.get_context("spawn")
-                    parent_connection, child_connection = spawn.Pipe(duplex=False)
+                    channel_errors: list[PublicError] = []
+
+                    def channel_error(error: PublicError) -> None:
+                        with self._lock:
+                            if live_job.supervisor is None:
+                                channel_errors.append(error)
+                            else:
+                                live_job.supervisor.fail(error)
+
+                    scope = ParentCommandScope(authority, deadline=deadline, child_publisher=publisher,
+                        on_channel_error=channel_error, command_authorizer=command_authorizer)
+                    with self._lock:
+                        live_job.command_scope = scope
+                    if cancel_event.is_set():
+                        return
+                    if time.monotonic() >= deadline:
+                        deadline_elapsed_before_start = True
+                        result = "Timed out before child execution started."
+                        return
+                    endpoint = scope.start()
                     payload = {
                         "workspace": str(self.workspace),
                         "parent_session_id": self.parent_session_id,
+                        "parent_model_id": parent_model_id,
+                        "memory_scope": memory_scope.to_dict(),
                         "prompt": str(item.get("prompt") or ""),
                         "agent_type": str(state.get("agent_type") or "general-purpose"),
                         "session_id": session_id,
@@ -1032,48 +1137,57 @@ class BackgroundAgentManager:
                         "target_paths": list(state.get("claimed_paths") or []),
                         "output_schema": item.get("output_schema"),
                         "model_hint": item.get("model_hint"),
-                        "evidence_refs": item.get("evidence_refs"),
+                        "evidence_refs": normalized_refs,
                         "verification": item.get("verification"),
                         "config_snapshot": run_snapshot,
+                        "settlement_id": state["settlement_id"],
+                        "prepared_workspace": prepared,
+                        "command_settings": authority.run_settings,
+                        "command_limits": CommandChannelLimits.from_settings(authority.run_settings),
+                        "command_deadline": deadline,
                     }
-                    process = spawn.Process(
-                        target=_run_subagent_process,
-                        args=(child_connection, payload),
-                        name=f"nz-subagent-process-{session_id}",
-                        daemon=True,
-                    )
-                    assert live_job is not None
-                    live_job.process = process
-                    process.start()
-                    child_connection.close()
-                    while process.is_alive() and not cancel_event.wait(0.05):
-                        pass
-                    if cancel_event.is_set() and process.is_alive():
-                        process.terminate()
-                        process.join(max(0.0, process_stop_grace))
-                        if process.is_alive() and hasattr(process, "kill"):
-                            process.kill()
-                    process.join()
+                    result_path = allocate_child_process_result(self.workspace)
                     if cancel_event.is_set():
-                        latest = self._load_raw(session_id) or state
-                        latest["status"] = "cancelled"
-                        result = "Cancelled; isolated child process terminated."
-                    elif parent_connection.poll():
-                        envelope = parent_connection.recv()
-                        result, process_public_error = (
-                            _decode_child_process_envelope(envelope)
+                        return
+                    if time.monotonic() >= deadline:
+                        deadline_elapsed_before_start = True
+                        result = "Timed out before child execution started."
+                        return
+                    assert live_job is not None
+                    with self._lock:
+                        live_job.supervisor = SubagentProcessSupervisor(
+                            payload, result_path, command_endpoint=endpoint, on_stop=scope.request_stop,
                         )
-                    else:
-                        process_public_error = PublicError(
-                            "child_process_exit",
-                            "The isolated child process exited unexpectedly.",
-                            metadata={"exit_code": process.exitcode},
-                        )
-                        result = process_public_error.message
-                    parent_connection.close()
+                        for error in channel_errors:
+                            live_job.supervisor.fail(error)
+                    live_job.supervisor.start()
+                    process_outcome = live_job.supervisor.wait(
+                        cancel_event, deadline=deadline, stop_grace=process_stop_grace,
+                    )
+                    result = process_outcome.result
                 else:
+                    from nz_coder.runtime.agent.subagent import scoped_prepared_subagent_workspace, scoped_subagent_cleanup_owner
+                    def retain_environment(environment):
+                        with self._lock:
+                            if self._jobs.get(session_id) is not live_job:
+                                raise RuntimeError("Child cleanup owner identity changed")
+                            if live_job.settlement_id != state["settlement_id"]:
+                                raise RuntimeError("Child cleanup settlement identity changed")
+                            live_job.environment = environment
+                            retiring = self._retiring or cancel_event.is_set()
+                        if retiring:
+                            environment.request_retirement()
+
+                    def run_prepared(*args, **kwargs):
+                        with (
+                            scoped_prepared_subagent_workspace(prepared),
+                            scoped_subagent_cleanup_owner(session_id, retain_environment),
+                            scoped_memory_scope(memory_scope),
+                            scoped_parent_context(memory_scope=memory_scope.to_dict(), command_authorizer=command_authorizer),
+                        ):
+                            return run_subagent(*args, **kwargs)
                     result = context.run(
-                        run_subagent,
+                        run_prepared,
                         str(item.get("prompt") or ""),
                         agent_type=str(state.get("agent_type") or "general-purpose"),
                         session_id=session_id,
@@ -1085,37 +1199,84 @@ class BackgroundAgentManager:
                         verification=item.get("verification"),
                         cancel_event=cancel_event,
                     )
-                latest = self._load_raw(session_id) or state
-                if state.get("isolation") == "process" and cancel_event.is_set():
-                    latest["status"] = "cancelled"
-                elif process_public_error is not None:
-                    latest["status"] = "error"
-                elif latest.get("status") in _LIVE_STATUSES:
-                    latest["status"] = "error"
-                persist_terminal(latest, result)
+            except PreparationInterrupted as exc:
+                preparation_interrupted = exc.reason
+                result = "Preparation cancelled." if exc.reason == "cancelled" else "Timed out during child preparation."
             except Exception as exc:
-                latest = self._load_raw(session_id) or state
-                latest["status"] = "error"
-                persist_terminal(latest, to_public_error(exc).message)
+                execution_error = to_public_error(exc)
+                result = execution_error.message
             finally:
-                # Publish the terminal transition before making execution
-                # capacity available.  The event projection can therefore
-                # never report more running tasks than the parent epoch admits.
-                if acquired:
-                    with self._capacity_condition:
-                        self._active_jobs -= 1
-                        self._capacity_condition.notify_all()
-                if live_job is not None and live_job.capability_lease_id:
-                    capability_leases().release(live_job.capability_lease_id)
-                    live_job.capability_lease_id = ""
-                done_event.set()
+                if live_job is not None and live_job.supervisor is not None and not live_job.supervisor.exited:
+                    cleanup_cancel = threading.Event()
+                    cleanup_cancel.set()
+                    live_job.supervisor.wait(cleanup_cancel, deadline=time.monotonic(), stop_grace=process_stop_grace)
+                # 查询投影与父交接共用锁，防止快照把刚发布的终态写回 running。
+                with self._lock:
+                    latest = self._load_raw(session_id) or state
+                    # stop 也在这把锁内接纳请求；已接纳的取消不能在交接窗口变成 error。
+                    if (cancel_event.is_set() or preparation_interrupted == "cancelled"
+                            or (process_outcome is not None and process_outcome.reason == "cancelled")):
+                        latest["status"] = "cancelled"
+                        if live_job.cancel_requested_at:
+                            latest.update(stop_reason=live_job.stop_reason, cancel_requested_at=live_job.cancel_requested_at)
+                        latest.pop("public_error", None)
+                        if acquired and state.get("isolation") == "process":
+                            result = "Cancelled; child execution stopped."
+                    elif execution_error is not None:
+                        latest["status"] = "error"
+                        latest["public_error"] = execution_error.to_dict()
+                    elif (deadline_elapsed_before_start or preparation_interrupted == "timeout"
+                          or (process_outcome is not None and process_outcome.reason == "timeout")):
+                        latest["status"] = "timeout"
+                        latest.pop("public_error", None)
+                    elif process_outcome is not None and process_outcome.public_error is not None:
+                        latest["status"] = "error"
+                        latest["public_error"] = process_outcome.public_error.to_dict()
+                    assert live_job is not None
+                    try:
+                        candidate = freeze_settlement(
+                            latest, result, settlement_id=live_job.settlement_id,
+                            canonical=process_outcome.canonical if process_outcome is not None else None,
+                            canonical_settlement_id=process_outcome.canonical_settlement_id if process_outcome is not None else "",
+                        )
+                    except ValueError:
+                        error = PublicError("child_result_protocol_error", "The child returned an invalid result for this invocation.")
+                        latest.update(status="error", public_error=error.to_dict())
+                        latest.pop(CHILD_RESULT_KEY, None)
+                        latest.pop("child_result_settlement_id", None)
+                        result = error.message
+                        candidate = freeze_settlement(latest, result, settlement_id=live_job.settlement_id)
+                    live_job.frozen = True
+
+                # 原worker保留命令域和租约，直到所有native owner实际退出。
+                # 先冻结再等待，晚到stop只推进清理，不能重写业务结果。
+                scopes = [scope for scope in (live_job.preparation_scope, live_job.command_scope) if scope is not None]
+                environment = live_job.environment
+                while scopes or environment is not None:
+                    for scope in scopes:
+                        scope.request_stop()
+                    round_deadline = time.monotonic() + .05
+                    closed = True
+                    for scope in scopes:
+                        closed = scope.close(deadline=round_deadline) and closed
+                    if environment is not None:
+                        try:
+                            environment.close()
+                        except BaseException:
+                            closed = False
+                        else:
+                            closed = environment.environment_cleanup_complete and closed
+                    if closed:
+                        break
+                    time.sleep(0.01)
+                self._submit_frozen_settlement(live_job, candidate, result_path)
 
         thread = threading.Thread(
             target=worker,
             name=f"nz-subagent-{session_id}",
             daemon=True,
         )
-        live_job = _LiveJob(cancel_event, done_event, thread)
+        live_job = _LiveJob(cancel_event, done_event, thread, settlement_id=state["settlement_id"])
         manager_ref = weakref.ref(self)
 
         def revoke_child() -> None:
@@ -1148,7 +1309,44 @@ class BackgroundAgentManager:
         live_job.capability_lease_id = lease.lease_id
         with self._lock:
             self._jobs[session_id] = live_job
-        thread.start()
+        try:
+            thread.start()
+        except Exception as exc:
+            if thread.ident is not None:
+                # 已启动的 worker 是唯一 owner，继续由它完成交接。
+                return
+            latest = copy.deepcopy(state)
+            error = to_public_error(exc)
+            latest.update(status="error", public_error=error.to_dict())
+            candidate = freeze_settlement(latest, error.message, settlement_id=live_job.settlement_id)
+            live_job.frozen = True
+            self._submit_frozen_settlement(live_job, candidate, None)
+
+    def _submit_frozen_settlement(self, live: _LiveJob, candidate: dict, result_path) -> None:
+        session_id = candidate["session_id"]
+
+        def committed() -> None:
+            if live.done_event.is_set():
+                return
+            try:
+                self._deliver_message(
+                    ["worker"], sender=session_id, content=str(candidate["background_result"]),
+                    seen_by=[session_id], kind="task_completed", status=str(candidate["status"]),
+                )
+            finally:
+                if live.acquired:
+                    self._active_jobs -= 1
+                    live.acquired = False
+                    self._capacity_condition.notify_all()
+                if live.capability_lease_id:
+                    capability_leases().release(live.capability_lease_id)
+                    live.capability_lease_id = ""
+                live.done_event.set()
+
+        self._settlements.submit(FrozenSettlement(
+            live.settlement_id, "workflow-terminal-" + live.settlement_id,
+            candidate, result_path, committed,
+        ))
 
     def status(self, session_ids: list[str] | None = None, wait_ms: int = 0) -> str:
         """Return persistent status and optionally wait briefly for one task."""
@@ -1158,70 +1356,76 @@ class BackgroundAgentManager:
                 live = self._jobs.get(ids[0])
             if live is not None:
                 live.done_event.wait(max(0, min(int(wait_ms), 10000)) / 1000)
-        states = self._states()
-        if ids:
-            wanted = set(ids)
-            states = [state for state in states if state.get("session_id") in wanted]
-        else:
-            states = [state for state in states if state.get("background")]
-        if not states:
-            return "No matching background subagent tasks."
-        rows = [f"Background subagents: {len(states)}"]
-        for state in sorted(states, key=lambda item: float(item.get("created_at") or 0)):
-            changed = ", ".join(state.get("changed_files") or []) or "(none)"
-            rows.append(
-                f"- {state.get('session_id')} [{state.get('status')}] "
-                f"{state.get('display_name') or ''}; changed: {changed}"
-            )
-            result = str(state.get("background_result") or "").strip()
-            if result and state.get("status") not in {"queued", "running"}:
-                canonical = state.get(CHILD_RESULT_KEY)
-                summary = (
-                    str(canonical.get("digest") or "").strip()
-                    if isinstance(canonical, dict)
-                    else ""
-                )
+        with self._lock:
+            states = self._visible_states()
+            if ids:
+                wanted = set(ids)
+                states = [state for state in states if state.get("session_id") in wanted]
+            else:
+                states = [state for state in states if state.get("background")]
+            if not states:
+                return "No matching background subagent tasks."
+            rows = [f"Background subagents: {len(states)}"]
+            for state in sorted(states, key=lambda item: float(item.get("created_at") or 0)):
+                changed = ", ".join(state.get("changed_files") or []) or "(none)"
                 rows.append(
-                    "  summary: "
-                    + (summary or " ".join(result.split())[:800])
+                    f"- {state.get('session_id')} [{state.get('status')}] "
+                    f"{state.get('display_name') or ''}; changed: {changed}"
                 )
-        outcomes: list[dict] = []
-        for state in states:
-            canonical = state.get(CHILD_RESULT_KEY)
-            if isinstance(canonical, dict):
-                outcomes.append(ChildAgentResult.from_dict(canonical).to_dict())
-            elif state.get("status") in _TERMINAL_STATUSES:
-                outcomes.append(child_result_from_state(
-                    state,
-                    final_text=str(state.get("background_result") or ""),
-                    status=str(state.get("status") or "unknown"),
-                    verification=str(state.get("verification") or ""),
-                ).to_dict())
-        workflow_snapshot = self._workflow.reconcile([
-            state for state in self._states() if state.get("background")
-        ])
-        return ToolOutput(
-            "\n".join(rows),
-            title="Background Agent status",
-            metadata={
-                "child_results": outcomes,
-                "workflow_snapshot": workflow_snapshot,
-            },
-        )
+                if state.get("_checkpoint_unavailable"):
+                    rows.append("  Complete result unavailable; committed workflow facts are preserved.")
+                result = str(state.get("background_result") or "").strip()
+                if result and state.get("status") not in {"queued", "running"}:
+                    canonical = state.get(CHILD_RESULT_KEY)
+                    summary = (
+                        str(canonical.get("digest") or "").strip()
+                        if isinstance(canonical, dict)
+                        else ""
+                    )
+                    rows.append(
+                        "  summary: "
+                        + (summary or " ".join(result.split())[:800])
+                    )
+            outcomes: list[dict] = []
+            for state in states:
+                if state.get("_checkpoint_unavailable"):
+                    continue
+                canonical = state.get(CHILD_RESULT_KEY)
+                if isinstance(canonical, dict):
+                    outcomes.append(ChildAgentResult.from_dict(canonical).to_dict())
+                elif state.get("status") in _TERMINAL_STATUSES:
+                    outcomes.append(child_result_from_state(
+                        state,
+                        final_text=str(state.get("background_result") or ""),
+                        status=str(state.get("status") or "unknown"),
+
+                    ).to_dict())
+            workflow_snapshot = self._workflow_snapshot()
+            return ToolOutput(
+                "\n".join(rows),
+                title="Background Agent status",
+                metadata={
+                    "child_results": outcomes,
+                    "workflow_snapshot": workflow_snapshot,
+                    **self._result_error_metadata(states),
+                },
+            )
 
     def events(self, after_sequence: int = 0) -> str:
         """Return the durable workflow event suffix for replay consumers."""
-        events = self._workflow.events(after_sequence)
-        snapshot = self._workflow.snapshot()
-        return ToolOutput(
-            f"Workflow events after revision {max(0, int(after_sequence))}: "
-            f"{len(events)}; current revision: {snapshot['revision']}.",
-            title="Background workflow events",
-            metadata={
-                "workflow_events": events,
-                "workflow_snapshot": snapshot,
-            },
-        )
+        with self._lock:
+            events = self._workflow.events(after_sequence)
+            snapshot = self._workflow_snapshot()
+            return ToolOutput(
+                f"Workflow events after revision {max(0, int(after_sequence))}: "
+                f"{len(events)}; current revision: {snapshot['revision']}.",
+                title="Background workflow events",
+                metadata={
+                    "workflow_events": events,
+                    "workflow_snapshot": snapshot,
+                    **self._result_error_metadata(self._visible_states()),
+                },
+            )
 
     def wait(self, session_ids: list[str], timeout_ms: int = 0) -> str:
         """Wait for owned tasks with one shared deadline and ordered results."""
@@ -1237,7 +1441,7 @@ class BackgroundAgentManager:
         )
         unknown = [
             session_id for session_id in ids
-            if not (self._load_raw(session_id) or {}).get("background")
+            if not (self._load(session_id) or {}).get("background")
         ]
         if unknown:
             return f"Error: unknown workflow task(s): {', '.join(unknown)}"
@@ -1270,56 +1474,62 @@ class BackgroundAgentManager:
                 if live is not None:
                     live.done_event.wait(max(0.0, settle_deadline - time.monotonic()))
 
-        states = [self._load(session_id) for session_id in ids]
-        outcomes = [
-            _outcome_from_background_state(state).to_dict()
-            for state in states
-            if state.get("status") in _TERMINAL_STATUSES
-        ]
-        unsettled = [
-            str(state.get("session_id") or "")
-            for state in states
-            if state.get("status") not in _TERMINAL_STATUSES
-        ]
-        snapshot = self._workflow.reconcile([
-            state for state in self._states() if state.get("background")
-        ])
-        return ToolOutput(
-            (
-                f"Waited for {len(ids)} workflow task(s); "
-                f"settled={len(outcomes)}, timed_out={len(timed_out)}, "
-                f"unsettled={len(unsettled)}."
-            ),
-            title="Background workflow wait",
-            metadata={
-                "child_results": outcomes,
-                "timed_out_task_ids": timed_out,
-                "unsettled_task_ids": unsettled,
-                "workflow_snapshot": snapshot,
-            },
-        )
+        with self._lock:
+            states = [self._load(session_id) for session_id in ids]
+            outcomes = [
+                _outcome_from_background_state(state).to_dict()
+                for state in states
+                if state.get("status") in _TERMINAL_STATUSES and not state.get("_checkpoint_unavailable")
+            ]
+            unsettled = [
+                str(state.get("session_id") or "")
+                for state in states
+                if state.get("status") not in _TERMINAL_STATUSES
+            ]
+            snapshot = self._workflow_snapshot()
+            return ToolOutput(
+                (
+                    f"Waited for {len(ids)} workflow task(s); "
+                    f"settled={len(outcomes)}, timed_out={len(timed_out)}, "
+                    f"unsettled={len(unsettled)}."
+                ),
+                title="Background workflow wait",
+                metadata={
+                    "child_results": outcomes,
+                    "timed_out_task_ids": timed_out,
+                    "unsettled_task_ids": unsettled,
+                    "workflow_snapshot": snapshot,
+                    **self._result_error_metadata(states),
+                },
+            )
 
-    def wait_until_settled(
+    def wait_for_result(
         self,
         session_id: str,
         cancel_event: threading.Event | None = None,
-        *,
-        poll_seconds: float = 0.05,
-    ) -> bool:
-        """Wait without inventing timeout semantics; return false on caller abort."""
-        state = self._load_raw(session_id)
-        if not state or not state.get("background"):
-            raise ValueError(f"unknown workflow task: {session_id}")
-        interval = max(0.01, min(float(poll_seconds), 0.5))
-        while self._load(session_id).get("status") not in _TERMINAL_STATUSES:
-            if cancel_event is not None and cancel_event.is_set():
-                return False
+    ) -> ChildAgentResult | None:
+        """Wait for parent settlement and read its result without consuming mail."""
+        with self._lock:
+            state = self._load(session_id)
+            if not state or not state.get("background"):
+                raise ValueError(f"unknown workflow task: {session_id}")
+            live = self._jobs.get(session_id)
+            pending = live is not None and not live.done_event.is_set()
+        if pending:
+            assert live is not None
+            # 完成直接由原结清事件唤醒；短期限只用于检查调用方取消，期间不读盘。
+            while not live.done_event.is_set():
+                if cancel_event is not None and cancel_event.is_set():
+                    raise CancelledError()
+                live.done_event.wait(0.05 if cancel_event is not None else None)
             with self._lock:
-                live = self._jobs.get(session_id)
-            if live is None:
-                return self._load(session_id).get("status") in _TERMINAL_STATUSES
-            live.done_event.wait(interval)
-        return True
+                state = self._load(session_id)
+            # 同一任务重新启动后，前一次等待不能接纳新一轮的结果。
+            if state.get("settlement_id") != live.settlement_id:
+                return None
+        if state.get("status") not in _TERMINAL_STATUSES or state.get("_checkpoint_unavailable"):
+            return None
+        return _outcome_from_background_state(state)
 
     def stop(
         self,
@@ -1336,7 +1546,7 @@ class BackgroundAgentManager:
             return "Error: session_ids is required for stop"
         unknown = [
             session_id for session_id in ids
-            if not (self._load_raw(session_id) or {}).get("background")
+            if not (self._load(session_id) or {}).get("background")
         ]
         if unknown:
             return f"Error: unknown workflow task(s): {', '.join(unknown)}"
@@ -1347,50 +1557,106 @@ class BackgroundAgentManager:
                 live = self._jobs.get(session_id)
             if live is not None and not live.done_event.is_set():
                 live.done_event.wait(max(0.0, deadline - time.monotonic()))
-        states = [self._load(session_id) for session_id in ids]
-        unsettled = [
-            str(state.get("session_id") or "")
-            for state in states
-            if state.get("status") not in _TERMINAL_STATUSES
-        ]
-        return ToolOutput(
-            f"Stop results: requested={len(requested)}, unsettled={len(unsettled)}.",
-            title="Background workflow stop",
-            metadata={
-                "requested_task_ids": requested,
-                "unsettled_task_ids": unsettled,
-                "child_results": [
-                    _outcome_from_background_state(state).to_dict()
-                    for state in states
-                    if state.get("status") in _TERMINAL_STATUSES
-                ],
-                "workflow_snapshot": self._workflow.reconcile([
-                    state for state in self._states() if state.get("background")
-                ]),
-            },
-        )
+        with self._lock:
+            states = [self._load(session_id) for session_id in ids]
+            unsettled = [
+                str(state.get("session_id") or "")
+                for state in states
+                if state.get("status") not in _TERMINAL_STATUSES
+            ]
+            return ToolOutput(
+                f"Stop results: requested={len(requested)}, unsettled={len(unsettled)}.",
+                title="Background workflow stop",
+                metadata={
+                    "requested_task_ids": requested,
+                    "unsettled_task_ids": unsettled,
+                    "child_results": [
+                        _outcome_from_background_state(state).to_dict()
+                        for state in states
+                        if state.get("status") in _TERMINAL_STATUSES and not state.get("_checkpoint_unavailable")
+                    ],
+                    "workflow_snapshot": self._workflow_snapshot(),
+                    **self._result_error_metadata(states),
+                },
+            )
+
+    def request_retirement(self) -> None:
+        """同锁关准入、通知全部未冻结孩子；诊断和等待留给 close。"""
+        with self._lock:
+            self._retiring = True
+            resources = []
+            for live in self._jobs.values():
+                if not live.frozen and not live.done_event.is_set() and not live.cancel_event.is_set():
+                    live.stop_reason = "parent Session closed"
+                    live.cancel_requested_at = time.time()
+                    live.cancel_event.set()
+                resources.extend(scope for scope in (live.preparation_scope, live.command_scope) if scope is not None)
+                environment = getattr(live, "environment", None)
+                if environment is not None:
+                    resources.append(environment)
+        # 先保证所有业务 Event 已通知，再进入各资源的非阻塞退休入口。
+        for resource in resources:
+            notify = getattr(resource, "request_retirement", None) or resource.request_stop
+            notify()
 
     def _request_stop(self, session_ids: list[str], *, reason: str) -> list[str]:
         requested: list[str] = []
+        with self._lock:
+            scopes = []
+            for task in session_ids:
+                live = self._jobs.get(task)
+                if live is None:
+                    continue
+                scopes.extend(scope for scope in (live.preparation_scope, live.command_scope) if scope is not None)
+                if live.environment is not None:
+                    scopes.append(live.environment)
+                # 取消与冻结共用交接锁，先接纳业务事实，再通知资源停止。
+                if not live.frozen and not live.done_event.is_set() and not live.cancel_event.is_set():
+                    live.stop_reason = str(reason)[:1000]
+                    live.cancel_requested_at = time.time()
+                    live.cancel_event.set()
+                    requested.append(task)
+        # 所有资源先收到停止请求；即使结果已冻结或随后写盘失败，也继续回收。
+        for scope in scopes:
+            notify = getattr(scope, "request_retirement", None) or scope.request_stop
+            notify()
         for session_id in session_ids:
             with self._lock:
-                state = self._load(session_id)
-                if not state or state.get("status") in _TERMINAL_STATUSES:
-                    continue
-                if state.get("status") != "cancel_requested":
-                    state["status"] = "cancel_requested"
-                    state["cancel_requested_at"] = time.time()
-                    state["stop_reason"] = str(reason)[:1000]
-                    self._save(state)
-                    self._workflow.record_task(
-                        "task_cancel_requested",
-                        state,
-                        message=f"stop requested for {session_id}: {reason}"[:1000],
-                    )
-                    requested.append(session_id)
                 live = self._jobs.get(session_id)
+                # 锁外通知期间可能已保存新目标或终态，不能回写旧state。
+                state = self._load_raw(session_id)
+                pending = live is not None and not live.done_event.is_set()
+                if not state:
+                    continue
                 if live is not None:
-                    live.cancel_event.set()
+                    if not live.cancel_requested_at or live.cancel_diagnostic_attempted:
+                        continue
+                    accepted_reason = live.stop_reason
+                    accepted_at = live.cancel_requested_at
+                    # 诊断可晚于冻结，但只尝试一次；写盘结果不明时不能盲目重复事件。
+                    live.cancel_diagnostic_attempted = True
+                    save_requested = pending and not live.frozen
+                else:
+                    if state.get("status") == "cancel_requested" or self._load(session_id).get("status") in _TERMINAL_STATUSES:
+                        continue
+                    accepted_reason = str(reason)[:1000]
+                    accepted_at = time.time()
+                    save_requested = True
+                    requested.append(session_id)
+                try:
+                    if save_requested:
+                        state.update(status="cancel_requested", cancel_requested_at=accepted_at, stop_reason=accepted_reason)
+                        self._save(state)
+                    diagnostic = self._project_state(state)
+                    if pending:
+                        diagnostic = {**diagnostic, "status": "cancel_requested"}
+                    self._workflow.record_task(
+                        "task_cancel_requested", diagnostic,
+                        message=f"stop requested for {session_id}: {accepted_reason}"[:1000],
+                    )
+                except (OSError, ValueError):
+                    # 停止信号先于诊断落盘；存储故障不能让实际执行继续失控。
+                    self._settlements.wake()
         return requested
 
     def cancel(self, session_ids: list[str]) -> str:
@@ -1403,8 +1669,9 @@ class BackgroundAgentManager:
             timeout_ms=0,
         )
         if isinstance(result, ToolOutput):
+            requested = bool(result.metadata.get("requested_task_ids"))
             return ToolOutput(
-                "cancellation requested. " + str(result),
+                ("cancellation requested. " if requested else "No new cancellation accepted. ") + str(result),
                 title=result.title,
                 metadata=result.metadata,
             )
@@ -1412,6 +1679,7 @@ class BackgroundAgentManager:
 
     def close(self, timeout: float = 5.0) -> None:
         """Cancel and settle every process-local child owned by this Session."""
+        self.request_retirement()
         deadline = time.monotonic() + max(0.0, float(timeout))
         with self._lock:
             while self._closing and not self._closed:
@@ -1426,6 +1694,7 @@ class BackgroundAgentManager:
             self._closing = True
             jobs = list(self._jobs.items())
         try:
+            self._settlements.wake(recheck=True)
             self._request_stop(
                 [
                     session_id
@@ -1441,11 +1710,16 @@ class BackgroundAgentManager:
                         f"background subagent '{session_id}' did not settle "
                         "before Session deletion"
                     )
+            if not self._settlements.close(deadline=deadline):
+                raise RuntimeError("background settlement recovery did not stop before Session deletion")
         except BaseException:
             with self._lock:
                 self._closing = False
                 self._close_condition.notify_all()
             raise
+        for _session_id, live in jobs:
+            if live.supervisor is not None:
+                live.supervisor.close(deadline=deadline)
         with self._lock:
             self._jobs.clear()
             self._closed = True
@@ -1457,8 +1731,12 @@ class BackgroundAgentManager:
         state = self._load(session_id)
         if not state or not state.get("background"):
             return [], [], f"Error: Unknown background subagent session '{session_id}'"
+        if state.get("_checkpoint_unavailable"):
+            return [], [], "Error: complete child result is unavailable; changes cannot be applied"
         if state.get("status") != "completed":
             return [], [], f"Error: subagent must be completed before apply; status={state.get('status')}"
+        if not isinstance(state.get('delivery_baseline'), dict):
+            return [], [], 'Error: child delivery baseline is unavailable; review and port changes explicitly'
         changed = sorted(dict.fromkeys(str(item) for item in state.get("changed_files") or []))
         reviewed = sorted(dict.fromkeys(str(item) for item in reviewed_files or []))
         if changed != reviewed:
@@ -1483,11 +1761,31 @@ class BackgroundAgentManager:
         if worktree is None or worktree.mode not in {"git", "copy"}:
             return [], [], "Error: direct-mode child changes cannot be safely applied"
         child_root = Path(worktree.path).resolve()
+        from nz_coder.runtime.worktree import WorktreeManager, WorktreeError
+        repository = WorktreeManager(self.workspace)
+        receipt = state.get('environment_preparation') or {}
+        modules = set(receipt.get('module_paths', [])) | {item['path'] for item in receipt.get('submodules', [])}
+        try:
+            if repository.is_git_repo():
+                modules.update(repository.gitlinks())
+            if worktree.mode == 'git':
+                modules.update(repository.gitlinks(child_root, ref=worktree.head_commit or 'HEAD'))
+                modules.update(repository.gitlinks(child_root))
+        except WorktreeError as exc:
+            return [], [], format_public_error(exc)
+        if any(path == root or path.startswith(root + '/') for path in changed for root in modules):
+            return [], [], 'Error: submodule changes require a separate review and application protocol'
         baseline = dict(state.get("baseline_hashes") or {})
         writes: list[dict] = []
         deletes: list[dict] = []
         conflicts: list[str] = []
         for relative in changed:
+            for root in (self.workspace, child_root):
+                cursor = root
+                for part in Path(relative).parts:
+                    cursor /= part
+                    if cursor.is_symlink():
+                        return [], [], f"Error: symbolic-link changes cannot be applied: {relative}"
             parent_path = (self.workspace / relative).resolve()
             child_path = (child_root / relative).resolve()
             try:
@@ -1713,7 +2011,7 @@ def apply_agent_changes(session_id: str, reviewed_files: list[str], confirm: boo
                 child_state,
                 final_text=output,
                 status="applied",
-                verification=str(child_state.get("verification") or ""),
+
             )
         return ToolOutput(
             output,
@@ -1756,6 +2054,7 @@ register(
                             "items": {"type": "string"},
                         },
                         "verification": {"type": "object"},
+                        "environment_mode": {"type": "string", "enum": ["reuse", "private"]},
                         "read_only": {
                             "type": "boolean",
                             "description": "Run as an isolated read-only child; target_paths may be omitted.",

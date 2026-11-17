@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "ts": 1793861338.2631447,
+      "category": "plan",
+      "content": "Current task: finish and actually verify the full StreamBus async TCP broker in /home/pyh/.codex/artifacts/serial-memory-long-task-20261105/attempts/run-01/workspace using Python 3.13.12 and the standard library. Implemented: streambus/{__init__,__main__,errors,models,protocol,config,storage,broker,client,cli}.py; tests/{support,test_protocol,test_storage,test_broker}.py; temporary smoke.py and debug_*.py. Confirmed passes: tests/test_protocol.py 23 tests, tests/test_storage.py 15 tests, and a targeted seven-test broker subset after fixes. The full broker suite has NOT yet been rerun after the latest fixes. Still missing: README, examples/, CLI subprocess test (port 0/listening line/graceful stop/port release), full `python -m unittest discover -s tests -v`, full `python -m compileall streambus examples tests`, cleanup of temporary scripts, and final actual-results/unresolved-items report. Do not claim completion until those pass."
+    },
+    {
+      "ts": 1793861338.2631454,
+      "category": "plan",
+      "content": "Confirmed architecture/contracts. Wire frame: big-endian u32 body length, then u8 opcode, u32 request id, payload; length includes opcode+request id. read_frame uses readexactly and handles fragmentation/coalescing; FrameAssembler rejects oversize declared bodies before buffering. PUBLISH payload: u16 topic length + topic bytes + raw binary body. MESSAGE/FETCH batches: u32 count then records of u64 cursor, u64 timestamp_ms, u16 topic length, topic, u32 body length, body. Topics are UTF-8, max 128 bytes, no control chars. JSON is only for control payloads. Defaults: admin/admin-secret and user/user-secret, PBKDF2 password hashes. Broker exposes bounded outbound queues, bounded subscription inbox/unacked deques, slow-consumer policies disconnect/drop_oldest, auth/roles, heartbeat/idle timeout, connection/subscription/frame/message/topic limits, graceful shutdown, stats/clients/kick/shutdown. Client has request-id demultiplexing, bounded subscription queues, optional heartbeat, timeout plus best-effort CANCEL. CLI supports --port 0 and must print `STREAMBUS_LISTENING host=<host> port=<actual> ...`; `python -m streambus` delegates to streambus.cli.main."
+    },
+    {
+      "ts": 1793861338.2631457,
+      "category": "plan",
+      "content": "Confirmed persistence semantics. Topic logs under data_dir/topics as hex(topic UTF-8)+.log. Record: magic SBL1, payload length u32, CRC32 u32, then cursor u64, timestamp_ms u64, body length u32, body. Torn final header/payload is truncated to last complete record and reported action=truncated. Bad magic, impossible length, CRC mismatch, bad body length, non-contiguous cursor, or oversized body quarantines the whole topic file as *.corrupt-<ms>, starts the topic empty, and reports action=quarantined. ACKs are append-only JSONL keyed by (client_id, topic); duplicate/lower ACKs are idempotent via max; torn final ACK line is truncated; complete unparsable lines are skipped/reported. Document these, including conservative whole-topic quarantine. In storage recovery quarantine paths, return `[]` (not messages recovered before the corruption) because the whole file is quarantined; this fixed two storage tests."
+    },
+    {
+      "ts": 1793861338.263146,
+      "category": "plan",
+      "content": "Test state and next actions, in order: (1) run full `python -m unittest tests.test_broker -v`; fix only real failures without weakening genuine failure paths. (2) Add tests/test_cli.py using subprocess for `python -m streambus --port 0 --data-dir ...`, parse STREAMBUS_LISTENING actual port, connect/publish, terminate gracefully, assert STREAMBUS_STOPPED and port becomes bindable. (3) Write README with startup, JSON/CLI config, wire protocol/API, ack/replay semantics, persistence/recovery, capacity bounds, slow-consumer behavior, shutdown, troubleshooting, and explicitly unprovided guarantees. (4) Add runnable examples using real sockets. (5) Delete or relocate smoke.py/debug_restart.py/debug_restart2.py/debug_shutdown.py. (6) Run `python -m unittest discover -s tests -v` and `python -m compileall streambus examples tests`; rerun smoke/manual checks and confirm no lingering ports, sessions, or background tasks. (7) Report exact commands/results and unresolved items. The suite already includes real 32-client binary broadcast, restart, corrupt-log, slow-consumer, cancellation, and cleanup cases, but they must pass in the final full run. tests/test_broker.py imports tests.support first and falls back to support so both `python -m unittest tests.test_broker` and discover -s tests work."
+    },
+    {
+      "ts": 1793861338.2631462,
+      "category": "failure",
+      "content": "Critical shutdown/task-cycle fixes, both confirmed. (a) Connection._close_impl must never await self.reader_task: the reader usually awaits the close task, creating a task cycle that makes Python 3.13 Task.cancel recurse until RecursionError. Cancel it only. (b) Broker.shutdown must NOT await asyncio.Server.wait_closed() before closing active client connections: in Python 3.12+ wait_closed also waits for active connection handlers and deadlocked shutdown with one live client. Correct order: mark shutting down, call server.close(), close client connections (request_close + timeout/abort), then await server.wait_closed() with a timeout, then cancel remaining broker tasks. debug_shutdown.py confirmed the deadlock and then “shutdown ok” after this reorder. Server.wait_closed exception handling should be broad enough not to mask the primary teardown."
+    },
+    {
+      "ts": 1793861338.2631466,
+      "category": "failure",
+      "content": "Client-side late ERROR fix, confirmed by tests. After a request deadline, the client best-effort sends CANCEL and drops the pending future. The server later sends an ERROR for that old nonzero request id (e.g. CANCELLED). In _handle_error, if request_id != 0 and no pending future exists, ignore it; only unsolicited ERROR with request_id 0 is terminal and should fail/close the client. Previously the late CANCELLED ERROR closed the whole client and broke subsequent ping. Also avoid comparing whole ping dicts for equality because time_ms changes; assert expected keys instead."
+    },
+    {
+      "ts": 1793861338.263147,
+      "category": "failure",
+      "content": "Test-semantic lessons: (1) Torn topic payload recovery reports bytes_truncated equal to the entire short payload bytes remaining after the header, not merely removed suffix bytes; the corrected test expects 53. (2) Bad-magic/CRC/length/cursor corruption must quarantine the whole topic and return an empty message list, not the valid prefix. (3) A declared body length < 5 (opcode+request id) is a BAD_FRAME; the server sends an ERROR with request id 0 and then closes, so tests must read that error before expecting EOF. (4) TOPIC_LIMIT counts retained TopicState objects; unsubscribe does not delete retained topic state, so re-subscribing to an existing topic is allowed but creating another topic remains limited until restart/removal. (5) Auth-failure/connection cleanup is asynchronous; use wait_until/wait_for_connection_count rather than immediately asserting broker.connections is empty. (6) Shell tooling rejects dynamic constructs like `echo EXIT:$?`; use simple commands or checked-in scripts, and bash timeout max is 120 seconds."
+    }
+  ],
+  "reminder": {
+    "revision": 2,
+    "completed_steps": 50,
+    "last_check_step": 50,
+    "pressure_notified": false
+  }
+}

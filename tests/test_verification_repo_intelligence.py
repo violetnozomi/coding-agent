@@ -141,19 +141,19 @@ def test_verification_gate_surfaces_ri_related_test_without_making_it_required(
     tmp_path,
 ) -> None:
     from nz_coder.intelligence.service import workspace_repo_intelligence
-    from nz_coder.intelligence.verification import VerificationManager
-    from nz_coder.runtime.verification.recovery import RecoveryState
+    from tests.verification_scenarios import VerificationScenario
     from nz_coder.runtime.process.workdir import scoped_workdir
-    from nz_coder.state.trace import TraceRecorder
 
     _indirect_pricing_fixture(tmp_path)
     with scoped_workdir(tmp_path):
         service = workspace_repo_intelligence(tmp_path, max_files=50)
         assert service is not None
         service.prewarm(max_files=50).result(timeout=10)
-        manager = VerificationManager(RecoveryState(), TraceRecorder())
-        manager.mark_write("write_file", {"path": "src/domain/pricing.py"})
+        scenario = VerificationScenario(workspace=tmp_path)
+        manager = scenario.runtime
+        scenario.write_resource("write_file", {"path": "src/domain/pricing.py"})
 
+        manager.refresh_plan()
         message = manager.make_gate_message()
         pipeline = manager.status()["verification_pipeline"]
 

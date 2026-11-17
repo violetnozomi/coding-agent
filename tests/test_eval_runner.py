@@ -8,7 +8,6 @@ import pytest
 
 def test_eval_runner_closes_agent_when_run_raises(tmp_path, monkeypatch):
     from nz_coder import eval_runner
-    from nz_coder.state.memory import memory_mgr
     from nz_coder.runtime.execution import composition
 
     class FailingAgent:
@@ -29,7 +28,6 @@ def test_eval_runner_closes_agent_when_run_raises(tmp_path, monkeypatch):
         "build_product_environment",
         lambda *_args, **_kwargs: FailingAgent(),
     )
-    monkeypatch.setattr(memory_mgr, "load_all", lambda: None)
 
     with pytest.raises(RuntimeError, match="agent failed"):
         asyncio.run(

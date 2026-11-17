@@ -31,8 +31,11 @@ class FakeContextManager:
 
 
 class FakeSessionRuntime:
-    async def open(self, request):  # noqa: ANN001
+    async def open(self, request, *, session_lease=None):  # noqa: ANN001
         return None
+
+    def abandon(self, context):
+        pass
 
     async def checkpoint(self, context, status):  # noqa: ANN001
         return None

@@ -151,3 +151,234 @@ def test_snapshot_manifest_integrity_is_verified(tmp_path):
 
     with pytest.raises(SnapshotError, match="integrity"):
         store.changed_files(snapshot, snapshot)
+
+
+def test_track_detects_same_size_content_with_restored_mtime(tmp_path):
+    import os
+    path = tmp_path / 'app.py'
+    path.write_bytes(b'AAAA')
+    store = _store(tmp_path)
+    before = store.track()
+    info = path.stat()
+    path.write_bytes(b'BBBB')
+    os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns))
+    after = store.track()
+    assert before != after
+    assert store.changed_files(before, after) == ['app.py']
+
+
+def test_transition_rejects_internal_leaf_symlink_without_touching_victim(tmp_path):
+    path, victim = tmp_path / 'app.py', tmp_path / 'victim'
+    path.write_text('before')
+    victim.write_text('after')
+    store = _store(tmp_path)
+    before = store.track()
+    path.write_text('after')
+    after = store.track()
+    path.unlink()
+    path.symlink_to(victim)
+    with pytest.raises(SnapshotError):
+        store.transition(after, before)
+    assert victim.read_text() == 'after'
+
+
+def test_copy_referenced_snapshots_supports_child_revert_after_parent_deletion(tmp_path):
+    import shutil
+    parent, child = tmp_path / 'parent', tmp_path / 'child'
+    parent.mkdir()
+    child.mkdir()
+    (parent / 'app.py').write_bytes(b'before')
+    source = WorkspaceSnapshotStore(parent, tmp_path / 'source-store')
+    before = source.track()
+    (parent / 'app.py').write_bytes(b'after!')
+    after = source.track()
+    (child / 'app.py').write_bytes(b'after!')
+    destination = WorkspaceSnapshotStore(child, tmp_path / 'dest-store')
+    source.copy_referenced_to(destination, [before, after])
+    shutil.rmtree(source.root)
+    destination.transition(after, before)
+    assert (child / 'app.py').read_bytes() == b'before'
+
+
+def test_corrupt_or_missing_referenced_blob_prevents_child_publication(tmp_path):
+    parent, child = tmp_path / 'parent', tmp_path / 'child'
+    parent.mkdir()
+    child.mkdir()
+    (parent / 'app.py').write_text('before')
+    source = WorkspaceSnapshotStore(parent, tmp_path / 'source-store')
+    snapshot = source.track()
+    blob = source._load(snapshot)['files']['app.py']['blob']
+    source._blob_path(blob).write_text('corrupt')
+    destination = WorkspaceSnapshotStore(child, tmp_path / 'dest-store')
+    with pytest.raises(SnapshotError):
+        source.copy_referenced_to(destination, [snapshot])
+    assert not destination._manifest_path(snapshot).exists()
+
+
+def test_compensation_rejects_external_same_size_restored_mtime_write(tmp_path):
+    import os
+    path = tmp_path / 'app.py'
+    path.write_bytes(b'AAAA')
+    store = _store(tmp_path)
+    before = store.track()
+    path.write_bytes(b'BBBB')
+    after = store.track()
+    applied = store.transition(after, before)
+    published = path.stat()
+    path.write_bytes(b'CCCC')
+    os.utime(path, ns=(published.st_atime_ns, published.st_mtime_ns))
+    with pytest.raises(SnapshotError):
+        store.transition(before, after, paths=list(applied.files), expected=applied.published_identities)
+    assert path.read_bytes() == b'CCCC'
+
+
+def test_transition_tracks_publish_before_fsync_error(tmp_path, monkeypatch):
+    import os
+    import stat
+    path = tmp_path / 'app.py'
+    path.write_bytes(b'before')
+    store = _store(tmp_path)
+    before = store.track()
+    path.write_bytes(b'after!')
+    after = store.track()
+    fsync = os.fsync
+    def fail_once(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            monkeypatch.setattr(os, 'fsync', fsync)
+            raise OSError('parent sync failed')
+        fsync(fd)
+    monkeypatch.setattr(os, 'fsync', fail_once)
+    with pytest.raises(SnapshotError):
+        store.transition(after, before)
+    assert path.read_bytes() == b'after!'
+    assert not store.has_pending_recovery
+
+
+def test_partial_rollback_retains_single_recovery_owner(tmp_path, monkeypatch):
+    import os
+    import stat
+    path = tmp_path / 'app.py'
+    path.write_bytes(b'before')
+    store = _store(tmp_path)
+    before = store.track()
+    path.write_bytes(b'after!')
+    after = store.track()
+    fsync = os.fsync
+    def fail_after_external_edit(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            monkeypatch.setattr(os, 'fsync', fsync)
+            path.write_bytes(b'EXTERN')
+            raise OSError('parent sync failed after external edit')
+        fsync(fd)
+    monkeypatch.setattr(os, 'fsync', fail_after_external_edit)
+    with pytest.raises(SnapshotError):
+        store.transition(after, before)
+    assert path.read_bytes() == b'EXTERN'
+    assert store.has_pending_recovery
+    with pytest.raises(SnapshotError, match='recovery is pending'):
+        store.transition(after, before)
+    assert not store.retry_pending_recovery()
+    path.write_bytes(b'before')
+    assert store.retry_pending_recovery()
+    assert path.read_bytes() == b'after!'
+
+
+def test_track_detects_atomic_replacement_with_equal_stat(tmp_path):
+    import os
+    path = tmp_path / 'app.py'
+    path.write_bytes(b'AAAA')
+    store = _store(tmp_path)
+    before = store.track()
+    info = path.stat()
+    replacement = tmp_path / 'replacement'
+    replacement.write_bytes(b'BBBB')
+    replacement.chmod(info.st_mode & 0o777)
+    os.utime(replacement, ns=(info.st_atime_ns, info.st_mtime_ns))
+    replacement.replace(path)
+    after = store.track()
+    assert before != after
+    assert store.changed_files(before, after) == ['app.py']
+
+
+def test_transition_rejects_parent_symlink(tmp_path):
+    directory = tmp_path / 'src'
+    directory.mkdir()
+    path = directory / 'app'
+    path.write_bytes(b'before')
+    store = _store(tmp_path)
+    before = store.track()
+    path.write_bytes(b'after!')
+    after = store.track()
+    directory.rename(tmp_path / 'moved')
+    victim = tmp_path / 'victim'
+    victim.mkdir()
+    (victim / 'app').write_bytes(b'after!')
+    directory.symlink_to(victim, target_is_directory=True)
+    with pytest.raises(SnapshotError):
+        store.transition(after, before)
+    assert (victim / 'app').read_bytes() == b'after!'
+
+
+def test_binary_mode_transition_and_compensation_are_exact(tmp_path):
+    import stat
+    path = tmp_path / 'asset'
+    path.write_bytes(b'\x00\xff\r\n')
+    path.chmod(0o640)
+    store = _store(tmp_path)
+    before = store.track()
+    path.write_bytes(b'\x01\x80\x00\n')
+    path.chmod(0o600)
+    after = store.track()
+    applied = store.transition(after, before)
+    assert path.read_bytes() == b'\x00\xff\r\n'
+    assert stat.S_IMODE(path.stat().st_mode) == 0o640
+    store.transition(before, after, paths=list(applied.files), expected=applied.published_identities)
+    assert path.read_bytes() == b'\x01\x80\x00\n'
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_copy_rejects_symlinked_destination_storage_without_creating_outside(tmp_path):
+    parent, child, outside = (tmp_path / name for name in ('parent', 'child', 'outside'))
+    parent.mkdir()
+    child.mkdir()
+    outside.mkdir()
+    (parent / 'app').write_text('content')
+    source = WorkspaceSnapshotStore(parent, tmp_path / 'source-store')
+    snapshot = source.track()
+    (tmp_path / 'linked').symlink_to(outside, target_is_directory=True)
+    destination = WorkspaceSnapshotStore(child, tmp_path / 'linked' / 'created')
+    with pytest.raises((SnapshotError, ValueError, OSError)):
+        source.copy_referenced_to(destination, [snapshot])
+    assert not (outside / 'created').exists()
+
+
+def test_external_chmod_after_publish_keeps_recovery_pending(tmp_path, monkeypatch):
+    import os
+    import stat
+    path = tmp_path / 'app'
+    path.write_bytes(b'before')
+    path.chmod(0o640)
+    store = _store(tmp_path)
+    before = store.track()
+    path.write_bytes(b'after!')
+    path.chmod(0o600)
+    after = store.track()
+    fsync = os.fsync
+    def fail_parent(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            monkeypatch.setattr(os, 'fsync', fsync)
+            path.chmod(0o444)
+            raise OSError('fsync failure after external chmod')
+        fsync(fd)
+    monkeypatch.setattr(os, 'fsync', fail_parent)
+    with pytest.raises(SnapshotError):
+        store.transition(after, before)
+    assert path.read_bytes() == b'before'
+    assert stat.S_IMODE(path.stat().st_mode) == 0o444
+    assert store.has_pending_recovery
+    assert not store.retry_pending_recovery()
+    assert stat.S_IMODE(path.stat().st_mode) == 0o444
+    path.chmod(0o640)
+    assert store.retry_pending_recovery()
+    assert path.read_bytes() == b'after!'
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600

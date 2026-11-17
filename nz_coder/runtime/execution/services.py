@@ -2,22 +2,20 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import concurrent.futures
 from contextvars import copy_context
 from functools import partial
-import hashlib
-import json
 import threading
 import time
 from typing import Awaitable, Callable
 
-from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, SYNTHETIC_USER_KEY
-from nz_coder.foundation.async_utils import start_background_coro
 from nz_coder.runtime.conversation.context_manager import ProductionContextManager
 from nz_coder.runtime.core.contracts import RuntimeServices
-from nz_coder.runtime.core.model_context import ModelExecutionContext
+from nz_coder.runtime.core.model_context import ModelExecutionContext, current_request_tools
 from nz_coder.runtime.core.execution_context import strict_local_tools
 from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.runtime.core.run_context import current_run_context, scoped_run_context
 from nz_coder.runtime.execution.host import ProductionRuntimeHost
 from nz_coder.runtime.model_gateway import ModelCall, ModelCallPurpose, ModelCallStatus
 from nz_coder.runtime.conversation.model_result import (
@@ -25,6 +23,7 @@ from nz_coder.runtime.conversation.model_result import (
     ModelCompletionError,
 )
 from nz_coder.state.context import estimate_request_tokens
+from nz_coder.protocol.public_error import to_public_error
 from nz_coder.runtime.session.runtime import SessionRuntime
 from nz_coder.runtime.session.store import LegacyJsonSessionStore
 from nz_coder.runtime.execution.run_lifecycle import ProductionRunLifecycle
@@ -184,7 +183,9 @@ class ProductionTurnModelRuntime:
         overflow = self.preflight_request(context, messages)
         if overflow is not None:
             return overflow
-        outcome = context.gateway(max_retries=max_retries).complete_sync(ModelCall(
+        with scoped_run_context(context.run_context or current_run_context()):
+            gateway = context.gateway(max_retries=max_retries)
+        outcome = gateway.complete_sync(ModelCall(
             purpose=ModelCallPurpose.CODING,
             messages=messages,
             tools=self._tools(context),
@@ -230,7 +231,9 @@ class ProductionTurnModelRuntime:
         overflow = self.preflight_request(context, messages, tools=[])
         if overflow is not None:
             return overflow
-        outcome = context.gateway().complete_sync(ModelCall(
+        with scoped_run_context(context.run_context or current_run_context()):
+            gateway = context.gateway()
+        outcome = gateway.complete_sync(ModelCall(
             purpose=ModelCallPurpose.CODING,
             messages=messages,
             tools=[],
@@ -245,6 +248,9 @@ class ProductionTurnModelRuntime:
     @staticmethod
     def _tools(context: ModelExecutionContext) -> list:
         capabilities = context.capabilities()
+        frozen = current_request_tools()
+        if frozen is not None:
+            return frozen
         return (
             context.active_tool_specs()
             if capabilities is None or capabilities.supports_tools
@@ -267,7 +273,8 @@ class ProductionTurnModelRuntime:
             if stream and stream_tool_handler is not None
             else None
         )
-        execution_context = copy_context()
+        with scoped_run_context(context.run_context or current_run_context()):
+            execution_context = copy_context()
         compatibility_override = context.complete_override
         if callable(compatibility_override):
             overflow = self.preflight_request(context, messages)
@@ -299,6 +306,8 @@ class ProductionTurnModelRuntime:
         try:
             return await asyncio.shield(future)
         except asyncio.CancelledError as cancel_error:
+            if context.run_context is not None:
+                context.run_context.request_cancel()
             if bridge is not None:
                 bridge.cancel()
             if message_part is not None:
@@ -312,7 +321,19 @@ class ProductionTurnModelRuntime:
                 except BaseException:
                     pass
             if future.done():
-                _consume_future_result(future)
+                try:
+                    result = future.result()
+                except BaseException:
+                    pass
+                else:
+                    if context.run_context is not None and isinstance(result, LLMResult):
+                        from nz_coder.runtime.core.result import TokenUsage
+                        from nz_coder.runtime.conversation.model_result import _normalize_llm_result_metrics
+                        _normalize_llm_result_metrics(result)
+                        context.run_context.add_usage(TokenUsage(
+                            input_tokens=result.input_tokens, output_tokens=result.output_tokens,
+                            cached_read_tokens=result.cache_read_tokens, cached_write_tokens=result.cache_write_tokens,
+                            reasoning_tokens=result.reasoning_tokens))
             else:
                 future.add_done_callback(_consume_future_result)
             raise cancel_error
@@ -332,174 +353,55 @@ class ProductionRuntimeEventSink:
     def publish(self, event) -> None:
         from nz_coder.protocol.session_events import publish_session_event
         name = getattr(event.name, "value", event.name)
+        # 产品终态有唯一持久边界；core 回调仍由其自己的 sink 正常接收。
+        if name in {"session.run.completed", "session.run.failed", "session.run.cancelled"}:
+            return
         publish_session_event(str(name), event.payload)
 
 
 class ProductionMemoryService:
-    """Own recall caching and terminal learning for production runs."""
+    """按持久代次缓存背景投影；终态不自动改写知识。"""
 
     def prompt_block(self, context, query: str) -> str:
         if strict_local_tools():
             return ""
-        has_memories = (
-            context.manager.has_memories()
-            if hasattr(context.manager, "has_memories")
-            else bool(getattr(context.manager, "memories", {}))
-        )
-        if not has_memories:
-            return ""
-        if query and query == context.recall.last_query:
-            return context.recall.last_block
         settings = current_run_settings()
-        block = context.manager.build_prompt_block(
-            query=query or None,
-            max_items=5,
-            max_chars=2000,
-            rerank_client=context.client if settings.memory_llm_rerank else None,
-            model=context.model_id if settings.memory_llm_rerank else None,
-            rerank_provider=(
-                context.provider if settings.memory_llm_rerank else None
-            ),
-            rerank_capabilities=(
-                context.capabilities if settings.memory_llm_rerank else None
-            ),
-            rerank_observer=(
-                context.observer if settings.memory_llm_rerank else None
-            ),
-        )
-        if query:
-            context.recall.last_query = query
-            context.recall.last_block = block
-            context.commit_recall(context.recall)
+        try:
+            generation = tuple(context.manager.generation())
+            from nz_coder.state.memory import configured_embedding_provider
+            provider = configured_embedding_provider()
+            retrieval_identity = (settings.memory_retrieval_mode, settings.memory_embedding_model, getattr(provider, "identity", "lexical"))
+            key = (context.manager.scope_id, generation, query, settings.memory_llm_rerank, retrieval_identity)
+            if key == context.recall.cache_key:
+                return context.recall.last_block
+            projection = context.manager.build_prompt_snapshot(
+                query=query or None, max_items=5, max_chars=2000, embedding_provider=provider,
+                rerank_client=context.client if settings.memory_llm_rerank else None,
+                model=context.model_id if settings.memory_llm_rerank else None,
+                rerank_provider=context.provider if settings.memory_llm_rerank else None,
+                rerank_capabilities=context.capabilities if settings.memory_llm_rerank else None,
+                rerank_observer=context.observer if settings.memory_llm_rerank else None,
+                rerank_runtime=context.model_runtime if settings.memory_llm_rerank else None,
+            )
+            block = projection["block"]
+            if settings.memory_retrieval_mode == "hybrid" and provider is None:
+                block = "<memory-diagnostic>Semantic encoder is not configured/available; using lexical retrieval.</memory-diagnostic>\n" + block
+            key = (context.manager.scope_id, tuple(projection["generation"]), query, settings.memory_llm_rerank, retrieval_identity)
+        except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+            # 不把记忆存储故障伪装成“确实没有相关记忆”。
+            return f"<long-term-memory status='unavailable'>{to_public_error(exc).message}</long-term-memory>"
+        context.recall.last_query = query
+        context.recall.last_block = block
+        context.recall.cache_key = key
+        context.commit_recall(context.recall)
         return block
 
     async def finalize(self, context, messages: list, status: str) -> None:
-        if strict_local_tools():
-            return
-        settings = current_run_settings()
-        snapshot = self._snapshot(messages)
-        memory_review_key = self._review_key(context, snapshot)
-
-        async def persist() -> None:
-            from nz_coder.state.memory import run_auto_memory_pipeline_async
-
-            client = context.client if settings.memory_llm_extract else None
-            model = context.model_id if settings.memory_llm_extract else None
-            summary = await run_auto_memory_pipeline_async(
-                context.session_id,
-                snapshot,
-                client=client,
-                model=model,
-                tracer=context.tracer,
-                provider=context.provider,
-                capabilities=context.capabilities,
-                observer=context.observer,
-            )
-            if summary.get("saved_count"):
-                context.recall.last_query = ""
-                context.recall.last_block = ""
-                context.commit_recall(context.recall)
-            self._record_outcome(context, memory_review_key, summary)
-
-        # A detached Provider call can outlive this run and charge its usage to
-        # the next run's mutable ledger.  Keep only local/deterministic writes
-        # eligible for background execution.
-        if settings.memory_async_write and not settings.memory_llm_extract:
-            start_background_coro(persist())
-        else:
-            await persist()
+        # 所有显式写入已由工具边界结清；此处不启动新模型或后台任务。
+        return None
 
     def finalize_sync(self, context, messages: list, status: str) -> None:
-        """Compatibility path for the legacy synchronous finalizer."""
-        if strict_local_tools():
-            return
-        settings = current_run_settings()
-        snapshot = self._snapshot(messages)
-        memory_review_key = self._review_key(context, snapshot)
-
-        def persist() -> None:
-            from nz_coder.state.memory import run_auto_memory_pipeline
-
-            client = context.client if settings.memory_llm_extract else None
-            model = context.model_id if settings.memory_llm_extract else None
-            summary = run_auto_memory_pipeline(
-                context.session_id,
-                snapshot,
-                client=client,
-                model=model,
-                tracer=context.tracer,
-                provider=context.provider,
-                capabilities=context.capabilities,
-                observer=context.observer,
-            )
-            if summary.get("saved_count"):
-                context.recall.last_query = ""
-                context.recall.last_block = ""
-                context.commit_recall(context.recall)
-            self._record_outcome(context, memory_review_key, summary)
-
-        if settings.memory_async_write and not settings.memory_llm_extract:
-            context = copy_context()
-            threading.Thread(target=lambda: context.run(persist), daemon=True).start()
-        else:
-            persist()
-
-    @staticmethod
-    def _snapshot(messages: list) -> list[dict]:
-        return [
-            {
-                "role": message.get("role"),
-                "content": message.get("content", ""),
-                MESSAGE_ID_KEY: message.get(MESSAGE_ID_KEY),
-                SYNTHETIC_USER_KEY: bool(message.get(SYNTHETIC_USER_KEY, False)),
-            }
-            for message in messages
-            if isinstance(message, dict)
-        ]
-
-    @staticmethod
-    def _review_key(context, snapshot: list[dict]) -> str:
-        identities = [
-            str(item.get(MESSAGE_ID_KEY) or "")
-            for item in snapshot
-            if item.get(MESSAGE_ID_KEY)
-        ]
-        payload = json.dumps(
-            {"session_id": context.session_id, "message_ids": identities},
-            ensure_ascii=False,
-            sort_keys=True,
-        )
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
-
-    @staticmethod
-    def _record_outcome(context, review_key: str, summary: dict) -> None:
-        lineage = context.lineage
-        if lineage is None or not isinstance(summary, dict):
-            return
-        saved_names = [
-            str(item)[:200]
-            for item in summary.get("saved_names", [])
-            if str(item).strip()
-        ][:20]
-        digest = {
-            "review_key": review_key,
-            "status": str(summary.get("status") or "unknown")[:80],
-            "candidate_count": max(0, int(summary.get("candidate_count", 0) or 0)),
-            "saved_count": max(0, int(summary.get("saved_count", 0) or 0)),
-            "saved_names": saved_names,
-        }
-        lineage.append_unique("memory_outcome_digest", review_key, digest)
-        lineage.append_unique("memory_review_receipt", review_key, {
-            "review_key": review_key,
-            "proposal_ids": saved_names,
-            "status": "completed" if saved_names else "no_action",
-        })
-        if saved_names:
-            lineage.append_unique("client_notice", review_key, {
-                "source": "memory-agent",
-                "content": "Memory updated: " + "; ".join(saved_names[:3]),
-                "proposal_ids": saved_names,
-            })
+        return None
 
 
 class ProductionCompletionVerifier:

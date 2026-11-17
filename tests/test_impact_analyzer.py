@@ -70,7 +70,6 @@ def test_deleted_public_symbols_require_conservative_replan():
         changed_files=["pkg/api.py"],
         diff_text=diff,
         project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
-        task_mode="bugfix",
     )
 
     signals = {item["category"]: item for item in report["risk_signals"]}
@@ -96,7 +95,6 @@ def test_public_signature_change_is_not_misreported_as_deletion():
         changed_files=["pkg/api.py"],
         diff_text=diff,
         project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
-        task_mode="feature",
     )
 
     categories = {item["category"] for item in report["risk_signals"]}
@@ -119,7 +117,6 @@ def test_body_only_edit_does_not_trigger_public_api_replan():
         changed_files=["pkg/api.py"],
         diff_text=diff,
         project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
-        task_mode="bugfix",
     )
 
     categories = {item["category"] for item in report["risk_signals"]}
@@ -144,7 +141,6 @@ def test_sensitive_persistent_delete_requires_semantic_review():
         ],
         diff_text=diff,
         project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
-        task_mode="bugfix",
     )
 
     signal = next(
@@ -163,7 +159,6 @@ def test_non_sensitive_delete_call_does_not_claim_persistent_data_risk():
         changed_files=["src/cache_cleanup.py"],
         diff_text="+    temporary_entry.delete()\n",
         project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
-        task_mode="bugfix",
     )
 
     assert not any(
@@ -186,7 +181,6 @@ def test_sensitive_cache_delete_does_not_claim_persistent_data_risk():
         changed_files=["auth/cache_cleanup.py"],
         diff_text=diff,
         project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
-        task_mode="bugfix",
     )
 
     assert not any(
@@ -206,7 +200,6 @@ def test_unscoped_multifile_delete_is_not_assigned_to_sensitive_path():
         ],
         diff_text="+    cache.delete(session_key)\n",
         project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
-        task_mode="bugfix",
     )
 
     assert not any(
@@ -223,7 +216,6 @@ def test_source_change_outside_user_named_path_requires_replan():
         diff_text="",
         project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
         requested_paths=["pkg/target.py"],
-        task_mode="bugfix",
     )
 
     signal = next(
@@ -235,7 +227,7 @@ def test_source_change_outside_user_named_path_requires_replan():
     assert "tests/test_target.py" not in signal["detail"]
 
 
-def test_project_creation_does_not_treat_broad_scope_as_replan_signal():
+def test_broad_source_changes_preserve_scope_risk_signals():
     from nz_coder.intelligence.impact_analyzer import analyze_patch_impact
 
     files = [f"src/module_{index}.py" for index in range(6)]
@@ -244,12 +236,13 @@ def test_project_creation_does_not_treat_broad_scope_as_replan_signal():
         diff_text="",
         project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
         requested_paths=["src/main.py"],
-        task_mode="project_creation",
     )
 
     assert report["risk"] == "high"
-    assert report["requires_replan"] is False
-    assert report["risk_signals"] == []
+    assert report["requires_replan"] is True
+    assert {item["category"] for item in report["risk_signals"]} == {
+        "broad_scope_expansion", "requested_scope_expansion",
+    }
 
 
 def test_impact_report_exposes_fingerprint_and_replan_signal():
@@ -260,7 +253,6 @@ def test_impact_report_exposes_fingerprint_and_replan_signal():
         diff_text="",
         project_profile={"test_roots": ["tests"], "test_commands": ["pytest"]},
         requested_paths=["pkg/target.py"],
-        task_mode="bugfix",
     )
     output = format_impact_report(report)
 
@@ -287,7 +279,7 @@ def test_explicit_empty_change_list_does_not_fall_back_to_git(monkeypatch):
     assert report["requires_replan"] is False
 
 
-def test_legacy_positional_arguments_keep_requested_paths_and_task_mode():
+def test_positional_requested_paths_still_define_scope():
     from nz_coder.intelligence.impact_analyzer import analyze_patch_impact
 
     report = analyze_patch_impact(
@@ -297,7 +289,6 @@ def test_legacy_positional_arguments_keep_requested_paths_and_task_mode():
         False,
         0,
         ["pkg/target.py"],
-        "bugfix",
     )
 
     assert any(

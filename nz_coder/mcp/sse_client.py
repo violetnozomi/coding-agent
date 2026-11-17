@@ -5,6 +5,7 @@ import json
 import queue
 import socket
 import threading
+import time
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit
@@ -14,6 +15,7 @@ from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.mcp.client import (
     MCPClient,
     MCPError,
+    MCPTimeoutError,
     _NOTIFICATION_CLOSED,
 )
 from nz_coder.mcp.oauth import MCPAuthenticationRequired
@@ -107,8 +109,13 @@ class MCPLegacySSEClient(MCPClient):
             self.close()
             raise
 
-    def _send(self, message: dict[str, Any]) -> None:
-        if not self._endpoint_ready.wait(self.startup_timeout_seconds):
+    def _send(self, message: dict[str, Any], *, deadline: float | None = None) -> None:
+        if deadline is None:
+            deadline = time.monotonic() + self.tool_timeout_seconds
+        remaining = max(0.0, deadline - time.monotonic())
+        if not self._endpoint_ready.wait(min(self.startup_timeout_seconds, remaining)):
+            if time.monotonic() >= deadline:
+                raise MCPTimeoutError(f"MCP server '{self.name}' timed out waiting for its endpoint")
             raise MCPError(f"MCP server '{self.name}' legacy endpoint is unavailable")
         with self._state_lock:
             if self._closed:
@@ -129,21 +136,26 @@ class MCPLegacySSEClient(MCPClient):
             headers={**self.headers, "Accept": "application/json", "Content-Type": "application/json"},
             method="POST",
         )
+        remaining = deadline - time.monotonic()
+        if not self._write_lock.acquire(timeout=max(0.0, remaining)):
+            raise MCPTimeoutError(f"MCP server '{self.name}' timed out waiting to send")
         try:
-            with self._write_lock:
-                response = self._opener.open(
-                    request,
-                    timeout=max(0.001, self.tool_timeout_seconds),
-                )
-                try:
-                    if getattr(response, "status", 200) not in {200, 202, 204}:
-                        raise MCPError(f"MCP server '{self.name}' legacy POST failed")
-                    if response.read(_MAX_EVENT_BYTES + 1):
-                        raise MCPError(
-                            f"MCP server '{self.name}' legacy POST returned an unexpected body"
-                        )
-                finally:
-                    response.close()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise MCPTimeoutError(f"MCP server '{self.name}' timed out sending a request")
+            response = self._opener.open(
+                request,
+                timeout=max(0.001, remaining),
+            )
+            try:
+                if getattr(response, "status", 200) not in {200, 202, 204}:
+                    raise MCPError(f"MCP server '{self.name}' legacy POST failed")
+                if response.read(_MAX_EVENT_BYTES + 1):
+                    raise MCPError(
+                        f"MCP server '{self.name}' legacy POST returned an unexpected body"
+                    )
+            finally:
+                response.close()
         except HTTPError as exc:
             if exc.code == 401:
                 error = MCPAuthenticationRequired(
@@ -159,6 +171,8 @@ class MCPLegacySSEClient(MCPClient):
             raise MCPError(
                 f"MCP server '{self.name}' legacy POST transport failed: {type(exc).__name__}"
             ) from exc
+        finally:
+            self._write_lock.release()
 
     def _read_stream(self) -> None:
         request = Request(

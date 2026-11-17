@@ -2,6 +2,13 @@
 from __future__ import annotations
 
 import json
+import sys
+
+
+def _command(tmp_path, name):
+    script = tmp_path / (name + ".py")
+    script.write_text("print('fixture')\n", encoding="utf-8")
+    return [sys.executable, str(script)]
 
 
 def _inline_snapshot(tmp_path, monkeypatch, payload):
@@ -35,7 +42,7 @@ def test_trusted_workspace_inline_mcp_still_requires_server_trust(tmp_path, monk
     from nz_coder.mcp.config import load_mcp_server_configs
 
     workspace, _trust_path, snapshot = _inline_snapshot(
-        tmp_path, monkeypatch, {"inline": {"command": ["server"]}},
+        tmp_path, monkeypatch, {"inline": {"command": _command(tmp_path, "server")}},
     )
     server = load_mcp_server_configs(workspace=workspace, config_snapshot=snapshot)[0]
 
@@ -49,7 +56,7 @@ def test_inline_workspace_mcp_can_be_trusted_explicitly(tmp_path, monkeypatch):
     from nz_coder.mcp.trust import MCPTrustStore
 
     workspace, trust_path, snapshot = _inline_snapshot(
-        tmp_path, monkeypatch, {"inline": {"command": ["server"]}},
+        tmp_path, monkeypatch, {"inline": {"command": _command(tmp_path, "server")}},
     )
     server = load_mcp_server_configs(workspace=workspace, config_snapshot=snapshot)[0]
     MCPTrustStore(trust_path).trust(workspace, server.name, server.fingerprint)
@@ -64,13 +71,13 @@ def test_inline_workspace_mcp_change_invalidates_server_trust(tmp_path, monkeypa
     from nz_coder.mcp.trust import MCPTrustStore
 
     workspace, trust_path, first = _inline_snapshot(
-        tmp_path, monkeypatch, {"inline": {"command": ["server-v1"]}},
+        tmp_path, monkeypatch, {"inline": {"command": _command(tmp_path, "server-v1")}},
     )
     server = load_mcp_server_configs(workspace=workspace, config_snapshot=first)[0]
     MCPTrustStore(trust_path).trust(workspace, server.name, server.fingerprint)
     workspace.joinpath(".env").write_text(
         "NZ_MCP_ENABLED=1\nNZ_MCP_SERVERS_JSON="
-        + json.dumps({"servers": {"inline": {"command": ["server-v2"]}}}, separators=(",", ":"))
+        + json.dumps({"servers": {"inline": {"command": _command(tmp_path, "server-v2")}}}, separators=(",", ":"))
         + "\n",
         encoding="utf-8",
     )
@@ -95,7 +102,7 @@ def test_untrusted_inline_workspace_mcp_never_starts_process(tmp_path, monkeypat
     from nz_coder.mcp.runtime import MCPRuntime
 
     workspace, _trust_path, snapshot = _inline_snapshot(
-        tmp_path, monkeypatch, {"inline": {"command": ["server"]}},
+        tmp_path, monkeypatch, {"inline": {"command": _command(tmp_path, "server")}},
     )
     started = []
 
@@ -217,7 +224,7 @@ def test_mcp_cli_can_trust_trusted_workspace_source(tmp_path, monkeypatch, capsy
     from nz_coder.mcp.config import load_mcp_server_configs
 
     workspace, _trust_path, _snapshot = _inline_snapshot(
-        tmp_path, monkeypatch, {"inline": {"command": ["server"]}},
+        tmp_path, monkeypatch, {"inline": {"command": _command(tmp_path, "server")}},
     )
     monkeypatch.chdir(workspace)
 
@@ -237,7 +244,7 @@ def test_os_environment_mcp_remains_host_trusted(tmp_path):
     workspace.mkdir()
     snapshot = load_config_snapshot(workspace, environ={
         "NZ_MCP_SERVERS_JSON": json.dumps({
-            "servers": {"host": {"command": ["host-server"]}},
+            "servers": {"host": {"command": [sys.executable]}},
         }),
     })
     server = load_mcp_server_configs(
@@ -258,7 +265,7 @@ def test_user_mcp_remains_user_trusted(tmp_path):
     user_mcp = tmp_path / "user" / "mcp.json"
     user_mcp.parent.mkdir()
     user_mcp.write_text(json.dumps({
-        "servers": {"user": {"command": ["user-server"]}},
+        "servers": {"user": {"command": [sys.executable]}},
     }), encoding="utf-8")
     snapshot = load_config_snapshot(workspace, environ={
         "NZ_MCP_USER_CONFIG": str(user_mcp),

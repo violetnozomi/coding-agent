@@ -188,7 +188,8 @@ class ToolResultProjector:
                     except OSError:
                         pass
                 policy, _fraction = _projection_policy(tool_name, self._budget.head_fraction)
-                signal = str(output).splitlines()[-1] if policy == "tail" else str(output).splitlines()[0]
+                lines = str(output).splitlines()
+                signal = (lines[-1] if policy == "tail" else lines[0]) if lines else ""
                 text = _tiny_projection_text(signal, artifact, share)
                 child = ProjectedToolResult(text, {
                     "tool_call_id": call_id, "tool_name": tool_name, "policy": policy,

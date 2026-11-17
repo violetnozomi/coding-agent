@@ -94,3 +94,28 @@ def test_workspace_endpoint_requires_credential_delegation(tmp_path, monkeypatch
     connection = provider_connection("openai-compatible", config_snapshot=trusted)
     assert connection.credential_source == "environment"
     assert connection.endpoint_source == "trusted-workspace"
+
+
+def test_revoke_pending_cleanup_keeps_lease_until_resources_done(tmp_path, monkeypatch):
+    from nz_coder.foundation.capability_lease import capability_leases
+    from nz_coder.runtime.process import process_service as processes
+    from tests.fixtures.process_lifecycle import ControlledBackend
+
+    backend = ControlledBackend()
+    monkeypatch.setattr(processes, "create_process_backend", lambda *a, **kw: backend)
+    service = processes.ProcessService(tmp_path, kill_grace_seconds=0)
+    handle = service.start("owned", cwd=tmp_path, owner_session_id="session-a")
+    record = service._records[handle.process_id]
+    lease_id = record.capability_lease_id
+    try:
+        result = capability_leases().revoke_workspace(tmp_path)
+        assert result.failed == 1
+        assert result.revoked == 0
+        assert capability_leases().get(lease_id) is not None
+        assert record.waiter.is_alive()
+        backend.recover()
+        assert record.cleanup_done.wait(2)
+        assert capability_leases().get(lease_id) is None
+    finally:
+        backend.recover()
+        service.close()

@@ -135,7 +135,7 @@ def get_reminder(rounds_since: int):
 
 register(
     name="todo",
-    description="Update the session task list. Keep one item in_progress. Use for multi-step work.",
+    description="Maintain a todo/checklist explicitly requested by the user. Keep one item in_progress. Do not create a second copy of your working plan or Runtime requirements.",
     parameters={
         "type": "object",
         "properties": {

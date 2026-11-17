@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from nz_coder.runtime.core.run_context import RunContext
@@ -32,7 +33,6 @@ class ToolPolicyContext:
     runtime_state: object
     recovery: object
     permissions: object
-    stall_orchestrator: object | None
     parse_input: Callable[[object], dict]
     trace: Callable[..., None]
     observability: dict = field(default_factory=_empty_observability)
@@ -110,10 +110,8 @@ class ToolProjectionContext:
     signal_from_metadata: Callable[[dict | None], object | None]
     record_result: Callable[[object], bool]
     trace_result: Callable[..., None]
-    stall_orchestrator: object | None
     after_result: Callable[[list[dict], object, str], None]
     available_result_tokens: Callable[[list[dict]], int] | None = None
-    runtime_state: object | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -134,6 +132,12 @@ class ToolExecutionContext:
     policy: ToolPolicyContext
     lifecycle: ToolLifecycleContext
     projection: ToolProjectionContext
+    assessment_scope: object | None = None
+    working_plan_scope: object | None = None
+    repeat_source: object | None = None
+    current_agent_name: Callable[[], str] = lambda: ""
+    runtime_state_path: Path | None = None
+    request_superseded: Callable[[], bool] = lambda: False
 
     def __post_init__(self) -> None:
         if self.run is not None and not isinstance(self.run, RunContext):

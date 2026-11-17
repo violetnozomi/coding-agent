@@ -207,7 +207,7 @@ def test_tool_guardrail_escalation_defers_settlement_to_run_boundary() -> None:
         signal_from_metadata=lambda _metadata: None,
         record_result=lambda _result: False,
         trace_result=lambda *_args, **_kwargs: None,
-        stall_orchestrator=None,
+
         after_result=lambda *_args: None,
     )
     context = ToolExecutionContext(

@@ -57,11 +57,11 @@ def sweep_workflow_worktrees(
         worktree = _worktree(state)
         if worktree is None:
             continue
+        if state.get("worktree_preparing") is True or state.get("environment_preparation", {}).get("status") in {"preparing", "failed", "cancelled"}:
+            warnings.append(f"retain {worktree.path}: worktree preparation is incomplete")
+            continue
         if state.get("changed_files"):
             warnings.append(f"retain {worktree.path}: child reported changed files")
-            continue
-        if worktree.mode == "git" and manager.changed_files(worktree.path):
-            warnings.append(f"retain {worktree.path}: worktree has unmerged changes")
             continue
         if worktree.mode == "copy" and state.get("read_only") is not True:
             warnings.append(
@@ -69,6 +69,9 @@ def sweep_workflow_worktrees(
             )
             continue
         try:
+            if worktree.mode == "git" and manager.changed_files(worktree.path):
+                warnings.append(f"retain {worktree.path}: worktree has unmerged changes")
+                continue
             manager.remove(worktree)
             removed.append(worktree.path)
         except Exception as exc:

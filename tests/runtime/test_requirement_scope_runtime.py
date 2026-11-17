@@ -24,7 +24,7 @@ from nz_coder.runtime.model_gateway import ResolvedModelRuntime
 FIXTURE = Path(__file__).parents[1] / 'fixtures/paid_m_requirement_fragment.json'
 
 
-def _run(monkeypatch, workspace, task, actions, *, semantic=('accept',), label='replay'):
+def _run(monkeypatch, workspace, task, actions, *, semantic=('accept',), assessment=None, label='replay'):
     requests, reviews, states, permissions = [], [], [], []
     initial_files = {str(p.relative_to(workspace)): p.read_text()
                      for p in workspace.rglob('*') if p.is_file()}
@@ -55,7 +55,7 @@ def _run(monkeypatch, workspace, task, actions, *, semantic=('accept',), label='
                 action = [('emit_sidecar_verdict', {'verdict': verdict, 'reason': (
                     'Controlled semantic judgment: report actual test result and limitations.'
                     if verdict == 'revise' else 'Controlled semantic acceptance of the final report.'
-                )})]
+                ), **({'delivery_assessment': assessment} if assessment is not None else {})})]
             else:
                 requests.append(copy.deepcopy(kwargs))
                 assert len(requests) <= len(actions), 'unexpected main request'
@@ -145,7 +145,7 @@ def _money_actions(fixture):
 def test_paid_money_reference_does_not_block_completion(monkeypatch, tmp_path):
     fixture = _money(tmp_path)
     result, state, trace, requests, reviews = _run(
-        monkeypatch, tmp_path, fixture['task'], _money_actions(fixture), label='money-reference')
+        monkeypatch, tmp_path, fixture['task'], _money_actions(fixture), assessment={'status': 'reviewed', 'issues': []}, label='money-reference')
     checks = [x['status'] for x in trace if x.get('event') == 'verification_result']
     assert checks == ['failed', 'passed']
     assert '6 failed' in str(requests[3]['messages'])
@@ -210,7 +210,7 @@ def test_money_missing_named_caller_is_not_closed_by_green_test(monkeypatch, tmp
     actions[4] = [('bash', {'command': command})]
     task = fixture['task'].replace('python -m pytest -q tests', command)
     task = 'Migrate web.py, cli.py, jobs.py, mobile.py and reporting.py. ' + task
-    result, state, trace, *_ = _run(monkeypatch, tmp_path, task, actions, label='missing-caller')
+    result, state, trace, *_ = _run(monkeypatch, tmp_path, task, actions, assessment={'status': 'reviewed', 'issues': []}, label='missing-caller')
     assert state['verification_contract']['passed'] is True
     assert result.status.value != 'completed'
     assert (tmp_path / 'reporting.py').read_text() == fixture['initial']['reporting.py']
@@ -243,7 +243,7 @@ def test_explicit_artifact_obligation_remains_without_mutation(monkeypatch, tmp_
                 'All files modified, including REQUIREMENTS.md and migration-notes.md; deletion and rename complete.']
     result, state, *_ = _run(monkeypatch, tmp_path,
         f'Implement api.py and {instruction}. Run python -m pytest -q tests.', actions,
-        label='missing-' + instruction.split()[0])
+        assessment={'status': 'reviewed', 'issues': []}, label='missing-' + instruction.split()[0])
     assert state['verification_contract']['passed'] is True
     assert result.status.value != 'completed'
 
@@ -261,7 +261,7 @@ def test_mutation_operation_uses_real_workspace_fact(monkeypatch, tmp_path, inst
                 [('bash', {'command': 'python -m pytest -q tests'})], 'API value is 2. Tests passed.']
     result, state, trace, *_ = _run(monkeypatch, tmp_path,
         f'Fix api.py. {instruction}. Run python -m pytest -q tests.', actions,
-        label='operation-' + instruction.split()[0].lower() + '-' + str(ready))
+        assessment={'status': 'reviewed', 'issues': []}, label='operation-' + instruction.split()[0].lower() + '-' + str(ready))
     assert state['verification_contract']['passed'] is True
     assert (result.status.value == 'completed') is ready, state['requirement_ledger']
     if ready and instruction.startswith(('Delete', 'Rename')):
@@ -271,13 +271,15 @@ def test_mutation_operation_uses_real_workspace_fact(monkeypatch, tmp_path, inst
 
 
 def test_scope_fix_preserves_semantic_revise_then_accept(monkeypatch, tmp_path):
+    # 检查审查修订链，不再依赖 compatibility 关键词自动生成硬卡片。
+    monkeypatch.setenv("KODAX_VERIFIER_ALWAYS", "1")
     actions = _small(tmp_path)
     actions += [[('bash', {'command': 'python -m pytest -q tests'})],
                 'python -m pytest -q tests: 1 passed. Remaining limitation: synthetic example, no external integration.']
     result, state, trace, _, reviews = _run(monkeypatch, tmp_path,
         'Read REQUIREMENTS.md and fix api.py. Preserve compatibility. '
         'Run python -m pytest -q tests and report actual results and limitations.',
-        actions, semantic=('revise', 'accept'), label='semantic-revise')
+        actions, semantic=('revise', 'accept'), assessment={'status': 'reviewed', 'issues': []}, label='semantic-revise')
     assert result.status.value == 'completed'
     assert len(reviews) == 2
     verdicts = [e['verdict'] for e in trace if e.get('event') == 'sidecar_finished']
@@ -306,7 +308,7 @@ def test_node_test_can_be_both_mutation_and_verification_artifact(tmp_path):
     (tmp_path / 'literal.test.cjs').write_text('// existing tests\n')
     state = RuntimeState()
     state.set_acceptance_criteria_from_text(text)
-    contract = derive_task_contract(text, acceptance_command=state.verification_contract['command'],
+    contract = derive_task_contract(text, acceptance_commands=(state.verification_contract['command'],),
                                    workspace=tmp_path, explicit_path_allowlist=tuple(state.requested_paths))
     assert any('literal.test.cjs' in r.expected_artifacts for r in contract.requirements)
     assert contract.acceptance_commands == ('node --test literal.test.cjs',)
@@ -337,7 +339,7 @@ def test_paid_storage_replay_keeps_semantic_report_review(monkeypatch, tmp_path)
         'revision read/replace has a TOCTOU window; no directory fsync or crash-leftover cleanup.',
     ]
     result, state, trace, _, reviews = _run(monkeypatch, tmp_path, task, actions,
-        semantic=('revise', 'accept'), label='storage-revise')
+        semantic=('revise', 'accept'), assessment={'status': 'reviewed', 'issues': []}, label='storage-revise')
     assert result.status.value == 'completed'
     assert '83 passed' in state['verification_contract']['output']
     assert len(reviews) == 2
@@ -362,7 +364,7 @@ def test_adding_documentation_updates_existing_reference_file(monkeypatch, tmp_p
                 [('bash', {'command': 'python -m pytest -q tests'})], 'Implemented and documented value=2; tests passed.']
     result, state, *_ = _run(monkeypatch, tmp_path,
         'Fix api.py and add the new API documentation to REQUIREMENTS.md. Run python -m pytest -q tests.',
-        actions, label='explicit-documentation-update')
+        actions, assessment={'status': 'reviewed', 'issues': []}, label='explicit-documentation-update')
     assert result.status.value == 'completed', state['requirement_ledger']
 
 
@@ -377,7 +379,7 @@ def test_todo_and_model_file_claims_cannot_complete_migration(monkeypatch, tmp_p
     ]
     result, state, trace, *_ = _run(monkeypatch, tmp_path,
         'Implement the new API in api.py and update REQUIREMENTS.md. Run python -m pytest -q tests.',
-        actions, label='todo-self-report')
+        actions, assessment={'status': 'reviewed', 'issues': []}, label='todo-self-report')
     assert result.status.value != 'completed'
     assert state['mutation_generation'] == 0
     assert not state['changed_files']
@@ -390,27 +392,29 @@ def test_explicit_documentation_target_does_not_require_other_docs(tmp_path):
     (tmp_path / 'REQUIREMENTS.md').write_text('API contract\n')
     contract = derive_task_contract(
         'Add the new API documentation to REQUIREMENTS.md. Run python -m pytest -q tests.',
-        acceptance_command='python -m pytest -q tests', workspace=tmp_path)
+        acceptance_commands=('python -m pytest -q tests',), workspace=tmp_path)
     assert [r.expected_artifacts for r in contract.requirements if r.kind == 'docs'] == [('REQUIREMENTS.md',)]
 
 
 def test_operation_provenance_survives_contract_and_ledger_round_trip(tmp_path):
-    from nz_coder.runtime.agent.task_contract import TaskContract, RequirementLedger, derive_task_contract
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.runtime.verification.domain.requirements import RequirementLedgerView
+    from nz_coder.runtime.agent.task_contract import derive_task_contract, parse_task_contract
     contract = derive_task_contract('Rename old.md to new.md. Run python -m pytest -q tests.',
-                                   acceptance_command='python -m pytest -q tests', workspace=tmp_path)
-    restored = TaskContract.from_dict(contract.to_dict(), workspace=tmp_path)
+                                   acceptance_commands=('python -m pytest -q tests',), workspace=tmp_path)
+    restored = parse_task_contract(contract.to_dict(), workspace=tmp_path)
     assert restored == contract
-    ledger = RequirementLedger.from_contract(restored)
-    assert RequirementLedger.from_dict(ledger.to_dict()).to_dict() == ledger.to_dict()
-    docs = next(r for r in restored.requirements if r.kind == 'docs')
-    assert dict(docs.artifact_operations) == {'old.md': 'delete', 'new.md': 'create'}
+    ledger = VerificationScenario(restored)
+    assert RequirementLedgerView.from_dict(ledger.to_dict()).to_dict() == ledger.to_dict()
+    operations = {path: op for r in restored.requirements if r.kind == 'docs' for path, op in r.artifact_operations}
+    assert operations == {'old.md': 'delete', 'new.md': 'create'}
 
 
 @pytest.mark.parametrize('instruction', ['Create migration-notes.md', 'Delete obsolete.md', 'Rename obsolete.md to migration-notes.md'])
 def test_explicit_file_obligation_without_declared_test_still_blocks_missing_work(monkeypatch, tmp_path, instruction):
     actions = _small(tmp_path)[:1]
     actions.append('Done.')
-    result, state, *_ = _run(monkeypatch, tmp_path, instruction, actions, label='no-command-' + instruction.split()[0].lower())
+    result, state, *_ = _run(monkeypatch, tmp_path, instruction, actions, assessment={'status': 'reviewed', 'issues': []}, label='no-command-' + instruction.split()[0].lower())
     assert result.status.value != 'completed'
 
 
@@ -424,7 +428,7 @@ def test_explicit_file_obligation_without_command_resolves_after_real_write(monk
     actions = _small(tmp_path)[:1]
     actions += [[('apply_patch', {'changes': changes})], 'Requested file operation completed.']
     result, state, *_ = _run(monkeypatch, tmp_path, instruction, actions,
-        label='no-command-done-' + instruction.split()[0].lower())
+        assessment={'status': 'reviewed', 'issues': []}, label='no-command-done-' + instruction.split()[0].lower())
     assert result.status.value == 'completed', state['requirement_ledger']
     assert state['mutation_generation'] == 1
     assert state['verification_contract'] == {}

@@ -3,7 +3,12 @@ from __future__ import annotations
 
 import ast
 import difflib
+import io
+import shlex
+import tokenize
 from pathlib import Path
+from nz_coder.tools import ToolOutput
+from nz_coder.runtime.verification.domain.models import ExecutionReceipt
 
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
@@ -18,17 +23,33 @@ def _safe_path(p: str) -> Path:
 
 def python_symbol_check(path: str, symbols: list = None, calls: list = None) -> str:
     """Check module/class/function symbols and simple call relationships with AST."""
+    command = shlex.join(["python_symbol_check", path,
+        *(part for value in symbols or [] for part in ("--symbol", str(value))),
+        *(part for value in calls or [] for part in ("--call", str(value)))])
+    receipts = []
+
+    def receipt(capability: str, outcome: str, output: str) -> ExecutionReceipt:
+        return ExecutionReceipt("python_symbol_check", command, str(current_workdir()), outcome,
+            capabilities=(capability,), targets=(path,), in_process=True, reason=output[-2000:])
+
+    def observed_result(output: str, outcome: str, capability: str) -> ToolOutput:
+        return ToolOutput(output, execution_facts=(*receipts, receipt(capability, outcome, output)))
+
     try:
         fp = _safe_path(path)
         source = WorkspaceFileAccess(current_workdir()).read_text(path)
         tree = ast.parse(source, filename=str(fp))
+        # ast.parse 不检查 return 等节点的作用域；syntax 证据须与编译检查同等有效。
+        compile(tree, str(fp), "exec", dont_inherit=True)
     except SyntaxError as e:
-        return format_public_error(e, context=f"Python syntax error in {path}: ")
+        return observed_result(format_public_error(e, context=f"Python syntax error in {path}: "), "failed", "syntax")
     except Exception as e:
-        return format_public_error(e)
+        return observed_result(format_public_error(e), "not_executed", "syntax")
 
     symbols = symbols or []
     calls = calls or []
+    if symbols or calls:
+        receipts.append(receipt("syntax", "succeeded", f"Python compilation passed: {path}"))
     lines = [f"Python AST check for {path}:"]
     ok = True
 
@@ -46,17 +67,19 @@ def python_symbol_check(path: str, symbols: list = None, calls: list = None) -> 
         lines.append(result)
 
     prefix = "OK" if ok else "FAIL"
-    return f"{prefix}: " + "\n".join(lines)
+    return observed_result(f"{prefix}: " + "\n".join(lines), "succeeded" if ok else "failed",
+                           "symbol" if symbols or calls else "syntax")
 
 
 def python_structural_edit(path: str, insertions: list = None, replacements: list = None) -> str:
     """Apply AST-located insertions/replacements for Python functions and methods."""
     try:
         fp = _safe_path(path)
-        source = WorkspaceFileAccess(current_workdir()).read_text(path)
+        source, expected = WorkspaceFileAccess(current_workdir()).read_text_with_identity(path)
         tree = ast.parse(source, filename=str(fp))
         lines = source.splitlines(keepends=True)
         edits = []
+        decorator_lines = _decorator_statements(source)
 
         for item in replacements or []:
             target = item.get("target", "")
@@ -66,8 +89,8 @@ def python_structural_edit(path: str, insertions: list = None, replacements: lis
             node = _find_target_node(target, tree)
             if not node:
                 return f"Error: target not found: {target}"
-            replacement = _prepare_code_lines(code, indent="    " if "." in target else "")
-            edits.append((node.lineno - 1, node.end_lineno, replacement))
+            replacement = _prepare_code_lines(code, indent=" " * node.col_offset)
+            edits.append((_definition_start(node, decorator_lines), node.end_lineno, replacement))
 
         for item in insertions or []:
             before = item.get("before_symbol", "")
@@ -77,18 +100,32 @@ def python_structural_edit(path: str, insertions: list = None, replacements: lis
             node = _find_target_node(before, tree)
             if not node:
                 return f"Error: before_symbol not found: {before}"
+            if node.col_offset or "." in before:
+                return "Error: insertion anchor must be a module-level definition"
             insertion = _prepare_code_lines(code, indent="")
-            edits.append((node.lineno - 1, node.lineno - 1, insertion))
+            start = _definition_start(node, decorator_lines)
+            edits.append((start, start, insertion))
 
         if not edits:
             return "Error: no insertions or replacements provided"
 
-        for start, end, replacement in sorted(edits, key=lambda e: e[0], reverse=True):
+        for index, (start, end, _) in enumerate(edits):
+            for other_start, other_end, _ in edits[index + 1:]:
+                if (max(start, other_start) < min(end, other_end)
+                        or start == end and other_start < start < other_end
+                        or other_start == other_end and start < other_start < end):
+                    return "Error: overlapping structural edits"
+
+        # 同锚点先替换定义，再倒序插入，使最终顺序与调用者输入一致。
+        for _, (start, end, replacement) in sorted(
+            enumerate(edits), key=lambda pair: (pair[1][0], pair[1][1], pair[0]), reverse=True,
+        ):
             lines[start:end] = replacement
         updated = "".join(lines)
+        compile(updated, str(fp), "exec", dont_inherit=True)
 
-        from nz_coder.tools.files import write_file
-        result = write_file(path, updated)
+        from nz_coder.tools.files import _write_file_version
+        result = _write_file_version(path, updated, source, expected)
         diff = "".join(difflib.unified_diff(
             source.splitlines(keepends=True),
             updated.splitlines(keepends=True),
@@ -102,6 +139,29 @@ def python_structural_edit(path: str, insertions: list = None, replacements: lis
         return format_public_error(e, context=f"Python syntax error in {path}: ")
     except Exception as e:
         return format_public_error(e)
+
+
+def _decorator_statements(source: str) -> list[tuple[int, int]]:
+    """AST 的表达式行号可能晚于 @，以词法逻辑行定位完整装饰器。"""
+    statements = []
+    first = None
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type in {tokenize.INDENT, tokenize.DEDENT, tokenize.NL, tokenize.COMMENT}:
+            continue
+        if token.type == tokenize.NEWLINE:
+            if first is not None and first.string == '@':
+                statements.append((first.start[0], token.end[0]))
+            first = None
+        elif first is None:
+            first = token
+    return statements
+
+
+def _definition_start(node, decorator_lines: list[tuple[int, int]]) -> int:
+    if not node.decorator_list:
+        return node.lineno - 1
+    line = node.decorator_list[0].lineno
+    return next(start - 1 for start, end in decorator_lines if start <= line <= end)
 
 
 def _check_symbol(symbol: str, module_funcs: dict, classes: dict) -> str:

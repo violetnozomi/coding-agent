@@ -80,6 +80,8 @@ class FakeService:
                 body = {"id": "local", "object": "chat.completion", "model": request["model"],
                         "choices": [{"index": 0, "message": {"role": "assistant", "content": "local"},
                                      "finish_reason": body_finish}], "usage": usage}
+                if fake.mode == "invalid_choices":
+                    body["choices"] = fake.response_choices
                 if request.get("stream"):
                     data = ("data: " + json.dumps({**body, "usage": None}) + "\n\n"
                             + "data: " + json.dumps(body) + "\n\n"
@@ -88,15 +90,35 @@ class FakeService:
                         data += "data: " + json.dumps({**body, "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}}) + "\n\n"
                     if fake.mode != "cut_stream":
                         data += "data: [DONE]\n\n"
+                    if fake.mode == "invalid_choices":
+                        data = "data: " + json.dumps(body) + "\n\ndata: [DONE]\n\n"
+                    if fake.mode in {"four_report_truncated", "four_report_timeout", "crossed_report_truncated"}:
+                        reports = [(100, 1000), (50, 1), (9000, 70000), (1, 0)]
+                        if fake.mode == "crossed_report_truncated":
+                            reports = [(100, 1000), (50, 1), (9000, 2), (1, 70000), (1, 0)]
+                        data = "".join("data: " + json.dumps({
+                            "model": "observed-provider-model", "system_fingerprint": "observed-fingerprint",
+                            "choices": [{"finish_reason": "length"}],
+                            "usage": {"prompt_tokens": p, "completion_tokens": c, "total_tokens": p+c},
+                        }) + "\n\n" for p, c in reports)
                     raw_response, content_type = data.encode(), "text/event-stream"
                 else:
                     raw_response, content_type = json.dumps(body).encode(), "application/json"
                 self.send_response(500 if fake.mode == "error" else 200)
                 self.send_header("Content-Type", content_type)
-                self.send_header("Content-Length", str(len(raw_response)))
+                if fake.mode != "done_hold":
+                    self.send_header("Content-Length", str(len(raw_response) + (100 if fake.mode in {"four_report_truncated", "four_report_timeout", "crossed_report_truncated"} else 0)))
                 self.end_headers()
                 try:
                     self.wfile.write(raw_response)
+                    if fake.mode in {"four_report_truncated", "four_report_timeout", "crossed_report_truncated"}:
+                        self.wfile.flush()
+                        if fake.mode == "four_report_timeout":
+                            fake.release.wait(3)
+                        self.close_connection = True
+                    if fake.mode == "done_hold":
+                        self.wfile.flush()
+                        fake.release.wait(3)
                 except OSError:
                     pass
 
@@ -104,35 +126,44 @@ class FakeService:
 
 
 @contextmanager
-def running(tmp_path, *, mode="normal", limits=None, cap=2, output=64000, counter=fake_count, deadline=None, authorization=None, exact_output=True):
+def running(tmp_path, *, mode="normal", limits=None, cap=2, output=64000, counter=fake_count, deadline=None, authorization=None, exact_output=True, stop_on_rejection=False, trace_directory=None):
     fake = FakeService(mode)
     upstream = ThreadingHTTPServer(("127.0.0.1", 0), fake.handler())
     fake.server_port = upstream.server_port
     upstream.daemon_threads = True
     thread = threading.Thread(target=upstream.serve_forever, daemon=True)
     thread.start()
-    ledger = RelayLedger(tmp_path / "ledger.jsonl", limits or RelayLimits(output_total=1000000 if authorization else 100000), empirical_authorization=authorization)
+    ledger = RelayLedger(tmp_path / "ledger.jsonl", limits or RelayLimits(output_total=1000000 if authorization else 100000), empirical_authorization=authorization,
+                         stop_on_rejection=stop_on_rejection)
     binding = RelayBinding(authorization["purpose"] if authorization else "local-test",
                            authorization["scope"][0] if authorization else "autonomous", "r1", "main", cap,
                            authorization["model"] if authorization else "local-model", output,
                            deadline or time.monotonic() + 5, exact_output)
     path = tmp_path / "relay.sock"
     relay = RelayServer(path, ledger=ledger, binding=binding,
-                        upstream=f"http://127.0.0.1:{upstream.server_port}/v1/chat/completions", counter=counter)
+                        upstream=f"http://127.0.0.1:{upstream.server_port}/v1/chat/completions", counter=counter,
+                        trace_directory=trace_directory)
+    fake.relay = relay
     relay_thread = threading.Thread(target=relay.serve_forever, daemon=True)
     relay_thread.start()
     try:
         yield fake, ledger, binding, path
     finally:
         fake.release.set()
-        ledger.cancel(binding.run)
+        if ledger.stopped(binding) != "journal_fault":
+            ledger.cancel(binding.run)
         relay.shutdown()
         relay.server_close()
         relay_thread.join(2)
+        assert relay.wait_handlers(time.monotonic() + 2), "测试退出前必须确认账本写入者已退出"
         upstream.shutdown()
         upstream.server_close()
         thread.join(2)
-        ledger.close()
+        if ledger.stopped(binding) == "journal_fault":
+            with pytest.raises(RuntimeError, match="journal_fault"):
+                ledger.close()
+        else:
+            ledger.close()
 
 
 def post(path, *, nonce=None, model="local-model", output=64000, stream=False, extra=None, headers=None, omit_output=False):
@@ -152,6 +183,26 @@ def test_n_plus_one_and_client_role_forgery_do_not_add_budget(tmp_path):
         assert post(path).status_code == 429
         assert len(fake.requests) == len(ledger.attempts) == 2
         assert set(ledger.counts) == {binding.bucket}
+
+
+def test_client_close_after_done_keeps_complete_stream_settlement(tmp_path):
+    with running(tmp_path, mode="done_hold") as (_fake, ledger, _binding, path):
+        with httpx.Client(transport=httpx.HTTPTransport(uds=str(path)), trust_env=False, timeout=4) as client:
+            with client.stream("POST", "http://localhost/v1/chat/completions",
+                json={"model": "local-model", "messages": [{"role": "user", "content": "local"}],
+                      "max_tokens": 64000, "stream": True},
+                headers={"X-NZ-Call-Id": uuid.uuid4().hex}) as response:
+                assert response.status_code == 200
+                assert any(line == "data: [DONE]" for line in response.iter_lines())
+        deadline = time.monotonic()+2
+        while not any(e["event"] == "settled" for e in ledger.events) and time.monotonic() < deadline:
+            time.sleep(.01)
+        settled = next(e for e in ledger.events if e["event"] == "settled")
+        assert settled["status"] == "complete"
+        assert settled["usage"]["completion_tokens"] == 7
+        assert settled["finish_reason"] == "stop"
+        assert not settled["ambiguous"] and not settled["reservation_retained"]
+        assert not ledger.failed_contracts
 
 
 def provider_output_grant(reservation=393216):
@@ -228,10 +279,11 @@ def test_invalid_provider_reservation_cannot_open_an_empirical_ledger(tmp_path, 
         RelayLedger(tmp_path / "ledger", RelayLimits(), empirical_authorization=provider_output_grant(reservation))
 
 
-@pytest.mark.parametrize("mode", ["missing", "over_input", "above_capacity"])
+@pytest.mark.parametrize("mode", ["missing", "above_capacity"])
 def test_provider_default_never_relaxes_unknown_usage_or_unreserved_cost(tmp_path, mode):
-    counter = lambda raw, p: InputAccounting(None, "local-reference", contract_id="local-fake-v1",
-        payload_sha256=hashlib.sha256(raw).hexdigest(), reference_count=100)
+    def counter(raw, p):
+        return InputAccounting(None, "local-reference", contract_id="local-fake-v1",
+            payload_sha256=hashlib.sha256(raw).hexdigest(), reference_count=100)
     with running(tmp_path, mode="normal" if mode == "above_capacity" else mode, output=393216,
                  counter=counter, authorization=provider_output_grant(), exact_output=False) as (fake, ledger, binding, path):
         fake.completion = 393217 if mode == "above_capacity" else 7
@@ -243,8 +295,6 @@ def test_provider_default_never_relaxes_unknown_usage_or_unreserved_cost(tmp_pat
         if mode == "missing":
             assert row["usage"] is None
             assert ledger.output_occupied == 393216
-        elif mode == "over_input":
-            assert row["input_over_reservation"] == 50
         else:
             assert row["output_over_reservation"] == 1
 
@@ -744,3 +794,440 @@ def test_authorized_forty_pro_instances_use_one_host_ledger(tmp_path):
     grant['scope'].append('instance_example__project-' + f'{40:040x}')
     with pytest.raises(ValueError, match='invalid_empirical_authorization'):
         RelayLedger(tmp_path/'forty-one.jsonl', RelayLimits(), empirical_authorization=grant)
+
+
+@pytest.mark.parametrize("stop_on_rejection,later_status", [(False, 200), (True, 429)])
+def test_budget_rejection_policy_does_not_reopen_after_cohort_settles(tmp_path, stop_on_rejection, later_status):
+    with running(tmp_path, mode="hold", cap=5, stop_on_rejection=stop_on_rejection) as (fake, ledger, binding, path):
+        with ThreadPoolExecutor() as pool:
+            first = pool.submit(post, path)
+            assert fake.started.wait(2)
+            assert post(path).status_code == 429
+            assert ledger.stopped(binding) == "", "预算软封门不能取消已准入请求"
+            fake.release.set()
+            assert first.result(3).status_code == 200
+        assert post(path).status_code == later_status
+        assert len(fake.requests) == (1 if stop_on_rejection else 2)
+        if stop_on_rejection:
+            assert ledger.admission_closed_reason == "output_reservation_exhausted"
+            closed = [e for e in ledger.events if e["event"] == "admissions_closed"]
+            assert len(closed) == 1
+            ledger.close_admissions("another_reason")
+            assert ledger.admission_closed_reason == closed[0]["reason"]
+            assert len([e for e in ledger.events if e["event"] == "admissions_closed"]) == 1
+
+
+def ledger_request(tmp_path, **kwargs):
+    ledger = RelayLedger(tmp_path / "ledger", RelayLimits(), **kwargs)
+    binding = RelayBinding("local-test", "u", "run", "main", 3, "local-model", 1024, time.monotonic() + 5)
+    payload = {"model": binding.model, "max_tokens": 1024, "messages": []}
+    raw = json.dumps(payload).encode()
+    return ledger, binding, raw, payload, fake_count(raw, payload)
+
+
+def test_explicit_deny_closes_all_roles_when_policy_selected(tmp_path):
+    from dataclasses import replace
+    from nz_coder.evaluation.model_relay import AdmissionDenied
+
+    ledger, binding, raw, payload, accounting = ledger_request(tmp_path, stop_on_rejection=True)
+    try:
+        ledger.deny(binding, "counter_failed")
+        assert ledger.stopped(binding) == ""
+        with pytest.raises(AdmissionDenied, match="counter_failed"):
+            ledger.reserve(replace(binding, unit="other", run="other", role="review"), "new", raw, payload, accounting)
+        assert not ledger.attempts
+    finally:
+        ledger.close()
+
+
+@pytest.mark.parametrize("operation", ["write", "fsync"])
+def test_journal_fault_latches_hard_stop_after_storage_recovers(tmp_path, monkeypatch, operation):
+    from nz_coder.evaluation.model_relay import AdmissionDenied
+    import nz_coder.evaluation.model_relay as module
+
+    ledger, binding, raw, payload, accounting = ledger_request(tmp_path)
+    failure = OSError("journal unavailable")
+    def fail(*_args):
+        raise failure
+    with monkeypatch.context() as patch:
+        patch.setattr(module.os, operation, fail)
+        with pytest.raises(OSError) as caught:
+            ledger.reserve(binding, "first", raw, payload, accounting)
+    assert caught.value is failure
+    assert ledger.journal_fault
+    assert ledger.stopped(binding) == "journal_fault"
+    with pytest.raises(AdmissionDenied, match="journal_fault"):
+        ledger.reserve(binding, "second", raw, payload, accounting)
+    assert not ledger.attempts
+    with pytest.raises(RuntimeError, match="journal_fault"):
+        ledger.close()
+
+
+def test_cancel_is_effective_even_when_its_journal_write_fails(tmp_path, monkeypatch):
+    import nz_coder.evaluation.model_relay as module
+
+    ledger, binding, *_ = ledger_request(tmp_path)
+    def fail(_fd):
+        raise OSError("cancel journal unavailable")
+    with monkeypatch.context() as patch:
+        patch.setattr(module.os, "fsync", fail)
+        with pytest.raises(OSError, match="cancel journal"):
+            ledger.cancel(binding.run)
+    assert binding.run in ledger.cancelled
+    assert ledger.stopped(binding)
+    with pytest.raises(RuntimeError, match="journal_fault"):
+        ledger.close()
+
+
+def test_ledger_close_refuses_unsettled_attempt_and_remains_usable_for_settlement(tmp_path):
+    ledger, binding, raw, payload, accounting = ledger_request(tmp_path)
+    attempt = ledger.reserve(binding, "first", raw, payload, accounting)
+    with pytest.raises(RuntimeError, match="reserved"):
+        ledger.close()
+    ledger.settle(attempt, status="cancelled_or_disconnected", ambiguous=True)
+    assert ledger.attempts[attempt]["reservation_retained"]
+    ledger.close()
+
+
+def test_incomplete_usage_increases_token_and_fee_occupancy_without_unconfirmed_cache_discount(tmp_path):
+    from dataclasses import replace
+
+    grant = provider_output_grant(1024)
+    ledger = RelayLedger(tmp_path / "ledger", RelayLimits(), empirical_authorization=grant)
+    binding = RelayBinding(grant["purpose"], grant["scope"][0], "run", "main", 2, grant["model"], 1024, time.monotonic()+5)
+    payload = {"model": binding.model, "max_tokens": 1024, "messages": []}
+    raw = json.dumps(payload).encode()
+    accounting = replace(reference_count(raw, payload), reference_count=100)
+    attempt = ledger.reserve(binding, "first", raw, payload, accounting)
+    try:
+        ledger.settle(attempt, status="stream_incomplete", ambiguous=True,
+                      usage={"prompt_tokens": 2000, "completion_tokens": 2048, "total_tokens": 4048,
+                             "prompt_cache_hit_tokens": 2000})
+        row = ledger.attempts[attempt]
+        assert (ledger.input_occupied, ledger.output_occupied) == (2000, 2048)
+        assert ledger.cost_occupied_cny == pytest.approx(.020384)
+        assert row["estimated_cost_occupied_cny"] == pytest.approx(.020384)
+        assert row["usage"] is None and row["estimated_cost_reported_cny"] is None
+        assert row["reservation_retained"]
+    finally:
+        ledger.close()
+
+
+@pytest.mark.parametrize("mode,expected_status", [("four_report_truncated", "transport_error"),
+                                                 ("crossed_report_truncated", "transport_error"),
+                                                 ("four_report_timeout", "request_timeout")])
+def test_all_usage_peaks_and_metadata_survive_transport_failure(tmp_path, mode, expected_status):
+    with running(tmp_path, mode=mode, output=1024, counter=reference_count,
+                 authorization=provider_output_grant(1024), limits=RelayLimits(request_seconds=.3)) as (_fake, ledger, binding, path):
+        assert post(path, model=binding.model, output=1024, stream=True).status_code == 200
+        row = next(iter(ledger.attempts.values()))
+        assert row["status"] == expected_status
+        assert row["reported_usage"] == {"prompt_tokens": 1, "completion_tokens": 0, "total_tokens": 1}
+        assert row["usage_conflict"] and row["conflicting_reports"][0]["completion_tokens"] == 1000
+        assert row["usage_high_water"] == {"prompt_tokens": 9000, "completion_tokens": 70000}
+        assert (ledger.input_occupied, ledger.output_occupied) == (9000, 70000)
+        assert ledger.cost_occupied_cny == pytest.approx(.578)
+        assert row["estimated_cost_occupied_cny"] == pytest.approx(.578)
+        assert row["usage"] is None and row["estimated_cost_reported_cny"] is None
+        assert row["provider_model"] == "observed-provider-model"
+        assert row["system_fingerprint"] == "observed-fingerprint" and row["finish_reason"] == "length"
+        assert len([e for e in ledger.events if e["event"] == "settled"]) == 1
+
+
+def test_settlement_journal_failure_keeps_observation_and_occupancy_in_memory(tmp_path, monkeypatch):
+    import nz_coder.evaluation.model_relay as module
+
+    ledger, binding, raw, payload, accounting = ledger_request(tmp_path)
+    attempt = ledger.reserve(binding, "first", raw, payload, accounting)
+    failure = OSError("settlement durable write failed")
+    def fail(_fd):
+        raise failure
+    with monkeypatch.context() as patch:
+        patch.setattr(module.os, "fsync", fail)
+        with pytest.raises(OSError) as caught:
+            ledger.settle(attempt, status="stream_incomplete", usage={"prompt_tokens": 9000, "completion_tokens": 70000},
+                          ambiguous=True, provider_model="observed-model")
+    assert caught.value is failure
+    row = ledger.attempts[attempt]
+    assert row["reported_usage"] == {"prompt_tokens": 9000, "completion_tokens": 70000}
+    assert row["provider_model"] == "observed-model" and not row["settlement_persisted"]
+    assert (ledger.input_occupied, ledger.output_occupied) == (9000, 70000)
+    assert binding.experiment in ledger.failed_contracts and binding.run in ledger.ambiguous
+    assert not any(e["event"] == "settled" for e in ledger.events)
+    written = [json.loads(line) for line in ledger.path.read_text().splitlines()]
+    assert not any(e.get("settlement_persisted") is True for e in written), "写出但未fsync的行不能宣称持久结算"
+    with pytest.raises(RuntimeError, match="already settled"):
+        ledger.settle(attempt, status="complete")
+    with pytest.raises(RuntimeError, match="journal_fault"):
+        ledger.close()
+
+
+@pytest.mark.parametrize("boundary", ["complete", "cancel", "timeout"])
+def test_budget_closed_cohort_survives_downstream_eof_until_original_boundary(tmp_path, boundary):
+    limits = RelayLimits(request_seconds=.3 if boundary == "timeout" else 3)
+    with running(tmp_path, mode="hold", cap=5, stop_on_rejection=True, limits=limits) as (fake, ledger, binding, path):
+        settled = threading.Event()
+        original = ledger.settle
+        def capture(*args, **kwargs):
+            try:
+                return original(*args, **kwargs)
+            finally:
+                settled.set()
+        ledger.settle = capture
+        raw = json.dumps({"model": binding.model, "messages": [], "max_tokens": 64000}).encode()
+        with socket.socket(socket.AF_UNIX) as channel:
+            channel.connect(str(path))
+            channel.sendall(b"POST /v1/chat/completions HTTP/1.0\r\nX-NZ-Call-Id: cohort\r\nContent-Length: "
+                            + str(len(raw)).encode() + b"\r\n\r\n" + raw)
+            assert fake.started.wait(2)
+            assert post(path).status_code == 429
+        if boundary == "complete":
+            assert not settled.wait(.05), "预算软封门后的EOF不能取消原上游"
+            fake.release.set()
+        elif boundary == "cancel":
+            ledger.cancel(binding.run)
+        assert settled.wait(1), "原超时或显式取消必须仍能结束排空"
+        row = next(iter(ledger.attempts.values()))
+        if boundary == "complete":
+            assert row["status"] == "complete" and row["usage"]["completion_tokens"] == 7
+            assert ledger.output_occupied == 7 and not row["reservation_retained"]
+        else:
+            assert row["status"] == ("request_timeout" if boundary == "timeout" else "cancelled_or_disconnected")
+            assert row["usage"] is None and row["reservation_retained"]
+            assert ledger.output_occupied == 64000
+        assert len(fake.requests) == len(ledger.attempts) == 1
+
+
+def test_handler_wait_includes_counter_and_actual_native_thread_exit(tmp_path):
+    entered, counter_release = threading.Event(), threading.Event()
+    tail_entered, tail_release = threading.Event(), threading.Event()
+    ledger, binding, *_ = ledger_request(tmp_path)
+    def counter(raw, payload):
+        entered.set()
+        assert counter_release.wait(3)
+        return fake_count(raw, payload)
+    path = tmp_path / "wait.sock"
+    relay = RelayServer(path, ledger=ledger, binding=binding, upstream="http://127.0.0.1:9/v1/chat/completions", counter=counter)
+    original = relay.process_request_thread
+    def delayed_native_exit(*args):
+        original(*args)
+        tail_entered.set()
+        assert tail_release.wait(3)
+    relay.process_request_thread = delayed_native_exit
+    thread = threading.Thread(target=relay.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with ThreadPoolExecutor() as pool:
+            pending = pool.submit(post, path, output=1024)
+            assert entered.wait(2)
+            relay.shutdown()
+            relay.server_close()
+            thread.join(2)
+            assert not thread.is_alive() and not ledger.attempts
+            assert relay.active_handlers == 1
+            assert not relay.wait_handlers(time.monotonic() + .03)
+            ledger.close_admissions("budget_stop")
+            counter_release.set()
+            assert pending.result(2).status_code == 429
+            assert tail_entered.wait(2)
+            assert relay.active_handlers == 1
+            assert not relay.wait_handlers(time.monotonic() + .03)
+            tail_release.set()
+            assert relay.wait_handlers(time.monotonic() + 1)
+            assert relay.active_handlers == 0 and not ledger.attempts
+    finally:
+        counter_release.set()
+        tail_release.set()
+        relay.shutdown()
+        relay.server_close()
+        thread.join(2)
+        ledger.close()
+
+
+@pytest.mark.parametrize("reason", ["budget_stop", ""])
+def test_explicit_admission_close_is_irreversible_for_every_reason(tmp_path, reason):
+    from nz_coder.evaluation.model_relay import AdmissionDenied
+
+    ledger, binding, raw, payload, accounting = ledger_request(tmp_path)
+    try:
+        ledger.close_admissions(reason)
+        with pytest.raises(AdmissionDenied):
+            ledger.reserve(binding, "later", raw, payload, accounting)
+        assert ledger.admission_closed_reason == reason and not ledger.attempts
+    finally:
+        for attempt_id, row in ledger.attempts.items():
+            if row["status"] == "reserved":
+                ledger.settle(attempt_id, status="cancelled_or_disconnected", ambiguous=True)
+        ledger.close()
+
+
+def test_fd_close_failure_keeps_admissions_closed_and_allows_close_retry(tmp_path, monkeypatch):
+    from nz_coder.evaluation.model_relay import AdmissionDenied
+    import nz_coder.evaluation.model_relay as module
+
+    ledger, binding, raw, payload, accounting = ledger_request(tmp_path)
+    original_close = module.os.close
+    def fail(fd):
+        if fd == ledger.fd:
+            raise OSError("fd close unavailable")
+        return original_close(fd)
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(module.os, "close", fail)
+            with pytest.raises(OSError, match="fd close unavailable"):
+                ledger.close()
+        with pytest.raises(AdmissionDenied):
+            ledger.reserve(binding, "later", raw, payload, accounting)
+    finally:
+        for attempt_id, row in ledger.attempts.items():
+            if row["status"] == "reserved":
+                ledger.settle(attempt_id, status="cancelled_or_disconnected", ambiguous=True)
+        ledger.close()
+
+
+def test_response_trace_write_failure_preserves_already_received_usage(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    original_open = Path.open
+    class FailingTrace:
+        def __init__(self, handle):
+            self.handle = handle
+        def __getattr__(self, name):
+            return getattr(self.handle, name)
+        def write(self, _chunk):
+            raise OSError("trace capture unavailable")
+    def fail_trace(path, *args, **kwargs):
+        handle = original_open(path, *args, **kwargs)
+        return FailingTrace(handle) if path.name.endswith(".response.txt") else handle
+    monkeypatch.setattr(Path, "open", fail_trace)
+    with running(tmp_path, trace_directory=tmp_path / "trace") as (_fake, ledger, binding, path):
+        assert post(path).status_code == 200
+        row = next(iter(ledger.attempts.values()))
+        assert row["status"] == "transport_error" and row["usage"] is None
+        assert row["reported_usage"]["completion_tokens"] == 7
+        assert row["provider_model"] == binding.model
+        assert row["reservation_retained"] and row["settlement_persisted"]
+
+
+def test_budget_closed_cohort_survives_broken_pipe_when_writing_headers(tmp_path, monkeypatch):
+    import nz_coder.evaluation.model_relay as module
+
+    with running(tmp_path, mode="hold", cap=5, stop_on_rejection=True) as (fake, ledger, _binding, path):
+        with ThreadPoolExecutor() as pool:
+            pending = pool.submit(post, path)
+            assert fake.started.wait(2)
+            assert post(path).status_code == 429
+            def broken_headers(_self):
+                raise BrokenPipeError("downstream write probe")
+            monkeypatch.setattr(module._Handler, "end_headers", broken_headers)
+            fake.release.set()
+            with pytest.raises(httpx.HTTPError):
+                pending.result(2)
+        row = next(iter(ledger.attempts.values()))
+        assert row["status"] == "complete" and row["usage"]["completion_tokens"] == 7
+        assert row["settlement_persisted"] and ledger.output_occupied == 7
+
+
+@pytest.mark.parametrize("boundary", ["cancel", "transport", "timeout"])
+def test_unparsed_buffered_transport_loss_does_not_invent_cross_run_usage_conflict(tmp_path, boundary):
+    from dataclasses import replace
+
+    with running(tmp_path, mode="lost" if boundary == "transport" else "hold", output=1024,
+                 limits=RelayLimits(request_seconds=.2 if boundary == "timeout" else 3)) as (fake, ledger, binding, path):
+        with ThreadPoolExecutor() as pool:
+            pending = pool.submit(post, path, output=1024)
+            assert fake.started.wait(2)
+            if boundary == "cancel":
+                ledger.cancel(binding.run)
+            assert pending.result(2).status_code == 502
+        row = next(iter(ledger.attempts.values()))
+        assert row["usage"] is None and row["reservation_retained"]
+        assert not row["usage_conflict"] and not ledger.failed_contracts
+        payload = {"model": binding.model, "max_tokens": 1024, "messages": []}
+        raw = json.dumps(payload).encode()
+        other = ledger.reserve(replace(binding, run="another-run"), "other", raw, payload, fake_count(raw, payload))
+        ledger.settle(other, status="cancelled_or_disconnected", ambiguous=True)
+
+
+@pytest.mark.parametrize("operation", ["write", "fsync"])
+def test_constructor_journal_failure_closes_its_unowned_fd(tmp_path, monkeypatch, operation):
+    from contextlib import suppress
+    import errno
+    import nz_coder.evaluation.model_relay as module
+
+    real_open = module.os.open
+    opened = []
+    failure = OSError("initial journal unavailable")
+    def capture_open(*args):
+        fd = real_open(*args)
+        opened.append(fd)
+        return fd
+    def fail(*_args):
+        raise failure
+    with monkeypatch.context() as patch:
+        patch.setattr(module.os, "open", capture_open)
+        patch.setattr(module.os, operation, fail)
+        with pytest.raises(OSError) as caught:
+            RelayLedger(tmp_path / "ledger", RelayLimits())
+    assert caught.value is failure
+    try:
+        with pytest.raises(OSError) as closed:
+            module.os.fstat(opened[0])
+        assert closed.value.errno == errno.EBADF
+    finally:
+        with suppress(OSError):
+            module.os.close(opened[0])
+
+
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("choices", [[None], None, {}, [1], [{"finish_reason": []}]])
+def test_malformed_response_choices_settle_once_and_preserve_received_usage(tmp_path, stream, choices):
+    import errno
+    import os
+
+    with running(tmp_path, mode="invalid_choices", output=1024) as (fake, ledger, binding, path):
+        fake.response_choices = choices
+        assert post(path, output=1024, stream=stream).status_code == 200
+        assert fake.relay.wait_handlers(time.monotonic() + 1)
+        row = next(iter(ledger.attempts.values()))
+        assert row["status"] == "transport_error", "预期协议结构错误仍须走唯一结算"
+        assert row["usage"] is None and row["reservation_retained"] and row["ambiguous"]
+        assert row["reported_usage"]["completion_tokens"] == 7
+        assert row["reported_usage"]["prompt_tokens"] == row["input_reserved"]
+        assert row["provider_model"] == binding.model and row["settlement_persisted"]
+        assert ledger.output_occupied == 1024
+        assert len([e for e in ledger.events if e["event"] == "settled"]) == 1
+    with pytest.raises(OSError) as closed:
+        os.fstat(ledger.fd)
+    assert closed.value.errno == errno.EBADF
+
+
+def test_complete_buffered_body_keeps_trusted_usage_when_cancel_arrives_at_client_exit(tmp_path, monkeypatch):
+    import asyncio
+    import nz_coder.evaluation.model_relay as module
+
+    real_client = module.httpx.AsyncClient
+    transport_closed = threading.Event()
+    with running(tmp_path, output=1024) as (fake, ledger, binding, path):
+        class CancelAtClientExit(real_client):
+            async def __aexit__(self, exc_type, exc_value, exc_tb):
+                result = await super().__aexit__(exc_type, exc_value, exc_tb)
+                if exc_type is None:
+                    assert self.is_closed
+                    transport_closed.set()
+                    ledger.cancel(binding.run)
+                    # 已完整读取且真实 HTTP client 已关闭，让既有取消观察器在同一收尾轮完成。
+                    watchers = [task for task in asyncio.all_tasks()
+                                if task.get_coro().__qualname__.endswith("._forward.<locals>.interruption")]
+                    assert len(watchers) == 1
+                    await watchers[0]
+                return result
+        monkeypatch.setattr(module.httpx, "AsyncClient", CancelAtClientExit)
+        assert post(path, output=1024).status_code == 200
+        assert fake.relay.wait_handlers(time.monotonic() + 1)
+        assert transport_closed.is_set() and binding.run in ledger.cancelled
+        row = next(iter(ledger.attempts.values()))
+        assert row["status"] == "complete" and row["usage"]["completion_tokens"] == 7
+        assert not row["reservation_retained"] and not row["ambiguous"]
+        assert ledger.output_occupied == 7 and binding.run not in ledger.ambiguous
+        assert len(fake.requests) == len([e for e in ledger.events if e["event"] == "settled"]) == 1

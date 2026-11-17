@@ -159,3 +159,14 @@ def test_stats_date_range_prefers_message_times_over_file_mtime(tmp_path):
         stats = aggregate_session_stats()
 
     assert stats["date_range"] == {"earliest": 100.0, "latest": 120.0}
+
+
+def test_stats_pairs_visible_record_with_own_raw_message_id():
+    from nz_coder.state.session_stats import _consume_parent_messages, _empty_stats
+    assistant = _assistant("s", "msg-visible", priced=True)
+    assistant.pop("_nz_parts")
+    messages = [{"role": "user", "content": "hidden", "_nz_visible": False}, assistant]
+    stats = _empty_stats(None)
+    _consume_parent_messages(stats, messages, "s")
+    assert stats["total_cost"] == pytest.approx(0.35)
+    assert stats["model_usage"]["openrouter/vendor/code-model"]["cost"] == 0

@@ -31,7 +31,7 @@ def _spec(name: str, description: str = "long detailed description") -> dict:
 
 def _context(session_id: str):
     return SimpleNamespace(
-        request=SimpleNamespace(session_id=session_id, messages=()),
+        request=SimpleNamespace(session_id=session_id, messages=(), metadata={}),
         metadata={},
     )
 

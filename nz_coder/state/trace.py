@@ -93,7 +93,8 @@ class TraceRecorder:
                 in {"error", "failed", "nonzero", "blocked"}
                 and "output" in projected
             ):
-                projected["output"] = "Tool execution failed."
+                public = public_error_from_wire(projected.get("public_error"))
+                projected["output"] = public.message if public is not None else "Tool execution failed."
             row = {
                 "ts": time.time(),
                 "run_id": self.run_id,
@@ -448,6 +449,8 @@ def _project_trace_diagnostics(
         )
     )
     if error_like and not safe_error_scalar:
+        if value is None:
+            return None
         public = public_error_from_wire(value)
         return (public or to_public_error(value)).to_dict()
     if normalized_field in {

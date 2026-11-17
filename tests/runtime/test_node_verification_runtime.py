@@ -49,9 +49,11 @@ TEST = [_tool("bash", command="node --test literal.test.cjs")]
 EDIT = [_tool("edit_file", path="index.js", old_text="x.replace(/-/g, '\\\\-')", new_text="x")]
 
 
-def _run(monkeypatch, workspace, actions, *, task=None, limit=None, permission=True, allowed_commands=()):
+def _run(monkeypatch, workspace, actions, *, task=None, limit=None, permission=True, allowed_commands=(), planning_response=None, semantic_response="accept", prior_messages=(), stream=False):
     """Replace only model/network boundaries, retain production state and tools."""
     requests, auxiliary, permissions = [], [], []
+    planning_responses = list(planning_response) if isinstance(planning_response, list) else None
+    semantic_responses = list(semantic_response) if isinstance(semantic_response, list) else None
     home = workspace.parent / (workspace.name + "-isolated-home")
     home.mkdir(exist_ok=True)
     monkeypatch.setenv("HOME", str(home))
@@ -62,7 +64,7 @@ def _run(monkeypatch, workspace, actions, *, task=None, limit=None, permission=T
         raise AssertionError("offline regression attempted a network connection")
 
     monkeypatch.setattr(socket.socket, "connect", deny_network)
-    capabilities = ModelCapabilities(provider="offline", model_id="offline-model", supports_streaming=False)
+    capabilities = ModelCapabilities(provider="offline", model_id="offline-model", supports_streaming=stream)
 
     class Provider:
         name = "offline"
@@ -75,11 +77,27 @@ def _run(monkeypatch, workspace, actions, *, task=None, limit=None, permission=T
 
         def create_completion(self, _client, **kwargs):
             names = [t.get("function", {}).get("name") for t in kwargs.get("tools", [])]
-            if names == ["emit_sidecar_verdict"]:
+            system = (kwargs.get("messages") or [{}])[0].get("content", "")
+            if not names and system in {
+                "You are a concise coding task planner.",
+                "You are a concise coding task re-planner.",
+            }:
+                auxiliary.append(copy.deepcopy(kwargs))
+                # 只替换规划模型边界，后续合同解析和工作集注入仍由生产代码执行。
+                if isinstance(planning_response, BaseException):
+                    raise planning_response
+                assert planning_response is not None, "unexpected planning request"
+                action = planning_responses.pop(0) if planning_responses is not None else planning_response
+            elif names == ["emit_sidecar_verdict"]:
                 auxiliary.append(copy.deepcopy(kwargs))
                 # This is a controlled semantic judgement, not proof of model
                 # quality. Actual execution/requirements must still gate it.
-                action = [_tool("emit_sidecar_verdict", verdict="accept", reason="Controlled offline semantic review")]
+                verdict = semantic_responses.pop(0) if semantic_responses is not None else semantic_response
+                if isinstance(verdict, BaseException):
+                    raise verdict
+                action = [_tool("emit_sidecar_verdict", verdict=verdict,
+                    reason="Controlled offline semantic review",
+                    delivery_assessment={"status": "reviewed", "issues": []} if verdict == "accept" else None)]
             else:
                 requests.append(copy.deepcopy(kwargs))
                 assert len(requests) <= len(actions), "unexpected extra main model request"
@@ -89,12 +107,28 @@ def _run(monkeypatch, workspace, actions, *, task=None, limit=None, permission=T
                     function=SimpleNamespace(name=name, arguments=json.dumps(args)))
                 for i, (name, args) in enumerate(action)
             ]
-            return SimpleNamespace(
+            response = SimpleNamespace(
                 choices=[SimpleNamespace(
                     message=SimpleNamespace(content=action if isinstance(action, str) else "", tool_calls=calls),
                     finish_reason="tool_calls" if calls else "stop")],
                 usage=SimpleNamespace(prompt_tokens=4, completion_tokens=2, total_tokens=6),
             )
+            if not kwargs.get("stream"):
+                return response
+
+            def chunks():
+                for index, call in enumerate(calls):
+                    delta_call = SimpleNamespace(index=index, id=call.id, type="function", function=call.function)
+                    yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(
+                        content=None, tool_calls=[delta_call], reasoning_content=None), finish_reason=None)])
+                if isinstance(action, str):
+                    yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(
+                        content=action, tool_calls=None, reasoning_content=None), finish_reason=None)])
+                yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(
+                    content=None, tool_calls=None, reasoning_content=None),
+                    finish_reason="tool_calls" if calls else "stop")], usage=response.usage)
+
+            return chunks()
 
     provider = Provider()
     runtime = ResolvedModelRuntime(provider_id="offline", model_id="offline-model",
@@ -106,16 +140,16 @@ def _run(monkeypatch, workspace, actions, *, task=None, limit=None, permission=T
 
     def allow(name, arguments):
         # 额外命令只调整受控用户授权，实际Bash准入和执行保持真实。
-        allowed = permission and name == "bash" and arguments.get("command") in (
+        allowed = permission and name in {"bash", "process"} and arguments.get("command") in (
             "node --test literal.test.cjs", *allowed_commands,
         )
         permissions.append((name, arguments, allowed))
         return allowed
 
     request = RunRequest(agent=AgentDefinition(name="node-evidence", instructions="Use the declared test and report truthfully."),
-        profile=MAIN_PROFILE, workspace=workspace, session_id="node-evidence", stream=False,
+        profile=MAIN_PROFILE, workspace=workspace, session_id="node-evidence", stream=stream,
         provider="offline", model="offline-model",
-        messages=({"role": "user", "content": task or "Fix index.js Unicode literal handling. Run node --test literal.test.cjs and report the result."},),
+        messages=(*prior_messages, {"role": "user", "content": task or "Fix index.js Unicode literal handling. Run node --test literal.test.cjs and report the result."}),
         metadata={"persist_session": False, "permission_mode": "auto", "max_turns": limit or len(actions)})
     options = RunOptions(permission_asker=allow)
     environment = native_sdk.build_product_run_environment(request, options)
@@ -128,11 +162,12 @@ def _run(monkeypatch, workspace, actions, *, task=None, limit=None, permission=T
         environment.close()
 
 
-def test_declared_node_pass_closes_at_tool_boundary(monkeypatch, node_project):
+@pytest.mark.parametrize("stream", [False, True])
+def test_declared_node_pass_at_hard_cap_preserves_evidence_without_extra_request(monkeypatch, node_project, stream):
     result, state, trace, requests, auxiliary, permissions = _run(
-        monkeypatch, node_project, [READ, TEST, EDIT, TEST], limit=4,
+        monkeypatch, node_project, [READ, TEST, EDIT, TEST], limit=4, stream=stream,
     )
-    assert result.status.value == "completed", (result.error, result.final_text, state)
+    assert result.status.value == "max_turns", (result.error, result.final_text, state)
     assert len(requests) == 4
     contract = state["verification_contract"]
     assert contract["passed"] is True
@@ -140,20 +175,26 @@ def test_declared_node_pass_closes_at_tool_boundary(monkeypatch, node_project):
     assert "Invalid regular expression" in str(requests[2]["messages"])
     checks = [e for e in trace if e.get("event") == "verification_result"]
     assert [e["status"] for e in checks] == ["failed", "passed"]
-    settled = [e for e in trace if e.get("event") == "terminal_boundary_settled"][-1]
-    assert settled["contract_required"] is True and settled["contract_passed"] is True
-    assert settled["unresolved_requirements"] == []
+    assert result.metadata["verification"]["tests_passed"] is True
+    assert auxiliary == []  # 没有自然交付候选，不为省略的模型正文启动评审。
     assert permissions and all(p[2] for p in permissions)
 
 
-def test_node_pass_can_close_before_work_limit(monkeypatch, node_project):
+@pytest.mark.parametrize("stream", [False, True])
+def test_node_pass_returns_to_model_for_followup_work_and_delivery(monkeypatch, node_project, stream):
+    docs = [_tool("write_file", path="README.md", content="# Unicode escaping\nNode tests pass.\n")]
     result, state, trace, requests, *_ = _run(
-        monkeypatch, node_project, [READ, TEST, EDIT, TEST], limit=12,
+        monkeypatch, node_project, [READ, TEST, EDIT, TEST, docs, "Unicode handling and usage notes are ready."],
+        limit=12, stream=stream,
     )
     assert result.status.value == "completed"
-    assert len(requests) == 4  # No scripted text ending was available.
+    assert len(requests) == 6
+    assert (node_project / "README.md").exists()
+    assert any("pass" in str(message.get("content", ""))
+               for message in requests[4]["messages"] if message.get("role") == "tool")
+    assert "usage notes" in result.final_text
     boundary = [e for e in trace if e.get("event") == "terminal_boundary_settled"][-1]
-    assert boundary["early_tool_completion_candidate"] is True
+    assert boundary["early_tool_completion_candidate"] is False
     assert boundary["contract_passed"] is True
 
 
@@ -164,11 +205,12 @@ def test_new_mutation_cannot_reuse_node_pass(monkeypatch, node_project):
     )
     assert result.status.value == "max_turns"
     contract = state["verification_contract"]
-    assert contract["attempted_generation"] == state["acceptance_mutation_generation"] == 2
-    assert contract["passed"] is False
+    assert contract["attempted_generation"] == 1
+    assert state["acceptance_mutation_generation"] == 2
+    assert contract["passed"] is not True
     assert len(requests) == 4
     checks = [e["status"] for e in trace if e.get("event") == "verification_result"]
-    assert checks == ["failed", "passed", "failed"]
+    assert checks == ["failed", "passed"]
 
 
 def test_green_old_tests_do_not_satisfy_new_api_artifact(monkeypatch, node_project):
@@ -213,7 +255,7 @@ def test_rejected_node_command_never_becomes_pass(monkeypatch, node_project):
     result, state, trace, requests, auxiliary, permissions = _run(
         monkeypatch, node_project, [READ, EDIT, TEST], limit=3, permission=False,
     )
-    assert result.status.value == "max_turns"
+    assert result.status.value == "blocked"
     assert state["verification_contract"]["passed"] is not True
     calls = [e for e in trace if e.get("event") == "tool_call" and e.get("name") == "bash"]
     assert calls and all(e["executed"] is False for e in calls)
@@ -236,10 +278,11 @@ def test_paid_n_action_fragment_uses_current_node_evidence(monkeypatch, node_pro
     for name, content in fixture["files"].items():
         (node_project / name).write_text(content)
     result, state, trace, requests, auxiliary, _ = _run(
-        monkeypatch, node_project, fixture["actions"], task=fixture["task"], limit=12,
+        monkeypatch, node_project, [*fixture["actions"], "The Unicode literal fix passes the declared Node test."],
+        task=fixture["task"], limit=12,
     )
     assert result.status.value == "completed", state.get("requirement_ledger")
-    assert len(requests) == 4  # No fabricated fifth/final response.
+    assert len(requests) == 5  # 原动作片段后补受控交付响应，不冒充原付费轨迹。
     assert "Invalid regular expression" in str(requests[2]["messages"])
     assert state["verification_contract"]["passed"] is True
     checks = [e["status"] for e in trace if e.get("event") == "verification_result"]
@@ -247,7 +290,7 @@ def test_paid_n_action_fragment_uses_current_node_evidence(monkeypatch, node_pro
     assert len(auxiliary) == 1  # Real completion hook; controlled model verdict.
     assert state["requested_paths"] == []  # Test command is not a mutation request.
     boundary = [e for e in trace if e.get("event") == "terminal_boundary_settled"][-1]
-    assert boundary["early_tool_completion_candidate"] is True
+    assert boundary["early_tool_completion_candidate"] is False
     assert boundary["unresolved_requirements"] == []
     evidence = node_project.parent / "paid-n-replay-evidence"
     evidence.mkdir(exist_ok=True)

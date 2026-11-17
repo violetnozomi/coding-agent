@@ -9,7 +9,8 @@ from pathlib import Path
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.protocol.message_schema import is_synthetic_user_message
 from nz_coder.runtime.agent.task_policy import (
-    declared_test_scopes, is_test_file, task_wants_tests, test_command_targets,
+    canonical_unittest_discovery, declared_test_scopes, declared_unittest_scopes, is_test_file, task_wants_tests,
+    test_command_targets, unittest_selector_matches_path, unittest_selectors,
 )
 from nz_coder.tools.read_support import MAX_LINE_SUFFIX
 
@@ -104,7 +105,7 @@ def _bounded_record(record, maximum):
 
 
 def project_read_tests(transcript, task, *, workspace=None, changed_paths=(),
-                       verification_command='', max_total=MAX_TOTAL, max_each=MAX_EACH):
+                       verification_commands=(), max_total=MAX_TOTAL, max_each=MAX_EACH):
     """在滚动历史裁剪前配对实际调用和已完成 Part，最多展示三个文件。"""
     budget = min(MAX_TOTAL, max(0, max_total))
     if budget < len(HEADER) + 100:
@@ -121,20 +122,36 @@ def project_read_tests(transcript, task, *, workspace=None, changed_paths=(),
     latest = owners[-1] if owners else {}
     scope = (latest.get('_nz_session_id'), latest.get('_nz_interaction_run_id'))
     scope_root = (latest.get('_nz_path') or {}).get('root')
-    scopes = list(declared_test_scopes(task))
-    scopes.extend(test_command_targets(verification_command))
-    for match in re.finditer(r'node\s+--test\s+([^\n`。；;,]+)', task):
-        scopes.extend(test_command_targets('node --test ' + match[1]))
+    declared_scopes = declared_test_scopes(task)
+    discovery_scopes = tuple(scope for scope in (*declared_scopes, *verification_commands) if canonical_unittest_discovery(scope) is not None)
+    scopes = [scope for scope in declared_scopes if canonical_unittest_discovery(scope) is None]
+    command_targets = tuple(target for command in verification_commands for target in test_command_targets(command))
+    scopes.extend(command_targets)
+    unittest_scopes = list(declared_unittest_scopes(task))
+    from nz_coder.intelligence.verification_planner import verification_command_segments
+    for command in verification_commands:
+        for words in verification_command_segments(command):
+            unittest_scopes.extend(target for target in unittest_selectors(words) or () if target in command_targets)
+    path_scopes = [scope for scope in scopes if scope not in unittest_scopes]
     changed_tests = {_path(p, workspace) for p in changed_paths if is_test_file(p)}
 
     def explicit(path):
-        return any(path == s.split('::', 1)[0] or path.startswith(s.rstrip('/') + '/') for s in scopes)
+        if (any(path == s.split('::', 1)[0] or path.startswith(s.rstrip('/') + '/') for s in path_scopes)
+                or any(unittest_selector_matches_path(selector, path) for selector in unittest_scopes)):
+            return True
+        if workspace is not None and discovery_scopes:
+            from nz_coder.runtime.adapters.verification_runtime import _generic_test_covers_artifact
+
+            # 复用已知文件与发现参数的关系，仅筛选已交付源码，不生成执行事实或验收权。
+            return any(_generic_test_covers_artifact(Path(workspace) / path, command, str(workspace))
+                       for command in discovery_scopes)
+        return False
 
     def relevant(path):
         if explicit(path):
             return True
         return path in changed_tests or (is_test_file(path) and (
-            path in task or (not scopes and task_wants_tests(task))))
+            path in task or (not scopes and not discovery_scopes and task_wants_tests(task))))
 
     # 同 call_id 的结果只能属于同一运行/会话。重复序列化的 Part 不重复展示。
     results = {}

@@ -13,19 +13,20 @@ import math
 import re
 import subprocess
 from collections import defaultdict
+from dataclasses import asdict
 from pathlib import Path
+from nz_coder.tools import ToolOutput
 
+from nz_coder.foundation.process_runner import ProcessRunner
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.protocol.public_error import format_public_error
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.runtime.process.workdir import current_workdir
-from nz_coder.runtime.agent.task_policy import (
-    is_source_file,
-    is_test_file as _policy_is_test_file,
-    language_for_path,
-)
-from nz_coder.tools import register
+from nz_coder.foundation.file_kinds import is_source_file, language_for_path
+from nz_coder.runtime.agent.task_policy import is_test_file as _policy_is_test_file
+from nz_coder.tools import register, current_tool_cancel_event
+from nz_coder.runtime.process.command_channel import current_command_client
 
 # ── path safety ────────────────────────────────────────────────────────────────
 
@@ -61,7 +62,9 @@ def _read_source(path: Path, *, errors: str = "replace") -> str:
     return access.read_text(relative, errors=errors)
 
 
-def _run_git(args: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
+def _run_git(args: list[str], timeout: int = 30, *, runner: ProcessRunner | None = None) -> subprocess.CompletedProcess:
+    if runner is not None:
+        return runner.capture(("git", *args), cwd=current_workdir(), timeout=timeout)
     return subprocess.run(
         ["git", *args],
         cwd=str(current_workdir()),
@@ -97,21 +100,26 @@ def _line_numbered(lines: list[str], start_line: int) -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def diff_status() -> str:
+    client = current_command_client()
+    if client is not None:
+        return client.call('diff_status', {}, cancel_event=current_tool_cancel_event())
+    return execute_diff_status_local(runner=None)
+
+
+def execute_diff_status_local(*, runner: ProcessRunner | None) -> str:
     """Show current git diff: changed files, diff size, test modifications,
     and a recommendation for the next step.
     """
     try:
-        repository = _run_git(["rev-parse", "--is-inside-work-tree"])
+        repository = _run_git(["rev-parse", "--is-inside-work-tree"], runner=runner)
         if repository.returncode != 0 or repository.stdout.strip() != "true":
-            from nz_coder.state.changes import (
-                current_changed_files,
-                render_current_change_diff,
-            )
 
             changed_files = [
-                path for path in current_changed_files() if not _is_excluded(path)
+                path for path in _bound_changed_files() if not _is_excluded(path)
             ]
-            diff_text = render_current_change_diff() if changed_files else ""
+            from nz_coder.tools.files import _get_change_tracker
+            tracker = _get_change_tracker()
+            diff_text = tracker.render_current_diff() if tracker is not None and changed_files else ""
             lines = [
                 "workspace_mode: non_git",
                 "diff_source: change_tracker",
@@ -133,20 +141,20 @@ def diff_status() -> str:
         name_result = _run_git([
             "diff", "--name-only", "--",
             ".", ":!.nz-coder", ":!.nz-coder-runs",
-        ])
+        ], runner=runner)
         if name_result.returncode not in (0, 1):
             return f"Error: git diff failed (returncode={name_result.returncode}): {name_result.stderr.strip()}"
         name_only = name_result.stdout.splitlines()
 
         diff_text = _run_git([
             "diff", "--", ".", ":!.nz-coder", ":!.nz-coder-runs",
-        ]).stdout
+        ], runner=runner).stdout
 
         # Untracked (new) files — stage them so they show up, then unstage
         # after collecting the diff, so the worktree stays clean.
         untracked_result = _run_git([
             "ls-files", "--others", "--exclude-standard",
-        ])
+        ], runner=runner)
         untracked_files: list[str] = []
         if untracked_result.returncode in (0, 1):
             untracked_files = [
@@ -220,14 +228,20 @@ def diff_status() -> str:
 # Tool 2: verify_changed_files
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _bound_changed_files() -> list[str]:
+    """非 Git 工作区必须使用本次宿主已绑定的变更所有者。"""
+    from nz_coder.tools.files import _get_change_tracker
+    tracker = _get_change_tracker()
+    return list(tracker.current_changed_paths()) if tracker is not None else []
+
+
 def _changed_files_for_verification(include_tests: bool) -> list[str]:
     """返回需要低噪音验证的 changed source files。"""
     repository = _run_git(["rev-parse", "--is-inside-work-tree"])
     if repository.returncode != 0 or repository.stdout.strip() != "true":
-        from nz_coder.state.changes import current_changed_files
 
         changed = [
-            path for path in current_changed_files() if not _is_excluded(path)
+            path for path in _bound_changed_files() if not _is_excluded(path)
         ]
     else:
         diff_result = _run_git([
@@ -289,62 +303,42 @@ def _node_typecheck_command() -> list[str] | None:
     return None
 
 
-def _run_verifier(label: str, cmd: list[str], timeout: int) -> tuple[bool, str]:
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            cwd=current_workdir(),
-            env=build_sanitized_subprocess_env(),
-        )
-    except FileNotFoundError:
-        return False, f"FAIL {label}\ncommand not found: {cmd[0]}"
-    if result.returncode == 0:
-        return True, f"OK  {label}"
-    detail = (result.stderr or result.stdout or "").strip()
-    return False, f"FAIL {label}\n{detail}"
-
-
 def verify_changed_files(include_tests: bool = False, timeout: int = 30) -> str:
-    """Run low-noise language-aware checks on changed source files.
+    """Parse changed Python source in-process and suggest other language checks.
 
-    Python uses ``py_compile`` per file. TypeScript/JavaScript uses an existing
-    typecheck script or local ``tsc`` when available. Go compiles changed package
-    directories with ``go test -run \'^$\'`` so tests are not executed. Rust uses
-    ``cargo check`` when Cargo.toml is present.
+    External checks must be explicitly run through the existing bash/process
+    tools. ``timeout`` is retained as an input; no language process is started.
     """
+    import shlex
+
     try:
-        timeout = int(timeout or 30)
-        timeout = max(1, min(timeout, 120))
         files = _changed_files_for_verification(include_tests)
         if not files:
-            return "OK: no changed source files requiring verification."
+            return ToolOutput("OK: no changed source files requiring verification.")
 
         rows: list[str] = []
         warnings: list[str] = []
         ok = True
-
+        access = WorkspaceFileAccess(current_workdir())
         py_files = [f for f in files if language_for_path(f) == "python"]
         for rel in py_files:
-            fp = current_workdir() / rel
-            if not fp.exists():
+            if not access.exists(rel):
                 rows.append(f"SKIP {rel} (deleted file)")
                 continue
-            passed, row = _run_verifier(rel, ["python3", "-m", "py_compile", str(fp)], timeout)
-            ok = ok and passed
-            rows.append(row)
+            try:
+                # 仅解析源码，不执行项目代码，也不生成已执行命令的回执。
+                ast.parse(access.read_bytes(rel), filename=rel)
+            except SyntaxError as exc:
+                ok = False
+                rows.append(f"FAIL {rel}\n{exc}")
+            else:
+                rows.append(f"OK  {rel}")
 
         node_files = [f for f in files if language_for_path(f) in {"javascript", "typescript"}]
         if node_files:
             cmd = _node_typecheck_command()
             if cmd:
-                passed, row = _run_verifier("node typecheck", cmd, timeout)
-                ok = ok and passed
-                rows.append(row)
+                warnings.append(f"NOT EXECUTED node typecheck: {shlex.join(cmd)}")
             else:
                 warnings.append(
                     "WARN node: changed JS/TS files but no package typecheck script "
@@ -356,24 +350,15 @@ def verify_changed_files(include_tests: bool = False, timeout: int = 30) -> str:
             (current_workdir() / name).exists() for name in ("go.mod", "go.work")
         )
         if go_dirs and not has_go_metadata:
-            warnings.append(
-                "WARN go: changed Go files but no root go.mod or go.work was found."
-            )
+            warnings.append("WARN go: changed Go files but no root go.mod or go.work was found.")
         else:
             for rel_dir in go_dirs:
                 pkg = "." if rel_dir in {"", "."} else "./" + rel_dir.replace("\\", "/")
-                passed, row = _run_verifier(
-                    f"go compile {pkg}", ["go", "test", pkg, "-run", "^$"], timeout
-                )
-                ok = ok and passed
-                rows.append(row)
+                warnings.append(f"NOT EXECUTED go compile {pkg}: {shlex.join(['go', 'test', pkg, '-run', '^$'])}")
 
-        rust_files = [f for f in files if language_for_path(f) == "rust"]
-        if rust_files:
+        if any(language_for_path(f) == "rust" for f in files):
             if (current_workdir() / "Cargo.toml").exists():
-                passed, row = _run_verifier("cargo check", ["cargo", "check"], timeout)
-                ok = ok and passed
-                rows.append(row)
+                warnings.append("NOT EXECUTED cargo check: cargo check")
             else:
                 warnings.append("WARN rust: changed Rust files but no Cargo.toml was found.")
 
@@ -382,22 +367,19 @@ def verify_changed_files(include_tests: bool = False, timeout: int = 30) -> str:
             if language_for_path(f) not in {"python", "javascript", "typescript", "go", "rust"}
         ]
         if unsupported:
-            warnings.append(
-                "WARN unsupported: no built-in verifier for " + ", ".join(unsupported[:8])
-            )
-
-        rows.extend(warnings)
-        if not rows:
-            return "OK: no changed source files requiring verification."
-        if not ok:
-            return "FAIL: changed files verification\n" + "\n".join(rows)
+            warnings.append("WARN unsupported: no built-in verifier for " + ", ".join(unsupported[:8]))
         if warnings:
-            return "WARN: changed files verification incomplete\n" + "\n".join(rows)
-        if py_files and len(py_files) == len(files):
-            return "OK: py_compile changed files\n" + "\n".join(rows)
-        return "OK: changed files verification\n" + "\n".join(rows)
+            warnings.append("External checks were not executed. Use the existing bash/process tools to run them with command authorization.")
+        rows.extend(warnings)
+        if not ok:
+            output = "FAIL: changed files verification\n" + "\n".join(rows)
+        elif warnings:
+            output = "WARN: changed files verification incomplete\n" + "\n".join(rows)
+        else:
+            output = "OK: Python syntax parsed in-process\n" + "\n".join(rows)
+        return ToolOutput(output)
     except subprocess.TimeoutExpired:
-        return f"Error: changed-file verification timed out after {timeout}s"
+        return "Error: changed-file Git query timed out"
     except Exception as exc:
         return format_public_error(exc)
 
@@ -461,7 +443,7 @@ def read_symbol(
     """
     try:
         fp = _safe_path(path)
-        source = _read_source(fp)
+        source, identity = WorkspaceFileAccess(current_workdir()).read_text_with_identity(path, errors="replace")
         lines = source.splitlines()
         tree = ast.parse(source, filename=str(fp))
         symbols = _collect_symbols(tree, max_depth=max_depth)
@@ -510,11 +492,16 @@ def read_symbol(
         end = min(len(lines), end_lineno + ctx)
 
         selected = lines[start - 1:end]
-        return (
+        return ToolOutput(
             f"{path}:{symbol}\n"
             f"type: {_symbol_type(node)}\n"
             f"lines: {getattr(node, 'lineno', '?')}-{end_lineno}\n\n"
-            f"{_line_numbered(selected, start)}"
+            f"{_line_numbered(selected, start)}",
+            metadata={"model_read_observation": {
+                "path": path, "identity": asdict(identity), "offset": start,
+                "limit": end - start + 1, "complete": start == 1 and end == len(lines),
+                "symbol": symbol, "mode": "read",
+            }},
         )
     except SyntaxError as exc:
         return format_public_error(exc, context=f"Python syntax error in {path}: ")
@@ -1026,9 +1013,10 @@ register(
 register(
     name="verify_changed_files",
     description=(
-        "Run low-noise language-aware checks on changed source files: Python "
-        "py_compile, JS/TS typecheck when configured, Go package check, and "
-        "Rust cargo check. Excludes test files by default."
+        "Parse changed Python source syntax in-process and suggest JS/TS, Go, "
+        "and Rust checks without executing them. Run suggested commands via "
+        "the existing bash/process tools with command authorization. Excludes "
+        "test files by default. No executed-command receipts are produced."
     ),
     parameters={
         "type": "object",
@@ -1039,12 +1027,12 @@ register(
             },
             "timeout": {
                 "type": "integer",
-                "description": "Per-file timeout in seconds. Default: 30, max: 120.",
+                "description": "Retained input; no external language checks are executed.",
             },
         },
     },
     handler=verify_changed_files,
-    side_effect="mutates-shell",
+    execution="read",
 )
 
 register(

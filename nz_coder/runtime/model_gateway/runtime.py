@@ -1,6 +1,8 @@
 """Resolve one Provider, model identity, capability snapshot, and client owner."""
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import Future
 import inspect
 import hashlib
 import json
@@ -19,6 +21,16 @@ from nz_coder.providers.capabilities import (
 )
 from nz_coder.providers.models import active_model_selection
 from nz_coder.providers.registry import ModelPricing, RegistryModel, registry_runtime_model
+
+
+@dataclass
+class _Inflight:
+    worker: threading.Thread
+    cancel: Callable[[], None]
+    cleanup_complete: Callable[[], bool] | None = None
+
+    def __iter__(self):
+        return iter((self.worker, self.cancel))
 
 
 @dataclass(frozen=True)
@@ -62,33 +74,50 @@ class ResolvedModelRuntime:
         init=False,
         repr=False,
     )
-    _inflight: dict[int, tuple[threading.Thread, Callable[[], None]]] = field(
+    _inflight: dict[int, _Inflight] = field(
         default_factory=dict,
         init=False,
         repr=False,
     )
     _next_inflight_id: int = field(default=1, init=False, repr=False)
     _tainted: bool = field(default=False, init=False, repr=False)
+    _retiring: bool = field(default=False, init=False, repr=False)
+    _close_future: Future[None] | None = field(default=None, init=False, repr=False)
 
     def begin_inflight(
         self,
         worker: threading.Thread,
         cancel: Callable[[], None],
+        *, cleanup_complete: Callable[[], bool] | None = None,
     ) -> int:
         """Register one transport worker, rejecting concurrent orphan growth."""
         with self._inflight_lock:
+            if self._retiring:
+                raise RuntimeError("Model runtime is closing or closed")
+            self._retire_settled_inflight()
             if self._inflight:
                 raise RuntimeError("A previous Provider worker is still running")
             call_id = self._next_inflight_id
             self._next_inflight_id += 1
-            self._inflight[call_id] = (worker, cancel)
+            self._inflight[call_id] = _Inflight(worker, cancel, cleanup_complete)
             return call_id
 
     def finish_inflight(self, call_id: int) -> None:
         with self._inflight_lock:
-            self._inflight.pop(int(call_id), None)
-            if not self._inflight:
-                self._tainted = False
+            record = self._inflight.get(int(call_id))
+            if record is not None and record.worker.ident is None:
+                self._inflight.pop(int(call_id), None)
+            self._retire_settled_inflight()
+
+    def _retire_settled_inflight(self) -> None:
+        for call_id, record in tuple(self._inflight.items()):
+            if record.worker.ident is None or record.worker.is_alive():
+                continue
+            record.worker.join(0)
+            if record.cleanup_complete is None or record.cleanup_complete():
+                self._inflight.pop(call_id, None)
+        if not self._inflight:
+            self._tainted = False
 
     def mark_inflight_unsettled(self) -> None:
         with self._inflight_lock:
@@ -97,10 +126,12 @@ class ResolvedModelRuntime:
     def inflight_status(self) -> dict[str, object]:
         """Return a secret-free lifecycle projection for diagnostics."""
         with self._inflight_lock:
+            self._retire_settled_inflight()
             running = sum(1 for worker, _cancel in self._inflight.values() if worker.is_alive())
             return {
                 "worker_still_running": running,
-                "tainted": bool(self._tainted or running),
+                "inflight_calls": len(self._inflight),
+                "tainted": bool(self._tainted or self._inflight),
             }
 
     def cancel_inflight(self, *, grace_seconds: float = 0.25) -> dict[str, object]:
@@ -115,18 +146,48 @@ class ResolvedModelRuntime:
                 cleanup_failures += 1
         current = threading.current_thread()
         for worker, _cancel in records:
-            if worker is current:
+            if worker is current or worker.ident is None:
                 continue
             worker.join(timeout=max(0.0, float(grace_seconds)))
         status = self.inflight_status()
         return {**status, "cleanup_failures": cleanup_failures}
 
+    def _begin_close(self) -> tuple[Future[None] | None, bool]:
+        with self._close_lock, self._inflight_lock:
+            self._retiring = True
+            if self._closed:
+                return None, False
+            if self._close_future is not None:
+                return self._close_future, False
+            self._close_future = Future()
+            return self._close_future, True
+
+    def _finish_close(self, pending: Future[None], error: BaseException | None = None) -> None:
+        with self._close_lock:
+            self._closed = error is None
+            self._close_future = None
+        # 通知会执行回调；必须在锁外，等待方可能立刻重试失败的关闭。
+        if error is None:
+            pending.set_result(None)
+        else:
+            pending.set_exception(error)
+
     def close(self) -> None:
         """Close a client exactly once, leaving failures retryable."""
-        with self._close_lock:
-            if self._closed:
+        pending, owner = self._begin_close()
+        if pending is None:
+            return
+        if not owner:
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                pending.result()
                 return
-            self.cancel_inflight()
+            raise RuntimeError("Model runtime cleanup is in progress; use aclose() to wait")
+        try:
+            status = self.cancel_inflight()
+            if status["inflight_calls"]:
+                raise RuntimeError("Model runtime cleanup is incomplete: worker still running")
             if self.owns_client:
                 close = getattr(self.client, "close", None)
                 if callable(close):
@@ -136,14 +197,29 @@ class ResolvedModelRuntime:
                         raise RuntimeError(
                             "Async model clients must be closed with aclose()"
                         )
-            self._closed = True
+        except BaseException as error:
+            self._finish_close(pending, error)
+            raise
+        self._finish_close(pending)
 
     async def aclose(self) -> None:
         """Close a sync or async client exactly once, retrying failures."""
-        with self._close_lock:
-            if self._closed:
-                return
-            self.cancel_inflight()
+        pending, owner = self._begin_close()
+        if pending is None:
+            return
+        if not owner:
+            completion = asyncio.wrap_future(pending)
+            try:
+                # 取消当前等待方不能取消其他 loop 共同等待的关闭结果。
+                await asyncio.shield(completion)
+            except asyncio.CancelledError:
+                completion.add_done_callback(_observe_close_completion)
+                raise
+            return
+        try:
+            status = self.cancel_inflight()
+            if status["inflight_calls"]:
+                raise RuntimeError("Model runtime cleanup is incomplete: worker still running")
             if self.owns_client:
                 close = getattr(self.client, "aclose", None)
                 if not callable(close):
@@ -152,7 +228,16 @@ class ResolvedModelRuntime:
                     result = close()
                     if inspect.isawaitable(result):
                         await result
-            self._closed = True
+        except BaseException as error:
+            self._finish_close(pending, error)
+            raise
+        self._finish_close(pending)
+
+
+def _observe_close_completion(completion) -> None:
+    """等待方已取消，仍取出关闭失败，避免留下无人观察的 Future 异常。"""
+    if not completion.cancelled():
+        completion.exception()
 
 
 def resolve_model_runtime(

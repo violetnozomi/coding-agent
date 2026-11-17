@@ -98,45 +98,50 @@ def test_trusted_failed_tool_summary_remains_visible():
     assert projected["state"]["error"]["code"] == "tool_failed"
 
 
-class _Connection:
-    def __init__(self):
-        self.payload = None
-        self.closed = False
-
-    def send(self, payload):
-        self.payload = payload
-
-    def close(self):
-        self.closed = True
-
 
 def test_child_process_exception_uses_public_error_wire(tmp_path, monkeypatch):
     from nz_coder.runtime.agent import subagent
-    from nz_coder.runtime.agent.agent_manager import _run_subagent_process
+    from nz_coder.runtime.agent.process_supervisor import _run_subagent_process
+    from nz_coder.runtime.agent.child_process_result import ChildProcessResultFile, read_child_process_result
+    from nz_coder.runtime.process.command_channel import current_command_client
+    from tests.runtime.test_parent_command_ownership import prepare_case, cleanup_case
+
+    reached = []
 
     def fail(*_args, **_kwargs):
+        client = current_command_client()
+        assert client.policy_ready(scope.authority.execution_policy, deadline=payload["command_deadline"])
+        reached.append(True)
         raise RuntimeError("Authorization=Bearer CHILD-SECRET")
 
     monkeypatch.setattr(subagent, "run_subagent", fail)
-    connection = _Connection()
-    _run_subagent_process(connection, {
-        "workspace": str(tmp_path),
-        "parent_session_id": "parent",
-        "prompt": "work",
-        "agent_type": "worker",
-        "session_id": "child",
-    })
+    result_path = tmp_path / "result.json"
+    if __import__("os").name == "nt":
+        from nz_coder.foundation.private_paths import harden_private_path
+        assert harden_private_path(tmp_path).hardened
+    result_file = ChildProcessResultFile.capture(result_path)
+    supervisor, scope, _prepared, payload, errors = prepare_case(
+        tmp_path, monkeypatch, _run_subagent_process, prompt="work",
+    )
+    try:
+        _run_subagent_process(result_file, payload, scope._endpoint)
+    finally:
+        cleanup_case(supervisor, scope)
 
-    assert connection.payload["schema"] == "nz.child_result.v1"
-    assert connection.payload["ok"] is False
-    assert connection.payload["public_error"]["schema"] == "nz.public_error.v1"
-    assert "CHILD-SECRET" not in repr(connection.payload)
+    payload = read_child_process_result(result_file)
+    assert reached == [True]
+    assert errors == []
+    assert payload["schema"] == "nz.child_result.v1"
+    assert payload["ok"] is False
+    assert payload["public_error"]["schema"] == "nz.public_error.v1"
+    assert payload["public_error"]["code"] == "internal_error"
+    assert "CHILD-SECRET" not in repr(payload)
 
 
 def test_child_process_exception_text_not_stored_in_background_result():
-    from nz_coder.runtime.agent.agent_manager import _decode_child_process_envelope
+    from nz_coder.runtime.agent.child_process_result import decode_child_process_result
 
-    result, public = _decode_child_process_envelope({
+    result, public = decode_child_process_result({
         "schema": "nz.child_result.v1",
         "ok": False,
         "public_error": {
@@ -153,9 +158,9 @@ def test_child_process_exception_text_not_stored_in_background_result():
 
 
 def test_child_process_secret_not_present_in_workflow_summary():
-    from nz_coder.runtime.agent.agent_manager import _decode_child_process_envelope
+    from nz_coder.runtime.agent.child_process_result import decode_child_process_result
 
-    result, _public = _decode_child_process_envelope({
+    result, _public = decode_child_process_result({
         "schema": "nz.child_result.v1",
         "ok": False,
         "public_error": {
@@ -172,9 +177,9 @@ def test_child_process_secret_not_present_in_workflow_summary():
 
 
 def test_child_process_malformed_error_envelope_fails_closed():
-    from nz_coder.runtime.agent.agent_manager import _decode_child_process_envelope
+    from nz_coder.runtime.agent.child_process_result import decode_child_process_result
 
-    result, public = _decode_child_process_envelope({
+    result, public = decode_child_process_result({
         "ok": False,
         "result": "Authorization=Bearer CHILD-SECRET",
     })
@@ -184,9 +189,9 @@ def test_child_process_malformed_error_envelope_fails_closed():
 
 
 def test_child_process_success_result_contract_is_unchanged():
-    from nz_coder.runtime.agent.agent_manager import _decode_child_process_envelope
+    from nz_coder.runtime.agent.child_process_result import decode_child_process_result
 
-    result, public = _decode_child_process_envelope({
+    result, public = decode_child_process_result({
         "schema": "nz.child_result.v1",
         "ok": True,
         "result": "completed",

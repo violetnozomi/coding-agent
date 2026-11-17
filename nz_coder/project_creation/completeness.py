@@ -47,70 +47,44 @@ def _planned_file_state(root: Path, blueprint: dict) -> tuple[list[str], list[st
     return present, missing
 
 
-def _feature_state(features: list[str], checks: dict, implemented: list[str], missing: list[str], notes: list[str]) -> None:
-    if "CRUD operations" in features:
-        if checks.get("create_todo_endpoint") and checks.get("update_todo_endpoint") and checks.get("delete_todo_endpoint"):
-            _append_unique(implemented, "CRUD endpoints")
-        else:
-            _append_unique(missing, "CRUD endpoints")
-        if checks.get("crud_tests"):
-            _append_unique(implemented, "CRUD pytest coverage")
-        else:
-            _append_unique(missing, "CRUD pytest coverage")
-
-    if "SQLite persistence" in features:
-        if checks.get("sqlite_support"):
-            _append_unique(implemented, "SQLite persistence")
-        else:
-            _append_unique(missing, "SQLite persistence")
-            if checks.get("sqlite_fallback_documented"):
-                _append_unique(notes, _SQLITE_FALLBACK_NOTE)
-
-    if "pytest tests" in features:
-        if checks.get("pytest_tests"):
-            _append_unique(implemented, "pytest tests")
-        else:
-            _append_unique(missing, "pytest tests")
-
-    if "README quickstart" in features:
-        if checks.get("readme_quickstart"):
-            _append_unique(implemented, "README quickstart")
-        else:
-            _append_unique(missing, "README quickstart")
-
-    if "health endpoint" in features:
-        if checks.get("health_endpoint"):
-            _append_unique(implemented, "health endpoint")
-        else:
-            _append_unique(missing, "health endpoint")
-
-    if "CLI entrypoint" in features:
-        if checks.get("cli_entrypoint") and checks.get("main_module"):
-            _append_unique(implemented, "CLI entrypoint")
-        else:
-            _append_unique(missing, "CLI entrypoint")
-
-    if "importable package API" in features:
-        if checks.get("package_api"):
-            _append_unique(implemented, "package API")
-        else:
-            _append_unique(missing, "package API")
-
-    if "slugify utility" in features:
-        if checks.get("slugify_function"):
-            _append_unique(implemented, "slugify utility")
-        else:
-            _append_unique(missing, "slugify utility")
-
-    if "REST API" in features:
-        if checks.get("fastapi_app"):
-            _append_unique(implemented, "REST API")
-        else:
-            _append_unique(missing, "REST API")
+def _feature_state(
+    features: list[str], checks: dict, implemented: list[str], missing: list[str], notes: list[str],
+) -> dict[str, str]:
+    requirements = {
+        "CRUD operations": (
+            ("CRUD endpoints", ("create_todo_endpoint", "update_todo_endpoint", "delete_todo_endpoint")),
+            ("CRUD pytest coverage", ("crud_tests",)),
+        ),
+        "SQLite persistence": (("SQLite persistence", ("sqlite_support",)),),
+        "pytest tests": (("pytest tests", ("pytest_tests",)),),
+        "README quickstart": (("README quickstart", ("readme_quickstart",)),),
+        "health endpoint": (("health endpoint", ("health_endpoint",)),),
+        "CLI entrypoint": (("CLI entrypoint", ("cli_entrypoint", "main_module")),),
+        "importable package API": (("package API", ("package_api",)),),
+        "slugify utility": (("slugify utility", ("slugify_function",)),),
+        "REST API": (("REST API", ("fastapi_app",)),),
+    }
+    states: dict[str, str] = {}
+    for feature in features:
+        rules = requirements.get(feature)
+        if rules is None:
+            states[feature] = "unverified"
+            continue
+        complete = True
+        for label, keys in rules:
+            present = all(checks.get(key) for key in keys)
+            _append_unique(implemented if present else missing, label)
+            complete = complete and present
+        states[feature] = "checked" if complete else "missing"
+        if feature == "SQLite persistence" and not complete and checks.get("sqlite_fallback_documented"):
+            _append_unique(notes, _SQLITE_FALLBACK_NOTE)
+    return states
 
 
-def _next_steps(missing: list[str], notes: list[str]) -> list[str]:
+def _next_steps(missing: list[str], notes: list[str], unverified: list[str]) -> list[str]:
     steps: list[str] = []
+    if unverified:
+        steps.append("Verify the requested behavior with focused checks: " + ", ".join(unverified) + ".")
     if any(item.startswith("planned files:") for item in missing):
         steps.append("Create the remaining planned files with scaffold_project or write_files_batch.")
     if "CRUD endpoints" in missing or "CRUD pytest coverage" in missing:
@@ -132,19 +106,21 @@ def _next_steps(missing: list[str], notes: list[str]) -> list[str]:
 
 
 def check_project_completeness(project_spec: dict, blueprint: dict, project_dir: str) -> dict:
+    spec = dict(project_spec or {})
+    features = [str(item) for item in spec.get("features", [])]
     root = _project_root(project_dir)
     if not root.exists() or not root.is_dir():
         return {
             "status": "missing",
+            "feature_status": {feature: "unverified" for feature in features},
+            "unverified": list(dict.fromkeys(features)),
             "implemented": [],
             "missing": ["project directory"],
             "notes": ["Project directory does not exist yet."],
             "recommended_next_steps": ["Run scaffold_project to create the initial project files."],
         }
 
-    spec = dict(project_spec or {})
     plan = dict(blueprint or {})
-    features = [str(item) for item in spec.get("features", [])]
     inspection = inspect_generated_project(str(root), str(spec.get("project_type") or plan.get("project_type") or ""))
     checks = dict(inspection.get("checks", {}))
 
@@ -163,15 +139,18 @@ def check_project_completeness(project_spec: dict, blueprint: dict, project_dir:
             preview += ", ..."
         missing.append(f"planned files: {preview}")
 
-    _feature_state(features, checks, implemented, missing, notes)
+    feature_status = _feature_state(features, checks, implemented, missing, notes)
+    unverified = [feature for feature, state in feature_status.items() if state == "unverified"]
 
-    status = "ok" if not missing else ("partial" if implemented else "missing")
+    status = "ok" if not missing and not unverified else ("partial" if implemented else "missing")
     return {
         "status": status,
+        "feature_status": feature_status,
+        "unverified": unverified,
         "implemented": implemented,
         "missing": missing,
         "notes": notes,
-        "recommended_next_steps": _next_steps(missing, notes),
+        "recommended_next_steps": _next_steps(missing, notes, unverified),
     }
 
 

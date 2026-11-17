@@ -166,3 +166,16 @@ def test_batch_write_rejects_changed_member_and_rolls_back_all(tmp_path, monkeyp
     assert result.startswith("Error:")
     assert first.read_text(encoding="utf-8") == "one\n"
     assert second.read_text(encoding="utf-8") == "concurrent\n"
+
+
+def test_replace_lines_preserves_literal_backslash_n_in_source(tmp_path):
+    from nz_coder.tools.files import replace_lines
+
+    target = tmp_path / "app.py"
+    target.write_text("pass\n")
+    source = r'print("\n")'
+    with scoped_workdir(tmp_path):
+        result = replace_lines("app.py", 1, 1, source)
+    assert not result.startswith("Error:")
+    assert target.read_text() == source + "\n"
+    compile(target.read_text(), "app.py", "exec")

@@ -15,16 +15,20 @@ from nz_coder.runtime.session.model import Session, SessionStatus
 from nz_coder.runtime.session.runtime import SessionRuntime
 
 
-class MemorySessionStore:
+from nz_coder.runtime.session.store import EphemeralSessionStore
+
+
+class MemorySessionStore(EphemeralSessionStore):
     """Minimal real-behavior store for SessionRuntime contract tests."""
 
     def __init__(self, existing: Session | None = None) -> None:
+        super().__init__()
         self.existing = existing
         self.saved = []
 
     async def load(self, identity, workspace):
         if self.existing is None or self.existing.identity.session_id != identity.session_id:
-            return None
+            return await super().load(identity, workspace)
         snapshot = self.existing.snapshot()
         session = Session(
             identity=snapshot.identity,
@@ -39,7 +43,7 @@ class MemorySessionStore:
 
     async def save(self, session):
         self.saved.append(session.snapshot())
-        session.mark_persisted()
+        await super().save(session)
 
 
 def _request(tmp_path, messages, *, session_id="s1", metadata=None):
@@ -118,8 +122,7 @@ def test_each_user_submission_gets_new_interaction_run_id(tmp_path):
         tmp_path,
         [{"role": "user", "content": "first"}],
     )))
-    first.session.finish(SessionStatus.COMPLETED)
-    first.session.mark_persisted()
+    asyncio.run(runtime.finalize(first, RunStatus.COMPLETED))
     store.existing = first.session
 
     second = asyncio.run(runtime.open(_request(
@@ -459,7 +462,7 @@ def test_terminal_save_failure_keeps_context_retryable_without_double_usage(
         asyncio.run(runtime.finalize(context, RunStatus.ERROR))
 
     assert context.finalized is False
-    assert context.terminal_status is None
+    assert context.terminal_status is RunStatus.ERROR
     assert context.session.status is SessionStatus.RUNNING
     assert context.session.usage == TokenUsage()
 
@@ -481,3 +484,44 @@ def test_run_context_snapshots_request_metadata(tmp_path):
     context.metadata["verification"]["enabled"] = False
 
     assert copy.deepcopy(request.metadata)["verification"]["enabled"] is True
+
+
+def test_open_discards_incoming_stale_authored_content(tmp_path):
+    request = _request(tmp_path, [], metadata={"authored_content": "old draft"})
+    context = asyncio.run(SessionRuntime(MemorySessionStore()).open(request))
+
+    assert "authored_content" not in context.metadata
+    assert "authored_content" not in context.session.metadata
+    assert request.metadata["authored_content"] == "old draft"
+
+
+def test_resume_appends_fresh_inline_user_without_rebinding_parts(tmp_path):
+    from nz_coder.interface.submission import build_user_submission, resolve_submission_files
+    from nz_coder.runtime.session.runtime import preview_activation_transcript
+
+    (tmp_path / "paper.pdf").write_bytes(b"%PDF-1.4\n")
+    user = build_user_submission("read paper", resolve_submission_files(["paper.pdf"], tmp_path),
+        workspace=tmp_path, session_id="s1", agent="coder", provider_id="test", model_id="test")
+    existing = Session.create("s1", [{"role": "user", "content": "old"},
+        {"role": "assistant", "content": "done"}], workspace=tmp_path)
+    expected = copy.deepcopy(user)
+    preview = preview_activation_transcript(existing, [user])
+    context = asyncio.run(SessionRuntime(MemorySessionStore(existing)).open(_request(tmp_path, [user])))
+    assert preview[-1] == expected
+    actual = context.transcript[-1]
+    assert actual["_nz_message_id"] == expected["_nz_message_id"]
+    expected_file = next(p for p in expected["_nz_parts"] if p["type"] == "file")
+    actual_file = next(p for p in actual["_nz_parts"] if p["type"] == "file")
+    assert actual_file["id"] == expected_file["id"]
+    assert actual_file["message_id"] == expected["_nz_message_id"]
+    assert len(context.transcript) == 3
+
+
+def test_resume_rejects_reused_user_identity_with_changed_content(tmp_path):
+    from nz_coder.protocol.message_schema import MESSAGE_ID_KEY
+    existing = Session.create("s1", [{"role": "user", "content": "old", MESSAGE_ID_KEY: "msg-old"}], workspace=tmp_path)
+    old = copy.deepcopy(existing.transcript[0])
+    changed = {**old, "content": "different"}
+    assert old[MESSAGE_ID_KEY]
+    with pytest.raises(ValueError, match="conflicts"):
+        asyncio.run(SessionRuntime(MemorySessionStore(existing)).open(_request(tmp_path, [changed])))

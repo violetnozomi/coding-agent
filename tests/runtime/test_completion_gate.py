@@ -1,13 +1,14 @@
 """Completion gate coverage independent of model-maintained Todo state."""
 from __future__ import annotations
 
-import json
+import pytest
 
 
 def _ledger(tmp_path):
-    from nz_coder.runtime.agent.task_contract import RequirementLedger, parse_planner_output
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    envelope = parse_planner_output(json.dumps({
+    contract = parse_task_contract({
         "objective": "Change behavior and docs",
         "plan": [],
         "requirements": [
@@ -27,15 +28,15 @@ def _ledger(tmp_path):
             },
         ],
         "constraints": [],
-    }), tmp_path)
-    return RequirementLedger.from_contract(envelope.contract)
+    }, tmp_path)
+    return VerificationScenario(contract)
 
 
 def test_completion_gate_blocks_with_bounded_missing_requirements(tmp_path):
     from nz_coder.runtime.verification.completion_gate import CompletionGate
 
     ledger = _ledger(tmp_path)
-    ledger.observe_mutation(1, ["src/app.py"])
+    ledger.mutate(1, ["src/app.py"])
 
     decision = CompletionGate().evaluate(ledger, mutation_generation=1)
 
@@ -43,7 +44,7 @@ def test_completion_gate_blocks_with_bounded_missing_requirements(tmp_path):
     assert decision.missing_ids == ("R1", "R2")
     assert "R1: Change behavior" in decision.message
     assert "R2: Update docs" in decision.message
-    assert "expected artifacts: src/app.py" in decision.message
+    assert "Runtime-owned evidence pending" in decision.message
     assert "expected artifacts: README.md" in decision.message
 
 
@@ -51,13 +52,15 @@ def test_completion_gate_allows_current_generation_satisfied_ledger(tmp_path):
     from nz_coder.runtime.verification.completion_gate import CompletionGate
 
     ledger = _ledger(tmp_path)
-    ledger.observe_mutation(2, ["src/app.py", "README.md"])
-    ledger.observe_verification(
+    ledger.mutate(2, ["src/app.py", "README.md"])
+    ledger.execute(
         2,
         command="pytest -q tests",
         passed=True,
         acceptance=True,
     )
+
+    ledger.review(2, accepted=True)
 
     decision = CompletionGate().evaluate(ledger, mutation_generation=2)
 
@@ -69,9 +72,10 @@ def test_completion_gate_separates_agent_repairs_from_runtime_semantic_evidence(
     tmp_path,
 ):
     from nz_coder.runtime.verification.completion_gate import CompletionGate
-    from nz_coder.runtime.agent.task_contract import RequirementLedger, TaskContract
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    contract = TaskContract.from_dict({
+    contract = parse_task_contract({
         "objective": "Update docs while preserving compatibility",
         "requirements": [
             {
@@ -87,9 +91,9 @@ def test_completion_gate_separates_agent_repairs_from_runtime_semantic_evidence(
             },
         ],
     }, workspace=tmp_path)
-    ledger = RequirementLedger.from_contract(contract)
-    ledger.observe_mutation(1, ["cron_engine/parser.py"])
-    ledger.observe_verification(
+    ledger = VerificationScenario(contract)
+    ledger.mutate(1, ["cron_engine/parser.py"])
+    ledger.execute(
         1,
         command="pytest -q cron_engine/tests",
         passed=True,
@@ -112,26 +116,26 @@ def test_completion_gate_separates_agent_repairs_from_runtime_semantic_evidence(
 
 def test_completion_gate_is_inert_without_requirements():
     from nz_coder.runtime.verification.completion_gate import CompletionGate
-    from nz_coder.runtime.agent.task_contract import RequirementLedger
+    from tests.verification_scenarios import VerificationScenario
 
     decision = CompletionGate().evaluate(
-        RequirementLedger(),
+        VerificationScenario(),
         mutation_generation=0,
     )
 
     assert decision.ready is True
 
 
-def test_policy_runs_semantic_verifier_before_rechecking_requirement_ledger():
+@pytest.mark.parametrize("prompt_count", [0, 2])
+def test_policy_runs_semantic_verifier_before_rechecking_requirement_ledger(prompt_count):
     import asyncio
     from types import SimpleNamespace
 
     from nz_coder.runtime.adapters.runner import _PolicyService
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    state = RuntimeState()
-    state.set_task_contract(TaskContract.from_dict({
+    from tests.verification_scenarios import VerificationScenario
+    scenario = VerificationScenario(parse_task_contract({
         "objective": "Preserve compatibility",
         "requirements": [{
             "id": "R1",
@@ -139,18 +143,20 @@ def test_policy_runs_semantic_verifier_before_rechecking_requirement_ledger():
             "kind": "compatibility",
         }],
     }))
-    state.observe_tool("edit_file", {"path": "app.py"}, "Done")
-    state.observe_requirement_verification(
-        "pytest -q tests",
+    state = scenario.state
+    scenario.mutate(1, ["app.py"])
+    scenario.execute(1,
+        command="pytest -q tests",
         passed=True,
         acceptance=True,
     )
+    state.completion_gate_prompts = prompt_count
     order = []
 
     class Verifier:
         async def verify(self, _context, _messages, status, _content):
             order.append("semantic-review")
-            state.observe_requirement_semantic_review(
+            scenario.review(state.mutation_generation,
                 accepted=True,
                 fingerprint="verifier_ok:compatibility",
             )
@@ -170,16 +176,15 @@ def test_policy_runs_semantic_verifier_before_rechecking_requirement_ledger():
     assert state.requirement_ledger_snapshot().unresolved() == ()
 
 
-def test_policy_keeps_semantic_requirement_open_when_verifier_has_no_evidence():
+def test_policy_leaves_unresolved_requirement_for_runner_settlement():
     import asyncio
     from types import SimpleNamespace
 
     from nz_coder.runtime.adapters.runner import _PolicyService
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    state = RuntimeState()
-    state.set_task_contract(TaskContract.from_dict({
+    from tests.verification_scenarios import VerificationScenario
+    scenario = VerificationScenario(parse_task_contract({
         "objective": "Preserve compatibility",
         "requirements": [{
             "id": "R1",
@@ -187,9 +192,10 @@ def test_policy_keeps_semantic_requirement_open_when_verifier_has_no_evidence():
             "kind": "compatibility",
         }],
     }))
-    state.observe_tool("edit_file", {"path": "app.py"}, "Done")
-    state.observe_requirement_verification(
-        "pytest -q tests",
+    state = scenario.state
+    scenario.mutate(1, ["app.py"])
+    scenario.execute(1,
+        command="pytest -q tests",
         passed=True,
         acceptance=True,
     )
@@ -208,22 +214,22 @@ def test_policy_keeps_semantic_requirement_open_when_verifier_has_no_evidence():
 
     result = asyncio.run(policy.verify_completion(messages, "completed", "Done"))
 
-    assert result == "continue"
+    assert result == "completed"
     assert state.semantic_review_pending_only() is True
-    assert messages[-1]["_nz_completion_gate"] is True
+    assert messages == []
+    assert state.completion_gate_prompts == 0
 
 
-def test_policy_continues_when_completion_guidance_budget_is_exhausted():
+def test_policy_does_not_own_exhausted_runner_guidance_budget():
     import asyncio
     from types import SimpleNamespace
 
     from nz_coder.runtime.adapters.runner import _PolicyService
     from nz_coder.runtime.verification.completion_gate import COMPLETION_GATE_REANIMATE_BUDGET
-    from nz_coder.runtime.execution.runtime_state import RuntimeState
-    from nz_coder.runtime.agent.task_contract import TaskContract
+    from nz_coder.runtime.agent.task_contract import parse_task_contract
 
-    state = RuntimeState()
-    state.set_task_contract(TaskContract.from_dict({
+    from tests.verification_scenarios import VerificationScenario
+    scenario = VerificationScenario(parse_task_contract({
         "objective": "Preserve compatibility",
         "requirements": [{
             "id": "R1",
@@ -231,9 +237,10 @@ def test_policy_continues_when_completion_guidance_budget_is_exhausted():
             "kind": "compatibility",
         }],
     }))
-    state.observe_tool("edit_file", {"path": "app.py"}, "Done")
-    state.observe_requirement_verification(
-        "pytest -q tests",
+    state = scenario.state
+    scenario.mutate(1, ["app.py"])
+    scenario.execute(1,
+        command="pytest -q tests",
         passed=True,
         acceptance=True,
     )
@@ -257,11 +264,9 @@ def test_policy_continues_when_completion_guidance_budget_is_exhausted():
 
     result = asyncio.run(policy.verify_completion(messages, "completed", "Done"))
 
-    assert result == "continue"
+    assert result == "completed"
     assert messages == []
-    assert persisted == [{"active": True}]
-    assert any(
-        event == "requirement_completion_budget_exhausted"
-        and payload["missing_ids"] == ["R1"]
-        for event, payload in trace_events
-    )
+    assert persisted == []
+    assert state.completion_gate_prompts == COMPLETION_GATE_REANIMATE_BUDGET
+    assert [item.requirement.id for item in state.requirement_ledger_snapshot().unresolved()] == ["R1"]
+    assert trace_events == []

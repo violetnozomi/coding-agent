@@ -16,6 +16,7 @@ from nz_coder.foundation.execution_identity import (
     ExecutionIdentity,
     resolve_execution_identity,
 )
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
 from nz_coder.foundation.secret_values import secret_str
 from nz_coder.foundation.workspace_trust import default_user_config_path
 from nz_coder.runtime.core.run_settings import current_run_settings
@@ -357,6 +358,9 @@ def load_mcp_server_configs(
             server=name,
             field="tool_timeout_seconds",
         )
+        final_environment = build_sanitized_subprocess_env(
+            overrides=dict(environment), profile="strict-service",
+        ) if command else None
         execution_identity = (
             resolve_execution_identity(
                 command,
@@ -364,6 +368,7 @@ def load_mcp_server_configs(
                 workspace=root,
                 config_source=origin,
                 environment_profile="strict-service",
+                environment=final_environment,
             )
             if command else None
         )

@@ -490,8 +490,6 @@ def test_swe_subprocess_worker_does_not_enable_auto_classifier(tmp_path) -> None
         {
             "workdir": str(tmp_path),
             "runtime_overrides": {},
-            "broad_tests_blocked": False,
-            "declared_test_scopes": (),
         },
         {"tool_allowlist": ("read_file",)},
     )
@@ -1328,6 +1326,7 @@ def test_prepare_repo_resolves_relative_checkout_before_running_git(
         {"repo": "owner/repo", "base_commit": "abc", "instance_id": "one"},
         Path("runs/one"),
         timeout=1,
+        work_root=Path("runs"),
     )
 
     assert result["returncode"] == 0
@@ -1403,7 +1402,8 @@ def test_strict_runtime_disables_memory_planning_reflection_and_learning():
 
     with scoped_runtime_overrides(strict_local_tools=True):
         assert AgentLoop._memory_block(object(), "issue") == ""
-        assert AgentLoop._should_replan(object()) is False
+        import asyncio
+        assert asyncio.run(AgentLoop._maybe_generate_plan(object(), [])) is None
         assert AgentLoop._should_run_reflection(object(), "completed") is False
         assert AgentLoop._maybe_save_learnings(object(), []) is None
 

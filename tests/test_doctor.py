@@ -234,7 +234,8 @@ def test_init_creates_private_config_and_refuses_overwrite(tmp_path, capsys, mon
     target = tmp_path / ".env"
     original = target.read_text(encoding="utf-8")
 
-    assert "API_KEY=" in original
+    assert "API_KEY=" not in original
+    assert "/connect" in original
     assert "MODEL_PROVIDER=openai-compatible" in original
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
     assert target in hardened

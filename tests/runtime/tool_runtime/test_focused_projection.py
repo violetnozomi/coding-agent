@@ -15,7 +15,7 @@ def test_projection_appends_contiguous_result_and_runs_post_hook() -> None:
         signal_from_metadata=lambda metadata: metadata.get("handoff") if metadata else None,
         record_result=lambda _result: False,
         trace_result=lambda result, output, **_kwargs: traced.append((result.name, output)),
-        stall_orchestrator=None,
+
         after_result=lambda _messages, result, output: hooked.append((result.name, output)),
     )
     result = ToolExecutionResult(
@@ -52,7 +52,7 @@ def test_projection_applies_one_budget_before_every_model_visible_consumer() -> 
         signal_from_metadata=lambda _metadata: None,
         record_result=lambda _result: False,
         trace_result=lambda _result, output, **_kwargs: observed.append(output),
-        stall_orchestrator=None,
+
         after_result=lambda _messages, _result, output: observed.append(output),
     )
     result = ToolExecutionResult(
@@ -90,7 +90,7 @@ def test_projection_uses_real_next_request_capacity() -> None:
         signal_from_metadata=lambda _metadata: None,
         record_result=lambda _result: False,
         trace_result=lambda _result, _output, **_kwargs: None,
-        stall_orchestrator=None,
+
         after_result=lambda _messages, _result, _output: None,
         available_result_tokens=lambda _messages: 60,
     )
@@ -121,7 +121,7 @@ def test_projection_keeps_complete_batch_when_physical_capacity_can_hold_it() ->
         signal_from_metadata=lambda _metadata: None,
         record_result=lambda _result: False,
         trace_result=lambda _result, _output, **_kwargs: None,
-        stall_orchestrator=None,
+
         after_result=lambda _messages, _result, _output: None,
         available_result_tokens=lambda _messages: 100_000,
     )
@@ -161,7 +161,7 @@ def test_projection_reserves_tool_result_envelope_capacity() -> None:
         signal_from_metadata=lambda _metadata: None,
         record_result=lambda _result: False,
         trace_result=lambda _result, _output, **_kwargs: None,
-        stall_orchestrator=None,
+
         after_result=lambda _messages, _result, _output: None,
         available_result_tokens=lambda _messages: 100,
     )
@@ -201,7 +201,7 @@ def test_over_capacity_batch_spills_only_largest_required_result() -> None:
         signal_from_metadata=lambda _metadata: None,
         record_result=lambda _result: False,
         trace_result=lambda _result, _output, **_kwargs: None,
-        stall_orchestrator=None,
+
         after_result=lambda _messages, _result, _output: None,
         available_result_tokens=lambda _messages: 246,
     )
@@ -255,7 +255,7 @@ def test_permission_denial_is_recoverable_tool_feedback(monkeypatch) -> None:
         signal_from_metadata=lambda _metadata: None,
         record_result=lambda _result: True,
         trace_result=lambda _result, _output, **_kwargs: None,
-        stall_orchestrator=None,
+
         after_result=lambda _messages, _result, _output: None,
     )
     result = ToolExecutionResult(
@@ -284,7 +284,7 @@ def test_consecutive_doom_loop_guard_remains_terminal() -> None:
         signal_from_metadata=lambda _metadata: None,
         record_result=lambda _result: True,
         trace_result=lambda _result, _output, **_kwargs: None,
-        stall_orchestrator=None,
+
         after_result=lambda _messages, _result, _output: None,
     )
     result = ToolExecutionResult(
@@ -320,7 +320,7 @@ def test_legacy_strict_progress_metadata_cannot_stop_processor() -> None:
         signal_from_metadata=lambda _metadata: None,
         record_result=lambda _result: True,
         trace_result=lambda _result, _output, **_kwargs: None,
-        stall_orchestrator=None,
+
         after_result=lambda _messages, _result, _output: None,
     )
     result = ToolExecutionResult(
@@ -356,9 +356,8 @@ def test_projection_stamps_resource_and_mutation_generation() -> None:
         signal_from_metadata=lambda _metadata: None,
         record_result=lambda _result: False,
         trace_result=lambda _result, _output, **_kwargs: None,
-        stall_orchestrator=None,
+
         after_result=lambda _messages, _result, _output: None,
-        runtime_state=State(),
     )
     result = ToolExecutionResult(
         name="read_file",
@@ -369,6 +368,8 @@ def test_projection_stamps_resource_and_mutation_generation() -> None:
         command_failed=False,
         is_write=False,
     )
+    from nz_coder.runtime.tool_runtime.result_projection import _semantic_evidence_metadata
+    result.evidence_metadata = _semantic_evidence_metadata(State(), result)
     messages: list[dict] = []
 
     ProductionToolResultProjector().consume(
@@ -380,3 +381,41 @@ def test_projection_stamps_resource_and_mutation_generation() -> None:
     assert messages[0]["_nz_evidence_kind"] == "file_read"
     assert messages[0]["_nz_resource"] == "src/app.py"
     assert messages[0]["_nz_mutation_generation"] == 3
+
+
+def _project_bash_evidence(command, output, **flags):
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.runtime.adapters.verification_facts import command_receipt
+    scenario = VerificationScenario(plan={"stages": []})
+    scenario.mutate(21, ["app.py"])
+    start = scenario.runtime.begin_tool({"id": "v", "function": {"name": "bash", "arguments": {"command": command}}})
+    context = ToolProjectionContext(
+        signal_from_metadata=lambda _: None, record_result=lambda _result: False,
+        trace_result=lambda *a, **kw: None,
+        after_result=lambda *a: None,
+    )
+    result = ToolExecutionResult(name="bash", tool_input={"command": command}, output=output,
+                                executed=flags.get("executed", True),
+                                dispatch_failed=flags.get("dispatch_failed", False),
+                                command_failed=flags.get("command_failed", False), is_write=False,
+                                permission_denied=flags.get("permission_denied", False), execution_id=start.execution_id,
+                                execution_facts=(command_receipt("bash", command, str(scenario.root),
+                                    outcome="failed" if flags.get("command_failed") else "succeeded",
+                                    exit_code=1 if flags.get("command_failed") else 0, output=output),))
+    scenario.runtime.record_result(result)
+    messages = []
+    ProductionToolResultProjector().consume(context, [(0, {"id": "v"}, result)], messages)
+    return messages[0]
+
+
+def test_projection_only_labels_actual_verification_evidence():
+    for flags in ({"executed": False}, {"dispatch_failed": True}, {"permission_denied": True}):
+        message = _project_bash_evidence("pytest -q", "Error: timeout invalid", **flags)
+        assert message.get("_nz_evidence_kind") != "verification"
+        assert "_nz_verification_passed" not in message
+    for command, output in (("pytest -q | tail -n 2", "2 passed"),
+                            ("pytest -q", "no tests ran in 0.01s")):
+        message = _project_bash_evidence(command, output)
+        assert message.get("_nz_verification_passed") is not True
+    assert _project_bash_evidence("pytest -q tests/test_app.py", "2 passed")["_nz_verification_passed"] is True
+    assert _project_bash_evidence("pytest -q", "FAILED test_app", command_failed=True)["_nz_verification_passed"] is False

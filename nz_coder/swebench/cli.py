@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from nz_coder.swebench.adapter import SWEBenchAdapter
+from nz_coder.swebench.adapter import SWEBenchAdapter, validate_instance_id
 from nz_coder.swebench.artifacts import AttemptJournal
 from nz_coder.swebench.guardrail import PatchGuardrail
 from nz_coder.swebench.orchestrator import (
@@ -71,6 +71,8 @@ def load_inference_instances(path: Path, profile, split: str) -> tuple[list[dict
                    for row in rows)
             or len({row["instance_id"] for row in rows}) != len(rows)):
         raise ValueError("inference input must contain unique public-only instances")
+    for row in rows:
+        validate_instance_id(row["instance_id"])
     return rows, {"revision": packet["revision"], "input_sha256": hashlib.sha256(raw).hexdigest()}
 
 
@@ -78,6 +80,15 @@ def run_agent(args: argparse.Namespace) -> int:
     """同一输出批次复用现有文件锁，只允许一个执行 owner。"""
     from nz_coder.foundation.file_lock import exclusive_file_lock
     from nz_coder.evaluation.reproducibility import write_reproducibility_manifest
+
+    frozen_input = None
+    if args.instances_file:
+        profile = get_profile(args.profile)
+        try:
+            frozen_input = load_inference_instances(Path(args.instances_file), profile, args.split or profile.split)
+        except (OSError, ValueError) as exc:
+            print(f"Error: cannot load frozen inference input: {exc}")
+            return 2
 
     args.run_id = args.run_id or time.strftime("%Y%m%d-%H%M%S")
     output = Path(args.output or DEFAULT_BENCH_DIR / f"predictions-{args.run_id}.jsonl")
@@ -90,10 +101,10 @@ def run_agent(args: argparse.Namespace) -> int:
             print("Error: work root belongs to another attempt/output; restart refused.")
             return 2
         write_reproducibility_manifest(receipt_path, receipt)
-        return _run_agent_owned(args)
+        return _run_agent_owned(args, frozen_input=frozen_input)
 
 
-def _run_agent_owned(args: argparse.Namespace) -> int:
+def _run_agent_owned(args: argparse.Namespace, *, frozen_input: tuple[list[dict], dict] | None) -> int:
     """Generate SWE-bench predictions by running NZ-Coder on dataset instances."""
 
     from nz_coder.foundation import config
@@ -111,12 +122,8 @@ def _run_agent_owned(args: argparse.Namespace) -> int:
         return 2
     split = args.split or profile.split
     dataset_identity = {}
-    if args.instances_file:
-        try:
-            dataset, dataset_identity = load_inference_instances(Path(args.instances_file), profile, split)
-        except (OSError, ValueError) as exc:
-            print(f"Error: cannot load frozen inference input: {exc}")
-            return 2
+    if frozen_input is not None:
+        dataset, dataset_identity = frozen_input
     else:
         try:
             from datasets import load_dataset

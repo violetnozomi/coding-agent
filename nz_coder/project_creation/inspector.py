@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from nz_coder.project_creation.templates import TemplateRegistry
 from nz_coder.tools import register
 from nz_coder.tools.files import _safe_path
 
@@ -228,9 +229,13 @@ def _inspect_python_package(root: Path) -> dict:
     }
 
 
-def _inspect_generic(root: Path) -> dict:
+def _inspect_generic(root: Path, project_type: str = "generic_python") -> dict:
     app_text = _read_text(root, "app.py")
-    tests_text = _read_text(root, "tests/test_smoke.py")
+    template = TemplateRegistry.build(root.name, project_type)
+    tests_text = "\n".join(
+        _read_text(root, item["path"]) for item in template["files"]
+        if item["path"].startswith("tests/") and item["path"].endswith(".py")
+    )
     readme_text = _read_text(root, "README.md")
     checks = {
         "app_entrypoint": bool(app_text),
@@ -252,7 +257,7 @@ def _inspect_generic(root: Path) -> dict:
     else:
         missing.append("README quickstart")
     return {
-        "project_type": "generic_python",
+        "project_type": project_type,
         "status": _status_from(implemented, missing),
         "implemented": implemented,
         "missing": missing,
@@ -281,7 +286,9 @@ def inspect_generated_project(project_dir: str, project_type: str = "") -> dict:
     elif detected_type == "python_package":
         payload = _inspect_python_package(root)
     else:
-        payload = _inspect_generic(root)
+        payload = _inspect_generic(
+            root, detected_type if detected_type in {"rag_demo", "agent_demo"} else "generic_python",
+        )
 
     payload["project_dir"] = root.as_posix()
     return payload

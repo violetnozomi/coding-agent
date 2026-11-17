@@ -20,7 +20,6 @@ def test_lifecycle_run_state_reset_clears_ephemeral_values() -> None:
         tool_calls_this_run=9,
         used_save_memory=True,
         restored_state=True,
-        replan_count=3,
         last_terminal_summary="old",
     )
 
@@ -29,5 +28,4 @@ def test_lifecycle_run_state_reset_clears_ephemeral_values() -> None:
     assert state.tool_calls_this_run == 0
     assert state.used_save_memory is False
     assert state.restored_state is False
-    assert state.replan_count == 0
     assert state.last_terminal_summary == ""

@@ -312,6 +312,15 @@ def _normalize_response(response: Any):
 
 
 def _normalize_stream(events: Iterable[Any]) -> Iterator[Any]:
+    from nz_coder.providers.http import OwnedStream
+
+    return OwnedStream(
+        _iter_normalized_stream(events),
+        close_owner=getattr(events, "close", lambda: None),
+    )
+
+
+def _iter_normalized_stream(events: Iterable[Any]) -> Iterator[Any]:
     reasoning_items: list[dict[str, Any]] = []
     seen_tools: set[int] = set()
     argument_deltas: set[int] = set()

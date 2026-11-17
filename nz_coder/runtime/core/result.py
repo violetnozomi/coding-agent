@@ -4,17 +4,30 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Literal
+from nz_coder.protocol.public_error import PublicError
 
 
 class RunStatus(str, Enum):
     """Normalized terminal states produced by the shared Runner."""
 
     COMPLETED = "completed"
+    COMPLETED_UNVERIFIED = "completed_unverified"
     INTERRUPTED = "interrupted"
     CANCELLED = "cancelled"
     BLOCKED = "blocked"
     ERROR = "error"
     MAX_TURNS = "max_turns"
+
+
+def normalize_run_status(value: object) -> RunStatus:
+    """所有宿主使用同一终态转换；未知值明确归为错误。"""
+    if isinstance(value, RunStatus):
+        return value
+    try:
+        return RunStatus(str(value or "error"))
+    except ValueError:
+        return RunStatus.ERROR
 
 
 @dataclass(frozen=True)
@@ -57,6 +70,15 @@ class TokenUsage:
 
 
 @dataclass(frozen=True)
+class SessionSettlementResult:
+    """一次原提交重试的投影；idle不代表历史任务已完成。"""
+    session_id: str
+    interaction_run_id: str | None
+    state: Literal["idle", "committed", "pending", "conflict"]
+    error: PublicError | None = None
+
+
+@dataclass(frozen=True)
 class RunResult:
     """Stable terminal envelope returned to CLI, HTTP, SDK, and evaluation hosts."""
 
@@ -78,3 +100,77 @@ class RunResult:
             raise ValueError("RunResult active_agent must be non-empty")
         object.__setattr__(self, "messages", copy.deepcopy(tuple(self.messages)))
         object.__setattr__(self, "metadata", copy.deepcopy(self.metadata))
+
+
+TERMINAL_RESULT_KEY = "_nz_terminal_result"
+
+
+def freeze_terminal_result(context, raw_result: object = None) -> None:
+    """在规范 Session 提交前冻结本次结果；不复制历史或嵌套终态载荷。"""
+    from dataclasses import asdict
+    from nz_coder.protocol.message_schema import INTERACTION_RUN_ID_KEY
+    from nz_coder.protocol.public_error import public_error_from_wire, to_public_error
+    if TERMINAL_RESULT_KEY in context.session.metadata:
+        return
+    payload = raw_result if isinstance(raw_result, dict) else {}
+    status = context.terminal_status
+    metadata = copy.deepcopy(context.metadata)
+    for key in (TERMINAL_RESULT_KEY, "_nz_http_terminal_result", "legacy_payload", "public_error", "structured"):
+        metadata.pop(key, None)
+    public = None
+    if status is RunStatus.ERROR:
+        public = public_error_from_wire(payload.get("public_error")) or to_public_error(context._terminal_error)
+        metadata["public_error"] = public.to_dict()
+    if "structured" in payload:
+        metadata["structured"] = copy.deepcopy(payload["structured"])
+    verification = (context.verification.snapshot().to_dict() if context.verification is not None
+                    else copy.deepcopy(payload.get("verification") or {}))
+    metadata.update(interaction_run_id=context.interaction_run_id,
+                    runtime=copy.deepcopy(payload.get("runtime") or {}),
+                    verification=verification,
+                    authored_content=str(payload.get("authored_content") or ""),
+                    raw_status=str(payload.get("status") or status.value))
+    if raw_result is None:
+        # 异常/取消可能没有产生新 assistant，不能认领上一轮正文。
+        answer = next((message["content"] for message in reversed(context.transcript)
+                       if message.get("role") == "assistant"
+                       and message.get(INTERACTION_RUN_ID_KEY) == context.interaction_run_id
+                       and message.get("_nz_internal") is not True and message.get("_nz_visible") is not False
+                       and isinstance(message.get("content"), str) and message["content"].strip()), "")
+    else:
+        answer = str(payload.get("content") or "")
+    error = public.message if public is not None else ""
+    context.session.metadata[TERMINAL_RESULT_KEY] = {
+        "session_id": context.session.session_id,
+        "workspace": str(context.session.workspace),
+        "interaction_run_id": context.interaction_run_id,
+        "status": status.value, "last_error": error,
+        "last_result": {"status": status.value, "answer": answer, "active_agent": context.active_agent,
+                        "error": error, "usage": asdict(context.usage), "metadata": metadata},
+    }
+
+
+def saved_terminal_result(payload: dict) -> dict | None:
+    """所有宿主只读取身份、状态及规范提交 marker 一致的正式投影。"""
+    from pathlib import Path
+    from nz_coder.runtime.session.store import confirms_terminal_commit
+    metadata = payload.get("metadata") or {}
+    record = metadata.get(TERMINAL_RESULT_KEY)
+    if not isinstance(record, dict):
+        return None
+    interaction = record.get("interaction_run_id")
+    if (not isinstance(interaction, str) or not interaction
+            or record.get("session_id") != payload.get("session_id")
+            or record.get("workspace") != payload.get("workspace")
+            or record.get("status") != payload.get("run_status")
+            or not isinstance(record.get("last_error"), str)):
+        return None
+    result = record.get("last_result")
+    if (not isinstance(result, dict) or result.get("status") != record["status"]
+            or any(not isinstance(result.get(key), str) for key in ("answer", "active_agent", "error"))
+            or not isinstance(result.get("metadata"), dict)
+            or result["metadata"].get("interaction_run_id") != interaction):
+        return None
+    if not confirms_terminal_commit(payload, Path(record["workspace"]), record["session_id"], interaction):
+        return None
+    return copy.deepcopy(record)

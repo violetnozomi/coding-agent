@@ -14,6 +14,8 @@ from threading import RLock
 import time
 from typing import Protocol, Sequence
 
+from nz_coder.foundation import config
+from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.intelligence.code_index import PersistentCodeIndex
 
 
@@ -191,8 +193,12 @@ class RepositorySemanticIndex:
             if self._generation == snapshot.generation:
                 return
             started = time.perf_counter()
-            chunks = self._chunks(snapshot.files)[:self.max_chunks]
+            chunks = self._chunks(snapshot.files)
+            if self._chunks_stale:
+                raise RuntimeError("Semantic index source is stale")
             vectors = self.provider.embed([chunk.embedding_text for chunk in chunks])
+            if self.index.snapshot().generation != snapshot.generation:
+                raise RuntimeError("Semantic index generation changed during build")
             self.store.replace(snapshot.generation, chunks, vectors)
             self._generation = snapshot.generation
             self._last_embedded_chunks = len(chunks)
@@ -201,11 +207,19 @@ class RepositorySemanticIndex:
 
     def _chunks(self, files) -> list[SemanticCodeChunk]:
         result: list[SemanticCodeChunk] = []
+        self._chunks_stale = False
+        access = WorkspaceFileAccess(self.workspace)
         for entry in files:
-            target = self.workspace / entry.path
             try:
-                lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
-            except OSError:
+                data, identity = access.read_bytes_with_identity(
+                    entry.path, maximum=max(1, int(config.REPO_MAP_MAX_FILE_BYTES))
+                )
+                if identity.content_hash != entry.content_hash:
+                    self._chunks_stale = True
+                    continue
+                lines = data.decode("utf-8", errors="replace").splitlines()
+            except (OSError, ValueError):
+                self._chunks_stale = True
                 continue
             for symbol in entry.symbols:
                 start = max(1, int(symbol.line))
@@ -221,6 +235,8 @@ class RepositorySemanticIndex:
                         symbol.qualified_name, symbol.signature or "", symbol.kind,
                     ))),
                 ))
+                if len(result) >= self.max_chunks:
+                    return result
             if result and any(chunk.file == entry.path for chunk in result):
                 continue
             for offset in range(0, len(lines), self.section_lines):
@@ -232,6 +248,8 @@ class RepositorySemanticIndex:
                         code_chunk=code, module_id=entry.module_id or None,
                         title=entry.path,
                     ))
+                    if len(result) >= self.max_chunks:
+                        return result
         return result
 
 
@@ -241,6 +259,7 @@ class SentenceTransformerEmbeddingProvider:
     def __init__(self, model: str = "sentence-transformers/all-MiniLM-L6-v2") -> None:
         self.model = str(model)
         self._encoder = None
+        self._local_files_only = False
         self._load_error = ""
         self._status = "configured"
         self._lock = RLock()
@@ -278,6 +297,14 @@ class SentenceTransformerEmbeddingProvider:
             )
         self.embed(["semantic capability probe"])
 
+    def prepare_local(self) -> None:
+        """记忆只使用用户明确提供的本地模型，禁止隐式联网下载。"""
+        if not Path(self.model).is_dir():
+            raise RuntimeError("Memory embedding model must be an existing local directory")
+        with self._lock:
+            self._local_files_only = True
+        self.prepare()
+
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
         with self._lock:
             if self._encoder is None:
@@ -291,7 +318,7 @@ class SentenceTransformerEmbeddingProvider:
                         "semantic retrieval requires the semantic-experiment extra"
                     ) from exc
                 try:
-                    self._encoder = SentenceTransformer(self.model)
+                    self._encoder = SentenceTransformer(self.model, **({"local_files_only": True} if self._local_files_only else {}))
                 except Exception as exc:
                     self._load_error = f"{type(exc).__name__}: {exc}"
                     self._status = "failed"

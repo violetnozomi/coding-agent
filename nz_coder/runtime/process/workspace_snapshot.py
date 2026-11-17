@@ -11,12 +11,17 @@ import difflib
 import hashlib
 import json
 import os
-import shutil
 import stat
 import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
+from typing import Mapping
+
+from nz_coder.foundation.workspace_file_access import ExpectedFileIdentity, FixedFileAccess, WorkspaceFileIdentity
+from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.state.transaction import TransactionManager
 
 
 _EXCLUDED_NAMES = {
@@ -43,6 +48,7 @@ class SnapshotTransition:
     source: str
     destination: str
     files: tuple[str, ...]
+    published_identities: Mapping[str, ExpectedFileIdentity]
 
 
 @dataclass(frozen=True)
@@ -74,7 +80,19 @@ class WorkspaceSnapshotStore:
         self.max_files = max(1, int(max_files))
         self.max_total_bytes = max(1, int(max_total_bytes))
         self._lock = threading.RLock()
-        self._file_cache: dict[str, tuple[int, int, int, str]] = {}
+        self._file_cache: dict[str, tuple[tuple, str]] = {}
+        self._pending_recovery: TransactionManager | None = None
+
+    def verification_snapshot(self, *, cancel_event=None, timeout_seconds: float = 1.0) -> str:
+        """Capture a complete bounded manifest; omissions fail the capture."""
+        from .workspace_scope import capture
+        with self._lock:
+            return capture(self, cancel_event=cancel_event, timeout_seconds=timeout_seconds)
+
+    def verification_changes(self, source: str, destination: str) -> dict[str, str]:
+        from .workspace_scope import changes
+        with self._lock:
+            return changes(self, source, destination)
 
     def track(self, cancel_event: threading.Event | None = None) -> str:
         """Capture a bounded workspace manifest and return its stable ID."""
@@ -97,16 +115,21 @@ class WorkspaceSnapshotStore:
                 rel = path.relative_to(self.workspace).as_posix()
                 mode = stat.S_IMODE(info.st_mode)
                 cached = self._file_cache.get(rel)
-                if cached is not None and cached[:3] == (info.st_mtime_ns, info.st_size, mode):
-                    digest = cached[3]
+                signature = (info.st_dev, info.st_ino, info.st_ctime_ns, info.st_mtime_ns, info.st_size, mode)
+                if os.name != 'nt' and cached is not None and cached[0] == signature:
+                    digest = cached[1]
                 else:
                     try:
-                        data = path.read_bytes()
-                    except OSError:
+                        data, identity = FixedFileAccess(self.workspace, (rel,)).read_bytes_with_identity(rel, maximum=self.max_file_bytes)
+                        after = path.stat(follow_symlinks=False)
+                        if (after.st_dev, after.st_ino, after.st_ctime_ns, after.st_mtime_ns, after.st_size, stat.S_IMODE(after.st_mode)) != signature or len(data) != info.st_size or (os.name != 'nt' and (identity.device, identity.inode) != (info.st_dev, info.st_ino)):
+                            raise SnapshotError('workspace file changed during snapshot')
+                    except (OSError, ValueError):
                         continue
                     digest = hashlib.sha256(data).hexdigest()
                     self._write_blob(digest, data)
-                    self._file_cache[rel] = (info.st_mtime_ns, info.st_size, mode, digest)
+                    if os.name != 'nt':
+                        self._file_cache[rel] = (signature, digest)
                 entries[rel] = {
                     "blob": digest,
                     "size": info.st_size,
@@ -169,6 +192,7 @@ class WorkspaceSnapshotStore:
         destination: str,
         *,
         paths: list[str] | tuple[str, ...] | None = None,
+        expected: Mapping[str, ExpectedFileIdentity] | None = None,
     ) -> SnapshotTransition:
         """Atomically replace changed paths from source state with destination.
 
@@ -176,6 +200,8 @@ class WorkspaceSnapshotStore:
         changed.  Every such path must still match ``source`` before any write.
         """
         with self._lock:
+            if self.has_pending_recovery:
+                raise SnapshotError('snapshot recovery is pending')
             source_files = self._load(source)["files"]
             destination_files = self._load(destination)["files"]
             available = self.changed_files(source, destination)
@@ -188,10 +214,32 @@ class WorkspaceSnapshotStore:
                 changed = [path for path in available if path in requested]
                 if requested != set(changed):
                     raise SnapshotError("transition path is absent from snapshot diff")
-            conflicts = [
-                path for path in changed
-                if not self._matches(path, source_files.get(path))
-            ]
+            if expected is not None and set(expected) != set(changed):
+                raise SnapshotError('expected identities must cover transition paths')
+            access = FixedFileAccess(self.workspace, tuple(changed))
+            actual = {}
+            conflicts = []
+            for path in changed:
+                entry = source_files.get(path)
+                try:
+                    kind = access.kind(path)
+                    if kind == 'missing':
+                        identity = WorkspaceFileIdentity.missing()
+                        matches = entry is None
+                    elif kind == 'file':
+                        data, identity = access.read_bytes_with_identity(path, maximum=self.max_file_bytes)
+                        current_mode = stat.S_IMODE(access.stat(path).mode)
+                        matches = entry is not None and identity.content_hash == entry['blob'] and len(data) == entry['size'] and current_mode == entry['mode']
+                    else:
+                        matches = False
+                        identity = WorkspaceFileIdentity.missing()
+                    if expected is not None:
+                        access._validate_expected(identity, expected[path])
+                    actual[path] = identity
+                    if not matches:
+                        conflicts.append(path)
+                except (OSError, ValueError):
+                    conflicts.append(path)
             if conflicts:
                 joined = ", ".join(conflicts[:20])
                 if len(conflicts) > 20:
@@ -200,48 +248,91 @@ class WorkspaceSnapshotStore:
                     "workspace changed after the recorded snapshot: " + joined
                 )
 
-            backup_root = Path(tempfile.mkdtemp(prefix="nz-snapshot-"))
-            applied: list[tuple[str, bool, int]] = []
+            published = {}
+            transaction = TransactionManager()
+            with scoped_workdir(self.workspace):
+                transaction.begin()
+                try:
+                    for rel in changed:
+                        source_entry, entry = source_files.get(rel), destination_files.get(rel)
+                        source_mode = source_entry['mode'] if source_entry is not None else None
+                        if entry is None:
+                            access.delete(rel, transaction=transaction, expected=actual[rel], expected_mode=source_mode)
+                            published[rel] = WorkspaceFileIdentity.missing()
+                        else:
+                            data = self._entry_bytes(entry)
+                            if len(data) != entry['size']:
+                                raise SnapshotError('snapshot blob size mismatch')
+                            published[rel] = access.write_bytes(rel, data, mode=entry['mode'], transaction=transaction, expected=actual[rel], expected_mode=source_mode)
+                    transaction.commit()
+                except Exception as exc:
+                    transaction.rollback()
+                    if transaction.active:
+                        self._pending_recovery = transaction
+                    raise SnapshotError(f"snapshot transition failed: {exc}") from exc
+            return SnapshotTransition(source, destination, tuple(changed), MappingProxyType(published))
+
+    @property
+    def has_pending_recovery(self) -> bool:
+        return self._pending_recovery is not None and self._pending_recovery.active
+
+    def retry_pending_recovery(self) -> bool:
+        with self._lock, scoped_workdir(self.workspace):
+            if self._pending_recovery is not None:
+                self._pending_recovery.rollback()
+                if not self._pending_recovery.active:
+                    self._pending_recovery = None
+            return not self.has_pending_recovery
+
+    def copy_referenced_to(self, destination: 'WorkspaceSnapshotStore', snapshot_ids) -> None:
+        """仅复制已验证的引用；清单在所有内容校验完成后发布。"""
+        with self._lock, destination._lock:
+            manifests = [self._load(snapshot_id) for snapshot_id in dict.fromkeys(snapshot_ids)]
+            blobs = {}
+            for manifest in manifests:
+                for entry in manifest['files'].values():
+                    data = self._entry_bytes(entry)
+                    if len(data) != entry['size']:
+                        raise SnapshotError('snapshot blob size mismatch')
+                    blobs[entry['blob']] = data
+            absolute_root = destination.root.absolute()
+            anchor = Path(absolute_root.anchor)
+            prefix = absolute_root.relative_to(anchor)
+            blob_paths = {digest: (prefix / 'blobs' / digest[:2] / digest[2:]).as_posix() for digest in blobs}
+            manifest_paths = {manifest['snapshot']: (prefix / 'manifests' / f"{manifest['snapshot']}.json").as_posix() for manifest in manifests}
+            access = FixedFileAccess(anchor, tuple(blob_paths.values()) + tuple(manifest_paths.values()))
             try:
-                for rel in changed:
-                    target = self._safe_path(rel)
-                    existed = target.is_file() and not target.is_symlink()
-                    mode = stat.S_IMODE(target.stat().st_mode) if existed else 0
-                    if existed:
-                        backup = backup_root / rel
-                        backup.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copyfile(target, backup)
-                    self._apply(target, destination_files.get(rel))
-                    applied.append((rel, existed, mode))
-            except Exception as exc:
-                for rel, existed, mode in reversed(applied):
-                    target = self._safe_path(rel)
-                    try:
-                        if existed:
-                            backup = backup_root / rel
-                            self._atomic_bytes(target, backup.read_bytes(), mode)
-                        elif target.exists() and target.is_file() and not target.is_symlink():
-                            target.unlink()
-                    except OSError:
-                        pass
-                raise SnapshotError(f"snapshot transition rolled back: {exc}") from exc
-            finally:
-                shutil.rmtree(backup_root, ignore_errors=True)
-            return SnapshotTransition(source, destination, tuple(changed))
+                for digest, data in blobs.items():
+                    rel = blob_paths[digest]
+                    if access.kind(rel) == 'missing':
+                        access.write_bytes(rel, data, mode=0o600, overwrite=False)
+                    elif access.read_bytes(rel) != data:
+                        raise SnapshotError('destination snapshot blob is corrupt')
+                for manifest in manifests:
+                    payload = dict(manifest, workspace=str(destination.workspace))
+                    data = (json.dumps(payload, sort_keys=True, ensure_ascii=False) + '\n').encode('utf-8')
+                    access.write_bytes(manifest_paths[manifest['snapshot']], data, mode=0o600)
+            except (OSError, ValueError) as exc:
+                raise SnapshotError(f'snapshot copy failed: {exc}') from exc
 
     def _iter_files(self):
+        from nz_coder.runtime.process.execution_environment import current_execution_environment
+        environment = current_execution_environment()
+        excluded = tuple(Path(p) for p in environment.excluded) if environment else ()
+        sources = environment.source_paths if environment else ()
+        def omit(path):
+            if any(path == root or path.is_relative_to(root) for root in excluded):
+                return True
+            relative = path.relative_to(self.workspace).as_posix()
+            original = any(name == relative or name.startswith(relative + '/') for name in sources)
+            return _is_excluded_name(path.name) and not original
         for root, dirs, files in os.walk(self.workspace, topdown=True, followlinks=False):
             root_path = Path(root)
-            dirs[:] = sorted(
-                name for name in dirs
-                if not _is_excluded_name(name)
-                and not (root_path / name).is_symlink()
-            )
+            dirs[:] = sorted(name for name in dirs if not omit(root_path / name) and not (root_path / name).is_symlink())
             for name in sorted(files):
                 path = root_path / name
-                if _is_excluded_name(name) or path.is_symlink():
-                    continue
-                yield path
+                if not omit(path) and not path.is_symlink():
+                    yield path
 
     def _matches(self, rel: str, entry: dict | None) -> bool:
         target = self._safe_path(rel)
@@ -263,7 +354,10 @@ class WorkspaceSnapshotStore:
         if entry is None:
             return b""
         blob = str(entry.get("blob") or "")
-        data = self._blob_path(blob).read_bytes()
+        try:
+            data = FixedFileAccess(self.root, (f'blobs/{blob[:2]}/{blob[2:]}',)).read_bytes(f'blobs/{blob[:2]}/{blob[2:]}')
+        except (OSError, ValueError) as exc:
+            raise SnapshotError(f'snapshot blob unavailable: {blob}') from exc
         if hashlib.sha256(data).hexdigest() != blob:
             raise SnapshotError(f"corrupt snapshot blob: {blob}")
         return data
@@ -283,9 +377,9 @@ class WorkspaceSnapshotStore:
 
     def _safe_path(self, rel: str) -> Path:
         raw = Path(rel)
-        if raw.is_absolute() or ".." in raw.parts:
+        if not raw.parts or raw.is_absolute() or ".." in raw.parts:
             raise SnapshotError(f"unsafe snapshot path: {rel}")
-        target = (self.workspace / raw).resolve(strict=False)
+        target = self.workspace / raw
         try:
             target.relative_to(self.workspace)
         except ValueError as exc:
@@ -296,8 +390,9 @@ class WorkspaceSnapshotStore:
         if not _valid_snapshot_id(snapshot_id):
             raise SnapshotError("invalid snapshot ID")
         try:
-            payload = json.loads(self._manifest_path(snapshot_id).read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            relative = f'manifests/{snapshot_id}.json'
+            payload = json.loads(FixedFileAccess(self.root, (relative,)).read_text(relative))
+        except (OSError, ValueError) as exc:
             raise SnapshotError(f"snapshot not found: {snapshot_id}") from exc
         if payload.get("snapshot") != snapshot_id or payload.get("workspace") != str(self.workspace):
             raise SnapshotError("snapshot workspace or identity mismatch")

@@ -546,10 +546,11 @@ def run_local_benchmark(output_dir: Path) -> dict:
     native_tool_turns = 40
     with scoped_runtime_overrides(nominal_agent_turns=nominal_sla_turns):
         native = run_native_long_horizon(workspace, tool_turns=native_tool_turns)
+    # 此处只衡量建议轮数是否妨碍工具循环；交付未验证状态仍原样保留。
     nominal_sla_advisory = bool(
         native["model_calls"] > nominal_sla_turns
         and native["tool_results"] == native_tool_turns
-        and native["result"].get("status") == "completed"
+        and native["result"].get("status") in {"completed", "completed_unverified"}
     )
     trace_events = list(native["events"])
     for turn in range(40):
@@ -580,35 +581,46 @@ def run_local_benchmark(output_dir: Path) -> dict:
     })
 
     from nz_coder.runtime.agent.agent_manager import BackgroundAgentManager
+    from nz_coder.runtime.agent.settlement import freeze_settlement
     from nz_coder.runtime.agent.subagent import _new_subagent_state
     from nz_coder.runtime.worktree.manager import WorktreeManager
+    from nz_coder.runtime.worktree.environment import source_manifest
     conflict_workspace = root / "conflict-workspace"
     conflict_workspace.mkdir(parents=True, exist_ok=True)
     conflict_target = conflict_workspace / "app.py"
     conflict_target.write_text("base\n", encoding="utf-8")
     manager = BackgroundAgentManager(conflict_workspace, "benchmark-parent")
-    baseline = manager._baseline(["app.py"])
-    state = _new_subagent_state("benchmark-parent", "general-purpose", None)
-    child_worktree = WorktreeManager(conflict_workspace).create(state["session_id"])
-    child = Path(child_worktree.path)
-    (child / "app.py").write_text("child\n", encoding="utf-8")
-    state.update({
-        "background": True, "status": "completed", "claimed_paths": ["app.py"],
-        "changed_files": ["app.py"], "baseline_hashes": baseline,
-        "worktree": {
-            "id": child_worktree.id,
-            "path": child_worktree.path,
-            "branch": child_worktree.branch,
-            "based_on": child_worktree.based_on,
-            "head_commit": child_worktree.head_commit,
-            "mode": child_worktree.mode,
-        },
-    })
-    manager._save(state)
-    conflict_target.write_text("parent changed\n", encoding="utf-8")
-    _writes, _deletes, conflict_error = manager.application_changes(
-        state["session_id"], ["app.py"],
-    )
+    try:
+        baseline = manager._baseline(["app.py"])
+        state = _new_subagent_state("benchmark-parent", "general-purpose", None)
+        state["background"] = True
+        manager._admit(state)
+        child_worktree = WorktreeManager(conflict_workspace).create(state["session_id"])
+        child = Path(child_worktree.path)
+        state["delivery_baseline"] = {"version": 1, "files": source_manifest(child)}
+        (child / "app.py").write_text("child\n", encoding="utf-8")
+        state.update({
+            "status": "completed", "claimed_paths": ["app.py"],
+            "changed_files": ["app.py"], "baseline_hashes": baseline,
+            "worktree": {
+                "id": child_worktree.id,
+                "path": child_worktree.path,
+                "branch": child_worktree.branch,
+                "based_on": child_worktree.based_on,
+                "head_commit": child_worktree.head_commit,
+                "mode": child_worktree.mode,
+            },
+        })
+        # 只有完成结果和父方终态日志一致，才能真正进入基线冲突检查。
+        state = freeze_settlement(state, "done", settlement_id=state["settlement_id"])
+        manager._save(state)
+        manager._workflow.commit_terminal(state, event_id="benchmark-terminal-" + state["settlement_id"])
+        conflict_target.write_text("parent changed\n", encoding="utf-8")
+        _writes, _deletes, conflict_error = manager.application_changes(
+            state["session_id"], ["app.py"],
+        )
+    finally:
+        manager.close()
     trace_events.append({
         "event": "child_session", "conflicts": int(bool(conflict_error)),
         "detail": conflict_error,

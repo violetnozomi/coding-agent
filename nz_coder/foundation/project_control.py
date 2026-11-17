@@ -12,16 +12,17 @@ from typing import Iterable, Mapping
 
 CONTROL_FILE_KINDS = (
     "fixed", "skill", "command", "workflow", "instruction", "rule",
-    "instruction-state",
+    "instruction-state", "workspace",
 )
 _SNAPSHOT_KINDS = (
     "settings", "mcp", "skill", "command", "workflow", "instruction",
-    "rule", "instruction-state",
+    "rule", "instruction-state", "workspace",
 )
 _ROOT_INSTRUCTION_PATHS = (
     ("instruction", "AGENTS.md"),
     ("instruction", "CLAUDE.md"),
 )
+_ROOT_PROJECT_PATHS = _ROOT_INSTRUCTION_PATHS + (("workspace", ".worktreeinclude"),)
 _FIXED_CONTROL_PATHS = (
     ("settings", ".nz-coder/settings.json"),
     ("mcp", ".nz-coder/mcp.json"),
@@ -285,7 +286,9 @@ def _read_posix_file(
     *,
     missing_ok: bool = False,
 ) -> tuple[bytes, os.stat_result] | None:
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    # FIFO 必须先非阻塞打开，才能到达紧随其后的普通文件类型检查。
+    flags = (os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
+             | getattr(os, "O_CLOEXEC", 0))
     try:
         descriptor = os.open(name, flags, dir_fd=parent_fd)
     except FileNotFoundError:
@@ -360,7 +363,7 @@ def _capture_posix(
             "inode": int(root_info.st_ino),
         }
         records: dict[str, TrustedControlFile] = {}
-        for kind, relative in _ROOT_INSTRUCTION_PATHS:
+        for kind, relative in _ROOT_PROJECT_PATHS:
             if kind not in selected:
                 continue
             result = _read_posix_file(root_fd, relative, missing_ok=True)
@@ -520,7 +523,7 @@ def _capture_windows(
             "inode": inode,
         }
         records: dict[str, TrustedControlFile] = {}
-        for kind, relative in _ROOT_INSTRUCTION_PATHS:
+        for kind, relative in _ROOT_PROJECT_PATHS:
             if kind not in selected:
                 continue
             result = _windows_read_file(

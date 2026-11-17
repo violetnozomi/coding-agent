@@ -669,19 +669,24 @@ def _read_limit(value: int | None) -> int:
 def write_file(path: str, content: str) -> str:
     try:
         access = _file_access()
-        fp = _model_write_path(path)
         before, expected = _read_for_mutation(access, path, errors="replace")
-        existed = expected.expected_exists
-        warning = _dirty_warning(path)
-        _track_before(path, fp, before, existed)
-        txn = _get_txn()
-        access.write_text(path, content, transaction=txn, expected=expected)
-        _track_after(path, content, True)
-        diff = _format_diff(path, before, content)
-        action = "Updated" if existed else "Created"
-        return f"{warning}{action} {path} ({len(content)} bytes)\n\nDiff:\n{diff}"
+        return _write_file_version(path, content, before, expected)
     except Exception as e:
         return format_public_error(e)
+
+
+def _write_file_version(path: str, content: str, before: str, expected: WorkspaceFileIdentity) -> str:
+    """提交调查时读取的版本，不能重新读取新版本后覆盖外部修改。"""
+    access = _file_access()
+    fp = _model_write_path(path)
+    existed = expected.expected_exists
+    warning = _dirty_warning(path)
+    _track_before(path, fp, before, existed)
+    access.write_text(path, content, transaction=_get_txn(), expected=expected)
+    _track_after(path, content, True)
+    diff = _format_diff(path, before, content)
+    action = "Updated" if existed else "Created"
+    return f"{warning}{action} {path} ({len(content)} bytes)\n\nDiff:\n{diff}"
 
 
 def edit_file(path: str, old_text: str, new_text: str) -> str:
@@ -727,11 +732,6 @@ def replace_lines(path: str, start_line: int, end_line: int, new_text: str) -> s
     try:
         if not isinstance(new_text, str):
             return "Error: new_text must be a string"
-        # Normalize literal \n sequences that LLMs sometimes emit instead of real newlines.
-        # In JSON function arguments, a real newline is encoded as \n (which Python parses to
-        # chr(10)). But some models write \\n (which parses to backslash+n). Detect and fix.
-        if "\\n" in new_text and "\n" not in new_text:
-            new_text = new_text.replace("\\n", "\n")
         try:
             start = int(start_line)
             end = int(end_line)

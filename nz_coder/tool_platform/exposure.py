@@ -17,7 +17,7 @@ RESIDENT_TOOLS = frozenset({
     "list_directory", "process", "task", "todo", "question", "load_skill",
     "tool_search", "compact", "diff_status", "verify_changed_files",
     "verify_project_build", "review_run_evidence", "read_scratchpad",
-    "update_scratchpad",
+    "update_scratchpad", "update_task_assessment",
 })
 DEFERRED_PREFIXES = (
     "mcp_", "lsp_", "workflow_", "memory_", "project_", "semantic_",
@@ -391,6 +391,14 @@ class ToolExposureMiddleware:
             context.metadata,
             task_text=_last_user_text(getattr(context.request, "messages", ())),
         )
+        # 记忆索引可能来自任意任务；可调用入口由可信能力决定，不等待任务文本命中关键词。
+        capability = context.request.metadata.get("memory_capability")
+        if capability in {"read", "propose", "manage"}:
+            state.unlock(("recall_memory", "list_memories"))
+            if capability in {"propose", "manage"}:
+                state.unlock(("save_memory",))
+            if capability == "manage":
+                state.unlock(("delete_memory",))
         tokens = (_CURRENT_STATE.set(state), _CURRENT_PLANNER.set(self.planner))
         with self._lock:
             self._tokens[id(context)] = tokens

@@ -299,7 +299,7 @@ def test_stream_normalizes_text_reasoning_and_partial_function_call():
     assert chunks[-1].choices[0].delta.content == "Done"
 
 
-def test_agent_loop_accumulates_responses_stream_tool_metadata(monkeypatch):
+def test_agent_loop_accumulates_responses_stream_tool_metadata(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "MODEL_ID", "gpt-5-codex")
     events = iter(
         [
@@ -328,25 +328,28 @@ def test_agent_loop_accumulates_responses_stream_tool_metadata(monkeypatch):
                 "output_index": 1,
                 "delta": '{"path":"README.md"}',
             },
+            {"type": "response.completed", "response": {"status": "completed", "output": []}},
         ]
     )
     provider = OpenAIResponsesProvider(api_key="key")
     client = _FakeClient(events)
 
-    class Recovery:
-        def record_success(self):
-            return None
+    from nz_coder.runtime.model_gateway import ResolvedModelRuntime
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
-    agent = AgentLoop.__new__(AgentLoop)
-    agent.provider = provider
-    agent.client = client
-    agent.recovery = Recovery()
-    agent.model_id = "gpt-5-codex"
-    agent.model_capabilities = resolve_model_capabilities(
-        "openai-responses",
-        "gpt-5-codex",
+    runtime = ResolvedModelRuntime(
+        provider_id="openai-responses", model_id="gpt-5-codex", request_model_id="gpt-5-codex",
+        variant=None, provider=provider, client=client,
+        capabilities=resolve_model_capabilities("openai-responses", "gpt-5-codex"),
     )
-    result = agent._call_streaming([{"role": "user", "content": "read"}])
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    with scoped_workdir(tmp_path):
+        agent = AgentLoop("offline", model_runtime=runtime, trace_enabled=False,
+                          session_id="responses-stream-metadata")
+        try:
+            result = agent._call_streaming([{"role": "user", "content": "read"}])
+        finally:
+            agent.close()
 
     assert result.extra["provider_extra"]["openai_reasoning_items"][0]["id"] == "rs-loop"
     assert result.tool_calls == [

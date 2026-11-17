@@ -11,6 +11,7 @@ import os
 import shutil
 import signal
 import subprocess
+import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -34,7 +35,7 @@ class ShellSpec:
     kind: ShellKind
     executable: str
 
-    def argv(self, command: str) -> tuple[str, ...]:
+    def argv(self, command: str, *, login: bool = True) -> tuple[str, ...]:
         if self.kind is ShellKind.POWERSHELL:
             selected_command = command
             stripped = selected_command.lstrip()
@@ -63,8 +64,8 @@ class ShellSpec:
         if self.kind is ShellKind.CMD:
             return (self.executable, "/d", "/s", "/c", command)
         if self.kind is ShellKind.BASH:
-            return (self.executable, "-o", "pipefail", "-lc", command)
-        return (self.executable, "-lc", command)
+            return (self.executable, "-o", "pipefail", "-lc" if login else "-c", command)
+        return (self.executable, "-lc" if login else "-c", command)
 
 
 def select_shell(
@@ -235,32 +236,48 @@ def terminate_process_tree(
     os_name: str | None = None,
     runner=subprocess.run,
     force: bool = True,
-) -> None:
-    """Terminate an owned process tree without process-name scans."""
+    deadline: float | None = None,
+) -> bool:
+    """Return whether group/tree termination was accepted or the group is absent."""
     selected_os = os.name if os_name is None else os_name
+    remaining = None if deadline is None else deadline-time.monotonic()
+    if remaining is not None and remaining <= 0:
+        return False
     try:
         if selected_os != "nt":
             selected_signal = getattr(signal, "SIGKILL", signal.SIGTERM) if force else signal.SIGTERM
-            os.killpg(process.pid, selected_signal)
-            return
+            try:
+                os.killpg(process.pid, selected_signal)
+            except ProcessLookupError:
+                # 组不存在时仍保留原来对直属领进程的停止，供未建组的调用者使用。
+                try:
+                    process.kill() if force else process.terminate()
+                except (OSError, ProcessLookupError):
+                    pass
+                return True
+            return True
         if not force:
             process.terminate()
-            return
+            return True
         completed = runner(
             ["taskkill", "/PID", str(process.pid), "/T", "/F"],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=5,
+            timeout=5 if remaining is None else min(5,remaining),
             check=False,
         )
         if completed.returncode != 0:
             process.kill()
+            return False
+        return True
     except (OSError, ProcessLookupError, subprocess.SubprocessError):
         try:
             process.kill() if force else process.terminate()
         except (OSError, ProcessLookupError):
             pass
+        # 只停止领进程不能证明整组清扫已提交，原owner需要继续重试。
+        return False
 
 
 def executable_argv(

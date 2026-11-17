@@ -173,6 +173,9 @@ def _exercise_finalize_secondary_failure():
         async def finalize(self, _context, _status):
             raise RuntimeError('body={"prompt":"SECRET-FINALIZE"}')
 
+    async def settle_checkpoints():
+        pass
+
     async def exercise():
         await AgentRunner._finalize_after_run_error(
             SimpleNamespace(session_runtime=SessionRuntime()),
@@ -184,6 +187,7 @@ def _exercise_finalize_secondary_failure():
                 )
             ),
             RuntimeError("Authorization=Bearer SECRET-ORIGINAL"),
+            SimpleNamespace(settle_session_checkpoints=settle_checkpoints),
         )
 
     import asyncio
@@ -499,3 +503,32 @@ def test_provider_secret_not_rendered_remotely():
     view.finish({"status": "failed"})
 
     _assert_private_diagnostic_absent(output.getvalue())
+
+
+def test_null_error_stays_null_in_trace_and_session_event(tmp_path):
+    fields = ("error", "last_error", "public_error")
+    recorder = TraceRecorder(trace_dir=tmp_path / "traces")
+    recorder.log("tool_batch_end", **dict.fromkeys(fields))
+    recorded = json.loads(recorder.path.read_text().splitlines()[-1])
+    bus = SessionEventBus(session_id="null-error")
+    try:
+        event = bus.publish("tool.batch.end", dict.fromkeys(fields)).to_dict()
+        for key in fields:
+            assert recorded[key] is None
+            assert event["properties"][key] is None
+    finally:
+        bus.close()
+
+
+def test_empty_and_scalar_errors_preserve_existing_boundary_policy(tmp_path):
+    from nz_coder.state.trace import _project_trace_diagnostics
+    from nz_coder.protocol.session_events import _project_public_failures
+    for value in (0, False):
+        assert _project_trace_diagnostics({"error": value})["error"] == value
+        assert _project_public_failures({"error": value})["error"]["code"] == "internal_error"
+    for value in ("", _SECRET, RuntimeError(_SECRET)):
+        for project in (_project_trace_diagnostics, _project_public_failures):
+            result = project({"error": value})
+            assert result["error"]["code"] == "internal_error"
+            _assert_private_diagnostic_absent(result)
+    assert _project_trace_diagnostics({"exception": None, "failure_detail": None}) == {"exception": None, "failure_detail": None}
