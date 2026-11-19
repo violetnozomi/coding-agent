@@ -1981,7 +1981,7 @@ def test_long_sidecar_reason_and_fix_reach_next_model_request(monkeypatch, tmp_p
         assert reason in guidance and fix in guidance
 
 @pytest.mark.parametrize('reason', ['Fine.', 'Completely different wording.'])
-def test_delivery_issue_overrides_accept_through_real_hook(reason):
+def test_repeated_contradiction_is_unavailable_through_real_hook(reason):
     import asyncio
     import json
     import re
@@ -2006,9 +2006,8 @@ def test_delivery_issue_overrides_accept_through_real_hook(reason):
     hook = create_sidecar_verifier_hook(loop, ResolvedVerifierProvider(Provider(), object(), 'judge-model', 'offline', 'inherit-main'), env={'KODAX_VERIFIER_ALWAYS': '1'})
     decision = asyncio.run(hook(StopHookContext(transcript=({'role': 'user', 'content': 'Explain how to run it'},),
         last_assistant_text='run --wrong', runtime_state={})))
-    assert decision.action == 'reanimate'
-    assert 'documented option differs' in decision.message
-    assert hook.stats['verdict_counts']['revise'] == 1
+    assert decision.action == 'complete_unverified'
+    assert hook.stats['verdict_counts']['unavailable'] == 1
 
 
 def test_complete_length_response_is_unavailable_through_real_hook():
@@ -2093,6 +2092,61 @@ def test_material_reference_uses_only_displayed_bare_id():
     reference = _material_ids(context)['user']
     assert f'user: {reference}' in build_verifier_user_message(context)
     report = {'verdict': 'accept', 'reason': 'ok', 'delivery_assessment': {'status': 'reviewed', 'issues': [{'candidate_excerpt': 'candidate', 'evidence_reference': reference, 'mismatch': 'different interface'}]}}
-    assert parse_verifier_report({'input': report}, True, context=context).verdict == 'revise'
+    assert parse_verifier_report({'input': report}, True, context=context).trace == 'conflicting_accept'
     report['delivery_assessment']['issues'][0]['evidence_reference'] = f'[material:{reference}]'
     assert parse_verifier_report({'input': report}, True, context=context).verdict == 'unavailable'
+
+
+@pytest.mark.parametrize("interruption", ["cancelled", "timeout", "clarification_input_budget"])
+def test_interrupted_clarification_cannot_accept(interruption, monkeypatch):
+    import json
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from types import SimpleNamespace
+    from nz_coder.runtime.verification.sidecar_verifier import VerifierContext, _material_ids, invoke_sidecar_verifier
+
+    context = VerifierContext(("check the interface",), (), (), "Candidate text.")
+    reference = _material_ids(context)["user"]
+    entered, release, cancel = (threading.Event() for _ in range(3))
+
+    class Provider:
+        name = "offline"
+        calls = 0
+        def create_completion(self, _client, **kwargs):
+            self.calls += 1
+            assessment = {"status": "reviewed", "issues": []}
+            report = {"verdict": "accept", "reason": "Checked", "delivery_assessment": assessment}
+            if self.calls == 1:
+                assessment["issues"].append(dict(candidate_excerpt="Candidate text.", evidence_reference=reference, mismatch="Check this observation."))
+            else:
+                entered.set()
+                release.wait(3)
+                report["clarifications"] = {"1": "Checked."}
+            call = SimpleNamespace(function=SimpleNamespace(name="emit_sidecar_verdict", arguments=json.dumps(report)))
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="", tool_calls=[call]), finish_reason="tool_calls")])
+
+    if interruption == "clarification_input_budget":
+        from nz_coder.protocol.public_error import PublicInputError
+        from nz_coder.runtime.verification import sidecar_verifier
+        preflight = sidecar_verifier._check_verifier_request_budget
+        def limited(request, capabilities):
+            if "clarifications" in request.report_tool["function"]["parameters"]["properties"]:
+                raise PublicInputError("Complete review request exceeds input budget")
+            preflight(request, capabilities)
+        monkeypatch.setattr(sidecar_verifier, "_check_verifier_request_budget", limited)
+    provider = Provider()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        result = pool.submit(invoke_sidecar_verifier, provider=provider, client=object(), model="offline",
+                             context=context, cancel_event=cancel, timeout_seconds=0.8)
+        try:
+            if interruption != "clarification_input_budget":
+                assert entered.wait(2)
+                if interruption == "cancelled":
+                    cancel.set()
+            verdict = result.result(timeout=2)
+            dispatched = int(interruption != "clarification_input_budget")
+            assert verdict.initial_conflict
+            assert (verdict.verdict, verdict.trace, verdict.clarification_attempts) == ("unavailable", interruption, dispatched)
+            assert provider.calls == 1 + dispatched
+        finally:
+            release.set()

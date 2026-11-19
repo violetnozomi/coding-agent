@@ -154,7 +154,10 @@ def test_native_plan_and_memory_share_real_facts_without_extra_freeze(monkeypatc
     env = native_sdk.build_product_run_environment(request, options, config_snapshot=snapshot)
     try:
         result = asyncio.run(native_sdk.NativeSDKRunner(env).run_result(request, options))
-        assert result.status.value == "completed"
+        # 本场景只提供编码与记忆模型，没有独立交付评审。
+        verification = env.verification_runtime.domain.snapshot()
+        assert not verification.reviews and verification.assess_completion("completed").review_required
+        assert result.status.value == "completed_unverified"
         assert [name for name, _ in requests] == ["planning", "main", "memory", "main"]
         assert len(freezes) == 2
         memory = json.loads(requests[2][1]["messages"][1]["content"])
@@ -229,7 +232,10 @@ def test_native_followup_keeps_full_instruction_and_observation_without_replanne
         env = native_sdk.build_product_run_environment(request, options, config_snapshot=snapshot)
         try:
             result = asyncio.run(native_sdk.NativeSDKRunner(env).run_result(request, options))
-            assert result.status.value == "completed"
+            # 本场景只提供编码与记忆模型，没有独立交付评审。
+            verification = env.verification_runtime.domain.snapshot()
+            assert not verification.reviews and verification.assess_completion("completed").review_required
+            assert result.status.value == "completed_unverified"
             if phase == 2:
                 assert env.runtime_state.initial_task_text == original
                 assert len(env.runtime_state.current_round_instruction_text) == 4000

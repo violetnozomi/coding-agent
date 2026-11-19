@@ -22,6 +22,7 @@ class WorkspaceSettlement:
     reference: str = ""
     errors: dict[str, str] = field(default_factory=dict)
     execution_unchanged: bool = False
+    unconfirmed_caches: dict[str, str] = field(default_factory=dict)
 
 
 def mutation_path_identities(workspace: Path, paths) -> dict:
@@ -78,6 +79,7 @@ def collect_workspace_settlement(result, store, generation: int, cursor: dict, *
         except SnapshotError as exc:
             complete = False
             errors["recovery"] = str(exc)
+    unconfirmed = {}
     if changes and complete:
         continuous = not anchor or (bool(cursor.get("complete", True)) and anchor == proof["before"])
         recovered = not cursor.get("complete", True) and bool(anchor)
@@ -86,7 +88,7 @@ def collect_workspace_settlement(result, store, generation: int, cursor: dict, *
             # 缓存删除沿用连续旧区间要求，不能靠补全扫描解释未知期间的删除。
             artifacts = removed_python_bytecode_paths(result, changes, store) if continuous else set()
             artifacts.update(python_verification_artifact_paths(result, changes, store,
-                python_verification_origin=python_verification_origin))
+                python_verification_origin=python_verification_origin, unconfirmed=unconfirmed))
             if recovered:
                 # 补全旧未知区间时，仅解释本次新增的缓存；之前的漂移仍保留为事实。
                 artifacts.difference_update(store.verification_changes(anchor, proof["before"]))
@@ -95,7 +97,7 @@ def collect_workspace_settlement(result, store, generation: int, cursor: dict, *
     execution_unchanged = complete and changes == {}
     if complete and not cursor.get("complete", True):
         changes = unaccounted_workspace_changes(store, observed, cursor)
-    return WorkspaceSettlement(changes, observed, complete, matches, reference, errors, execution_unchanged)
+    return WorkspaceSettlement(changes, observed, complete, matches, reference, errors, execution_unchanged, unconfirmed)
 
 
 def collect_artifact_facts(snapshot, workspace: Path, operations: dict, generation: int) -> tuple[ArtifactFact, ...]:
@@ -105,8 +107,9 @@ def collect_artifact_facts(snapshot, workspace: Path, operations: dict, generati
     paths = {path for item in snapshot.requirements for path in item.requirement.expected_artifacts}
     # 重核既有事实并纳入真实新修改；不能从文件存在推导修改，也不能改写用户明确的路径约束。
     paths.update(previous)
-    from nz_coder.foundation.file_kinds import is_test_file, is_documentation_file
-    paths.update(path for path in operations if is_test_file(path) or is_documentation_file(path))
+    from nz_coder.foundation.file_kinds import is_test_file, is_documentation_file, is_python_cache_path
+    paths.update(path for path in operations if not is_python_cache_path(path)
+                 and (is_test_file(path) or is_documentation_file(path)))
     facts = []
     for path in sorted(paths):
         prior = previous.get(path)

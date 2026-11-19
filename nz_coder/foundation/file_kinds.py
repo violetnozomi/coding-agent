@@ -18,6 +18,12 @@ def is_test_file(path: str) -> bool:
     return any(part in TEST_DIR_NAMES for part in parts[:-1]) or name.startswith("test_") or name.endswith(_TEST_SUFFIXES)
 
 
+def is_python_cache_path(path: str) -> bool:
+    """缓存可以是工作区变化，不能作为模型编写的测试或文档。"""
+    normalized = path.replace("\\", "/").casefold()
+    return "__pycache__" in normalized.split("/") or Path(normalized).suffix in {".pyc", ".pyo"}
+
+
 def is_documentation_file(path: str) -> bool:
     """识别文档范围，保留现有路径分类规则。"""
     normalized = (path or "").replace("\\", "/")

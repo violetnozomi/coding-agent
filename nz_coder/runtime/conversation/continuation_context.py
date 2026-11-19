@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import copy
+import json
 import math
+from pathlib import Path
 import re
 import time
 
@@ -209,6 +211,69 @@ def project_continuation_messages(messages: list[dict], *, authoritative_state: 
     return [*originals, *projected]
 
 
+def _recent_check_receipts(snapshot) -> list[str]:
+    """执行来自宿主，只有当前检查决定能说明哪一项验证已获采信。"""
+    def quoted(value):
+        return _safe_context_text(json.dumps(_bounded_text(value, 320), ensure_ascii=False))
+
+    facts = {fact.execution_id: fact for fact in snapshot.executions if fact.scope == snapshot.scope}
+    order = {key: index for index, key in enumerate(facts)}
+    decisions = {item.check_id: item for item in snapshot.checks}
+    matched = set()
+    checks = []
+    for spec in snapshot.specs:
+        decision = decisions[spec.id]
+        fact = facts.get(decision.execution_id)
+        if fact is None and not spec.required:
+            continue
+        identity = f"{quoted(spec.command.original)} cwd={quoted(spec.command.cwd)}"
+        label = f"{spec.capability}, {'required' if spec.required else 'observed'}"
+        if fact is not None:
+            matched.add(fact.execution_id)
+        current = (fact is not None and not snapshot.integrity_errors and not snapshot.rebuild_required
+                   and snapshot.version.scope_complete and fact.scope_complete
+                   and fact.before.scope_complete and fact.after.scope_complete
+                   and fact.before.acceptance_generation == fact.after.acceptance_generation
+                   == snapshot.version.acceptance_generation)
+        if decision.status == "passed" and current:
+            targets = " targets=" + quoted(", ".join(spec.targets)) if spec.targets else ""
+            line = (f"Verified check ({label}, current acceptance generation "
+                    f"{snapshot.version.acceptance_generation}): {identity}{targets}.")
+        else:
+            status = "current validity unknown" if decision.status == "passed" else decision.status
+            line = f"Check decision ({label}, {status}): {identity}."
+            if decision.status == "pending" and decision.reason:
+                line += f" Reason: {quoted(decision.reason)}."
+            if fact is not None:
+                line += f" Recorded execution: {fact.outcome}, exit={fact.exit_code}."
+        checks.append((not spec.required, decision.status in {"passed", "covered"},
+                       -order.get(decision.execution_id, -1), line))
+
+    # 优先展示必需及未结清的检查，再合并原因相同的普通执行。
+    items = [entry[-1] for entry in sorted(checks)]
+    observed_reasons = set()
+    for fact in reversed(snapshot.executions):
+        if fact.scope != snapshot.scope or not fact.capabilities or fact.execution_id in matched:
+            continue
+        if not fact.output_complete:
+            reason = "incomplete output"
+        elif not fact.reliable and fact.command.opaque:
+            reason = "individual checks unproven; use current verified results and separate missing checks if needed"
+        elif not fact.reliable:
+            reason = "execution cannot establish a successful check"
+        elif fact.test_count == 0:
+            reason = "no tests executed"
+        else:
+            reason = "no matching check decision"
+        if reason in observed_reasons:
+            continue
+        observed_reasons.add(reason)
+        candidates = " candidate targets=" + quoted(", ".join(fact.targets)) if fact.targets else ""
+        items.append(f"Execution only ({fact.outcome}, exit={fact.exit_code}): {quoted(fact.command.original)} "
+                     f"cwd={quoted(fact.command.cwd)}; {reason}.{candidates}")
+    return items
+
+
 def build_current_facts(runtime_state, *, workspace, run_evidence=None, max_tokens: int = 2000) -> str:
     """按完整条目呈现当前状态；摘要文本不能反向成为验证真值。"""
     from nz_coder.runtime.agent.planning_runtime import render_execution_handoff
@@ -216,6 +281,10 @@ def build_current_facts(runtime_state, *, workspace, run_evidence=None, max_toke
     from nz_coder.runtime.verification.verification_contract import effective_acceptance_generation
     from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
 
+    domain = _field(runtime_state, "verification_domain", None)
+    snapshot = domain.snapshot() if domain is not None and not isinstance(runtime_state, dict) else None
+    if snapshot is not None and Path(snapshot.scope.task.workspace) != Path(workspace).resolve():
+        return "<current-task-facts>Verification unknown for this workspace.</current-task-facts>"
     header = "<current-task-facts>\nCurrent authoritative state (hypotheses remain unverified)."
     closing = "\n</current-task-facts>"
     generation = int(_field(runtime_state, "mutation_generation", 0))
@@ -239,12 +308,16 @@ def build_current_facts(runtime_state, *, workspace, run_evidence=None, max_toke
     elif _field(runtime_state, "verification_attempts", 0):
         items.append("Scoped changed-file verification: current validity unknown; rerun after mutations.")
     from nz_coder.runtime.verification.verification_contract import declared_acceptance
-    checks = declared_acceptance(runtime_state)
+    checks = snapshot.acceptance_checks if snapshot is not None else declared_acceptance(runtime_state)
     for check in checks:
         items.append("Declared verification: status=" + check["status"] + "; command=" + check["command"]
                      + "; cwd=" + str(check.get("cwd") or "."))
-    if not checks:
+    receipts = _recent_check_receipts(snapshot) if snapshot is not None else []
+    if not checks and receipts:
+        items.append("No user-declared acceptance check. The following results apply to their own checks only.")
+    elif not checks:
         items.append("Current verification unknown; no declared verification result for this generation.")
+    items.extend(receipts)
     for item in _dict_field(runtime_state, "requirement_ledger").get("items") or []:
         if not isinstance(item, dict) or item.get("status") == "satisfied":
             continue

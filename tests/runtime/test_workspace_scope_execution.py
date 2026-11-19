@@ -14,7 +14,8 @@ from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
 from nz_coder.runtime.process.workspace_snapshot import SnapshotError
 from nz_coder.tool_platform.execution import ToolExecutionResult
-from test_verification_interfaces import _host, _source
+from nz_coder.runtime.verification.domain.requirements import TaskContract
+from test_verification_interfaces import COMPILE, _host, _source
 
 
 def _scope_host(root, **limits):
@@ -178,10 +179,14 @@ def test_full_unknown_interval_adds_bad_b_and_only_fresh_complete_checks_can_clo
         status = host.verification_runtime.status()
         assert status['mutation_generation'] >= unknown
         assert status['mutation_scope_unknown'] is False
-        assert status['verification_needed'] is True
-        assert any('pkg/new.py' in item['command']
-                   for stage in status['verification_pipeline']['stages']
-                   for item in stage['commands'] if item.get('required'))
+        assert 'pkg/new.py' in host.runtime_state.changed_files
+        new_command = 'python -m py_compile pkg/new.py'
+        snap = host.scenario.domain.snapshot()
+        assert any(s.command.original == new_command and not s.required for s in snap.specs)
+        # 扫描先找回新文件。用户随后要求检查它，这条检查才构成硬验收。
+        host.runtime_state.set_task_contract(TaskContract(acceptance_commands=(COMPILE, new_command)))
+        host.verification_runtime.synchronize_task()
+        assert host.verification_runtime.status()['verification_needed']
         assert _execute(host, 'python -m py_compile pkg/new.py').command_failed is True
         _execute(host, "printf 'value = 1\n' > pkg/new.py")
         _execute(host, 'python -m py_compile pkg/module.py')
@@ -338,7 +343,7 @@ def test_denied_targeted_test_cannot_be_replaced_with_static_compile(tmp_path):
         _execute(host, "printf '\nvalue = 2\n' >> pkg/module.py")
         command = 'python -m unittest discover -s tests -p test_app.py -v'
         # 用户声明的测试未获授权，静态通过不能代替它；不靠缓存副作用维持 pending。
-        host.runtime_state.verification_definition = {'command': command, 'targets': []}
+        host.runtime_state.set_task_contract(TaskContract(acceptance_commands=(COMPILE, command)))
         host.verification_runtime.synchronize_task()
         host.executor.execute_one.side_effect = lambda *_: ToolExecutionResult(
             'bash', {'command': command}, 'Denied: user rejected the test',

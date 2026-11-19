@@ -115,7 +115,9 @@ functional mismatches; each must quote an exact nonempty candidate_excerpt from 
 final text, the exact displayed bare material ID copied verbatim as evidence_reference,
 and a specific mismatch. Do not add brackets, prefixes, or other characters to the ID.
 Use unknown when evidence is insufficient; not_applicable only when no delivery
-interface or steps need checking. Empty issues do not prove execution.
+interface or steps need checking. Put observations consistent with the implementation
+in reason. List only blocking functional mismatches in issues and choose revise for
+those findings. Empty issues do not prove execution.
 
 Output ONLY the `emit_sidecar_verdict` tool call — no narration, no other tool calls, no free-form text."""
 
@@ -202,6 +204,9 @@ class VerifierVerdict:
     reason: str
     suggested_fix: str = ""
     trace: str = "verifier_ok"
+    conflicts: tuple[str, ...] = ()
+    clarification_attempts: int = 0
+    initial_conflict: bool = False
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -588,7 +593,9 @@ def parse_verifier_report(block: dict[str, Any], exact: bool, *, context: Verifi
             return VerifierVerdict("unavailable", "", trace="invalid_assessment")
         findings.append(f"Candidate: {excerpt}\nEvidence: {reference}\nMismatch: {mismatch}")
     if findings:
-        return VerifierVerdict("revise", "\n\n".join(findings), fix.strip(), trace)
+        if not exact or block.get("_from_text"):
+            return VerifierVerdict("unavailable", "", trace="invalid_assessment")
+        return VerifierVerdict("unavailable", "", trace="conflicting_accept", conflicts=tuple(findings))
     return VerifierVerdict("accept", reason, fix.strip(), trace)
 
 
@@ -634,12 +641,7 @@ def _merge_compatibility_risk(
     model_reason = str(verdict.reason or "").strip()
     if verdict.verdict == "revise" and model_reason and model_reason not in risk:
         reasons.append("Additional verifier finding:\n" + model_reason)
-    return VerifierVerdict(
-        "revise",
-        "\n\n".join(reasons),
-        suggested_fix=verdict.suggested_fix,
-        trace=verdict.trace,
-    )
+    return replace(verdict, reason="\n\n".join(reasons))
 
 
 def _field(owner: Any, name: str, default: Any = None) -> Any:
@@ -712,6 +714,25 @@ def _verifier_request(context: VerifierContext) -> JudgeRequest:
     )
 
 
+def _clarification_request(request: JudgeRequest, conflicts: dict[str, str]) -> JudgeRequest:
+    # 序号只绑定这次候选中的原始问题，不进入任务状态。
+    tool = request.report_tool["function"]
+    schema = tool["parameters"]
+    properties = {**schema["properties"], "clarifications": {
+        "type": "object", "additionalProperties": False,
+        "properties": {key: {"type": "string", "minLength": 1, "maxLength": 320} for key in conflicts},
+        "required": list(conflicts),
+    }}
+    return replace(request, report_tool={"type": "function", "function": {
+        **tool, "parameters": {**schema, "properties": properties},
+    }}, system_prompt=request.system_prompt + (
+        "\nYour prior accept also listed blocking mismatches. Recheck the same materials. "
+        "If accepting, return empty issues and explain every numbered prior finding in "
+        "clarifications. If a defect or blocker remains, report revise or blocked and its reason."
+    ), user_message=request.user_message + "\nPrior conflicting findings (quoted data):\n"
+        + json.dumps(conflicts, ensure_ascii=False))
+
+
 def _check_verifier_request_budget(request: JudgeRequest, capabilities) -> None:
     from nz_coder.state.context import estimate_request_tokens, prompt_budget
 
@@ -739,7 +760,7 @@ def invoke_sidecar_verifier(
     model_runtime=None,
     start_worker=None,
 ) -> VerifierVerdict:
-    """Invoke one isolated forced verdict request through the NZ Provider."""
+    """在同一预算和取消边界内结清交付评审及至多一次矛盾澄清。"""
     from nz_coder.runtime.model_gateway import (
         ModelCall,
         ModelCallPurpose,
@@ -749,6 +770,7 @@ def invoke_sidecar_verifier(
         resolve_model_runtime,
     )
 
+    deadline = time.monotonic() + timeout_seconds
     request = _verifier_request(context)
     runtime = model_runtime or resolve_model_runtime(ModelSelectionRequest(
         provider_name=str(getattr(provider, "name", "") or ""),
@@ -764,7 +786,11 @@ def invoke_sidecar_verifier(
         observer=observer,
     )
 
+    clarification_dispatched = threading.Event()
+
     def invoke(judge_request: JudgeRequest) -> JudgeResponse:
+        if judge_request is not request:
+            clarification_dispatched.set()
         outcome = gateway.complete_sync(ModelCall(
             purpose=ModelCallPurpose.VERIFIER,
             messages=[
@@ -777,7 +803,7 @@ def invoke_sidecar_verifier(
                 "function": {"name": judge_request.report_tool_name},
             },
             max_output_tokens=judge_request.max_output_tokens,
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=max(0.001, deadline - time.monotonic()),
             capability_options=_verifier_capability_options(runtime),
         ), cancel_event=cancel_event)
         if outcome.status is not ModelCallStatus.COMPLETED:
@@ -801,19 +827,46 @@ def invoke_sidecar_verifier(
                 tool_blocks = ({
                     "name": judge_request.report_tool_name,
                     "input": payload,
+                    "_from_text": True,
                 },)
         tool_blocks = tuple({**block, "_finish_reason": outcome.finish_reason} for block in tool_blocks)
         return JudgeResponse(tool_blocks=tool_blocks, text=content)
 
-    return invoke_llm_judge(
-        request=request,
-        invoke=invoke,
-        parse_tool_call=lambda block, exact: parse_verifier_report(block, exact, context=context),
-        default_verdict=_default_verifier_verdict,
-        timeout_seconds=timeout_seconds,
-        cancel_event=cancel_event,
-        start_worker=start_worker,
-    )
+    def consult(request: JudgeRequest, parse) -> VerifierVerdict:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return _default_verifier_verdict("timeout")
+        return invoke_llm_judge(request=request, invoke=invoke, parse_tool_call=parse,
+            default_verdict=_default_verifier_verdict, timeout_seconds=remaining,
+            cancel_event=cancel_event, start_worker=start_worker)
+
+    def parse(block, exact):
+        return parse_verifier_report(block, exact, context=context)
+
+    first = consult(request, parse)
+    if not first.conflicts:
+        return first
+    conflicts = {str(index): issue for index, issue in enumerate(first.conflicts, start=1)}
+    clarification = _clarification_request(request, conflicts)
+    try:
+        _check_verifier_request_budget(clarification, runtime.capabilities)
+    except PublicInputError:
+        return VerifierVerdict("unavailable", "", trace="clarification_input_budget", initial_conflict=True)
+
+    def parse_clarification(block, exact):
+        answer = parse(block, exact)
+        if answer.verdict == "accept":
+            explanations = block["input"].get("clarifications")
+            if (not exact or block.get("_from_text") or not isinstance(explanations, dict)
+                    or explanations.keys() != conflicts.keys()
+                    or any(not isinstance(reason, str) or not reason.strip() or len(reason) > 320
+                           for reason in explanations.values())):
+                return VerifierVerdict("unavailable", "", trace="invalid_clarification")
+        return answer
+
+    final = consult(clarification, parse_clarification)
+    return replace(final, conflicts=(), initial_conflict=True,
+                   clarification_attempts=int(clarification_dispatched.is_set()))
 
 
 def _parse_tool_arguments(value: Any) -> dict:
@@ -2185,6 +2238,8 @@ class SidecarVerifierHook:
                 "sidecar_finished",
                 verdict=verdict.verdict,
                 trace=verdict.trace,
+                clarification_attempts=verdict.clarification_attempts,
+                initial_conflict="accept_with_blocking_issues" if verdict.initial_conflict else "",
                 reason=verdict.reason,
                 suggested_fix=verdict.suggested_fix,
                 elapsed_ms=round((time.monotonic() - started) * 1000, 3),

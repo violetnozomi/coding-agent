@@ -2237,7 +2237,8 @@ class AgentRunner:
                 decision = (_TerminalBoundaryDecision("finalize", "max_turns",
                             self._deterministic_failure_summary(state), "hard_cap_exhausted")
                             if at_hard_cap else _TerminalBoundaryDecision("continue", reason="completion_requires_revision"))
-            elif status == "blocked":
+            elif status == "blocked" or (status == "completed_unverified" and assessment.status == "blocked"):
+                # 必需交付证据缺失时，用户看到具体阻塞原因，避免发布未经证实的完成声明。
                 reason = context.control.stop_hook_reason() or self._deterministic_failure_summary(state,
                     unresolved_ids=assessment.blocking_ids)
                 decision = _TerminalBoundaryDecision("finalize", "blocked", reason, "completion_stopped")

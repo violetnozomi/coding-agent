@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
-from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping
 
-from nz_coder.foundation.file_kinds import is_documentation_file, is_test_file
+from nz_coder.foundation.file_kinds import is_documentation_file, is_python_cache_path, is_test_file
 from .models import ArtifactFact, CheckDecision, CheckSpec, ReviewFact, WorkspaceVersion
 
 
@@ -42,8 +41,7 @@ def requires_semantic_review(requirement: Requirement) -> bool:
 
 def matches_artifact_kind(requirement: Requirement, path: str) -> bool:
     # 编译缓存不是作者编写的测试/文档，权限所用的全局路径分类仍保持不变。
-    normalized = path.replace("\\", "/").casefold()
-    if "__pycache__" in normalized.split("/") or Path(normalized).suffix in {".pyc", ".pyo"}:
+    if is_python_cache_path(path):
         return False
     return is_test_file(path) if requirement.kind == "test" else is_documentation_file(path)
 

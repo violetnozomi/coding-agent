@@ -6,14 +6,23 @@ import json
 from pathlib import Path
 
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
-from nz_coder.foundation.file_kinds import is_documentation_file, is_test_file
+from nz_coder.foundation.file_kinds import is_documentation_file, is_python_cache_path, is_test_file
 from nz_coder.protocol.public_error import PublicInputError
 
 
 def generic_requirement_materials(snapshot, workspace: Path, *, maximum: int = 64000) -> tuple[str, str]:
     """只回读已认领的修改事实；超预算或身份变化明确失败，不裁掉尾部后认证。"""
-    facts = {fact.path: fact for fact in snapshot.artifacts if fact.operation in {"create", "change", "delete"}
-             and (is_test_file(fact.path) or is_documentation_file(fact.path))}
+    explicit = {path for item in snapshot.requirements for path in item.requirement.expected_artifacts}
+    facts = {}
+    for fact in snapshot.artifacts:
+        if fact.operation not in {"create", "change", "delete"}:
+            continue
+        if is_python_cache_path(fact.path):
+            if fact.path not in explicit:
+                continue
+        elif not (is_test_file(fact.path) or is_documentation_file(fact.path)):
+            continue
+        facts[fact.path] = fact
     if not facts and not any(fact.outcome == "failed" or fact.exit_code not in {None, 0}
                              for fact in snapshot.executions):
         return "", ""
@@ -35,8 +44,13 @@ def generic_requirement_materials(snapshot, workspace: Path, *, maximum: int = 6
             body, identity = access.read_bytes_with_identity(path, maximum=maximum * 4)
             if identity.content_hash != fact.fingerprint:
                 raise PublicInputError("Artifact identity changed.")
-            section = json.dumps({"path": path, "operation": fact.operation,
-                "sha256": identity.content_hash, "content": body.decode("utf-8")}, ensure_ascii=False)
+            record = {"path": path, "operation": fact.operation, "sha256": identity.content_hash}
+            if Path(path).suffix.casefold() in {".pyc", ".pyo"}:
+                # 用户点名的字节码可证明文件身份，行为由独立运行证据证明。
+                record.update(size_bytes=len(body), evidence="binary identity only; behavior unverified")
+            else:
+                record["content"] = body.decode("utf-8")
+            section = json.dumps(record, ensure_ascii=False)
         if len(section) > remaining:
             raise PublicInputError("Complete artifact materials exceed review budget.")
         sections.append(section)

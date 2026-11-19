@@ -315,3 +315,13 @@ def test_structural_changed_scope_enriches_impact_and_verification_risk():
     assert report["structural_impact"]["impacted_callers"] == ["service.py:handle", "cli.py:main"]
     assert "tests/test_service.py" in report["likely_tests"]
     assert any("2 structural callers" in reason for reason in report["reasons"])
+
+
+def test_source_count_alone_is_informational_in_new_and_existing_projects():
+    from nz_coder.intelligence.impact_analyzer import analyze_patch_impact
+    paths = [f'pkg/module_{n}.py' for n in range(11)]
+    for diff in ('', 'diff --git a/pkg/module_0.py b/pkg/module_0.py\n@@ -1 +1 @@\n-value = 1\n+value = 2'):
+        report = analyze_patch_impact(changed_files=paths, diff_text=diff)
+        assert report['requires_replan'] is False
+        signal, = report['risk_signals']
+        assert signal['severity'] == 'info' and '11 source files' in signal['detail']

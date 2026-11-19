@@ -337,7 +337,7 @@ def analyze_patch_impact(
         reasons.append("more than 4 source files changed")
         risk_signals.append({
             "category": "broad_scope_expansion",
-            "severity": "replan",
+            "severity": "info",
             "detail": f"{len(source_files)} source files changed",
         })
     if diff_size >= 6000:

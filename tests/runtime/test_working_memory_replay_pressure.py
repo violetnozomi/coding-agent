@@ -115,7 +115,10 @@ def test_native_replay_pressure_preserves_conditional_notes_before_compaction(mo
         assert len(freezes) == 2
         assert freezes[-1].working_memory_revision == env._sp.revision == 2
         assert env._sp.completed_steps == 2
-        assert result.status.value == "completed"
+        # 本场景只提供编码与记忆模型，没有独立交付评审。
+        verification = env.verification_runtime.domain.snapshot()
+        assert not verification.reviews and verification.assess_completion("completed").review_required
+        assert result.status.value == "completed_unverified"
         assert not any("detailed evidence" in str(row.get("content", ""))
                        for row in requests[-1]["messages"])
     finally:
@@ -312,6 +315,9 @@ def test_native_unrelieved_replay_pressure_does_not_maintain_every_step(monkeypa
         assert env._sp.read() == "Scratchpad is empty."
         assert env._sp.completed_steps == 4
         assert env._sp.reminder_reason(25, True) == ""
-        assert result.status.value == "completed"
+        # 本场景只提供编码与记忆模型，没有独立交付评审。
+        verification = env.verification_runtime.domain.snapshot()
+        assert not verification.reviews and verification.assess_completion("completed").review_required
+        assert result.status.value == "completed_unverified"
     finally:
         env.close()

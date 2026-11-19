@@ -47,6 +47,9 @@ def build(
         "- If `apply_patch` or `edit_file` says old_text was not found, re-read the file or use the nearby context before retrying.",
         "- After Python refactors, if the `python_ast` pack is loaded, use `python_symbol_check` and an import/behavior command when possible.",
         "- After editing files, run the most specific relevant verification command before finishing. If it fails, inspect the failing test/traceback, fix the behavior, and rerun it.",
+        "- For a user-facing guarantee, consider a sequence of operations and check the final result a user relies on. "
+        "When the deliverable includes getting-started steps, consider trying them from the documented starting state. "
+        "Use existing evidence when it covers that behavior.",
         "- If the user/task gives an exact verification command, run it after editing and fix any failures before final response.",
         "- Do not finish merely because a patch was applied. Finish only after a passing check, or after clearly explaining why verification is impossible.",
         "- For project creation requests, start with analyze_project_requirements -> create_project_blueprint -> scaffold_project. Use write_files_batch only when the scaffold still misses requested logic, then run inspect_generated_project -> check_project_completeness -> plan_project_acceptance -> verify_project_build.",

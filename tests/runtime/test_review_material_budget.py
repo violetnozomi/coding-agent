@@ -54,7 +54,8 @@ def test_cache_alone_cannot_prove_generic_test_modification(tmp_path, path):
     _write(domain, tmp_path, (path, "README.md"))
     _pass(domain, spec)
     progress = next(p for p in domain.snapshot().requirements if p.requirement.id == "R2")
-    assert progress.status == "pending"
+    # 同代单测通过提供了部分证据，缓存仍不能充当新增测试。
+    assert progress.status == "candidate" and not progress.deterministic_ready
     assert not any(e.type in {"file_created", "file_changed"} for e in progress.evidence)
 
 
@@ -139,31 +140,74 @@ def test_review_abort_keeps_reason_without_completion_reanimation(tmp_path, boun
     hooks = AgentHooks(completion_review_hooks=[abort])
     host = SimpleNamespace(hooks=hooks, runtime_state=state)
 
-    async def review(messages, _status, content):
-        return await hooks.handle_completion_review_async(host, messages, message=content)
-
-    async def terminal_rules(*_args):
-        raise AssertionError("hook abort must remain terminal")
+    async def review(messages, content, *, review, guidance):
+        return await hooks.handle_delivery_boundary_async(host, messages, message=content,
+                                                         review=review, guidance=guidance)
 
     async def checkpoint(*_args):
         pass
 
     context = SimpleNamespace(runtime_state=state,
         policy=SimpleNamespace(verification_status=lambda: domain.snapshot().to_dict(),
-                               verify_completion=review, check_terminal_rules=terminal_rules),
+                               prepare_completion=lambda: None, settle_completion=review),
         hooks=SimpleNamespace(trace=lambda *_args, **_kwargs: None),
         control=SimpleNamespace(persist_runtime_state=lambda **_kwargs: None,
+                                structured_output=lambda: None, invalidate_completion_payload=lambda: None,
                                 stop_hook_reason=lambda: hooks.stop_hook_reason))
     messages = [{"role": "user", "content": "Add tests and docs"},
                 {"role": "assistant", "content": "All done"}]
     budget = WorkBudgetController(max_turns=20, nominal_turns=10)
     decision = asyncio.run(AgentRunner()._settle_terminal_boundary(
         context, SimpleNamespace(session_runtime=SimpleNamespace(checkpoint=checkpoint)),
-        SimpleNamespace(request=SimpleNamespace(workspace=tmp_path), interaction_run_id="run"),
+        SimpleNamespace(request=SimpleNamespace(workspace=tmp_path), interaction_run_id="run",
+                        verification=domain, metadata={}, check_cancelled=lambda: None),
         messages, boundary=boundary, content="All done", completed_turns=20 if at_hard_cap else 10,
         work_budget=budget, resolve_tool_runtime_context=lambda: None,
         natural_completion=boundary == "natural_completion"))
-    assert calls == [reason]
-    assert decision.action == "finalize" and decision.status == "stopped_by_hook"
-    assert decision.content == reason
+    if boundary == "natural_completion" and not pending_after:
+        assert calls == [reason]
+        assert decision.action == "finalize" and decision.status == "blocked"
+        assert decision.content == reason
+    elif boundary == "natural_completion":
+        assert calls == [reason] and hooks.stop_hook_reason == reason
+        assert decision.reason == ("hard_cap_exhausted" if at_hard_cap else "candidate_invalidated")
+    else:
+        # 一批工具结束后没有提交交付候选，主模型获取结果；耗尽轮数时如实退出。
+        assert not calls
+        assert decision.action == ("finalize" if at_hard_cap else "continue")
+        if at_hard_cap:
+            assert decision.status == "max_turns"
     assert len(messages) == 2 and state.completion_gate_prompts == 0
+
+
+def test_explicit_cached_directory_deliverables_are_identified_individually(tmp_path):
+    import json
+    from dataclasses import replace
+    from nz_coder.runtime.verification.artifact_evidence import generic_requirement_materials
+
+    text = "tests/__pycache__/README.md"
+    binary = "output.pyo"
+    incidental = "tests/test_unrequested.pyc"
+    domain, _spec = _setup(tmp_path)
+    definition = domain.task_definition
+    contract = definition.contract
+    required = replace(contract.requirements[0], expected_artifacts=(text, binary))
+    domain.declare_task(replace(definition, contract=replace(contract, requirements=(required,))))
+    for path, contents in [(text, b"Documented behavior"), (binary, b"\xff\x00"), (incidental, b"\xff\x01")]:
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(contents)
+        _observe(domain, tmp_path, path)
+    materials, _ = generic_requirement_materials(domain.snapshot(), tmp_path)
+    rows = [json.loads(line) for line in materials.splitlines() if line.startswith("{")]
+    records = {row["path"]: row for row in rows}
+    assert set(records) == {text, binary}
+    assert records[text]["content"] == "Documented behavior"
+    receipt = records[binary]
+    assert receipt["sha256"] == hashlib.sha256((tmp_path / binary).read_bytes()).hexdigest()
+    assert receipt["size_bytes"] == 2 and receipt["evidence"].startswith("binary identity only")
+    assert "content" not in receipt
+    (tmp_path / text).unlink()
+    domain.observe_artifact(ArtifactFact(domain.scope.task, text, "delete", 0, "deletion", present=False))
+    materials, _ = generic_requirement_materials(domain.snapshot(), tmp_path)
+    assert json.loads(next(line for line in materials.splitlines() if text in line))["operation"] == "delete"

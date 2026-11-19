@@ -293,7 +293,8 @@ class InteractionBroker:
     def _resolve(self, request_id: str, kind: str, result: Any) -> _PendingInteraction:
         with self._lock:
             item = self._pending.get(str(request_id))
-            if item is None or item.kind != kind:
+            # 等待线程可能尚未拿到锁；到期的权限此时也不能再被批准。
+            if item is None or item.kind != kind or (kind == "permission" and time.time() >= item.expires_at):
                 raise InteractionNotFoundError(str(request_id))
             self._pending.pop(item.request_id, None)
             item.result = copy.deepcopy(result)

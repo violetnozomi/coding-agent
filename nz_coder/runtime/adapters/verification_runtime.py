@@ -225,6 +225,7 @@ class ToolVerificationStart:
     origin: str = "model"
     zone: str = ""
     process_start_receipt: ExecutionReceipt | None = None
+    tool_call_id: str = ""
 
 
 _TOOL_START: ContextVar[ToolVerificationStart | None] = ContextVar("nz_tool_verification_start", default=None)
@@ -398,7 +399,8 @@ class VerificationRuntime:
             revision = self.domain.begin_execution(id, ids, mutates=name == "bash" or is_write_tool(name),
                 verifies=bool(ids) or (name not in {"bash", "process"} and is_host_verification_tool(name)))
             origin, zone = _INVOCATION.get()
-            start = ToolVerificationStart(self, id, self.version(), revision, ids, origin=origin, zone=zone)
+            start = ToolVerificationStart(self, id, self.version(), revision, ids, origin=origin, zone=zone,
+                                         tool_call_id=str(tool_call.get("id") or ""))
             self._pending[id] = start
         try:
             if (name == "process" and str(args.get("operation") or "").strip().lower() == "start"
@@ -536,6 +538,10 @@ class VerificationRuntime:
                     record_trace("workspace_scope_incomplete", stage=stage, errors=settlement.errors)
                 elif settlement.complete and not cursor.get("reference") and not cursor.get("complete", True):
                     record_trace("workspace_scope_baseline_established", stage=stage, history_observed=False)
+                if settlement.unconfirmed_caches:
+                    result.metadata = {**(result.metadata or {}), "unconfirmed_python_caches": settlement.unconfirmed_caches}
+                    record_trace("workspace_cache_unconfirmed", tool_call_id=start.tool_call_id,
+                                 execution_id=start.execution_id, paths=settlement.unconfirmed_caches)
             after = self.version()
             self.domain.observe_workspace(WorkspaceObservation(after, paths=tuple(settlement.observed_changes),
                 execution_id=start.execution_id, keep_execution_open=started))
@@ -562,19 +568,24 @@ class VerificationRuntime:
                     self._register_command(fact.command.original, fact.command.cwd, failed=True)
                 fact = replace(fact, execution_id=start.execution_id if len(facts) == 1 else start.execution_id + ":" + fact.execution_id)
                 decisions = self.domain.observe_execution(fact)
+                record_trace("verification_execution_settled", tool_call_id=start.tool_call_id,
+                    execution_id=fact.execution_id, outcome=fact.outcome, exit_code=fact.exit_code,
+                    reliable=fact.reliable)
                 if any(item.status in {"failed", "blocked_environment"} for item in decisions):
                     state.verification_failures += 1
                     state.needs_broad_exploration = any(item.status == "blocked_environment" for item in decisions)
                 if not fact.reliable and is_check_execution(fact, self.domain.snapshot().specs):
                     record_trace("verification_result_ignored", command=fact.command.original,
-                        reason="execution cannot prove a successful check", execution_id=fact.execution_id)
+                        reason="execution cannot prove a successful check", execution_id=fact.execution_id,
+                        tool_call_id=start.tool_call_id)
                 for decision in decisions:
                     if decision.status == "pending" and decision.reason == "check capability not covered":
                         continue
                     spec = next(spec for spec in self.domain.snapshot().specs if spec.id == decision.check_id)
                     record_trace("verification_result", command=spec.command.original, stage=spec.stage,
                         cwd=fact.command.cwd, scope=fact.command.cwd, status=decision.status,
-                        evidence_generation=fact.after.generation, output=fact.reason, execution_id=fact.execution_id)
+                        evidence_generation=fact.after.generation, output=fact.reason, execution_id=fact.execution_id,
+                        tool_call_id=start.tool_call_id)
             if not started:
                 self.domain.end_execution(start.execution_id)
             from nz_coder.runtime.tool_runtime.result_projection import _semantic_evidence_metadata

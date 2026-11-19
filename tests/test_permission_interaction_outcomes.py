@@ -169,3 +169,21 @@ def test_real_terminal_eof_is_unavailable_but_questions_still_dismiss(tmp_path, 
             await terminal.select_async(**options, require_interaction=True)
         assert caught.value.reason == 'unavailable'
     asyncio.run(scenario())
+
+
+def test_expired_permission_cannot_be_approved_before_waiter_wakes(monkeypatch):
+    from nz_coder.http_service.interactions import InteractionNotFoundError
+    broker = InteractionBroker(session_id="expiry", event_bus=SessionEventBus(session_id="expiry"), timeout_seconds=3)
+    broker.begin_run()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(broker.ask_permission, "bash", {"command": "ls"})
+        request = _pending(broker)
+        try:
+            monkeypatch.setattr("nz_coder.http_service.interactions.time.time", lambda: request["expires_at"])
+            with pytest.raises(InteractionNotFoundError):
+                broker.reply_permission(request["id"], "once")
+        finally:
+            broker.cancel_all("cancelled", block_new=True)
+            broker.close()
+        with pytest.raises(RuntimeError):
+            future.result(timeout=1)

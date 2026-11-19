@@ -233,3 +233,99 @@ def test_unexecuted_pytest_cannot_explain_written_pytest_cache(tmp_path):
     assert (tmp_path / ".pytest_cache/v/cache/lastfailed").read_text() == "{}"
     assert snapshot.version.acceptance_generation > 0
     assert ".pytest_cache/v/cache/lastfailed" in vm.state.changed_files
+
+
+@pytest.mark.parametrize("relative", [False, True])
+def test_foreign_cpython_timestamp_cache_uses_actual_shell_interpreter(tmp_path, relative):
+    import os
+    import shutil
+
+    candidates = [os.environ.get("NZ_TEST_PROJECT_PYTHON"), shutil.which("python3.13"), shutil.which("python3.12")]
+    other = next((path for path in candidates if path and not os.path.samefile(path, sys.executable)), None)
+    if not other or not sys.platform.startswith("linux"):
+        pytest.skip("requires another installed CPython on Linux")
+    _project(tmp_path)
+    if relative:
+        link = tmp_path / ".venv/bin/python"
+        link.parent.mkdir(parents=True)
+        link.symlink_to(other)
+        other = ".venv/bin/python"
+    command = f"{shlex.quote(other)} -m unittest discover -s tests -v"
+    vm = _scenario(tmp_path, command)
+    result = _settle(vm, command)
+    snapshot = vm.domain.snapshot()
+    assert not result.command_failed and snapshot.executions[0].test_count == 1
+    from nz_coder.state.sessions import _validate_json_value
+    _validate_json_value(result.metadata)
+    assert isinstance(result.metadata.get("python_bytecode_identity"), list)
+    assert snapshot.version.acceptance_generation == 0
+    assert [item.status for item in _required(snapshot)] == ["passed"]
+
+
+def test_required_failure_is_visible_after_later_unregistered_scripts(tmp_path):
+    from nz_coder.runtime.conversation.continuation_context import build_current_facts
+    from nz_coder.runtime.adapters.verification_plans import check_spec
+    from nz_coder.runtime.verification.domain.models import ExecutionFact
+    from nz_coder.runtime.verification.domain.identity import command_identity
+
+    vm = _scenario(tmp_path)
+    command = "python -m pytest"
+    spec = check_spec(command, str(tmp_path), capability="test", source="planner", required=True)
+    vm.domain.register_check(spec)
+    version = vm.domain.snapshot().version
+    vm.domain.observe_execution(ExecutionFact("required", vm.domain.scope, spec.command, "failed", version, version,
+        ("test",), exit_code=127, environment_error=True, output_complete=False))
+    for i in range(4):
+        identity = command_identity(f"bash smoke{i}.sh", str(tmp_path))
+        vm.domain.observe_execution(ExecutionFact(str(i), vm.domain.scope, identity, "succeeded", version, version,
+            ("custom_assert",), exit_code=0))
+    block = build_current_facts(vm.state, workspace=tmp_path)
+    assert 'blocked_environment' in block
+    assert block.index('blocked_environment') < block.index('no matching check decision')
+
+
+def test_projected_pass_survives_readme_but_expires_on_source_change(tmp_path):
+    from nz_coder.runtime.conversation.continuation_context import build_current_facts
+    suite = _project(tmp_path)
+    vm = _scenario(tmp_path)
+    _settle(vm, suite)
+    vm.mutate(1, ["README.md"])
+    assert "Verified check" in build_current_facts(vm.state, workspace=tmp_path)
+    vm.mutate(2, ["source.py"])
+    assert "Verified check" not in build_current_facts(vm.state, workspace=tmp_path)
+
+
+def test_empty_discovery_and_foreign_workspace_cannot_appear_verified(tmp_path):
+    from nz_coder.runtime.conversation.continuation_context import build_current_facts
+
+    (tmp_path / "empty").mkdir()
+    command = f"{shlex.quote(sys.executable)} -m unittest discover -s empty"
+    vm = _scenario(tmp_path, command)
+    _settle(vm, command)
+    rendered = build_current_facts(vm.state, workspace=tmp_path)
+    assert "no tests executed" in rendered and "Verified check (" not in rendered
+    _project(tmp_path)
+    _settle(vm, command.replace("-s empty", "-s tests"))
+    assert "Verified check (" not in build_current_facts(vm.state, workspace=tmp_path / "empty")
+
+
+def test_foreign_python_hash_cache_reports_why_it_cannot_be_exempt(tmp_path):
+    import os
+    import shutil
+    from nz_coder.runtime.process.python_bytecode import _installed_identity
+
+    candidates = [os.environ.get("NZ_TEST_PROJECT_PYTHON"), shutil.which("python3.13"), shutil.which("python3.12")]
+    other = next((path for path in candidates if path and (identity := _installed_identity(path, tmp_path))
+                  and identity[-2] != sys.implementation.cache_tag), None)
+    if not other or not sys.platform.startswith("linux"):
+        pytest.skip("requires a second managed CPython version on Linux")
+    (tmp_path / "helper.py").write_text("answer = 42\n")
+    _project(tmp_path, effect="import py_compile; py_compile.compile('helper.py', invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH)")
+    command = f"{shlex.quote(other)} -m unittest discover -s tests -v"
+    vm = _scenario(tmp_path, command)
+    result = _settle(vm, command)
+    assert not result.command_failed
+    [(cache_path, reason)] = result.metadata["unconfirmed_python_caches"].items()
+    assert cache_path.startswith("__pycache__/helper.") and "source hash cannot be verified" in reason
+    assert vm.domain.snapshot().version.acceptance_generation > 0
+    assert _required(vm.domain.snapshot())[0].status != "passed"

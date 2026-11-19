@@ -64,15 +64,55 @@ def test_issue_reanimates_real_runner(monkeypatch, tmp_path, candidate):
             payload = accepted()
             payload['delivery_assessment']['issues'] = [{'candidate_excerpt': candidate, 'evidence_reference': reference, 'mismatch': 'The requested interface differs from this delivered text.'}]
             return payload, 'tool_calls'
+        if index == 2:
+            assert not env.verification_runtime.domain._reviews
+            assert 'The requested interface differs' in kwargs['messages'][1]['content']
+            return {'verdict': 'revise', 'reason': 'The requested interface differs from the delivery.'}, 'tool_calls'
         return accepted(), 'tool_calls'
     result, hook, provider, snapshot = run_probe(monkeypatch, tmp_path, reports=reports, candidate=candidate)
     assert result.status.value == 'completed'
-    assert provider.mains == 2 and provider.reviews == 2
+    assert provider.mains == 2 and provider.reviews == 3
     assert hook.stats['verdict_counts'] == {'accept': 1, 'revise': 1, 'blocked': 0, 'unavailable': 0}
     assert len(snapshot.reviews) == 2
     assert not snapshot.reviews[0].accepted and snapshot.reviews[-1].accepted
     # 模型投影可能省略内部戳；真实主请求仍须包含补救指导。
     assert 'The requested interface differs' in str(provider.seen[1]['messages'])
+
+
+@pytest.mark.parametrize('reply,expected', [
+    ({'1': 'The help and tests confirm the gc interface.'}, 'historical'),
+    ({'1': 'The implementation and help agree.', '2': 'The example agrees with the evidence.'}, 'completed'),
+    ({}, 'completed_unverified'),
+    ({'1': 'The implementation and help agree.'}, 'completed_unverified'),
+    ({'1': 'Agrees.', '9': 'Other.'}, 'completed_unverified'),
+    ({'1': 'Agrees.', '2': '   '}, 'completed_unverified'),
+])
+def test_gc_review_clarification_stays_inside_sidecar(monkeypatch, tmp_path, reply, expected):
+    candidate = 'python3 -m vaultpack gc    ~/backups/vault'
+    note = 'The README command reference lists gc with --dry-run/--json; implementation/tests support it, so no functional defect—recorded as note only.'
+    original_only = expected == 'historical'
+    if original_only:
+        expected = 'completed'
+    def reports(index, kwargs, environment):
+        report = accepted()
+        message = kwargs['messages'][1]['content']
+        assert not environment.verification_runtime.domain._reviews
+        if index == 1:
+            ref = re.search(r'^user: (user-[0-9a-f]+)$', message, re.MULTILINE).group(1)
+            report['delivery_assessment']['issues'] = [
+                dict(candidate_excerpt=candidate, evidence_reference=ref, mismatch=mismatch)
+                for mismatch in ((note,) if original_only else (note, 'Example is consistent.'))
+            ]
+        else:
+            assert note in message and (original_only or 'Example is consistent.' in message)
+            assert 'clarifications' in kwargs['tools'][0]['function']['parameters']['properties']
+            report['clarifications'] = reply
+        return report, 'tool_calls'
+    result, hook, provider, snapshot = run_probe(monkeypatch, tmp_path, reports=reports, candidate=candidate)
+    assert result.status.value == expected
+    assert (provider.mains, provider.reviews) == (1, 2)
+    assert [item.accepted for item in snapshot.reviews] == ([True] if expected == 'completed' else [])
+    assert bool(hook._accepted_evidence_key) == (expected == 'completed')
 
 
 @pytest.mark.parametrize('kind', ['unknown', 'missing', 'provider', 'blocked', 'revise'])
@@ -124,16 +164,26 @@ def test_pure_explanation_not_applicable(monkeypatch, tmp_path):
     assert provider.mains == provider.reviews == 1
 
 
-def test_source_change_during_review_invalidates_accept(monkeypatch, tmp_path):
+@pytest.mark.parametrize('change_during_clarification', [False, True])
+def test_source_change_during_review_invalidates_accept(monkeypatch, tmp_path, change_during_clarification):
     from tests.runtime.test_requirement_scope_runtime import _small
     initial = _small(tmp_path) + [[('bash', {'command': 'python -m pytest -q tests'})]]
     def reports(index, kwargs, environment):
         # 真实临时源码在评审调用尚未返回时改变；不伪造域投影或工具结果。
-        (tmp_path / 'api.py').write_text('value = 3\n')
-        return accepted(), 'tool_calls'
+        report = accepted()
+        if change_during_clarification and index == 1:
+            ref = re.search(r'^user: (user-[0-9a-f]+)$', kwargs['messages'][1]['content'], re.MULTILINE).group(1)
+            report['delivery_assessment']['issues'] = [
+                dict(candidate_excerpt='A candidate.', evidence_reference=ref, mismatch='Check the interface.')]
+        else:
+            (tmp_path / 'api.py').write_text('value = 3\n')
+            if change_during_clarification and index == 2:
+                report['clarifications'] = {'1': 'Source and interface agreed when checked.'}
+        return report, 'tool_calls'
     result, hook, provider, snapshot = run_probe(monkeypatch, tmp_path,
         reports=reports, initial_actions=initial,
         task='Fix api.py. Preserve compatibility. Run python -m pytest -q tests.')
+    assert provider.reviews >= (2 if change_during_clarification else 1)
     assert snapshot.current.version.generation == 2
     # 第一代材料的 accept 不得提交；之后重新执行和评审可以合法完成。
     assert all(item.version.generation == snapshot.current.version.generation for item in snapshot.reviews)
@@ -181,3 +231,25 @@ def test_user_revision_skips_review_of_already_rejected_candidate(monkeypatch, t
     assert len(provider.review_messages) == 1
     assert 'Second candidate.' in provider.review_messages[0]
     assert hook.stats['verdict_counts']['accept'] == 1
+
+
+def test_next_model_request_distinguishes_verified_and_unattributed_commands(monkeypatch, tmp_path):
+    (tmp_path / 'test_one.py').write_text(
+        'import unittest\nclass Sample(unittest.TestCase):\n def test_one(self): self.assertTrue(True)\n')
+    (tmp_path / 'smoke.sh').write_text('exit 0\n')
+    suite = 'python -m unittest discover'
+    result, _, provider, _ = run_probe(monkeypatch, tmp_path, reports=lambda *_: (accepted(), 'tool_calls'),
+        task='Check this project and explain the results.', initial_actions=[
+            [('update_scratchpad', {'section': 'focus', 'entries': [
+                {'summary': 'Suite still blocking; check same-second ordering.', 'details': 'Check fresh receipts.'}]})],
+            [('bash', {'command': suite})],
+            [('bash', {'command': 'ls && ' + suite + ' 2>&1 | tail -4; bash smoke.sh'})],
+            [('bash', {'command': 'bash smoke.sh'})],
+        ])
+    current = next(message['content'] for message in provider.seen[-1]['messages']
+                   if '<current-task-facts>' in str(message.get('content')))
+    assert 'Verified check' in current and suite in current
+    assert 'individual checks unproven' in current
+    assert 'no matching check decision' in current and 'bash smoke.sh' in current
+    assert 'check same-second ordering' in current
+    assert result.status.value == 'completed'

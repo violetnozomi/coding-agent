@@ -153,11 +153,12 @@ def test_cache_cleanup_with_other_mutation_never_preserves_pass(tmp_path, operat
 def test_incomplete_cache_cleanup_proof_cannot_preserve_pass(tmp_path, monkeypatch):
     with scoped_workdir(tmp_path):
         host = _compiled_host(tmp_path)
-        version = host.runtime_state.mutation_generation
         monkeypatch.setattr(host.workspace_snapshots, "verification_snapshot",
                             lambda **_: (_ for _ in ()).throw(SnapshotError("incomplete")))
         _execute(host, "rm -rf pkg/__pycache__")
-        assert host.runtime_state.mutation_generation > version
+        snapshot = host.scenario.domain.snapshot()
+        assert not snapshot.version.scope_complete
+        assert all(snapshot.decision(spec.id).status == "pending" for spec in snapshot.specs if spec.required)
         assert host.verification_runtime.status()["verification_needed"]
 
 

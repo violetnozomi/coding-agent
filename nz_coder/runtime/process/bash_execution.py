@@ -28,6 +28,7 @@ class BashExecution:
     def __init__(
         self, argv: tuple[str, ...], *, cwd: Path, env: dict[str, str],
         deadline: float, kill_grace: float, on_output: Callable[[bytes], bool],
+        pass_fds: tuple[int, ...] = (),
     ) -> None:
         self._argv = argv
         self._cwd = cwd
@@ -35,6 +36,7 @@ class BashExecution:
         self._deadline = deadline
         self._kill_grace = kill_grace
         self._on_output = on_output
+        self._pass_fds = pass_fds
         self._stop = threading.Event()
         self._done = threading.Event()
         self._lock = threading.Lock()
@@ -84,6 +86,7 @@ class BashExecution:
                 self._argv, shell=False, cwd=self._cwd, env=self._env,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 start_new_session=os.name != "nt",
+                **({"pass_fds": self._pass_fds} if self._pass_fds else {}),
                 creationflags=(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0),
             )
         except BaseException:

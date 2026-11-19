@@ -414,13 +414,18 @@ def execute_bash_local(
             last_report = now
         return not output_buffer.limit_exceeded
 
-    execution = create_execution(
-        tuple(shell.argv(command, login=selected_environment is None)), cwd=resolved_workdir, env=process_environment,
-        deadline=time.monotonic() + timeout_seconds,
-        kill_grace=settings.process_kill_grace, on_output=on_output,
-    )
+    from nz_coder.runtime.process.python_bytecode import capture_python_identity
+
     try:
-        outcome = execution.run(cancel_event=current_tool_cancel_event())
+        with capture_python_identity(shell, command, tokens, process_environment, resolved_workdir,
+                                     current_workdir(), command_identity) as (body, descriptors):
+            execution = create_execution(
+                tuple(shell.argv(body, login=selected_environment is None)), cwd=resolved_workdir, env=process_environment,
+                deadline=time.monotonic() + timeout_seconds,
+                kill_grace=settings.process_kill_grace, on_output=on_output,
+                **({"pass_fds": descriptors} if descriptors else {}),
+            )
+            outcome = execution.run(cancel_event=current_tool_cancel_event())
     except (FileNotFoundError, OSError) as exc:
         recoverable_output.close()
         return format_public_error(exc)
@@ -569,7 +574,8 @@ def run_bash(
 
 register(
     name="bash",
-    description="Run a shell command in the workspace. Use for running tests, installing packages, git operations, etc.",
+    description=("Run a shell command in the workspace. When individual check results matter, use one call "
+                 "per check with its workdir so each has its own exit status. Use current verified results when applicable."),
     parameters={
         "type": "object",
         "properties": {

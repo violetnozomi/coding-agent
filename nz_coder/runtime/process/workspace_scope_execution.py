@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import re
 import shlex
+import sys
 from pathlib import Path, PurePosixPath
 
 from .workspace_snapshot import SnapshotError, WorkspaceSnapshotStore
@@ -75,7 +76,7 @@ def _bytecode_for_unchanged_source(path: str, before: dict, after: dict) -> bool
     return bool(original and original.get("kind") == "file" and original == after.get(source))
 
 
-def _bytecode_header_matches_source(path: str, after: dict, store) -> bool:
+def _unconfirmed_bytecode_reason(path: str, after: dict, store, interpreter) -> str:
     """核对稳定快照中的缓存头部与源码身份，不反序列化或执行字节码。"""
     from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 
@@ -86,18 +87,28 @@ def _bytecode_header_matches_source(path: str, after: dict, store) -> bool:
         cache, cache_identity = access.read_bytes_with_identity(path, maximum=store.max_file_bytes)
         body, source_identity = access.read_bytes_with_identity(source, maximum=store.max_file_bytes)
     except (OSError, ValueError, RuntimeError):
-        return False
+        return "cache or source could not be read"
     if (cache_identity.content_hash != after[path].get("digest")
             or source_identity.content_hash != after[source].get("digest")
-            or len(cache) <= 16 or cache[:4] != importlib.util.MAGIC_NUMBER):
-        return False
+            or len(cache) <= 16):
+        return "cache or source identity changed, or header was incomplete"
+    tag, magic = interpreter
+    if not target.name.startswith(f"{PurePosixPath(source).stem}.{tag}.") and not target.name.startswith(
+            f"{PurePosixPath(source).stem}.{tag}-pytest-"):
+        return "cache tag does not match a confirmed interpreter"
+    if cache[:4].hex() != magic:
+        return "cache magic does not match the interpreter"
     flags = int.from_bytes(cache[4:8], "little")
     if flags in {1, 3}:
-        return cache[8:16] == importlib.util.source_hash(body)
+        if cache[:4] != importlib.util.MAGIC_NUMBER:
+            return "source hash cannot be verified for this interpreter"
+        return "" if cache[8:16] == importlib.util.source_hash(body) else "source hash differs"
     if flags != 0:
-        return False
-    return (int.from_bytes(cache[8:12], "little") == (source_identity.mtime_ns // 1_000_000_000 & 0xFFFFFFFF)
-            and int.from_bytes(cache[12:16], "little") == (source_identity.size & 0xFFFFFFFF))
+        return "unsupported cache header flags"
+    if (int.from_bytes(cache[8:12], "little") != (source_identity.mtime_ns // 1_000_000_000 & 0xFFFFFFFF)
+            or int.from_bytes(cache[12:16], "little") != (source_identity.size & 0xFFFFFFFF)):
+        return "source timestamp or size differs"
+    return ""
 
 
 def _cache_directories(paths: set[str], directories: set[str], entries: dict) -> set[str]:
@@ -131,7 +142,8 @@ def removed_python_bytecode_paths(result, changes: dict, store) -> set[str]:
     return _cache_directories(files, directories, before)
 
 
-def python_verification_artifact_paths(result, changes: dict, store, *, python_verification_origin=None) -> set[str]:
+def python_verification_artifact_paths(result, changes: dict, store, *, python_verification_origin=None,
+                                      unconfirmed=None) -> set[str]:
     """逐项核实可靠 Python 检查的缓存，不豁免其他输入变化。"""
     if result.name not in {"bash", "process", "verify_changed_files"} or not changes:
         return set()
@@ -187,6 +199,9 @@ def python_verification_artifact_paths(result, changes: dict, store, *, python_v
         (entry := _python_entry(words)) is not None and entry[2] and entry[0] in {"pytest", "py.test"})
         for words in python_checks)
     artifacts, cache_directories = set(), set()
+    interpreter = (sys.implementation.cache_tag, importlib.util.MAGIC_NUMBER.hex())
+    if result.name == "bash" and any(receipt.producer == "bash" for receipt in result.execution_facts):
+        interpreter = (result.metadata or {}).get("python_bytecode_identity") or interpreter
     for path in changes:
         if changes[path] == "delete":
             continue
@@ -210,8 +225,10 @@ def python_verification_artifact_paths(result, changes: dict, store, *, python_v
             if after.get(path, {}).get("kind") == "directory":
                 cache_directories.add(path)
             continue
-        if (_bytecode_for_unchanged_source(path, before, after)
-                and _bytecode_header_matches_source(path, after, store)):
-            artifacts.add(path)
-            continue
+        if _bytecode_for_unchanged_source(path, before, after):
+            reason = _unconfirmed_bytecode_reason(path, after, store, interpreter)
+            if not reason:
+                artifacts.add(path)
+            elif unconfirmed is not None and len(unconfirmed) < 4:
+                unconfirmed[path] = reason
     return _cache_directories(artifacts, cache_directories, after)
