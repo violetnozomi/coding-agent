@@ -92,6 +92,9 @@ def test_negative_or_unavailable_runner(monkeypatch, tmp_path, kind):
     assert result.status.value == expected
     if kind in ('blocked', 'revise'):
         assert result.metadata['raw_status'] == 'blocked'
+        assert '交付评审未通过' in result.final_text
+    else:
+        assert '交付评审尚未确认' in result.final_text
     assert bool(snapshot.reviews) == (kind in ('blocked', 'revise'))
     assert all(not item.accepted for item in snapshot.reviews)
     assert hook._accepted_evidence_key is None

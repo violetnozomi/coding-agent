@@ -96,13 +96,13 @@ class WorkspaceFileAccess:
         try:
             metadata = os.stat(name, dir_fd=parent, follow_symlinks=False)
             if not stat.S_ISREG(metadata.st_mode):
-                raise ValueError("Workspace target is not a regular file")
+                raise PublicInputError("Workspace target is not a regular file")
             flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
             descriptor = os.open(name, flags, dir_fd=parent)
             try:
                 info = os.fstat(descriptor)
                 if not stat.S_ISREG(info.st_mode):
-                    raise ValueError("Workspace target is not a regular file")
+                    raise PublicInputError("Workspace target is not a regular file")
                 if maximum is not None and info.st_size > maximum:
                     raise PublicInputError("Workspace file exceeds the allowed size")
                 before = info
@@ -904,7 +904,7 @@ class WorkspaceFileAccess:
                 hashlib.sha256(data).hexdigest(),
             ), int(after.st_mode)
         except UnsafeProjectControl as exc:
-            raise ValueError("Workspace file boundary is unsafe") from exc
+            raise PublicInputError("Workspace file boundary is unsafe") from exc
         finally:
             for handle in reversed(handles):
                 _windows_close(handle)

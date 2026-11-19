@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import copy
 import logging
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -206,7 +207,7 @@ class PermissionManager:
                     persist=True,
                 )
                 if persisted:
-                    print("  [Permission] Added persistent scoped allow rule")
+                    print("  [Permission] Added persistent scoped allow rule", file=sys.stderr)
                 return True
             if answer in ("n", "no"):
                 return False

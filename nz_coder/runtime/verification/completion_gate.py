@@ -262,14 +262,21 @@ def verification_appendix(snapshot: dict) -> str:
             raw = raw[:450] + "…（命令已截断，原文见 verification 元数据）"
         return raw.replace("`", "\\`").replace("\n", " ")
     lines = ["**运行时验证记录**（来源：VerificationDomain）"]
-    for failure in snapshot.get("ordinary_failures", []):
+    failures = snapshot.get("ordinary_failures", [])
+    for failure in failures:
         lines.append(f"- 保留的失败记录：`{command(failure)}`；版本 {failure.get('generation')}，退出码 {failure.get('exit_code')}。当前交付评审不将该记录改写成通过。")
     if snapshot.get("verification_needed"):
         lines.append("- 验证未确认：仍有缺项，不能据此声明全部测试通过。")
     elif snapshot.get("verification_state") == "unverified":
-        lines.append("- 未评估：本次没有已采信的验证执行。")
+        if not failures:
+            lines.append("- 未评估：本次没有已采信的验证执行。")
     else:
         lines.append("- 验证状态：" + str(snapshot.get("verification_state") or "unknown"))
+    review = snapshot.get("delivery_review") or {}
+    if review.get("accepted") is False:
+        lines.append("- 交付评审未通过。")
+    elif snapshot.get("review_pending"):
+        lines.append("- 交付评审尚未确认。")
     if snapshot.get("mutation_scope_unknown"):
         lines.append("- 工作区范围尚未确认；已知文件检查通过不代表完整覆盖，也不能据此断定发生了源码修改。")
     last = snapshot.get("last_verification") or {}

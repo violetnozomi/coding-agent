@@ -1151,10 +1151,11 @@ def _agent_status_risk_labels(agent_status: dict, tool_log: list[dict]) -> list[
     These complement PatchRiskReport.risk_labels() in the result dict.
     """
     reasons: list[str] = []
-    status = (agent_status or {}).get("status")
-    if status != "completed":
-        reasons.append(f"agent_status:{status or 'unknown'}")
-    if (agent_status or {}).get("verification_needed"):
+    status = agent_status or {}
+    terminal = status.get("status")
+    if terminal != "completed":
+        reasons.append(f"agent_status:{terminal or 'unknown'}")
+    if status.get("verification_needed"):
         reasons.append("verification_needed")
 
     significant_error_tools = frozenset({
@@ -1172,7 +1173,7 @@ def _agent_status_risk_labels(agent_status: dict, tool_log: list[dict]) -> list[
         out = row.get("output", "") or ""
         return any(pattern in out for pattern in ignorable_error_patterns)
 
-    runtime = (agent_status or {}).get("runtime") or {}
+    runtime = status.get("runtime") or {}
     final_generation = runtime.get("mutation_generation")
 
     def _belongs_to_final_generation(row: dict) -> bool:
@@ -1190,8 +1191,15 @@ def _agent_status_risk_labels(agent_status: dict, tool_log: list[dict]) -> list[
     ):
         reasons.append("tool_errors")
 
-    verification_passed = not (agent_status or {}).get("verification_needed", True)
-    if any(row["status"] == "nonzero" for row in tool_log) and not verification_passed:
+    stages = (status.get("verification_pipeline") or {}).get("stages", [])
+    # 没有强制复测项时，当前版本实际失败的自选检查仍是评测依据。
+    current_failure = any(
+        check.get("status") == "failed" and check.get("attempted_current")
+        for stage in stages for check in stage.get("commands", [])
+    )
+    if any(row["status"] == "nonzero" for row in tool_log) and (
+        status.get("verification_needed", True) or current_failure
+    ):
         reasons.append("nonzero_commands")
 
     return reasons

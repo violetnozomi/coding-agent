@@ -125,16 +125,19 @@ def test_unknown_step_fields_cannot_publish_a_second_contract(tmp_path):
     assert rejected.dispatch_failed and state.plan_text == TEXT
 
 
-def test_save_failure_preserves_body_revision_and_receipt(monkeypatch, tmp_path):
+@pytest.mark.parametrize("error_type", [OSError, ValueError])
+def test_save_failure_preserves_body_revision_and_receipt(monkeypatch, tmp_path, error_type):
     state, run = setup_run(tmp_path)
     publish(state, run)
     before = copy.deepcopy(state.plan_last_commit)
     def fail(*_args):
-        raise OSError("disk full")
+        raise error_type("Could not save the private checkpoint")
     monkeypatch.setattr(state, "_write_snapshot", fail)
     result, _, _, _ = publish(state, run, steps=[{"title": "New route"}], revision=1,
                              call_id="plan-two", path=tmp_path / "state.json")
     assert result.dispatch_failed
+    assert result.output == "Error: working plan rejected: An internal error occurred."
+    assert result.metadata["working_plan_commit"]["reason"] == "An internal error occurred."
     assert state.plan_revision == 1 and state.plan_text == TEXT and state.plan_last_commit == before
 
 

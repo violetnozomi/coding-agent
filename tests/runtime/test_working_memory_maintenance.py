@@ -125,12 +125,31 @@ def test_revision_changed_while_awaiting_keeps_latest_notes(tmp_path):
     assert "NEWER" in pad.read() and "STALE" not in pad.read()
 
 
-def test_pending_cancel_before_commit_keeps_old_notes(tmp_path):
-    pad, _, _, run = _setup(tmp_path, _completed(content=json.dumps({"status": "replace", "memory": {'focus': [{"summary": "LATE", "details": ""}], 'findings': [], 'decisions': [], 'lessons': []}})),
-        callback=lambda: asyncio.current_task().cancel())
-    with pytest.raises(asyncio.CancelledError):
+@pytest.mark.parametrize("cancel_source", ["task", "run"])
+def test_pending_cancel_before_commit_keeps_old_notes(tmp_path, cancel_source):
+    from nz_coder.runtime.core.run_context import RunContext, scoped_run_context
+    from nz_coder.runtime.session.model import Session
+    from test_native_product_runtime import _request
+
+    request = _request(tmp_path)
+    owner = RunContext(request, Session.create(request.session_id, [], workspace=tmp_path), request.agent.name)
+
+    def cancel():
+        if cancel_source == "task":
+            asyncio.current_task().cancel()
+        else:
+            owner.request_cancel()
+
+    pad, calls, events, run = _setup(tmp_path, _completed(content=json.dumps({
+        "status": "replace",
+        "memory": {"focus": [{"summary": "LATE", "details": ""}], "findings": [], "decisions": [], "lessons": []},
+    })), callback=cancel)
+    before = pad.snapshot()
+    with scoped_run_context(owner), pytest.raises(asyncio.CancelledError):
         asyncio.run(run())
-    assert "OLD_FACT" in pad.read() and "LATE" not in pad.read()
+    assert pad.snapshot() == Scratchpad(tmp_path / "notes.json").snapshot() == before
+    assert len(calls) == 1
+    assert [event["status"] for _, event in events] == ["started", "cancelled"]
 
 
 def test_soft_pressure_runs_once_until_completed_step_observes_relief(tmp_path):

@@ -11,13 +11,14 @@ from nz_coder.runtime.core.request import RunOptions
 from nz_coder.runtime.execution import native_sdk
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state import sessions
-from nz_coder.tools.scratchpad import scratchpad
+from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, is_user_request_message
+from nz_coder.tools.scratchpad import Scratchpad
 from tests.runtime.test_native_product_runtime import _completion, _install_runtime, _request
 
 
 OLD_COMMAND = "python -m unittest tests.test_old -v"
 NEW_COMMAND = "python -m unittest tests.test_new -v"
-ORIGINAL_NOTE = "Keep the original task failure note across runs."
+ORIGINAL_NOTE = "The first request's original working note."
 
 
 def _tool(name, **arguments):
@@ -65,8 +66,11 @@ def _acceptance_journey(monkeypatch, tmp_path, *, fail_old):
                 index = self.calls[self.phase]
                 self.calls[self.phase] += 1
                 assert self.calls[self.phase] <= 6, "unexpected unbounded coding requests"
-                first = [_tool("read_file", path="app.py"),
-                         _tool("update_scratchpad", category="failure", content=ORIGINAL_NOTE)]
+                first = [
+                    _tool("read_file", path="app.py"),
+                    _tool("update_scratchpad", section="lessons",
+                          entries=[{"summary": ORIGINAL_NOTE, "details": ""}]),
+                ]
                 if fail_old:
                     first.append(_tool("bash", command=OLD_COMMAND))
                 # 返回值长度发生变化，避免同秒真实子进程复用旧字节码。
@@ -99,8 +103,10 @@ def _acceptance_journey(monkeypatch, tmp_path, *, fail_old):
         environment = native_sdk.build_product_run_environment(current_request, options)
         try:
             result = await native_sdk.NativeSDKRunner(environment).run_result(current_request, options)
+            user_id = next(message[MESSAGE_ID_KEY] for message in reversed(result.messages)
+                           if is_user_request_message(message))
             with scoped_workdir(workspace), sessions.scoped_session(request.session_id):
-                notes = scratchpad.read()
+                notes = Scratchpad.for_user_message(request.session_id, user_id).read()
             return {
                 "result": result,
                 "state": environment.runtime_state.to_dict(),
@@ -127,7 +133,8 @@ def _acceptance_journey(monkeypatch, tmp_path, *, fail_old):
     assert first["checkpoint"]["scope"]["task"]["task_lineage_id"] == (
         resumed["checkpoint"]["scope"]["task"]["task_lineage_id"]
     )
-    assert ORIGINAL_NOTE in first["notes"] and ORIGINAL_NOTE in resumed["notes"]
+    assert ORIGINAL_NOTE in first["notes"]
+    assert resumed["notes"] == "Scratchpad is empty."
     assert resumed["state"]["initial_task_text"] == initial
     assert resumed["state"]["forbids_test_changes"] is True
     assert (workspace / "app.py").read_text() == "def value(): return 22\n"

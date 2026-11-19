@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Callable
 
 from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
@@ -85,12 +86,17 @@ def read_permission_answer(
 
         render_permission_request(console, summary)
     else:
-        print(f"\n  [Permission] {summary}")
+        print(f"\n  [Permission] {summary}", file=sys.stderr)
+
+    def read_stdin() -> str:
+        # 标准输出可能是 JSON 结果流，审批提示走标准错误。
+        print(prompt, end="", file=sys.stderr, flush=True)
+        return input("")
 
     readers: list[Callable[[], str]] = []
     if console and hasattr(console, "input"):
         readers.append(lambda: console.input(prompt, markup=False))
-    readers.append(lambda: input(prompt))
+    readers.append(read_stdin)
     if tty_input is not None:
         readers.append(lambda: tty_input(prompt))
 
@@ -111,10 +117,10 @@ def read_permission_answer(
             if answer in valid_answers:
                 return answer
             break
+        if not got_input:
+            raise PermissionInteractionError("unavailable")
         if console and hasattr(console, "print"):
             console.print("  Please answer y/n/a/p.", markup=False, highlight=False)
         else:
-            print("  Please answer y/n/a/p.")
-        if not got_input:
-            raise PermissionInteractionError("unavailable")
+            print("  Please answer y/n/a/p.", file=sys.stderr)
     raise PermissionInteractionError("invalid_response")

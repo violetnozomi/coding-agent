@@ -415,7 +415,8 @@ def test_http_default_native_run_commits_result_history_and_settled_state(monkey
         assert info["last_result"]["status"] == "completed_unverified"
         answer = (
             "本次执行已结束，验证尚未确认。\n\n**运行时验证记录**（来源：VerificationDomain）\n"
-            "- 未评估：本次没有已采信的验证执行。\n\n模型交付说明（未经独立确认）：\nOFFLINE_DONE"
+            "- 未评估：本次没有已采信的验证执行。\n- 交付评审尚未确认。\n\n"
+            "模型交付说明（未经独立确认）：\nOFFLINE_DONE"
         )
         assert info["last_result"]["answer"] == answer
         expected = [("user", "Reply with OFFLINE_DONE."), ("assistant", answer)]
@@ -1096,6 +1097,7 @@ def test_http_resilient_stream_closes_snapshot_to_settled_loop(local_service):
     assert baseline["properties"]["messages"] == []
 
     client.run(session_id, "closure")
+    _wait_for_status(client, session_id, "completed")
     observed = []
     while "session.run.settled" not in observed:
         observed.append(next(stream)["type"])
@@ -1951,6 +1953,27 @@ def test_http_permission_request_reply_and_late_reply_boundary(local_service):
         "session.run.completed",
         "session.run.settled",
     ]
+
+
+def test_http_late_reply_cannot_approve_identical_request_in_next_run(local_service):
+    client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
+    session_id = client.create_session("default")["id"]
+    client.run(session_id, "permission")
+    first, = _wait_for_pending(lambda: client.pending_permissions(session_id))
+    assert client.abort(session_id) == {"aborted": True}
+    assert local_service.manager.get(session_id).wait(timeout=3)
+
+    client.run(session_id, "permission")
+    second, = _wait_for_pending(lambda: client.pending_permissions(session_id))
+    assert first["tool_input"] == second["tool_input"]
+    assert first["id"] != second["id"]
+    with pytest.raises(NZCoderHTTPError) as late_reply:
+        client.reply_permission(session_id, first["id"], "once")
+    assert late_reply.value.code == "interaction_not_found"
+    assert [item["id"] for item in client.pending_permissions(session_id)] == [second["id"]]
+    assert client.reply_permission(session_id, second["id"], "once") is True
+    _wait_for_status(client, session_id, "completed")
+    assert client.messages(session_id)[-1]["content"] == "permission:once"
 
 
 def test_http_question_reply_validation_reject_and_abort(local_service):

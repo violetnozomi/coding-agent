@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -751,6 +752,91 @@ def test_unverified_headless_preserves_snapshot_and_returns_failure(tmp_path, ou
     assert code == 1
     assert record['status'] == 'completed_unverified'
     assert record['verification'] == verification
+
+
+@pytest.mark.parametrize("declared, passes, output, answers", [
+    pytest.param(True, False, "json", "y\n", id="required-test-fails"),
+    pytest.param(False, False, "jsonl", "invalid\ny\n", id="observed-test-fails"),
+    pytest.param(True, True, "json", "p\n", id="test-passes-review-pending"),
+])
+def test_headless_reports_actual_test_result_and_persists_same_evidence(
+    monkeypatch, tmp_path, capsys, declared, passes, output, answers,
+):
+    from nz_coder.interface.headless import run_main
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state.sessions import load_session
+    from tests.runtime.test_native_product_runtime import _install_runtime
+    from tests.runtime.test_working_memory_reminders import _call, _reply
+
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    monkeypatch.setenv("NZ_CODER_USER_CONFIG", str(tmp_path / "config.env"))
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(tmp_path / "trust.json"))
+
+    class TerminalInput(io.StringIO):
+        def isatty(self):
+            return True
+
+    monkeypatch.setattr(sys, "stdin", TerminalInput(answers))
+    command = "python -m unittest test_value"
+    (workspace / "test_value.py").write_text(
+        "import unittest\nclass T(unittest.TestCase):\n"
+        f" def test_value(self): self.assertEqual(1, {1 if passes else 2})\n"
+    )
+
+    class Provider:
+        name = "offline"
+        check_requested = False
+
+        def create_completion(self, _client, **kwargs):
+            if not self.check_requested:
+                self.check_requested = True
+                return _reply(kwargs, calls=[_call(1, "bash", {"command": command})])
+            return _reply(kwargs, text="Finished running the test.")
+
+    _install_runtime(monkeypatch, Provider())
+    prompt = "Run the tests and report whether they pass."
+    if declared:
+        prompt += f" Acceptance command: `{command}`."
+    code = run_main(
+        ["--cwd", str(workspace), "--provider", "offline", "--model", "offline-model",
+         "--max-turns", "5", "--output", output, prompt],
+    )
+    captured = capsys.readouterr()
+    records = [json.loads(line) for line in captured.out.splitlines()]
+    if output == "json":
+        assert len(records) == 1
+    else:
+        assert records[-1]["type"] == "result"
+    assert command in captured.err and "Allow?" in captured.err
+    if not declared:
+        assert "Please answer y/n/a/p" in captured.err
+    record = records[-1]
+    with scoped_workdir(workspace):
+        saved = load_session(record["session_id"])
+    snapshot = record["verification"]
+    assert saved["metadata"]["verification"] == snapshot
+    assert saved["run_status"] == record["status"]
+    assert saved["messages"][-1]["content"] == record["text"]
+    receipt = next(m for m in saved["messages"] if m.get("tool_call_id") == "memory-1")
+    assert "Ran 1 test" in receipt["content"]
+    assert receipt["_nz_verification_passed"] is passes
+    assert snapshot["last_verification"]["status"] == ("passed" if passes else "failed")
+    assert snapshot["verification_needed"] is (declared and not passes)
+    assert snapshot["tests_passed"] is (passes if declared else None)
+    assert code == 1 and not snapshot["completion_ready"]
+    if declared and not passes:
+        assert record["status"] == "blocked"
+        assert snapshot["acceptance_checks"][0]["status"] == "failed"
+        assert command in record["text"] and "FAILED (failures=1)" in record["text"]
+    else:
+        assert record["status"] == "completed_unverified"
+        assert snapshot["review_pending"] and "交付评审尚未确认" in record["text"]
+    if not declared:
+        assert snapshot["test_obligations"] == []
+        assert snapshot["ordinary_failures"][0]["exit_code"] == 1
+        assert "退出码 1" in record["text"]
+        assert "没有已采信的验证执行" not in record["text"]
 
 
 def test_headless_resume_reports_corrupt_identity_before_client(tmp_path):

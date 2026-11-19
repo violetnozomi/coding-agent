@@ -38,10 +38,12 @@ jobs:
             --workpath build/windows-installer `
             --distpath dist `
             packaging/windows/nz-coder.spec
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
           python -m nz_coder.evaluation.release_contracts `
             --root . `
             --validate-frozen dist/NZ-Coder `
             --json | Out-File artifacts/windows-frozen-contract.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw "Frozen product verification failed." }
       - name: Locate Inno Setup compiler
         id: inno
         shell: pwsh
@@ -55,6 +57,7 @@ jobs:
           Set-StrictMode -Version Latest
           $ErrorActionPreference = "Stop"
           $identity = python -m nz_coder.evaluation.release_contracts --root . --json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "Unable to determine the package version." }
           $iscc = "${{ steps.inno.outputs.path }}"
           & $iscc `
             "/DAppVersion=$($identity.version)" `
@@ -120,6 +123,7 @@ jobs:
           "$hash *$($artifact[0].Name)" | Set-Content artifacts/SHA256SUMS.txt -Encoding ascii
           if ($env:GITHUB_REF -like "refs/tags/v*") {
             $identity = python -m nz_coder.evaluation.release_contracts --root . --json | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw "Unable to determine the release version." }
             if ($env:GITHUB_REF_NAME.Substring(1) -ne $identity.version) {
               throw "Tag version does not match pyproject.toml."
             }

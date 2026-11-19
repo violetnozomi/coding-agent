@@ -84,6 +84,20 @@ nz-coder run --resume SESSION_ID --output jsonl "try another approach"
 nz-coder run --file notes.txt --attach screenshot.png "review these"
 ```
 
+After a coding task, use `/diff` to inspect recorded changes and `/undo` to
+restore the latest recorded turn and its captured file changes. Headless JSON
+reports `status`, `changed_files`, and `verification`. The SDK result metadata
+and the HTTP session result expose the same verification evidence.
+`completed_unverified` means the run ended with verification still open.
+Within `verification`, `verification_needed` tracks outstanding execution
+checks and workspace evidence. An agent-selected test can fail with this
+flag set to `false`. See `verification_pipeline` for individual check results.
+`tests_passed` reports the aggregate for required tests or strict-mode testing.
+It can be `null` when only agent-selected tests ran. A required test can pass
+while `review_pending` still indicates an unconfirmed delivery review.
+After a process interruption, use `/resume` or `run --resume SESSION_ID` to
+reopen the saved session and continue from the current workspace.
+
 Install offline completion for the active shell with one of:
 
 ```bash
@@ -416,13 +430,27 @@ session = client.create_session(
     permission_mode="acceptEdits",
     workspace_id=workspace["id"],
 )
-client.run(session["id"], "Inspect this repository and explain its entry points")
+started = client.run(session["id"], "Inspect this repository and explain its entry points")
+interaction_id = started["active_interaction_run_id"]
 
 for event in client.events(session["id"]):
     print(event["type"], event.get("properties", {}))
-    if event["type"] == "session.run.settled":
+    if (
+        event["type"] == "session.run.settled"
+        and event.get("meta", {}).get("interaction_run_id") == interaction_id
+    ):
+        if event["properties"]["persisted"]:
+            snapshot = client.snapshot(session["id"])
+            result = snapshot["session"]["last_result"]
+            if result.get("metadata", {}).get("interaction_run_id") == interaction_id:
+                print(result["status"], result["metadata"].get("verification"))
+        else:
+            print("The run ended before the session could be saved.")
         break
 ```
+
+After restarting the service, use the same session ID in `client.run` with a
+follow-up message to continue from the saved session and current workspace.
 
 HTTP Agents use provider streaming and publish text-part lifecycle events:
 
@@ -608,9 +636,11 @@ PYCODE
 
 ## Durable Working Memory And Compaction
 
-Scratchpad plans/failures and todo items are isolated by both workspace and
-session, then atomically persisted under that session's runtime directory. A
-process restart or `/resume` can therefore restore active working state.
+Todo items are stored per workspace and session. Structured working notes
+(Scratchpad v2) are stored for each user message in that session. Reopening
+the same message can restore its notes; a new user message starts fresh
+notes while the task checkpoint retains applicable task and verification
+facts. The runtime rejects older working-note formats without rewriting them.
 `/clear`, like `/new-session`, switches to a fresh session ID with empty history
 and fresh task state. The previous saved session and its working state remain
 available through `/resume <previous-session-id>`; workspace files and long-term

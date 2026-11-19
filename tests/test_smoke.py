@@ -937,9 +937,11 @@ def test_permission_manager_falls_back_after_console_eof(monkeypatch):
     assert renderer.calls == ["pause", "resume"]
 
 
-def test_permission_manager_resumes_renderer_after_eof(monkeypatch):
+def test_permission_manager_resumes_renderer_after_eof(monkeypatch, capsys):
     import builtins
+    import pytest
     from nz_coder.permissions import PermissionManager
+    from nz_coder.tool_platform.permissioning.interaction import PermissionInteractionError
 
     renderer = _FakeRenderer()
 
@@ -950,8 +952,13 @@ def test_permission_manager_resumes_renderer_after_eof(monkeypatch):
     monkeypatch.setattr(PermissionManager, "_tty_input", lambda self, prompt: (_ for _ in ()).throw(EOFError()))
 
     pm = PermissionManager("default", renderer=renderer)
-    assert pm.ask_user("write_file", {"path": "app.py", "content": "print(\"ok\")\n"}) is False
+    with pytest.raises(PermissionInteractionError) as caught:
+        pm.ask_user("write_file", {"path": "app.py", "content": "print(\"ok\")\n"})
+    assert caught.value.reason == "unavailable"
     assert renderer.calls == ["pause", "resume"]
+    captured = capsys.readouterr()
+    assert not captured.out and "Allow?" in captured.err
+    assert "Please answer" not in captured.err
 
 
 

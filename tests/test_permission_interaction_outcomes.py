@@ -9,7 +9,6 @@ import pytest
 from nz_coder.http_service.interactions import InteractionBroker
 from nz_coder.permissions import PermissionManager
 from nz_coder.protocol.session_events import SessionEventBus
-from scripts.delivery_smoke_driver import input_sha256
 
 
 def _pending(broker):
@@ -36,7 +35,7 @@ def test_explicit_approval_adapter_reply_preserves_its_meaning(reply, allowed):
 
 
 @pytest.mark.parametrize("stage", ["static", "targeted"])
-def test_pending_and_asked_share_public_parameters_and_hash(tmp_path, stage):
+def test_pending_and_asked_share_exact_public_parameters(tmp_path, stage):
     bus = SessionEventBus(session_id="projection")
     broker = InteractionBroker(session_id="projection", event_bus=bus, timeout_seconds=3)
     broker.begin_run()
@@ -50,10 +49,9 @@ def test_pending_and_asked_share_public_parameters_and_hash(tmp_path, stage):
             try:
                 assert not future.done()
                 assert pending["id"] == asked.properties["id"]
-                assert pending["tool_input"] == asked.properties["tool_input"]
-                assert input_sha256("bash", pending["tool_input"]) == input_sha256("bash", asked.properties["tool_input"])
-                assert "_nz_runtime_verification_stage" not in pending["tool_input"]
-                assert original["_nz_runtime_verification_stage"] == stage
+                expected = {"command": "python -m py_compile app.py", "workdir": str(tmp_path)}
+                assert pending["tool_input"] == asked.properties["tool_input"] == expected
+                assert original == {**expected, "_nz_runtime_verification_stage": stage}
             finally:
                 broker.reply_permission(pending["id"], "once")
             assert future.result(timeout=2) == "once"

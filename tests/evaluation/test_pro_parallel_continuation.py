@@ -52,33 +52,41 @@ def closed_source(tmp_path, *, pending=False, unknown=False):
         "tasks": [{"number": i, "instance_id": task["instance_id"], "attempt": 1 if i < 3 else 0,
                    "resolved": False if i == 2 else None} for i, task in enumerate(tasks, 1)]}
     (tmp_path / "summary.json").write_text(json.dumps(summary))
+    source = tmp_path
+    if pending:
+        # 保留真实的未结算快照供恢复入口读取，再正常关闭夹具的账本。
+        source = tmp_path / "pending"
+        source.mkdir()
+        for name in ("ledger.jsonl", "summary.json"):
+            (source / name).write_bytes((tmp_path / name).read_bytes())
+        ledger.settle(attempt, status="request_timeout")
     ledger.close()
-    return manifest, summary
+    return source, manifest, summary
 
 
 def test_preparation_retry_carries_real_ledger_fee_and_excludes_paid_failure(tmp_path):
-    manifest, summary = closed_source(tmp_path)
-    plan = parallel.preparation_remainder(tmp_path, manifest)
+    source, manifest, summary = closed_source(tmp_path)
+    plan = parallel.preparation_remainder(source, manifest)
     assert [number for number, _task in plan["tasks"]] == [3]
     assert plan["used_cny"] == pytest.approx(summary["estimated_cost_occupied_cny"])
     assert plan["remaining_cny"] + plan["used_cny"] == pytest.approx(50)
     assert plan["remaining_requests"] == 918
-    assert plan["source_ledger_sha256"] == hashlib.sha256((tmp_path / "ledger.jsonl").read_bytes()).hexdigest()
+    assert plan["source_ledger_sha256"] == hashlib.sha256((source / "ledger.jsonl").read_bytes()).hexdigest()
 
 
 @pytest.mark.parametrize("pending,unknown", [(True, False), (False, True)])
 def test_preparation_retry_cannot_reset_pending_or_failed_accounting(tmp_path, pending, unknown):
-    manifest, _summary = closed_source(tmp_path, pending=pending, unknown=unknown)
+    source, manifest, _summary = closed_source(tmp_path, pending=pending, unknown=unknown)
     with pytest.raises(RuntimeError, match="previous_stage_not_settled_or_accounting_stopped"):
-        parallel.preparation_remainder(tmp_path, manifest)
+        parallel.preparation_remainder(source, manifest)
 
 
 def test_preparation_retry_rejects_changed_previous_fee_summary(tmp_path):
-    manifest, summary = closed_source(tmp_path)
+    source, manifest, summary = closed_source(tmp_path)
     summary["estimated_cost_occupied_cny"] = 0
-    (tmp_path / "summary.json").write_text(json.dumps(summary))
+    (source / "summary.json").write_text(json.dumps(summary))
     with pytest.raises(RuntimeError, match="previous_fee_summary_mismatch"):
-        parallel.preparation_remainder(tmp_path, manifest)
+        parallel.preparation_remainder(source, manifest)
 
 
 def test_long_evidence_path_binds_real_relays_without_changing_mount_identity(tmp_path, monkeypatch):
@@ -129,7 +137,7 @@ def test_long_evidence_path_binds_real_relays_without_changing_mount_identity(tm
 def test_combined_closed_phases_count_second_fee_and_exclude_paid_task(tmp_path):
     first = tmp_path / "first"
     first.mkdir()
-    manifest, initial = closed_source(first)
+    _, manifest, initial = closed_source(first)
     second = tmp_path / "second"
     second.mkdir()
     grant = json.loads((first / "ledger.jsonl").read_text().splitlines()[0])["fee_authorization"]
@@ -157,7 +165,7 @@ def test_combined_closed_phases_count_second_fee_and_exclude_paid_task(tmp_path)
 
 
 def test_forty_task_continuation_uses_current_authorized_request_limit(tmp_path):
-    manifest, summary = closed_source(tmp_path)
+    _, manifest, summary = closed_source(tmp_path)
     manifest.update(cost_limit=50, request_limit=1840)
     plan = parallel.preparation_remainder(tmp_path, manifest)
     assert plan["remaining_requests"] == 1838
@@ -165,7 +173,7 @@ def test_forty_task_continuation_uses_current_authorized_request_limit(tmp_path)
 
 
 def test_additional_grant_can_include_sdk_launch_without_paid_request(tmp_path):
-    manifest, summary = closed_source(tmp_path)
+    _, manifest, summary = closed_source(tmp_path)
     # 第三题虽启动 SDK，但所有请求在本地被拒绝；第二题有真实付费请求。
     summary["tasks"][2]["attempt"] = 1
     (tmp_path / "summary.json").write_text(json.dumps(summary))

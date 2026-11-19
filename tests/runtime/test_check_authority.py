@@ -302,10 +302,11 @@ def test_scheduler_retries_executed_planner_without_changing_authority(tmp_path)
 def test_scheduler_can_retry_optional_failure_in_original_subdirectory(tmp_path):
     sub = tmp_path / "package"
     sub.mkdir()
-    domain = _domain(tmp_path)
+    domain = _domain(tmp_path, targeted=True)
     spec = _check(sub, required=False)
     domain.register_check(spec)
     _execute(domain, spec, passed=False)
+    domain.observe_workspace(WorkspaceObservation(WorkspaceVersion(1, 1, 1), paths=("package/app.py",)))
     action = _schedule(domain)
     assert action.kind == "stage"
     assert action.cwd == str(sub)

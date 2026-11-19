@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from nz_coder.protocol.message_schema import is_synthetic_user_message
+from nz_coder.protocol.public_error import PublicInputError, format_public_error
 from nz_coder.runtime.verification.reference_evidence import (
     RetainedTaskReference, reference_digest, render_references, sanitize_references,
 )
@@ -720,7 +721,10 @@ def _check_verifier_request_budget(request: JudgeRequest, capabilities) -> None:
         {"role": "user", "content": request.user_message},
     ], [request.report_tool])
     if not budget.context_metadata_missing and estimated > budget.soft_preflight_tokens:
-        raise ValueError(f"Complete review request exceeds input budget: {estimated} > {budget.soft_preflight_tokens} estimated tokens")
+        raise PublicInputError(
+            f"Complete review request exceeds input budget: {estimated} > "
+            f"{budget.soft_preflight_tokens} estimated tokens"
+        )
 
 
 def invoke_sidecar_verifier(
@@ -1999,7 +2003,11 @@ class SidecarVerifierHook:
                 generic_materials, generic_digest = generic_requirement_materials(
                     review_snapshot, Path(review_snapshot.scope.task.workspace), maximum=material_maximum)
             except (OSError, ValueError, RuntimeError) as error:
-                return StopHookDecision(action="abort", message=f"Runtime review evidence unavailable: {error}", source="verification-evidence")
+                return StopHookDecision(
+                    action="abort",
+                    message=format_public_error(error, prefix="Runtime review evidence unavailable: "),
+                    source="verification-evidence",
+                )
         verifier_context, metrics, compatibility_risk = self._evidence(context, runtime_state=state)
         if domain is not None and structured is not None:
             verifier_context = replace(verifier_context, additional_criteria=verifier_context.additional_criteria
@@ -2096,7 +2104,11 @@ class SidecarVerifierHook:
         try:
             _check_verifier_request_budget(_verifier_request(verifier_context), capabilities)
         except ValueError as error:
-            return StopHookDecision(action="abort", message=f"Runtime review evidence unavailable: {error}", source="verification-evidence")
+            return StopHookDecision(
+                action="abort",
+                message=format_public_error(error, prefix="Runtime review evidence unavailable: "),
+                source="verification-evidence",
+            )
 
         self.stats["fire_count"] += 1
         started = time.monotonic()
@@ -2151,7 +2163,11 @@ class SidecarVerifierHook:
                     _, current_digest = generic_requirement_materials(
                         review_snapshot, Path(review_snapshot.scope.task.workspace), maximum=material_maximum)
                 except (OSError, ValueError, RuntimeError) as error:
-                    return StopHookDecision(action="abort", message=f"Runtime review evidence unavailable: {error}", source="verification-evidence")
+                    return StopHookDecision(
+                        action="abort",
+                        message=format_public_error(error, prefix="Runtime review evidence unavailable: "),
+                        source="verification-evidence",
+                    )
                 with domain._lock:
                     if (domain.review_basis() != review_basis or current_digest != generic_digest
                             or domain.snapshot().candidate_fingerprint != review_snapshot.candidate_fingerprint):

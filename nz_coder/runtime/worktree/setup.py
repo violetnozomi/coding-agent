@@ -9,6 +9,8 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
+
 if TYPE_CHECKING:
     from nz_coder.runtime.process.preparation import PreparationScope
 
@@ -96,7 +98,12 @@ def _copy_ignored_files(root: Path, wt: Path, *, preparation: PreparationScope |
         if preparation is not None:
             result = preparation.run_git(tuple(args), cwd=root, timeout=30)
         else:
-            raw = subprocess.run(["git", *args], cwd=root, capture_output=True, timeout=30, check=False)
+            env = build_sanitized_subprocess_env()
+            env.update(GIT_TERMINAL_PROMPT="0", GIT_ASKPASS="")
+            raw = subprocess.run(
+                ["git", *args], cwd=root, capture_output=True, timeout=30, check=False,
+                stdin=subprocess.DEVNULL, env=env,
+            )
             result = subprocess.CompletedProcess(raw.args, raw.returncode, os.fsdecode(raw.stdout), os.fsdecode(raw.stderr))
         _checkpoint(preparation)
         if result.returncode != 0:

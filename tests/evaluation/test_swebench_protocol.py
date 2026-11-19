@@ -237,6 +237,7 @@ def test_harness_effective_config_and_changed_patch_cache(tmp_path, monkeypatch)
     adapter = SWEBenchAdapter("verified")
     monkeypatch.setattr(adapter, "_check_module", lambda _: (True, "", ""))
     monkeypatch.setattr(adapter, "_check_docker", lambda: (True, "", ""))
+    monkeypatch.setattr("nz_coder.swebench.adapter.importlib.metadata.version", lambda _: "offline-harness")
     commands = []
     monkeypatch.setattr("nz_coder.swebench.adapter.subprocess.run", lambda cmd:
         commands.append(cmd) or subprocess.CompletedProcess(cmd, 0))
@@ -284,6 +285,7 @@ def test_official_summary_keeps_missing_and_filtered_instances(tmp_path, monkeyp
     adapter = SWEBenchAdapter("verified")
     monkeypatch.setattr(adapter, "_check_module", lambda _: (True, "", ""))
     monkeypatch.setattr(adapter, "_check_docker", lambda: (True, "", ""))
+    monkeypatch.setattr("nz_coder.swebench.adapter.importlib.metadata.version", lambda _: "offline-harness")
     monkeypatch.setattr(adapter, "_prepull_instance_images", lambda *_a, **_k: ["owner__repo-1", "owner__repo-2", "owner__repo-4"])
     monkeypatch.setattr("nz_coder.swebench.adapter.subprocess.run",
         lambda cmd: subprocess.CompletedProcess(cmd, 0))

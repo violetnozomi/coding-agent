@@ -3,7 +3,21 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from nz_coder.tools.scratchpad import Scratchpad, _update_scratchpad, scoped_scratchpad, empty_memory
+
+
+def test_unsupported_notes_are_not_overwritten(tmp_path):
+    path = tmp_path / "notes.json"
+    original = b'{"version": 1, "entries": [{"category": "plan", "content": "old note", "ts": 1}]}\n'
+    path.write_bytes(original)
+    pad = Scratchpad(path)
+    with pytest.raises(ValueError, match="unsupported working memory format/version"):
+        pad.read()
+    with pytest.raises(ValueError, match="unsupported working memory format/version"):
+        pad.update_section("focus", [{"summary": "new note", "details": ""}])
+    assert path.read_bytes() == original
 
 
 def test_model_replaces_one_category_and_clears_it_without_empty_entries(tmp_path):

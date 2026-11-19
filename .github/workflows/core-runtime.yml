@@ -89,4 +89,4 @@ jobs:
           "$RUNNER_TEMP/nz-coder-installed/bin/nz-coder" doctor --repo-intelligence-only --json
           "$RUNNER_TEMP/nz-coder-installed/bin/nz-coder" config show --json
           "$RUNNER_TEMP/nz-coder-installed/bin/python" -c \
-            'from importlib.metadata import version; from importlib.resources import files; assert version("nz-coder"); assert files("nz_coder").joinpath("bundled_skills").is_dir(); assert files("nz_coder").joinpath("bundled_commands").is_dir()'
+            'from importlib.metadata import version; from importlib.resources import files; from nz_coder.evaluation.model_relay import RelayLedger; assert version("nz-coder"); assert files("nz_coder").joinpath("bundled_skills").is_dir(); assert files("nz_coder").joinpath("bundled_commands").is_dir()'

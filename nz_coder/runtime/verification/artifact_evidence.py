@@ -7,6 +7,7 @@ from pathlib import Path
 
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.foundation.file_kinds import is_documentation_file, is_test_file
+from nz_coder.protocol.public_error import PublicInputError
 
 
 def generic_requirement_materials(snapshot, workspace: Path, *, maximum: int = 64000) -> tuple[str, str]:
@@ -24,20 +25,20 @@ def generic_requirement_materials(snapshot, workspace: Path, *, maximum: int = 6
     remaining = maximum
     for path, fact in sorted(facts.items()):
         if not fact.complete:
-            raise ValueError(f"Incomplete artifact materials: {path}")
+            raise PublicInputError("Incomplete artifact materials.")
         if not fact.present and fact.operation == "delete":
             # 删除也是需要审查的变更，原差异由既有 diff 材料提供。
             if (Path(workspace) / path).exists():
-                raise ValueError(f"Artifact identity changed: {path}")
+                raise PublicInputError("Artifact identity changed.")
             section = json.dumps({"path": path, "operation": "delete", "sha256": fact.fingerprint})
         else:
             body, identity = access.read_bytes_with_identity(path, maximum=maximum * 4)
             if identity.content_hash != fact.fingerprint:
-                raise ValueError(f"Artifact identity changed: {path}")
+                raise PublicInputError("Artifact identity changed.")
             section = json.dumps({"path": path, "operation": fact.operation,
                 "sha256": identity.content_hash, "content": body.decode("utf-8")}, ensure_ascii=False)
         if len(section) > remaining:
-            raise ValueError(f"Complete artifact materials exceed review budget: {path}")
+            raise PublicInputError("Complete artifact materials exceed review budget.")
         sections.append(section)
         remaining -= len(section)
     # 不依赖滚动对话或已移除的义务定位旧失败；后继不同范围通过只作材料。
@@ -52,7 +53,7 @@ def generic_requirement_materials(snapshot, workspace: Path, *, maximum: int = 6
             "test_count": fact.test_count, "reliable": fact.reliable, "output_complete": fact.output_complete,
             "output_summary": fact.reason}, ensure_ascii=False)
         if len(section) > remaining:
-            raise ValueError("Complete execution review materials exceed review budget")
+            raise PublicInputError("Complete execution review materials exceed review budget")
         sections.append(section)
         remaining -= len(section)
     material = "\n".join(sections)

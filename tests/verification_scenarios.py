@@ -23,24 +23,36 @@ from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore, 
 
 
 class VerificationScenario:
-    def __init__(self, contract: TaskContract | None = None, workspace=None, plan=None, require_targeted=False):
+    def __init__(self, contract: TaskContract | None = None, workspace=None, plan=None, require_targeted=False, *, context=None, state=None):
+        if context is not None:
+            workspace = context.request.workspace
         self._temporary = TemporaryDirectory(prefix="nz-domain-fixture-") if workspace is None else None
         self.root = Path(self._temporary.name if self._temporary is not None else workspace).resolve()
-        request = RunRequest(agent=AgentDefinition(name="test", instructions="test"), profile=MAIN_PROFILE,
-                             workspace=self.root, session_id="test", messages=())
-        self.context = RunContext(request, Session.create("test", [], workspace=self.root), "test")
-        scope = RunScope(TaskScope("test", "task", str(self.root)), self.context.interaction_run_id, "test")
-        self.domain = VerificationDomain(lock=self.context._state_lock, scope=scope, version=WorkspaceVersion(), require_targeted=require_targeted)
+        if context is None:
+            request = RunRequest(agent=AgentDefinition(name="test", instructions="test"), profile=MAIN_PROFILE,
+                                 workspace=self.root, session_id="test", messages=())
+            context = RunContext(request, Session.create("test", [], workspace=self.root), "test")
+        self.context = context
+        scope = RunScope(TaskScope(context.session.session_id, "task", str(self.root)),
+                         context.interaction_run_id, context.active_agent)
+        self.state = RuntimeState() if state is None else state
+        acceptance = self.state.acceptance_mutation_generation
+        version = WorkspaceVersion(
+            self.state.mutation_generation, self.state.source_mutation_generation,
+            self.state.mutation_generation if acceptance is None else acceptance,
+        )
+        self.domain = VerificationDomain(lock=self.context._state_lock, scope=scope, version=version, require_targeted=require_targeted)
         self.context.attach_verification(self.domain)
-        self.state = RuntimeState()
         self.state.bind_run_context(self.context)
-        self.state.set_task_contract(contract or TaskContract())
+        if state is None or contract is not None:
+            self.state.set_task_contract(contract or TaskContract())
         self.store = WorkspaceSnapshotStore(self.root, self.root / ".nz-coder" / "test-snapshots")
         try:
             reference = self.store.verification_snapshot()
         except SnapshotError:
             reference = ""
-        self.state.workspace_observation = {"reference": reference, "generation": 0, "complete": bool(reference)}
+        self.state.workspace_observation = {"reference": reference,
+                                            "generation": version.generation, "complete": bool(reference)}
         self.runtime = VerificationRuntime(SimpleNamespace(runtime_state=self.state, workspace_snapshots=self.store,
             tracer=SimpleNamespace(log=lambda *_args, **_kwargs: None),
             workdir=self.root, _best_effort_tool_input=lambda value: __import__("json").loads(value) if isinstance(value, str) else value), self.context)

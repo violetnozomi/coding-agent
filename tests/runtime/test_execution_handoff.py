@@ -66,7 +66,8 @@ def test_save_failure_rejects_receipt_and_keeps_previous_handoff(tmp_path, monke
     state.execution_handoff = {"previous": True}
     monkeypatch.setattr(state, "_write_snapshot", lambda *_a: (_ for _ in ()).throw(OSError("disk full")))
     rejected = _submit(tmp_path, state, messages, call, result, tmp_path / "state.json")
-    assert rejected.dispatch_failed and "disk full" in rejected.output
+    assert rejected.dispatch_failed
+    assert rejected.output == "Error: execution handoff rejected: An internal error occurred."
     assert state.execution_handoff == {"previous": True}
 
 
@@ -95,6 +96,18 @@ def test_invalid_or_unseen_evidence_cannot_replace_current_action(tmp_path, chan
     rejected = _submit(tmp_path, state, messages, call, result)
     assert rejected.dispatch_failed and rejected.output.startswith("Error:")
     assert state.execution_handoff == {"previous": True}
+
+    # 固定文件类型校验仍应给模型提供可纠正的错误。
+    if change == "outside":
+        directory = tmp_path / "package"
+        directory.mkdir()
+        action["targets"][0]["path"] = directory.name
+        rejected = _submit(tmp_path, state, messages, call, result)
+        assert rejected.dispatch_failed
+        assert any(reason in rejected.output for reason in (
+            "Workspace target is not a regular file", "Workspace file boundary is unsafe",
+        ))
+        assert state.execution_handoff == {"previous": True}
 
 
 def test_external_change_invalidates_when_rendering_without_new_tool(tmp_path):

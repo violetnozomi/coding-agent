@@ -8,6 +8,7 @@ from pathlib import Path
 
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess, WorkspaceFileIdentity
 from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, PARTS_KEY, SESSION_ID_KEY, COMPACTION_KEY
+from nz_coder.protocol.public_error import PublicInputError, format_public_error, to_public_error
 from nz_coder.runtime.verification.domain.models import TaskScope
 
 
@@ -26,15 +27,15 @@ class WorkingPlanScope:
 
 def parse_working_plan_update(payload: dict) -> str:
     if not isinstance(payload, dict) or set(payload) != {"plan", "expected_revision"}:
-        raise ValueError("working plan requires only plan and expected_revision")
+        raise PublicInputError("working plan requires only plan and expected_revision")
     if type(payload["expected_revision"]) is not int or payload["expected_revision"] < 0:
-        raise ValueError("expected_revision must be a nonnegative integer")
+        raise PublicInputError("expected_revision must be a nonnegative integer")
     steps = payload["plan"]
     if not isinstance(steps, list) or any(
         not isinstance(step, dict) or set(step) - {"title", "target", "verification"}
         for step in steps
     ):
-        raise ValueError("working plan steps allow only title, target and verification")
+        raise PublicInputError("working plan steps allow only title, target and verification")
     return parse_working_plan(json.dumps({"plan": steps}, ensure_ascii=False))
 
 
@@ -58,14 +59,14 @@ def capture_working_plan_scope(state, run_context, assistant_message_id: str, me
 
 def _check_plan_source(state, scope, run, superseded) -> None:
     if not isinstance(scope, WorkingPlanScope) or run is None or state._verification_context is not run:
-        raise ValueError("working plan request context is unavailable")
+        raise PublicInputError("working plan request context is unavailable")
     if (run.cancel_scope.is_set() or run.finalized or run.terminal_status is not None or superseded()
             or scope.task != run.verification.scope.task
             or scope.agent_id != run.verification.scope.agent_id
             or scope.interaction_run_id != run.interaction_run_id
             or scope.authority_epoch != state.task_authority_epoch
             or scope.instruction_message_id != _plan_instruction(run.transcript)):
-        raise ValueError("working plan request is cancelled, frozen or superseded")
+        raise PublicInputError("working plan request is cancelled, frozen or superseded")
 
 
 def _commit_working_plan(state, scope, run, text, payload, call_id, *, source_kind, path, superseded) -> dict:
@@ -80,11 +81,11 @@ def _commit_working_plan(state, scope, run, text, payload, call_id, *, source_ki
             if (previous and previous.get("source_kind") == source_kind
                     and previous.get("scope") == asdict(scope) and previous.get("call_id") == call_id):
                 if previous["payload_hash"] != fingerprint:
-                    raise ValueError("same working plan call has a different payload")
+                    raise PublicInputError("same working plan call has a different payload")
                 return {"status": "already_accepted", "revision": previous["revision"],
                         "persisted": previous["persisted"], "reason": ""}
             if payload["expected_revision"] != scope.revision or scope.revision != state.plan_revision:
-                raise ValueError(f"stale working plan revision; expected_revision={state.plan_revision}")
+                raise PublicInputError(f"stale working plan revision; expected_revision={state.plan_revision}")
             status = "unchanged" if text == state.plan_text else "accepted"
             receipt = {"source_kind": source_kind, "scope": asdict(scope), "call_id": call_id,
                        "payload_hash": fingerprint, "revision": state.plan_revision + 1,
@@ -100,7 +101,7 @@ def _commit_working_plan(state, scope, run, text, payload, call_id, *, source_ki
             try:
                 _check_plan_source(state, scope, run, superseded)
                 if before != (state.plan_revision, state.plan_text, state.plan_last_commit):
-                    raise ValueError("working plan changed during save")
+                    raise PublicInputError("working plan changed during save")
             except ValueError as exc:
                 failure = exc
                 rollback = build_runtime_checkpoint(state, active=True)
@@ -121,30 +122,28 @@ def _commit_working_plan(state, scope, run, text, payload, call_id, *, source_ki
 
 
 def submit_working_plan(state, scope, call, result, messages, *, run_context, path=None, superseded=lambda: False):
-    from nz_coder.protocol.public_error import to_public_error
-
     proposal = (result.metadata or {}).get("working_plan_proposal")
     if proposal is None or result.dispatch_failed:
         return result
     try:
         if not isinstance(scope, WorkingPlanScope) or run_context is None or not scope.assistant_message_id:
-            raise ValueError("working plan request context is unavailable")
+            raise PublicInputError("working plan request context is unavailable")
         if result.name != "update_working_plan" or not result.executed or call.get("function", {}).get("name") != result.name:
-            raise ValueError("only executed update_working_plan may publish a route")
+            raise PublicInputError("only executed update_working_plan may publish a route")
         raw = call["function"].get("arguments", {})
         args = json.loads(raw) if isinstance(raw, str) else raw
         text = parse_working_plan_update(args)
         if args != proposal or args != result.tool_input:
-            raise ValueError("working plan proposal differs from the actual tool input")
+            raise PublicInputError("working plan proposal differs from the actual tool input")
         owners = [message for message in messages if message.get(MESSAGE_ID_KEY) == scope.assistant_message_id
                   and message.get("role") == "assistant" and any(item == call for item in message.get("tool_calls", []))]
         if len(owners) != 1 or not call.get("id"):
-            raise ValueError("working plan source call is unavailable or ambiguous")
+            raise PublicInputError("working plan source call is unavailable or ambiguous")
         receipt = _commit_working_plan(state, scope, run_context, text, args, call["id"],
             source_kind="tool", path=path, superseded=superseded)
     except (ValueError, TypeError, OSError) as exc:
         result.dispatch_failed = True
-        reason = to_public_error(exc).message if isinstance(exc, OSError) else str(exc)
+        reason = to_public_error(exc).message
         receipt = {"status": "rejected", "revision": state.plan_revision, "persisted": False, "reason": reason}
         result.output = "Error: working plan rejected: " + reason
     else:
@@ -229,18 +228,18 @@ def parse_working_plan(raw_text: str) -> str:
     try:
         payload = json.loads(raw_text)
     except (TypeError, json.JSONDecodeError) as exc:
-        raise ValueError("working plan must be a JSON object") from exc
+        raise PublicInputError("working plan must be a JSON object") from exc
     steps = payload.get("plan") if isinstance(payload, dict) else None
     if not isinstance(steps, list) or not steps:
-        raise ValueError("working plan requires nonempty plan steps")
+        raise PublicInputError("working plan requires nonempty plan steps")
     lines = ["## Plan"]
     for index, step in enumerate(steps, start=1):
         if not isinstance(step, dict) or not isinstance(step.get("title"), str) or not step["title"].strip():
-            raise ValueError("working plan step requires a title")
+            raise PublicInputError("working plan step requires a title")
         target = step.get("target", "need to search")
         verification = step.get("verification", "focused verification")
         if not isinstance(target, str) or not isinstance(verification, str):
-            raise ValueError("working plan target and verification must be text")
+            raise PublicInputError("working plan target and verification must be text")
         lines.append(f"{index}. {step['title'].strip()} - {target.strip()} - {verification.strip()}")
     return "\n".join(lines)
 
@@ -294,7 +293,7 @@ class ExecutionHandoff:
 
 def _text(value, name: str, limit: int, *, required: bool = True) -> str:
     if not isinstance(value, str) or len(value) > limit or (required and not value.strip()):
-        raise ValueError(f"invalid {name} (maximum {limit} characters)")
+        raise PublicInputError(f"invalid {name} (maximum {limit} characters)")
     return value
 
 
@@ -307,7 +306,7 @@ def _call_owner(messages: list, call_id: str) -> tuple[int, dict]:
               if message.get("role") == "assistant"
               for call in message.get("tool_calls", []) if call.get("id") == call_id]
     if len(owners) != 1 or not owners[0][1].get(MESSAGE_ID_KEY):
-        raise ValueError("source call/message identity is unavailable or ambiguous")
+        raise PublicInputError("source call/message identity is unavailable or ambiguous")
     return owners[0]
 
 
@@ -356,42 +355,42 @@ def _prepare_handoff(state, proposal: dict, messages: list, call_id: str, worksp
     source_index, source = _call_owner(messages, call_id)
     if any(is_filesystem_mutation_tool(call.get("function", {}).get("name", ""))
            for call in source.get("tool_calls", [])):
-        raise ValueError("submit the handoff in a separate batch before editing")
+        raise PublicInputError("submit the handoff in a separate batch before editing")
     action = proposal.get("next_action")
     if not isinstance(action, dict) or set(action) - {
         "kind", "evidence", "targets", "action", "verification_command", "verification_cwd",
     }:
-        raise ValueError("invalid next_action fields")
+        raise PublicInputError("invalid next_action fields")
     kind = action.get("kind")
     if kind not in {"inspect", "edit", "verify", "blocked"}:
-        raise ValueError("kind must be inspect, edit, verify or blocked")
+        raise PublicInputError("kind must be inspect, edit, verify or blocked")
     refs = action.get("evidence", [])
     if not isinstance(refs, list) or len(refs) > 5:
-        raise ValueError("evidence must contain at most 5 references")
+        raise PublicInputError("evidence must contain at most 5 references")
     seen = _seen_evidence(messages[:source_index])
     for ref in refs:
         _text(ref, "evidence ID", 200)
         if ref not in seen:
-            raise ValueError("evidence is not a visible settled tool/artifact: " + ref)
+            raise PublicInputError("evidence is not a visible settled tool/artifact")
     targets = action.get("targets", [])
     if not isinstance(targets, list) or len(targets) > 3 or (kind == "edit" and not targets):
-        raise ValueError("targets must contain at most 3 paths; edit requires a target")
+        raise PublicInputError("targets must contain at most 3 paths; edit requires a target")
     access = WorkspaceFileAccess(workspace)
     bound = []
     for target in targets:
         if not isinstance(target, dict) or set(target) != {"path", "symbol", "operation"}:
-            raise ValueError("target requires path, symbol, operation")
+            raise PublicInputError("target requires path, symbol, operation")
         raw_path = _text(target["path"], "target path", 240)
         path = str(access.display_path(raw_path, write=kind == "edit").relative_to(access.root))
         symbol = _text(target["symbol"], "symbol", 120, required=False)
         operation = target["operation"]
         if operation not in {"modify", "create", "read"}:
-            raise ValueError("operation must be modify, create or read")
+            raise PublicInputError("operation must be modify, create or read")
         current = _identity(access, path)
         observed = None
         if operation == "create":
             if current["expected_exists"]:
-                raise ValueError("new target already exists: " + path)
+                raise PublicInputError("new target already exists")
             observed = current
         else:
             for ref in refs:
@@ -402,7 +401,7 @@ def _prepare_handoff(state, proposal: dict, messages: list, call_id: str, worksp
             if observed is None and kind == "inspect":
                 observed = current
             if observed is None or observed != current:
-                raise ValueError("target must be re-read; observed version is missing or stale: " + path)
+                raise PublicInputError("target must be re-read; observed version is missing or stale")
         bound.append({"path": path, "symbol": symbol, "operation": operation, "identity": observed})
     command = _text(action.get("verification_command", ""), "verification command", 500, required=kind == "verify")
     cwd = _text(action.get("verification_cwd", "."), "verification cwd", 240)
@@ -418,7 +417,7 @@ def _prepare_handoff(state, proposal: dict, messages: list, call_id: str, worksp
         verification_failures=state.verification_failures,
     ))
     if len(_display_handoff(value)) > 1500:
-        raise ValueError("handoff display exceeds 1500 characters; shorten complete fields")
+        raise PublicInputError("handoff display exceeds 1500 characters; shorten complete fields")
     return value
 
 
@@ -430,9 +429,9 @@ def submit_execution_handoff(state, call, result, messages, *, workspace, path=N
     try:
         if (result.name != "update_scratchpad" or not result.executed
                 or call.get("function", {}).get("name") != "update_scratchpad"):
-            raise ValueError("only executed update_scratchpad may submit an execution handoff")
+            raise PublicInputError("only executed update_scratchpad may submit an execution handoff")
         if not isinstance(proposal, dict):
-            raise ValueError("invalid execution handoff proposal")
+            raise PublicInputError("invalid execution handoff proposal")
         _, source = _call_owner(messages, str(call.get("id") or ""))
         previous = state.execution_handoff
         duplicate = (previous.get("source_call") == call.get("id")
@@ -443,7 +442,7 @@ def submit_execution_handoff(state, call, result, messages, *, workspace, path=N
         receipt = "Execution handoff accepted" + (" (current process only)" if path is None else " (saved)")
         return replace(result, output=receipt, metadata={"execution_handoff_accepted": state.execution_handoff["source_call"]})
     except (ValueError, TypeError, OSError) as exc:
-        return replace(result, output="Error: execution handoff rejected: " + str(exc), dispatch_failed=True,
+        return replace(result, output=format_public_error(exc, context="execution handoff rejected: "), dispatch_failed=True,
                        metadata={"execution_handoff_rejected": True})
 
 

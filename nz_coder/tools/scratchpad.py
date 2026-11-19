@@ -12,8 +12,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import RLock
 
+from nz_coder.protocol.public_error import PublicInputError, format_public_error, to_public_error
 from nz_coder.tools import ToolOutput, register
-from nz_coder.protocol.public_error import to_public_error
 
 SECTIONS = ("focus", "findings", "decisions", "lessons")
 
@@ -45,7 +45,7 @@ def empty_memory() -> dict:
 
 def validate_entries(section: str, entries: list, *, stored: bool = False) -> None:
     if section not in SECTIONS or not isinstance(entries, list):
-        raise ValueError("invalid working memory section or entries")
+        raise PublicInputError("invalid working memory section or entries")
     fields = {"summary", "details"}
     if section == "findings":
         fields |= {"certainty", "basis"}
@@ -53,23 +53,23 @@ def validate_entries(section: str, entries: list, *, stored: bool = False) -> No
         fields.add("ts")
     for entry in entries:
         if not isinstance(entry, dict) or set(entry) != fields:
-            raise ValueError(f"invalid working memory fields in {section}")
+            raise PublicInputError(f"invalid working memory fields in {section}")
         if not isinstance(entry["summary"], str) or not entry["summary"].strip():
-            raise ValueError("working memory summary must be a nonempty string")
+            raise PublicInputError("working memory summary must be a nonempty string")
         if not isinstance(entry["details"], str):
-            raise ValueError("working memory details must be a string")
+            raise PublicInputError("working memory details must be a string")
         if section == "findings" and (
             entry["certainty"] not in ("confirmed", "hypothesis")
             or not isinstance(entry["basis"], str)
         ):
-            raise ValueError("invalid finding certainty or basis")
+            raise PublicInputError("invalid finding certainty or basis")
         if stored and (type(entry["ts"]) not in (float, int) or not math.isfinite(entry["ts"])):
             raise ValueError("invalid working memory timestamp")
 
 
 def validate_memory(memory: dict, *, stored: bool = False) -> None:
     if not isinstance(memory, dict) or set(memory) != set(SECTIONS):
-        raise ValueError("working memory requires all four sections")
+        raise PublicInputError("working memory requires all four sections")
     for section in SECTIONS:
         validate_entries(section, memory[section], stored=stored)
 
@@ -225,7 +225,7 @@ class Scratchpad:
         try:
             validate_memory(memory)
         except ValueError as exc:
-            return str(exc)
+            return to_public_error(exc).message
         with self._lock:
             if self._session_state().revision != expected_revision:
                 return "stale working memory revision"
@@ -250,7 +250,7 @@ class Scratchpad:
         try:
             validate_entries(section, entries)
         except ValueError as exc:
-            return f"Error: {exc}"
+            return format_public_error(exc)
         with self._lock:
             memory = self.memory
             notes = self._stamp(entries)

@@ -1,6 +1,7 @@
 """提出阶段路线更新；当前运行时负责归属、提交版本和持久化。"""
 from __future__ import annotations
 
+from nz_coder.protocol.public_error import format_public_error
 from nz_coder.runtime.agent.planning_runtime import parse_working_plan_update
 from nz_coder.tools import ToolOutput, register
 
@@ -10,7 +11,7 @@ def update_working_plan(plan: list, expected_revision: int) -> str:
     try:
         parse_working_plan_update(payload)
     except ValueError as exc:
-        return "Error: " + str(exc)
+        return format_public_error(exc)
     return ToolOutput("Working plan proposed; awaiting runtime acceptance.",
                       metadata={"working_plan_proposal": payload})
 

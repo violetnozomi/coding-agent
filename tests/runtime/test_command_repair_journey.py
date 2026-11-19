@@ -59,7 +59,7 @@ def test_explicit_unittest_stderr_success_completes_real_runner(monkeypatch, tmp
     result, state, trace, requests, auxiliary, permissions = _journey(
         monkeypatch, tmp_path, 'stderr-success',
         [READ, [_tool('edit_file', path='app.py', old_text='return 0', new_text='return 2')],
-         [_tool('bash', command=STDERR_COMMAND)]],
+         [_tool('bash', command=STDERR_COMMAND)], 'The required check passes.'],
         task=TASK + f' Acceptance command: `{STDERR_COMMAND}`.',
     )
     assert (tmp_path / 'app.py').read_text() == 'def value():\n    return 2\n'
@@ -72,7 +72,7 @@ def test_explicit_unittest_stderr_success_completes_real_runner(monkeypatch, tmp
     boundary = [item for item in trace if item.get('event') == 'terminal_boundary_settled'][-1]
     assert boundary['contract_required'] and boundary['contract_passed']
     assert boundary['unresolved_requirements'] == []
-    assert len(requests) == 3
+    assert len(requests) == 4
     assert permissions and all(item[2] for item in permissions)
 
 
@@ -81,6 +81,7 @@ def test_redirected_real_failure_after_edit_prevents_runner_completion(monkeypat
     result, state, trace, requests, *_ = _journey(
         monkeypatch, tmp_path, 'redirected-failure',
         [READ, [EDIT_WRONG, _tool('bash', command=REDIRECT_COMMAND)], 'The task is done.'],
+        task=TASK + f' Acceptance command: `{REDIRECT_COMMAND}`.',
     )
     assert (tmp_path / 'app.py').read_text() == 'def value():\n    return 11\n'
     body = (tmp_path / 'unit-output.txt').read_text()
@@ -118,6 +119,7 @@ def test_repair_and_fresh_clean_subject_settle_redirected_failure(monkeypatch, t
     assert boundaries[-1]['status'] == 'completed'
     assert boundaries[-1]['unresolved_requirements'] == []
     final = [item for item in trace if item.get('event') == 'run_end'][-1]
-    assert final['completion_ready'] is True and final['tests_passed'] is True
+    assert final['completion_ready'] is True and final['tests_passed'] is None
+    assert result.metadata['verification']['last_verification']['status'] == 'passed'
     assert not any(item['status'] == 'pending' for item in final['test_obligations'])
     assert len(requests) >= 3

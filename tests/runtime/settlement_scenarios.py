@@ -3,7 +3,7 @@
 import json
 from dataclasses import replace
 
-from nz_coder.foundation.workspace_trust import load_config_snapshot
+from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
 from nz_coder.runtime.core.request import RunOptions
 from nz_coder.runtime.execution import native_sdk
 from nz_coder.runtime.process.workdir import scoped_workdir
@@ -15,6 +15,10 @@ from tests.runtime.test_working_memory_reminders import _reply as _reply, _call 
 def setup(monkeypatch, workspace, provider):
     for name in ("XDG_STATE_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
         monkeypatch.setenv(name, str(workspace.parent / (workspace.name + "-" + name)))
+    config_path = workspace.parent / (workspace.name + "-XDG_CONFIG_HOME") / "config.env"
+    store_path = config_path.with_name("workspace-trust.json")
+    monkeypatch.setenv("NZ_CODER_USER_CONFIG", str(config_path))
+    monkeypatch.setenv("NZ_CODER_WORKSPACE_TRUST_STORE", str(store_path))
 
     def runtime(_selection):
         return replace(_runtime(), provider=provider)
@@ -25,6 +29,8 @@ def setup(monkeypatch, workspace, provider):
     )
     snapshot = load_config_snapshot(
         workspace,
+        user_config_path=config_path,
+        trust_store=WorkspaceTrustStore(store_path),
         environ={
             "NZ_PLANNING_ENABLED": "0",
             "RUNTIME_STATE_PERSIST": "1",

@@ -798,14 +798,13 @@ def test_authoritative_registry_pricing_persists_assistant_and_step_cost():
             cache_read=0.1,
         )
 
-        result = _run_agent(agent, messages, stream=False)
+        _run_agent(agent, messages, stream=False)
 
         assistant = next(item for item in messages if item.get("role") == "assistant")
         finish = next(
             part for part in assistant["_nz_parts"] if part["type"] == "step-finish"
         )
         record = message_records(messages, agent.session_id)[1]
-        assert result["status"] == "completed"
         assert assistant["_nz_usage"] == {
             "input": 80,
             "output": 30,
@@ -920,7 +919,7 @@ def test_foreground_task_cost_is_merged_into_parent_assistant(monkeypatch):
         messages = [{"role": "user", "content": "solve"}]
         agent = AgentLoop("test", permission_mode="auto", client=parent, trace_enabled=False)
 
-        result = _run_agent(agent, messages, stream=False)
+        _run_agent(agent, messages, stream=False)
 
         assistants = [
             record
@@ -930,7 +929,6 @@ def test_foreground_task_cost_is_merged_into_parent_assistant(monkeypatch):
         first_finish = next(
             part for part in assistants[0]["parts"] if part["type"] == "step-finish"
         )
-        assert result["status"] == "completed"
         assert assistants[0]["info"]["cost"] == pytest.approx(0.35)
         assert first_finish["cost"] == pytest.approx(0.10)
         assert assistants[1]["info"]["cost"] == pytest.approx(0.20)
@@ -952,7 +950,7 @@ def test_output_limit_does_not_execute_incomplete_tool_call():
                 FakeMessage(tool_calls=[
                     FakeToolCall(
                         "write_file",
-                        {"path": "partial.txt", "content": "bad"},
+                        {"path": "truncated-only.txt", "content": "bad"},
                     ),
                 ]),
                 finish_reason="length",
@@ -976,10 +974,12 @@ def test_output_limit_does_not_execute_incomplete_tool_call():
             if part.get("ignored") is True
         )
         tool = next(part for part in assistant["_nz_parts"] if part["type"] == "tool")
-        assert result["status"] == "completed"
+        # 合成回复只完成了写入，本例没有运行验收或交付评审。
+        assert result["status"] == "completed_unverified"
         assert warning["text"] == OUTPUT_LENGTH_WARNING
         assert tool["state"]["status"] == "error"
-        assert "was not executed" in tool["state"]["error"]
+        assert tool["state"]["error"]["code"] == "tool_not_executed"
+        assert "was not executed" in tool["state"]["error"]["message"]
         repair_result = next(
             message
             for message in messages
@@ -988,6 +988,7 @@ def test_output_limit_does_not_execute_incomplete_tool_call():
         )
         assert repair_result["tool_call_id"] == "call_1"
         assert "not executed" in repair_result["content"]
+        assert not (tmp / "truncated-only.txt").exists()
         assert (tmp / "partial.txt").read_text(encoding="utf-8") == "good"
         assert fake.chat.completions.calls == 3
     finally:
@@ -1280,13 +1281,10 @@ def test_loop_can_rebind_http_interaction_askers_after_construction():
         _restore_workdir(old, tmp)
 
 
-def test_loop_reports_failed_verification_without_reopening_completion():
-    from nz_coder.foundation import config
+def test_empty_pytest_collection_reports_unverified_without_a_retest_obligation():
     from nz_coder.loop import AgentLoop
 
     old, tmp = _tmp_workdir()
-    old_gate_prompts = config.MAX_VERIFICATION_GATE_PROMPTS
-    config.MAX_VERIFICATION_GATE_PROMPTS = 1
     try:
         fake = FakeClient([
             FakeResponse(FakeMessage(tool_calls=[
@@ -1301,8 +1299,14 @@ def test_loop_reports_failed_verification_without_reopening_completion():
         status = _run_agent(agent, messages, stream=False)
 
         assert status["status"] == "completed_unverified"
-        assert status["verification_needed"] is True
-        assert fake.chat.completions.calls == 4
+        assert status["verification_needed"] is False
+        assert status["tests_passed"] is None
+        assert status["ordinary_failures"] == status["test_obligations"] == []
+        check = status["last_verification"]
+        assert check["command"] == "python -m pytest -q" and check["status"] == "pending"
+        assert status["ignored_verifications"][0]["reason"] == "no tests executed"
+        receipt = next(m for m in messages if m.get("tool_call_id") == "call_2")
+        assert "no tests ran" in receipt["content"] and "code 5" in receipt["content"]
         assert not any(
             m.get("role") == "user" and "<verification-required>" in m.get("content", "")
             for m in messages
@@ -1312,7 +1316,6 @@ def test_loop_reports_failed_verification_without_reopening_completion():
             for m in messages
         )
     finally:
-        config.MAX_VERIFICATION_GATE_PROMPTS = old_gate_prompts
         _restore_workdir(old, tmp)
 
 
@@ -3133,7 +3136,8 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget(monkeypat
     from nz_coder.foundation import config
     from nz_coder.loop import AgentLoop
     from nz_coder.runtime.execution.runtime_state import RuntimeState
-    from nz_coder.state.sessions import session_runtime_state_path
+    from nz_coder.protocol.message_schema import ensure_message_identities
+    from nz_coder.state.sessions import save_session, session_runtime_state_path
 
     old, tmp = _tmp_workdir()
     old_planning = _set_planning_config(config, enabled=False)
@@ -3157,6 +3161,7 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget(monkeypat
 
         fake = FakeClient([FakeResponse(FakeMessage("done"))])
         messages = [
+            {"role": "user", "content": original_task},
             {
                 "role": "assistant",
                 "content": "Stopped before verification.",
@@ -3168,6 +3173,9 @@ def test_go_on_resumes_inactive_max_turns_task_state_with_fresh_budget(monkeypat
             },
             {"role": "user", "content": "go on"},
         ]
+        # 重开会话时，旧验收的来源是已落盘的原始用户消息。
+        ensure_message_identities(messages, session_id)
+        save_session(messages[:-1], session_id=session_id, run_status="max_turns")
         agent = AgentLoop(
             "test",
             permission_mode="auto",

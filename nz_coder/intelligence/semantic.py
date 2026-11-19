@@ -14,7 +14,6 @@ from threading import RLock
 import time
 from typing import Protocol, Sequence
 
-from nz_coder.foundation import config
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.intelligence.code_index import PersistentCodeIndex
 
@@ -210,9 +209,13 @@ class RepositorySemanticIndex:
         self._chunks_stale = False
         access = WorkspaceFileAccess(self.workspace)
         for entry in files:
+            if not entry.content_hash:
+                self._chunks_stale = True
+                continue
             try:
+                # 用结构索引已读取的字节范围，避免另取宿主设置或读取较新的源码。
                 data, identity = access.read_bytes_with_identity(
-                    entry.path, maximum=max(1, int(config.REPO_MAP_MAX_FILE_BYTES))
+                    entry.path, maximum=entry.fingerprint[1]
                 )
                 if identity.content_hash != entry.content_hash:
                     self._chunks_stale = True

@@ -1,6 +1,7 @@
 """发布模型任务判断的纯元数据提案；正式运行时负责来源、版本及落盘。"""
 from __future__ import annotations
 
+from nz_coder.protocol.public_error import PublicInputError, format_public_error
 from nz_coder.runtime.agent.task_intent import COMPLEXITIES, TASK_KINDS, parse_task_assessment
 from nz_coder.tools import ToolOutput, register
 
@@ -9,11 +10,11 @@ def update_task_assessment(task_kinds: list, complexity: str, reason: str, uncer
                            expected_revision: int) -> str:
     try:
         if type(expected_revision) is not int or expected_revision < 0:
-            raise ValueError("expected_revision must be a nonnegative integer")
+            raise PublicInputError("expected_revision must be a nonnegative integer")
         value = parse_task_assessment({"task_kinds": task_kinds, "complexity": complexity,
                                        "reason": reason, "uncertainties": uncertainties})
     except ValueError as exc:
-        return "Error: " + str(exc)
+        return format_public_error(exc)
     return ToolOutput("Task assessment proposed; awaiting runtime acceptance.",
                       metadata={"task_assessment_proposal": {**value, "expected_revision": expected_revision}})
 

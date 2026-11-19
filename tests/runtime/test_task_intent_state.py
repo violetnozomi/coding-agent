@@ -141,18 +141,21 @@ def test_interrupted_result_does_not_publish(tmp_path, interruption):
     assert result.dispatch_failed and current_task_assessment(state) is None
 
 
-def test_save_failure_preserves_previous_value_and_revision(monkeypatch, tmp_path):
+@pytest.mark.parametrize("error_type", [OSError, ValueError])
+def test_save_failure_preserves_previous_value_and_revision(monkeypatch, tmp_path, error_type):
     state, run = setup_run(tmp_path)
     assert not publish(state, run)[0].dispatch_failed
     before = copy.deepcopy(state.task_assessment_state)
 
     def fail(*_args):
-        raise OSError("disk full")
+        raise error_type("Could not save the private checkpoint")
 
     monkeypatch.setattr(state, "_write_snapshot", fail)
     result, _, _, _ = publish(state, run, value={**VALUE, "complexity": "complex"}, revision=1,
                              call_id="call-two", path=tmp_path / "state.json")
     assert result.dispatch_failed and state.task_assessment_state == before
+    assert result.output == "Error: task assessment rejected: An internal error occurred."
+    assert result.metadata["task_assessment_commit"]["reason"] == "An internal error occurred."
 
 
 def test_cancellation_during_save_does_not_leave_new_value_on_disk(monkeypatch, tmp_path):

@@ -124,7 +124,8 @@ def test_terminal_controller_two_runs_use_bound_permission_selector(tmp_path, mo
                     await _until(lambda: composer._dialog_future is not None)
                     pipe.send_text("\r")
                     result = await asyncio.wait_for(task, 5)
-                    assert result["status"] == "completed"
+                    assert result["status"] == "completed_unverified"
+                    assert result["verification"]["review_pending"] is True
                     assert (tmp_path / name).read_text() == f"run {index}"
                     assert composer._dialog_kind == ""
             finally:

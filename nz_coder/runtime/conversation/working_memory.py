@@ -9,6 +9,7 @@ from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
 from nz_coder.runtime.conversation.message_projection import project_provider_messages
 from nz_coder.runtime.conversation.model_result import ModelCompletionError
 from nz_coder.runtime.core.model_context import ModelExecutionContext
+from nz_coder.runtime.core.run_context import current_run_context
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.runtime.model_gateway import ModelCall, ModelCallPurpose, ModelCallStatus
 from nz_coder.state.context import estimate_request_tokens
@@ -39,18 +40,25 @@ Return all notes to keep, including unchanged ones; replacement is atomic, not a
 """
 
 
+async def _check_cancellation() -> None:
+    # 让待处理的任务取消先送达，再检查运行自己的取消信号。
+    await asyncio.sleep(0)
+    run = current_run_context()
+    if run is not None:
+        run.check_cancelled()
+
+
 async def maintain_working_memory(
     model: ModelExecutionContext, pad: Scratchpad, *, task: dict, history: list,
     projected_tokens: int, interval: int, superseded: Callable[[], bool],
     current_facts: Callable[[], str], under_pressure: bool | None = None,
 ) -> None:
-    """只提交模型结果；资源、用量和取消仍由正式 Gateway 管理。"""
+    """提交前检查取消，模型资源和用量由正式 Gateway 管理。"""
     budget = model.prompt_budget()
     pressure = (projected_tokens > budget.soft_preflight_tokens
                 if under_pressure is None else under_pressure)
     reason = pad.reminder_reason(interval, pressure)
-    if asyncio.current_task().cancelling():
-        raise asyncio.CancelledError
+    await _check_cancellation()
     if not reason or superseded():
         return
 
@@ -63,8 +71,7 @@ async def maintain_working_memory(
         return
     # 当前事实只在实际整理窗口生成；沿用 renderer 的动作失效检查，不保存副本。
     facts = current_facts()
-    if asyncio.current_task().cancelling():
-        raise asyncio.CancelledError
+    await _check_cancellation()
     if superseded():
         return
     existing_memory, revision = pad.snapshot()
@@ -98,15 +105,12 @@ async def maintain_working_memory(
             timeout_seconds=current_run_settings().provider_hard_timeout,
             metadata={"operation": "working_memory_maintenance", "task_message_id": task["message_id"]},
         ))
+        await _check_cancellation()
+        if outcome.status is ModelCallStatus.CANCELLED:
+            raise asyncio.CancelledError
     except asyncio.CancelledError:
         trace("cancelled")
         raise
-    if asyncio.current_task().cancelling():
-        trace("cancelled")
-        raise asyncio.CancelledError
-    if outcome.status is ModelCallStatus.CANCELLED:
-        trace("cancelled")
-        raise asyncio.CancelledError
     if outcome.status is not ModelCallStatus.COMPLETED:
         trace("provider_failed", gateway_status=outcome.status.value)
         raise ModelCompletionError(model.project_outcome(outcome))

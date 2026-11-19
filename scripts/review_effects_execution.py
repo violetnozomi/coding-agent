@@ -128,6 +128,103 @@ def local_counter(raw, _request):
                            contract_id="local-fake-v1", payload_sha256=hashlib.sha256(raw).hexdigest())
 
 
+def _cleanup_failure(failures, stage, exc, on_interrupt=None):
+    failures.append((stage, exc))
+    if isinstance(exc, KeyboardInterrupt) and on_interrupt is not None:
+        # 人工中断必须先切断在途请求，再继续等待其他 owner；取消本身失败也保留原中断。
+        _cleanup_call(failures, "manual-cancel", on_interrupt)
+
+
+def _cleanup_call(failures, stage, action, *args, on_interrupt=None, **kwargs):
+    try:
+        return action(*args, **kwargs)
+    except BaseException as exc:
+        _cleanup_failure(failures, stage, exc, on_interrupt)
+        return None
+
+
+def _report_cleanup(path, failures):
+    if not failures:
+        return
+    primary = sys.exc_info()[1]
+    records = [{"stage": stage, "type": type(exc).__name__, "detail": str(exc)} for stage, exc in failures]
+    try:
+        save(path, records)
+    except BaseException as exc:
+        failures.append(("cleanup-report", exc))
+        print(json.dumps({"cleanup_failures": records, "report_error": str(exc)}), file=sys.stderr)
+    if primary is None:
+        raise failures[0][1]
+
+
+def _close_services(services, failures, *, on_interrupt=None):
+    # 未启动的 serve_forever 不能调用 shutdown，否则 socketserver 会永久等待。
+    for service, thread in services:
+        if thread.ident is not None:
+            _cleanup_call(failures, "listener-shutdown", service.shutdown, on_interrupt=on_interrupt)
+        _cleanup_call(failures, "listener-close", service.server_close, on_interrupt=on_interrupt)
+    for _service, thread in services:
+        if thread.ident is not None:
+            _cleanup_call(failures, "listener-join", thread.join, 2, on_interrupt=on_interrupt)
+            if thread.is_alive():
+                failures.append(("listener-join", RuntimeError("listener thread did not exit")))
+
+
+def _cleanup_case(case, run, ledger, relays, process, owns_container, failures):
+    def on_interrupt():
+        ledger.cancel(run)
+
+    primary = sys.exc_info()[1]
+    if primary is not None:
+        _cleanup_call(failures, "close-admissions", ledger.close_admissions, "controller_error", on_interrupt=on_interrupt)
+    if isinstance(primary, KeyboardInterrupt):
+        _cleanup_call(failures, "manual-cancel", ledger.cancel, run)
+    name = "nz-review-" + case.name
+    remove = False
+    if owns_container:
+        try:
+            if name in docker("ps", "-a", "--format", "{{.Names}}", timeout=5).stdout.splitlines():
+                inspected = json.loads(docker("inspect", name, timeout=5).stdout)[0]
+                if inspected["Config"]["Labels"].get("nz-review-case") != case.name:
+                    raise RuntimeError("refuse cleanup of container without owned case label")
+                if inspected["State"]["Running"]:
+                    docker("kill", name, timeout=5)
+                remove = True
+        except BaseException as exc:
+            _cleanup_failure(failures, "container-stop", exc, on_interrupt)
+    if process is not None:
+        try:
+            process.wait(timeout=5)
+        except BaseException as exc:
+            _cleanup_failure(failures, "process-wait", exc, on_interrupt)
+            _cleanup_call(failures, "process-kill", process.kill, on_interrupt=on_interrupt)
+            _cleanup_call(failures, "process-reap", process.wait, timeout=5, on_interrupt=on_interrupt)
+    if remove:
+        _cleanup_call(failures, "container-remove", docker, "rm", name, timeout=5, on_interrupt=on_interrupt)
+    _close_services(relays, failures, on_interrupt=on_interrupt)
+    # 关监听只阻止新连接；计数阶段和已有转发都必须实际退出后才能关闭账本。
+    for server, _thread in relays:
+        before_wait = len(failures)
+        drained = _cleanup_call(failures, "handler-wait", server.wait_handlers, server.binding.deadline,
+                                on_interrupt=on_interrupt)
+        if any(isinstance(exc, KeyboardInterrupt) for _stage, exc in failures[before_wait:]):
+            # 原中断仍是失败；硬取消后给当前 owner 一次原期限内的实际退出等待。
+            drained = _cleanup_call(failures, "handler-wait-retry", server.wait_handlers, server.binding.deadline,
+                                    on_interrupt=on_interrupt)
+        if not drained:
+            failures.append(("handler-wait", RuntimeError("relay handler did not exit before deadline")))
+
+
+def _close_ledger(ledger, relays, failures):
+    if any(thread.is_alive() for _server, thread in relays):
+        failures.append(("ledger-close", RuntimeError("ledger retained: relay listener is still active")))
+        return
+    if any(server.active_handlers for server, _thread in relays):
+        failures.append(("ledger-close", RuntimeError("ledger retained: relay handler is still active")))
+        return
+    _cleanup_call(failures, "ledger-close", ledger.close)
+
+
 def probe(directory, probe_id, modes):
     runtime = json.loads((directory / "runtime.json").read_text())
     spec = importlib.util.spec_from_file_location("execution_fake", FIXTURES / "review_execution_fake.py")
@@ -148,19 +245,24 @@ def probe(directory, probe_id, modes):
         for name in ("score", "other-candidate", "host-home", "credentials"):
             (case / "private" / name).write_text("nonsensitive sentinel\n")
         ws = case / "workspace"
-        fake = module.ExecutionFake(cancel=mode != "positive")
-        fake_thread = threading.Thread(target=fake.serve_forever, daemon=True)
-        fake_thread.start()
-        (ws / "calc.py").write_text("value = 1\n")
-        (ws / "tests").mkdir()
-        (ws / "tests/test_calc.py").write_text("from calc import value\ndef test_value(): assert value == 2\n")
-        shutil.copyfile(FIXTURES / "review_boundary_probe.py", ws / "boundary_probe.py")
-        (ws / "outside-link").symlink_to(private)
-        targets = {"absolute": str(private), "score": str(case / "private/score"),
-                   "other_candidate": str(case / "private/other-candidate"), "host_home": str(case / "private/host-home"),
-                   "credential_sentinel": str(case / "private/credentials"), "host_evidence": str(FROZEN / "README.md")}
-        save(ws / "probe-config.json", {"outside_targets": targets, "host_pid": os.getpid(), "host_port": fake.server_port})
-        (ws / "heartbeat.py").write_text('''import os,subprocess,sys,time,uuid
+        ledger, process = None, None
+        relays, fake_services = [], []
+        owns_container = False
+        try:
+            fake = module.ExecutionFake(cancel=mode != "positive")
+            fake_thread = threading.Thread(target=fake.serve_forever, daemon=True)
+            fake_services.append((fake, fake_thread))
+            fake_thread.start()
+            (ws / "calc.py").write_text("value = 1\n")
+            (ws / "tests").mkdir()
+            (ws / "tests/test_calc.py").write_text("from calc import value\ndef test_value(): assert value == 2\n")
+            shutil.copyfile(FIXTURES / "review_boundary_probe.py", ws / "boundary_probe.py")
+            (ws / "outside-link").symlink_to(private)
+            targets = {"absolute": str(private), "score": str(case / "private/score"),
+                       "other_candidate": str(case / "private/other-candidate"), "host_home": str(case / "private/host-home"),
+                       "credential_sentinel": str(case / "private/credentials"), "host_evidence": str(FROZEN / "README.md")}
+            save(ws / "probe-config.json", {"outside_targets": targets, "host_pid": os.getpid(), "host_port": fake.server_port})
+            (ws / "heartbeat.py").write_text('''import os,subprocess,sys,time,uuid
 from pathlib import Path
 import httpx
 if "--child" not in sys.argv: subprocess.Popen([sys.executable,__file__,"--child"])
@@ -172,69 +274,67 @@ with httpx.Client(transport=httpx.HTTPTransport(uds="/model/main.sock"),trust_en
   except httpx.HTTPError: pass
   time.sleep(0.03)
 ''')
-        commands = ["python boundary_probe.py", "python -m pytest -q tests"] if mode == "positive" else ["python heartbeat.py"]
-        task = ("Set calc.py value to 2. Preserve integer result behavior. Verify workspace boundaries using the existing probe script. Run python -m pytest -q tests and report actual results."
-                if mode == "positive" else "Run python heartbeat.py to exercise cancellation. Do not edit code.")
-        save(case / "input/run.json", {"task": task, "bash_commands": commands})
-        ledger = RelayLedger(case / "ledger.jsonl", RelayLimits())
-        run_seconds = 6 if mode == "timeout" else 30
-        deadline = time.monotonic() + run_seconds
-        servers, threads = [], []
-        for role, cap, output, exact in (("main", 12, 64000, True), ("auxiliary", 6, 64000, False)):
-            binding = RelayBinding("execution-probe", mode, mode, role, cap, "deepseek-v4-flash", output, deadline, exact)
-            server = RelayServer(case / "sockets" / (role + ".sock"), ledger=ledger, binding=binding,
-                upstream=f"http://127.0.0.1:{fake.server_port}/v1/chat/completions", counter=local_counter)
-            thread = threading.Thread(target=server.serve_forever, daemon=True)
-            thread.start()
-            servers.append(server)
-            threads.append(thread)
-        argv = launch_argv(directory, case, image=runtime["image"])
-        container_name = "nz-review-" + case.name
-        assert container_name not in docker("ps", "-a", "--format", "{{.Names}}").stdout.splitlines(), "existing container must not be replaced"
-        with ExitStack() as stack:
-            sentinel_fd = stack.enter_context(private.open())
-            os.set_inheritable(sentinel_fd.fileno(), True)
-            stdout = stack.enter_context((case / "stdout.txt").open("w"))
-            stderr = stack.enter_context((case / "stderr.txt").open("w"))
-            env = {"PATH": os.environ["PATH"], "HOME": str(Path.home()), "LANG": "C.UTF-8"}
-            process = subprocess.Popen(argv, env=env, stdout=stdout, stderr=stderr, close_fds=True)
+            commands = ["python boundary_probe.py", "python -m pytest -q tests"] if mode == "positive" else ["python heartbeat.py"]
+            task = ("Set calc.py value to 2. Preserve integer result behavior. Verify workspace boundaries using the existing probe script. Run python -m pytest -q tests and report actual results."
+                    if mode == "positive" else "Run python heartbeat.py to exercise cancellation. Do not edit code.")
+            save(case / "input/run.json", {"task": task, "bash_commands": commands})
+            ledger = RelayLedger(case / "ledger.jsonl", RelayLimits(), stop_on_rejection=True)
+            run_seconds = 6 if mode == "timeout" else 30
+            deadline = time.monotonic() + run_seconds
+            for role, cap, output, exact in (("main", 12, 64000, True), ("auxiliary", 6, 64000, False)):
+                binding = RelayBinding("execution-probe", mode, mode, role, cap, "deepseek-v4-flash", output, deadline, exact)
+                server = RelayServer(case / "sockets" / (role + ".sock"), ledger=ledger, binding=binding,
+                    upstream=f"http://127.0.0.1:{fake.server_port}/v1/chat/completions", counter=local_counter)
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                relays.append((server, thread))
+                thread.start()
+            argv = launch_argv(directory, case, image=runtime["image"])
+            container_name = "nz-review-" + case.name
+            assert container_name not in docker("ps", "-a", "--format", "{{.Names}}").stdout.splitlines(), "existing container must not be replaced"
+            owns_container = True
+            with ExitStack() as stack:
+                sentinel_fd = stack.enter_context(private.open())
+                os.set_inheritable(sentinel_fd.fileno(), True)
+                stdout = stack.enter_context((case / "stdout.txt").open("w"))
+                stderr = stack.enter_context((case / "stderr.txt").open("w"))
+                env = {"PATH": os.environ["PATH"], "HOME": str(Path.home()), "LANG": "C.UTF-8"}
+                process = subprocess.Popen(argv, env=env, stdout=stdout, stderr=stderr, close_fds=True)
 
-            def stop_active_container():
-                if process.poll() is None:
-                    ledger.cancel(mode)
-                    docker("kill", container_name)
-                    process.wait(timeout=5)
-
-            # 宿主启动器本身异常/取消时也收掉容器，不能留下后台工具后代。
-            stack.callback(stop_active_container)
-            started = time.monotonic()
-            control_sent = False
-            timed_out = False
-            while process.poll() is None:
-                if mode == "cancel" and not control_sent and (ws / "heartbeat-child.txt").exists():
-                    ledger.cancel(mode)
-                    (case / "control/cancel").write_text("cancel")
-                    control_sent = True
-                if time.monotonic() >= deadline:
-                    ledger.cancel(mode)
-                    docker("kill", "nz-review-" + case.name)
-                    timed_out = True
-                    break
-                threading.Event().wait(0.02)
-            process.wait(timeout=5)
-        inspected = json.loads(docker("inspect", "nz-review-" + case.name).stdout)[0]
-        assert inspected["Config"]["Labels"].get("nz-review-case") == case.name
-        save(case / "container-inspect.json", inspected)
-        save(case / "launch.json", {"argv": argv, "environment_whitelist": env})
-        docker("rm", "nz-review-" + case.name)
-        for server in servers:
-            server.shutdown()
-            server.server_close()
-        for thread in threads:
-            thread.join(2)
-        fake.shutdown()
-        fake.server_close()
-        fake_thread.join(2)
+                started = time.monotonic()
+                control_sent = False
+                budget_stop = False
+                timed_out = False
+                while process.poll() is None:
+                    control = case / "control/cancel"
+                    if mode == "cancel" and not control_sent and (ws / "heartbeat-child.txt").exists():
+                        ledger.cancel(mode)
+                        control.write_text("cancel")
+                        control_sent = True
+                    timed_out = time.monotonic() >= deadline
+                    manual_stop = control.exists() and not control_sent and not budget_stop
+                    if (timed_out or ledger.failed_contracts or ledger.journal_fault or manual_stop
+                            or (mode in ledger.cancelled and not control_sent)):
+                        ledger.cancel(mode)
+                        docker("kill", "nz-review-" + case.name)
+                        break
+                    if ledger.admission_closed_reason and not budget_stop:
+                        control.write_text("budget: " + ledger.admission_closed_reason)
+                        budget_stop = True
+                    threading.Event().wait(0.02)
+                process.wait(timeout=5)
+            inspected = json.loads(docker("inspect", "nz-review-" + case.name).stdout)[0]
+            assert inspected["Config"]["Labels"].get("nz-review-case") == case.name
+            save(case / "container-inspect.json", inspected)
+            save(case / "launch.json", {"argv": argv, "environment_whitelist": env})
+        finally:
+            failures = []
+            if ledger is not None:
+                _cleanup_case(case, mode, ledger, relays, process, owns_container, failures)
+            _close_services(fake_services, failures,
+                            on_interrupt=(lambda: ledger.cancel(mode)) if ledger is not None else None)
+            if ledger is not None:
+                _close_ledger(ledger, relays, failures)
+            _report_cleanup(case / "cleanup-failures.json", failures)
         before_late = {p.name: sha(p) for p in ws.glob("heartbeat-*.txt")}
         calls = len(fake.requests)
         threading.Event().wait(0.15)
@@ -274,7 +374,6 @@ with httpx.Client(transport=httpx.HTTPTransport(uds="/model/main.sock"),trust_en
             receipt["runtime_end_status"] = "cancelled"
         else:
             assert timed_out and before_late and process.returncode != 0
-        ledger.close()
         save(case / "receipt.json", receipt)
         receipts.append(receipt)
         print(json.dumps({"probe": mode, "status": state["status"] if state else receipt.get("runtime_end_status", "deadline_killed"), "requests": calls}))
@@ -439,15 +538,15 @@ def run_formal(directory, output, *, counter, upstream, api_key=None, online=Fal
     manifest = json.loads((FROZEN / "manifest.json").read_text())
     output.mkdir(parents=True, exist_ok=False)
     ledger = RelayLedger(output / "ledger.jsonl", RelayLimits(),
-                         empirical_authorization=grant if input_mode == "empirical" else None)
-    rows = []
+                         empirical_authorization=grant if input_mode == "empirical" else None, stop_on_rejection=True)
+    rows, all_relays = [], []
     try:
         for row in manifest["order"] + [{"unit": "a01", "version": "new"}]:
             if units is not None and row["unit"] not in units:
                 continue
             if grant is not None and input_mode == "empirical" and row["unit"] not in grant["scope"]:
                 continue
-            if ledger.failed_contracts:
+            if ledger.failed_contracts or ledger.journal_fault or ledger.admission_closed_reason:
                 break
             unit, version = row["unit"], row["version"]
             case = output / unit
@@ -470,22 +569,25 @@ def run_formal(directory, output, *, counter, upstream, api_key=None, online=Fal
                             neutral_report=manifest["gate"]["neutral_report"])
             save(case / "input/run.json", spec)
             deadline = time.monotonic() + 900
-            servers, threads = [], []
-            for role, cap, limit, exact in (("main", 12 if autonomous else 0, 64000, True),
-                                           ("auxiliary", 6 if autonomous else 2, 64000 if autonomous else 1024, not autonomous)):
-                binding = RelayBinding("review-effects-formal", unit, unit, role, cap, "deepseek-v4-flash", limit, deadline, exact)
-                server = RelayServer(case / "sockets" / (role + ".sock"), ledger=ledger, binding=binding,
-                                     upstream=upstream, counter=counter, remote_authorized=online, api_key=api_key,
-                                     trace_directory=case / "provider")
-                thread = threading.Thread(target=server.serve_forever, daemon=True)
-                thread.start()
-                servers.append(server)
-                threads.append(thread)
-            name = "nz-review-" + case.name
-            assert name not in docker("ps", "-a", "--format", "{{.Names}}").stdout.splitlines(), "retain existing container"
-            argv = launch_argv(directory, case, image=runtime["image"], version=version)
-            env = {"PATH": os.environ["PATH"], "HOME": str(Path.home()), "LANG": "C.UTF-8"}
+            relays, process = [], None
+            owns_container = False
+            budget_stop = False
             try:
+                for role, cap, limit, exact in (("main", 12 if autonomous else 0, 64000, True),
+                                               ("auxiliary", 6 if autonomous else 2, 64000 if autonomous else 1024, not autonomous)):
+                    binding = RelayBinding("review-effects-formal", unit, unit, role, cap, "deepseek-v4-flash", limit, deadline, exact)
+                    server = RelayServer(case / "sockets" / (role + ".sock"), ledger=ledger, binding=binding,
+                                         upstream=upstream, counter=counter, remote_authorized=online, api_key=api_key,
+                                         trace_directory=case / "provider")
+                    thread = threading.Thread(target=server.serve_forever, daemon=True)
+                    relays.append((server, thread))
+                    all_relays.append((server, thread))
+                    thread.start()
+                name = "nz-review-" + case.name
+                assert name not in docker("ps", "-a", "--format", "{{.Names}}").stdout.splitlines(), "retain existing container"
+                owns_container = True
+                argv = launch_argv(directory, case, image=runtime["image"], version=version)
+                env = {"PATH": os.environ["PATH"], "HOME": str(Path.home()), "LANG": "C.UTF-8"}
                 # 先create并核对实际挂载，再start，避免请求早于代码身份检查。
                 created = docker("create", *argv[2:], timeout=20)
                 inspected = json.loads(docker("inspect", created.stdout.strip()).stdout)[0]
@@ -506,19 +608,22 @@ def run_formal(directory, output, *, counter, upstream, api_key=None, online=Fal
                     "startup_source_sha256": sha(Path(__file__)), "counter_contract": counter.status()})
                 with (case / "stdout.txt").open("w") as stdout, (case / "stderr.txt").open("w") as stderr:
                     process = subprocess.Popen(["docker", "start", "-a", name], env=env, stdout=stdout, stderr=stderr)
-                    try:
-                        while process.poll() is None:
-                            if time.monotonic() >= deadline or ledger.failed_contracts:
-                                ledger.cancel(unit)
-                                docker("kill", name)
-                                break
-                            threading.Event().wait(0.02)
-                        process.wait(timeout=5)
-                    finally:
-                        if process.poll() is None:
+                    while process.poll() is None:
+                        control = case / "control/cancel"
+                        manual_stop = control.exists() and not budget_stop
+                        if (time.monotonic() >= deadline or ledger.failed_contracts or ledger.journal_fault
+                                or unit in ledger.cancelled or manual_stop):
                             ledger.cancel(unit)
                             docker("kill", name)
-                            process.wait(timeout=5)
+                            break
+                        if ledger.admission_closed_reason and not budget_stop:
+                            # 只停容器内的逻辑执行；Relay 仍按原期限收取已获准请求的用量。
+                            control.write_text("budget: " + ledger.admission_closed_reason)
+                            budget_stop = True
+                        threading.Event().wait(0.02)
+                    process.wait(timeout=5)
+                if budget_stop or (ledger.admission_closed_reason and not ledger.failed_contracts and not ledger.journal_fault):
+                    break
                 final_inspect = json.loads(docker("inspect", name).stdout)[0]
                 save(case / "container-final.json", final_inspect)
                 assert not final_inspect["State"]["Running"]
@@ -537,23 +642,21 @@ def run_formal(directory, output, *, counter, upstream, api_key=None, online=Fal
                              "runtime_status": json.loads((case / "result/result.json").read_text())["status"] if autonomous else "review_boundary"})
                 print(json.dumps(rows[-1]), flush=True)
             finally:
-                for server in servers:
-                    server.shutdown()
-                    server.server_close()
-                for thread in threads:
-                    thread.join(2)
-                if name in docker("ps", "-a", "--format", "{{.Names}}").stdout.splitlines():
-                    if docker("inspect", name, "--format", "{{.State.Running}}").stdout.strip() == "true":
-                        ledger.cancel(unit)
-                        docker("kill", name)
-                    docker("rm", name)
+                failures = []
+                _cleanup_case(case, unit, ledger, relays, process, owns_container, failures)
+                _report_cleanup(case / "cleanup-failures.json", failures)
     finally:
-        ledger.close()
-        save(output / "formal-results.json", {"units": rows, "physical_attempts": len(ledger.attempts),
+        failures = []
+        _cleanup_call(failures, "formal-summary", lambda: save(output / "formal-results.json", {
+            "units": rows, "physical_attempts": len(ledger.attempts),
             "input_occupied": ledger.input_occupied, "output_occupied": ledger.output_occupied,
             "failed_contracts": ledger.failed_contracts, "remote_provider_requests": len(ledger.attempts) if online else 0,
             "input_admission_mode": input_mode, "estimated_cost_occupied_cny": ledger.cost_occupied_cny if input_mode == "empirical" else None,
-            "driver_sha256": sha(FIXTURES / "review_execution_entry.py"), "runtime_sha256": sha(directory / "runtime.json")})
+            "admission_closed_reason": ledger.admission_closed_reason,
+            "driver_sha256": sha(FIXTURES / "review_execution_entry.py"), "runtime_sha256": sha(directory / "runtime.json")}))
+        _close_ledger(ledger, all_relays, failures)
+        _report_cleanup(output / "cleanup-failures.json", failures)
+
 
 
 def main():
@@ -585,9 +688,9 @@ def main():
         spec.loader.exec_module(module)
         fake = module.FormalFake()
         thread = threading.Thread(target=fake.serve_forever, daemon=True)
-        thread.start()
         output = (args.output_root or directory / "formal-local").resolve()
         try:
+            thread.start()
             status = execution_status(directory, local_counter, local=True)
             save(output.parent / (output.name + "-status.json"), status)
             if not status["technical_ready"]:
@@ -595,10 +698,11 @@ def main():
             run_formal(directory, output, counter=local_counter,
                        upstream=f"http://127.0.0.1:{fake.server_port}/v1/chat/completions")
         finally:
-            fake.shutdown()
-            fake.server_close()
-            thread.join(2)
-            save(output.parent / (output.name + "-fake-requests.json"), fake.requests)
+            failures = []
+            _close_services([(fake, thread)], failures)
+            _cleanup_call(failures, "fake-requests", save,
+                          output.parent / (output.name + "-fake-requests.json"), fake.requests)
+            _report_cleanup(output.parent / (output.name + "-cleanup-failures.json"), failures)
     else:
         from nz_coder.evaluation.deepseek_counting import DeepSeekV41Counter
         counter = DeepSeekV41Counter(args.tokenizer) if args.tokenizer else unknown_input

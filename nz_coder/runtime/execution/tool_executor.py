@@ -538,7 +538,7 @@ class ToolExecutor:
                 if exc.reason == "cancelled":
                     raise asyncio.CancelledError from None
                 return ToolExecutionResult(
-                    fn_name, tool_input, str(exc), False, True, False, is_write,
+                    fn_name, tool_input, to_public_error(exc).message, False, True, False, is_write,
                     permission_denied=True, metadata={
                         "permission_source": "interaction_failure", "permission_reason": exc.reason,
                     },

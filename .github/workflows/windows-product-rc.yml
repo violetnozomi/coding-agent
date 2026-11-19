@@ -35,9 +35,13 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install basedpyright
+          if ($LASTEXITCODE -ne 0) { throw "basedpyright installation failed." }
           npm install --global typescript typescript-language-server
+          if ($LASTEXITCODE -ne 0) { throw "TypeScript language server installation failed." }
           go install golang.org/x/tools/gopls@latest
+          if ($LASTEXITCODE -ne 0) { throw "gopls installation failed." }
           "$(go env GOPATH)\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          if ($LASTEXITCODE -ne 0) { throw "Unable to find the Go binary directory." }
       - name: Verify native parser wheels
         run: python -c "import tree_sitter, tree_sitter_javascript, tree_sitter_typescript, tree_sitter_go"
       - name: Platform and doctor evidence
@@ -47,7 +51,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           nz-coder platform --json | Out-File artifacts/platform.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw "Platform probe failed." }
           nz-coder doctor --json | Out-File artifacts/doctor.json -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw "Doctor probe failed." }
       - name: Native Windows product acceptance
         shell: pwsh
         run: |
@@ -76,15 +82,19 @@ jobs:
         shell: pwsh
         run: |
           python -m build --wheel --sdist
+          if ($LASTEXITCODE -ne 0) { throw "Wheel or source distribution build failed." }
           $wheel = Get-ChildItem dist/nz_coder-*.whl -File
           if ($wheel.Count -ne 1) { throw "Expected exactly one wheel." }
           python -m venv "$env:RUNNER_TEMP/nz-coder-release"
+          if ($LASTEXITCODE -ne 0) { throw "Fresh-install environment creation failed." }
           $python = "$env:RUNNER_TEMP/nz-coder-release/Scripts/python.exe"
           & $python -m pip install $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Wheel installation failed." }
           Push-Location $env:RUNNER_TEMP
           & $python -m nz_coder --help
           if ($LASTEXITCODE -ne 0) { throw "Installed CLI help failed." }
           & $python -m nz_coder platform --json | Out-File "$env:GITHUB_WORKSPACE/artifacts/installed-platform.json" -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw "Installed platform probe failed." }
           Pop-Location
       - name: Upload Windows RC evidence
         if: always()

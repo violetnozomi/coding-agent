@@ -238,17 +238,24 @@ def test_sidecar_reads_complete_generic_materials_without_current_diff(tmp_path)
 
 
 @pytest.mark.parametrize('when', ['before', 'during'])
-def test_sidecar_rejects_generic_file_identity_change(tmp_path, when):
+@pytest.mark.parametrize('missing', [False, True], ids=['changed', 'missing'])
+def test_sidecar_rejects_generic_file_identity_change(tmp_path, when, missing):
     domain, spec = _setup(tmp_path)
     _write(domain, tmp_path)
     _pass(domain, spec)
     def change_file():
-        (tmp_path / 'README.md').write_text('unreviewed replacement')
+        path = tmp_path / 'README.md'
+        if missing:
+            path.unlink()
+        else:
+            path.write_text('unreviewed replacement')
     hook, context, requests = _sidecar(domain, spec, tmp_path, on_request=change_file if when == 'during' else None)
     if when == 'before':
         change_file()
     decision = asyncio.run(hook(context))
     assert decision.action == 'abort'
+    reason = 'An internal error occurred.' if missing else 'Artifact identity changed.'
+    assert decision.message == f'Runtime review evidence unavailable: {reason}'
     assert not domain.snapshot().ready_for_completion
     assert len(requests) == (0 if when == 'before' else 1)
 

@@ -7,7 +7,7 @@ import json
 from dataclasses import asdict, dataclass
 
 from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, is_user_request_message
-from nz_coder.protocol.public_error import PublicError, PublicRuntimeError, to_public_error
+from nz_coder.protocol.public_error import PublicError, PublicInputError, PublicRuntimeError, to_public_error
 from nz_coder.runtime.verification.domain.models import TaskScope
 
 
@@ -28,17 +28,17 @@ class AssessmentCallScope:
 
 def parse_task_assessment(payload: dict) -> dict:
     if not isinstance(payload, dict) or set(payload) != {"task_kinds", "complexity", "reason", "uncertainties"}:
-        raise ValueError("assessment requires task_kinds, complexity, reason and uncertainties")
+        raise PublicInputError("assessment requires task_kinds, complexity, reason and uncertainties")
     kinds = payload["task_kinds"]
     if not isinstance(kinds, list) or any(not isinstance(k, str) or k not in TASK_KINDS for k in kinds):
-        raise ValueError("invalid task_kinds")
+        raise PublicInputError("invalid task_kinds")
     if not isinstance(payload["complexity"], str) or payload["complexity"] not in COMPLEXITIES:
-        raise ValueError("invalid semantic complexity")
+        raise PublicInputError("invalid semantic complexity")
     if not isinstance(payload["reason"], str):
-        raise ValueError("assessment reason must be a string")
+        raise PublicInputError("assessment reason must be a string")
     questions = payload["uncertainties"]
     if not isinstance(questions, list) or any(not isinstance(q, str) for q in questions):
-        raise ValueError("assessment uncertainties must be strings")
+        raise PublicInputError("assessment uncertainties must be strings")
     return copy.deepcopy(payload)
 
 
@@ -122,7 +122,7 @@ def _payload_hash(payload: dict) -> str:
 
 def _check_source(state, scope, run, superseded) -> None:
     if not isinstance(scope, AssessmentCallScope) or run is None or state._verification_context is not run:
-        raise ValueError("task assessment request context is unavailable")
+        raise PublicInputError("task assessment request context is unavailable")
     binding = state.task_assessment_state.get("binding", {})
     if (run.cancel_scope.is_set() or run.finalized or run.terminal_status is not None or superseded()
             or scope.interaction_run_id != run.interaction_run_id
@@ -131,7 +131,7 @@ def _check_source(state, scope, run, superseded) -> None:
             or binding != {"task": asdict(scope.task), "instruction_message_id": scope.instruction_message_id,
                            "authority_epoch": scope.authority_epoch}
             or state.task_authority_epoch != scope.authority_epoch):
-        raise ValueError("task assessment request is cancelled, frozen or superseded")
+        raise PublicInputError("task assessment request is cancelled, frozen or superseded")
 
 
 def _commit(state, scope, run, payload, call_id, *, path, superseded) -> dict:
@@ -139,7 +139,7 @@ def _commit(state, scope, run, payload, call_id, *, path, superseded) -> dict:
 
     expected = payload["expected_revision"]
     if type(expected) is not int or expected < 0:
-        raise ValueError("expected_revision must be a nonnegative integer")
+        raise PublicInputError("expected_revision must be a nonnegative integer")
     authored = parse_task_assessment({k: v for k, v in payload.items() if k != "expected_revision"})
     fingerprint = _payload_hash(payload)
     # 先持久化候选，再发布内存；写盘期间失效时用当前状态覆盖候选。
@@ -150,11 +150,11 @@ def _commit(state, scope, run, payload, call_id, *, path, superseded) -> dict:
             receipt = record.get("last_commit")
             if receipt and receipt["scope"] == asdict(scope) and receipt["call_id"] == call_id:
                 if receipt["payload_hash"] != fingerprint:
-                    raise ValueError("same assessment call has a different payload")
+                    raise PublicInputError("same assessment call has a different payload")
                 return {"status": "already_accepted", "revision": record["revision"],
                         "persisted": receipt["persisted"], "reason": ""}
             if expected != scope.revision or expected != record["revision"]:
-                raise ValueError(f"stale assessment revision; expected_revision={record['revision']}")
+                raise PublicInputError(f"stale assessment revision; expected_revision={record['revision']}")
             candidate = {"binding": copy.deepcopy(record["binding"]), "revision": expected + 1,
                          "value": authored, "last_commit": {
                              "scope": asdict(scope), "call_id": call_id, "payload_hash": fingerprint,
@@ -169,7 +169,7 @@ def _commit(state, scope, run, payload, call_id, *, path, superseded) -> dict:
             try:
                 _check_source(state, scope, run, superseded)
                 if assessment_cache_key(state) != old_key:
-                    raise ValueError("assessment changed during save")
+                    raise PublicInputError("assessment changed during save")
             except ValueError as exc:
                 failure = exc
                 rollback = build_runtime_checkpoint(state, active=True)
@@ -193,22 +193,22 @@ def submit_task_assessment(state, scope, call, result, messages, *, run_context,
         return result
     try:
         if not isinstance(scope, AssessmentCallScope) or run_context is None:
-            raise ValueError("task assessment request context is unavailable")
+            raise PublicInputError("task assessment request context is unavailable")
         if result.name != "update_task_assessment" or not result.executed or call.get("function", {}).get("name") != result.name:
-            raise ValueError("only executed update_task_assessment can publish a judgment")
+            raise PublicInputError("only executed update_task_assessment can publish a judgment")
         args = call["function"].get("arguments", {})
         args = json.loads(args) if isinstance(args, str) else args
         if proposal != args or proposal != result.tool_input:
-            raise ValueError("task assessment proposal differs from the actual tool input")
+            raise PublicInputError("task assessment proposal differs from the actual tool input")
         owners = [m for m in messages if m.get(MESSAGE_ID_KEY) == scope.assistant_message_id
                   and m.get("role") == "assistant" and any(c.get("id") == call.get("id") for c in m.get("tool_calls", []))]
         if len(owners) != 1 or not call.get("id"):
-            raise ValueError("task assessment source call is unavailable or ambiguous")
+            raise PublicInputError("task assessment source call is unavailable or ambiguous")
         receipt = _commit(state, scope, run_context, proposal, call["id"], path=path, superseded=superseded)
     except (ValueError, TypeError, OSError) as exc:
         result.dispatch_failed = True
         receipt = {"status": "rejected", "revision": state.task_assessment_state.get("revision", 0),
-                   "persisted": False, "reason": (to_public_error(exc).message if isinstance(exc, OSError) else str(exc))}
+                   "persisted": False, "reason": to_public_error(exc).message}
         result.output = "Error: task assessment rejected: " + receipt["reason"]
     else:
         result.output = (f"Task assessment {receipt['status']}; expected_revision={receipt['revision']}; "

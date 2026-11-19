@@ -804,6 +804,7 @@ def test_run_harness_passes_explicit_clean_value(tmp_path, monkeypatch):
     """The official harness parses --clean as a boolean value, not a flag."""
     from nz_coder.swebench import adapter as adapter_mod
 
+    monkeypatch.setattr(adapter_mod.importlib.metadata, "version", lambda _: "offline-harness")
     monkeypatch.chdir(tmp_path)
     predictions = tmp_path / "predictions.jsonl"
     predictions.write_text(json.dumps({"instance_id": "owner__repo-1",
@@ -847,6 +848,9 @@ def test_run_harness_passes_explicit_clean_value(tmp_path, monkeypatch):
 
 
 # ── orchestrator helpers ──────────────────────────────────────────────────────
+
+# spawn 的冷启动计入总时限。回执和退出码用例需留出启动时间，超时行为单独以一秒验证。
+_WORKER_RESULT_TIMEOUT = 5
 
 def test_should_retry_empty_patch_only_for_retry_feedback():
     from nz_coder.swebench.orchestrator import _should_retry_empty_patch
@@ -916,7 +920,7 @@ def test_run_agent_attempt_replays_child_tool_events():
         None,
         [{"role": "user", "content": "work"}],
         lambda name, output: events.append((name, output)),
-        timeout=5,
+        timeout=_WORKER_RESULT_TIMEOUT,
     )
 
     assert status == {"status": "completed"}
@@ -941,7 +945,7 @@ def test_run_agent_attempt_uses_spawn_context(monkeypatch):
         None,
         [{"role": "user", "content": "work"}],
         lambda _name, _output: None,
-        timeout=5,
+        timeout=_WORKER_RESULT_TIMEOUT,
     )
 
     assert status == {"status": "completed"}
@@ -988,7 +992,7 @@ def test_run_agent_attempt_drains_large_child_result_before_joining():
         None,
         [{"role": "user", "content": "work"}],
         lambda name, output: events.append((name, output)),
-        timeout=2,
+        timeout=_WORKER_RESULT_TIMEOUT,
     )
 
     assert status == {"status": "completed", "events": 24}
@@ -1008,7 +1012,7 @@ def test_run_agent_attempt_keeps_result_when_dependency_thread_lingers():
         None,
         [{"role": "user", "content": "work"}],
         lambda name, output: events.append((name, output)),
-        timeout=2,
+        timeout=_WORKER_RESULT_TIMEOUT,
     )
 
     assert status == {"status": "completed"}
@@ -1025,7 +1029,7 @@ def test_run_agent_attempt_surfaces_child_exception():
             None,
             [{"role": "user", "content": "work"}],
             lambda name, output: None,
-            timeout=2,
+            timeout=_WORKER_RESULT_TIMEOUT,
         )
     except RuntimeError as exc:
         assert "ValueError('child boom')" in str(exc)
@@ -1043,7 +1047,7 @@ def test_run_agent_attempt_reports_abrupt_child_exit():
             None,
             [{"role": "user", "content": "work"}],
             lambda name, output: None,
-            timeout=1,
+            timeout=_WORKER_RESULT_TIMEOUT,
         )
     except RuntimeError as exc:
         assert "exitcode=7" in str(exc)
@@ -1103,6 +1107,26 @@ def test_real_bash_dispatch_error_remains_patch_run_risk():
 
     assert status == "error"
     assert labels == ["tool_errors"]
+
+
+def test_observed_test_failure_stays_visible_until_that_check_passes(tmp_path):
+    from nz_coder.swebench.orchestrator import _agent_status_risk_labels
+    from tests.verification_scenarios import VerificationScenario
+
+    scenario = VerificationScenario(workspace=tmp_path, plan={"stages": []})
+    first = {"command": "pytest test_a.py"}
+    second = {"command": "pytest test_b.py"}
+    log = [{"name": "bash", "status": "nonzero"}, {"name": "bash", "status": "ok"}]
+    scenario.command_result(first, "1 failed", False, True, exit_code=1)
+    scenario.command_result(second, "1 passed", False, False, exit_code=0)
+    status = scenario.runtime.status()
+    assert status["verification_needed"] is False and status["test_obligations"] == []
+    assert "nonzero_commands" in _agent_status_risk_labels({"status": "completed_unverified", **status}, log)
+
+    scenario.command_result(first, "1 passed", False, False, exit_code=0)
+    assert "nonzero_commands" not in _agent_status_risk_labels(
+        {"status": "completed_unverified", **scenario.runtime.status()}, [*log, {"name": "bash", "status": "ok"}],
+    )
 
 
 def test_recovered_write_error_from_older_generation_is_not_final_patch_risk():
