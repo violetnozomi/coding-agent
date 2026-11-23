@@ -365,10 +365,11 @@ class GeminiProvider:
                 normalized_calls.append(call)
             tool_calls = normalized_calls
             candidate = next(iter(event.get("candidates") or []), {})
+            reason = candidate.get("finishReason")
             finish_reason = _gemini_finish_reason(
-                candidate.get("finishReason"),
+                reason,
                 has_tools=bool(next_index),
-            ) if candidate.get("finishReason") else ""
+            ) if reason and reason != "FINISH_REASON_UNSPECIFIED" else ""
             usage = _gemini_usage(event.get("usageMetadata"))
             if text or reasoning or tool_calls or finish_reason or any(usage.values()):
                 yield chunk(
@@ -381,13 +382,11 @@ class GeminiProvider:
 
 
 def _gemini_finish_reason(value: Any, *, has_tools: bool = False) -> str:
-    if has_tools:
-        return "tool_calls"
     normalized = str(value or "").strip().upper()
     if normalized == "MAX_TOKENS":
         return "length"
-    if normalized in {"", "STOP", "FINISH_REASON_UNSPECIFIED"}:
-        return "stop"
+    if normalized in {"", "STOP"}:
+        return "tool_calls" if has_tools else "stop"
     return "error"
 
 

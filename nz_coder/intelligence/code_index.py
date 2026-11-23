@@ -10,7 +10,9 @@ import stat
 import subprocess
 import threading
 import time
+from collections.abc import Iterator
 from concurrent.futures import CancelledError
+from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Protocol
@@ -344,7 +346,8 @@ class PersistentCodeIndex:
         self.workspace = Path(workspace).resolve()
         self._stop_event = stop_event
         self._cache_root = prepare_user_storage(self.workspace).workspace_cache
-        self.database_path = self._cache_root / "indexes" / "code-index.sqlite3"
+        # 原路径留给每次连接检查别名；SQLite 和进程内锁共用已验证目录的规范路径。
+        self.database_path = self._cache_root.resolve(strict=True) / "indexes" / "code-index.sqlite3"
         self._validate_cache_paths()
         self._lock = _database_lock(self.database_path)
         self.analyzers = analyzers or AnalyzerRegistry()
@@ -357,7 +360,7 @@ class PersistentCodeIndex:
         _secure_directory(self._cache_root)
         index_dir = self._cache_root / "indexes"
         _secure_directory(index_dir)
-        if index_dir.resolve(strict=True) != self._cache_root / "indexes":
+        if index_dir.resolve(strict=True) != self.database_path.parent:
             raise ValueError("Code index cache directory changed ownership")
         for suffix in ("", "-wal", "-shm", "-journal"):
             candidate = Path(str(self.database_path) + suffix)
@@ -368,17 +371,20 @@ class PersistentCodeIndex:
             if _is_alias(info) or not stat.S_ISREG(info.st_mode):
                 raise ValueError("Code index cache file must be a regular file without aliases")
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         self._check_cancelled()
         self._validate_cache_paths()
-        connection = sqlite3.connect(str(self.database_path), timeout=5.0)
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA busy_timeout = 5000")
-        connection.row_factory = sqlite3.Row
-        if self._stop_event is not None:
-            # 与文件间的停止检查配合，中止已经进入 SQLite 的大批量索引操作。
-            connection.set_progress_handler(lambda: int(self._stop_event.is_set()), 1000)
-        return connection
+        with closing(sqlite3.connect(str(self.database_path), timeout=5.0)) as connection:
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA busy_timeout = 5000")
+            connection.row_factory = sqlite3.Row
+            if self._stop_event is not None:
+                # 与文件间的停止检查配合，中止已经进入 SQLite 的大批量索引操作。
+                connection.set_progress_handler(lambda: int(self._stop_event.is_set()), 1000)
+            # 内层事务负责提交或回滚，外层在事务退出或配置失败时关闭句柄。
+            with connection:
+                yield connection
 
     def _check_cancelled(self) -> None:
         if self._stop_event is not None and self._stop_event.is_set():

@@ -88,6 +88,116 @@ def test_fork_history_rejects_invalid_turn():
         timeline.fork_history(_history(), 3)
 
 
+def test_history_controls_do_not_take_turn_numbers_or_become_clickable_user_messages():
+    messages = [
+        {"role": "user", "content": "mixed future summary", "_nz_compaction": {}},
+        {"role": "user", "content": "Explain the <session-summary> element.", "_nz_message_id": "msg-first"},
+        {"role": "user", "content": "run continuation", "_nz_continuation": {}},
+        {"role": "user", "content": [{"type": "text", "text": "again"}], "_nz_message_id": "msg-second"},
+    ]
+    turns = timeline.conversation_turns(messages)
+    assert [(turn.number, turn.message_id) for turn in turns] == [(1, "msg-first"), (2, "msg-second")]
+    document = timeline.build_transcript_document("parent", messages)
+    assert [block.message_id for block in document.blocks] == ["msg-first", "msg-second"]
+    assert "Explain the <session-summary> element." in document.markdown()
+    with pytest.raises(ValueError, match="must be restored"):
+        timeline.fork_history(messages, 1)
+    with pytest.raises(ValueError, match="must be restored"):
+        timeline.render_timeline(messages)
+
+
+def test_hidden_user_and_late_descendants_are_not_public_timeline_or_transcript_rows():
+    messages = [
+        {"role": "user", "content": "first", "_nz_message_id": "msg-first"},
+        {"role": "user", "content": "secret question", "_nz_message_id": "msg-hidden", "_nz_visible": False},
+        {"role": "assistant", "content": "secret positional reply"},
+        {"role": "user", "content": "second", "_nz_message_id": "msg-second"},
+        {"role": "assistant", "content": "secret late reply", "_nz_parent_id": "msg-hidden",
+         "tool_calls": [{"id": "secret-id", "function": {"name": "secret tool"}}]},
+        {"role": "tool", "content": "secret receipt", "tool_call_id": "secret-id"},
+        {"role": "assistant", "content": "public reply", "_nz_parent_id": "msg-second"},
+    ]
+    turns = timeline.conversation_turns(messages)
+    assert [(turn.number, turn.user_text, turn.assistant_text) for turn in turns] == [
+        (1, "first", ""), (2, "second", "public reply")]
+    assert timeline.fork_history(messages, 1) == messages[:1]
+    assert "secret" not in timeline.build_transcript_document("session", messages).markdown()
+    assert "secret" not in timeline.format_turn_detail("session", turns[1], messages, remote=True)
+
+
+def test_fork_stops_before_the_next_submission_even_if_a_result_arrives_late():
+    messages = [
+        {"role": "user", "content": "same", "_nz_message_id": "msg-first"},
+        {"role": "assistant", "content": "started", "_nz_parent_id": "msg-first",
+         "tool_calls": [{"id": "tool-1", "function": {"name": "read_file", "arguments": "{}"}}]},
+        {"role": "user", "content": "same", "_nz_message_id": "msg-second", "_nz_time": {"created": 5}},
+        {"role": "tool", "tool_call_id": "tool-1", "content": "late receipt"},
+        {"role": "assistant", "content": "late reply", "_nz_parent_id": "msg-first"},
+    ]
+    first = timeline.conversation_turns(messages)[0]
+    detail = timeline.format_turn_detail("parent", first, messages)
+    assert "late receipt" in detail and "late reply" in detail
+    assert timeline.fork_history(messages, 1) == messages[:2]
+    # 边界前的助手消息也可能在后面被原地结算。无法复原旧状态时明确拒绝。
+    messages[1]["_nz_parts"] = [{"type": "tool", "call_id": "tool-1",
+                                 "state": {"status": "completed", "output": "late receipt"}}]
+    with pytest.raises(timeline.HistoryUnavailable):
+        timeline.fork_history(messages, 1)
+    messages[1]["_nz_parts"][0]["state"]["time"] = {"start": 1, "end": 9}
+    with pytest.raises(timeline.HistoryUnavailable):
+        timeline.fork_history(messages, 1)
+    assert timeline.fork_history(messages, 2) == messages
+
+
+def test_historical_fork_requires_evidence_for_tool_output_filled_in_place():
+    state = {"status": "completed", "output": "settled"}
+    assistant = {"role": "assistant", "content": "", "_nz_parts": [
+        {"type": "tool", "call_id": "one", "state": state}]}
+    messages = [{"role": "user", "content": "first"}, assistant, {"role": "user", "content": "second"}]
+    with pytest.raises(timeline.HistoryUnavailable):
+        timeline.fork_history(messages, 1)
+
+    receipt = {"role": "tool", "tool_call_id": "one", "content": "settled"}
+    messages.insert(2, receipt)
+    assert timeline.fork_history(messages, 1) == messages[:3]
+    receipt["content"] = "different result"
+    with pytest.raises(timeline.HistoryUnavailable):
+        timeline.fork_history(messages, 1)
+    messages.remove(receipt)
+
+    messages[-1]["_nz_time"] = {"created": 7}
+    assistant["_nz_time"] = {"completed": 6}
+    assert timeline.fork_history(messages, 1) == messages[:2]
+    del assistant["_nz_time"]
+    state["time"] = {"end": 6}
+    assert timeline.fork_history(messages, 1) == messages[:2]
+
+
+@pytest.mark.parametrize("remote", [False, True])
+def test_late_tool_result_belongs_to_the_request_that_issued_the_call(remote):
+    def assistant(parent, run, tool_id):
+        return {"role": "assistant", "content": "", "_nz_parent_id": parent,
+                "_nz_interaction_run_id": run, "tool_calls": [
+                    {"id": tool_id, "function": {"name": "read_file", "arguments": "{}"}}]}
+
+    messages = [
+        {"role": "user", "content": "First request", "_nz_message_id": "msg-first"},
+        {"role": "user", "content": "Second request", "_nz_message_id": "msg-second"},
+        assistant("msg-first", "one", "shared-call"),
+        assistant("msg-second", "two", "shared-call"),
+        {"role": "tool", "tool_call_id": "shared-call", "content": "Ambiguous output"},
+        {"role": "tool", "tool_call_id": "shared-call", "_nz_interaction_run_id": "one",
+         "content": "Output for first request"},
+        {"role": "tool", "tool_call_id": "shared-call", "_nz_interaction_run_id": "two",
+         "content": "Output for second request"},
+    ]
+    first, second = [timeline.format_turn_detail("test", turn, messages, remote=remote)
+                     for turn in timeline.conversation_turns(messages)]
+    assert "Output for first request" in first and "Output for second request" not in first
+    assert "Output for second request" in second and "Output for first request" not in second
+    assert "Ambiguous output" not in first + second
+
+
 def test_forked_session_title_increments_infcode_suffix():
     assert timeline.forked_session_title("Parser repair") == "Parser repair (fork #1)"
     assert timeline.forked_session_title("Parser repair (fork #1)") == "Parser repair (fork #2)"

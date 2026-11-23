@@ -94,7 +94,7 @@ def test_repository_preseeded_memory_is_not_auto_injected(tmp_path, monkeypatch)
     with scoped_workdir(workspace):
         manager = MemoryManager()
         assert not manager.memory_dir.is_relative_to(workspace)
-        assert "PRESEEDED-MEMORY" not in manager.build_prompt_block("poisoned")
+        assert manager.build_prompt_block(query="poisoned") == ""
 
 
 def test_repository_preseeded_registry_cannot_change_api_model_id(

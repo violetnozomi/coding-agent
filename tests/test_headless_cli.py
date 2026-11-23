@@ -285,6 +285,15 @@ def test_headless_file_and_attach_share_filepart_pipeline(tmp_path):
     assert any(part["type"] == "file" for part in message["_nz_parts"])
 
 
+def test_headless_invalid_long_attachment_reports_an_input_error(tmp_path):
+    code, _stdout, stderr, client = _run(["--attach", "测" * 260, "review"], tmp_path)
+
+    assert code != 0
+    assert "workspace" in stderr
+    assert str(tmp_path) not in stderr
+    assert client.requests == []
+
+
 def test_headless_expands_project_command_and_narrows_tools(tmp_path, monkeypatch):
     commands = tmp_path / ".nz-coder" / "commands"
     commands.mkdir(parents=True)
@@ -603,11 +612,23 @@ def test_headless_native_path_completes_model_tool_model_without_agentloop(
         stdin=io.StringIO(), stdout=stdout, stderr=stderr,
     )
     assert code == 1
-    assert "native headless complete" in stdout.getvalue()
-    assert "未经独立确认" in stdout.getvalue()
+    assert "native headless complete" not in stdout.getvalue()
+    assert "没有已采信的测试结果" in stdout.getvalue()
+    assert "--no-session，模型说明未保存" in stdout.getvalue()
+    assert "/message" not in stdout.getvalue()
     assert "未评估" in stdout.getvalue()
     assert stderr.getvalue() == ""
     assert provider.calls == 2
+
+
+def test_no_session_preserves_an_ordinary_answer_which_mentions_message():
+    from nz_coder.interface.headless import _result_record
+    from nz_coder.runtime.verification.completion_gate import MODEL_NOTE_HINT
+
+    answer = "命令帮助里的原文是 " + MODEL_NOTE_HINT
+    result = RunResult(RunStatus.COMPLETED, answer, [{"role": "assistant", "content": answer}],
+                       TokenUsage(), "ordinary", "headless")
+    assert _result_record(result, persist_session=False)["text"] == answer
 
 
 @pytest.mark.parametrize("persist_session", [False, True])
@@ -832,6 +853,7 @@ def test_headless_reports_actual_test_result_and_persists_same_evidence(
     else:
         assert record["status"] == "completed_unverified"
         assert snapshot["review_pending"] and "交付评审尚未确认" in record["text"]
+        assert ("已有通过的测试回执" in record["text"]) is passes
     if not declared:
         assert snapshot["test_obligations"] == []
         assert snapshot["ordinary_failures"][0]["exit_code"] == 1

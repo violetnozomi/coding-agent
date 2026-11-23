@@ -29,6 +29,7 @@ from nz_coder.protocol.public_error import (
     PublicRuntimeError,
     TrustedPublicMessage,
     public_error_from_wire,
+    redact_failed_event_output,
     to_public_error,
 )
 
@@ -57,15 +58,7 @@ def _safe_event_properties(properties: dict[str, Any]) -> dict[str, Any]:
     """Detach metadata and guarantee strict-JSON live/replay transport values."""
     projected = _project_public_failures(properties)
     projected = project_public_protocol_value(projected)
-    if isinstance(projected, dict) and str(projected.get("status") or "").casefold() in {
-        "error",
-        "failed",
-        "nonzero",
-        "blocked",
-    }:
-        if "output" in projected:
-            public = public_error_from_wire(projected.get("public_error"))
-            projected["output"] = public.message if public is not None else "Tool execution failed."
+    redact_failed_event_output(projected)
     payload = json_safe_value(projected)
     return payload if isinstance(payload, dict) else {}
 

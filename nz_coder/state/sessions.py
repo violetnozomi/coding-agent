@@ -677,6 +677,14 @@ def _file_identity(st):
     return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
 
 
+def _handle_matches_path(handle_identity: tuple, path_identity: tuple) -> bool:
+    # Windows 上，改名或设置权限后，句柄和路径报告的 ctime 可能不同。
+    # 只有跨来源比对时略过末项；同一句柄或同一路径的两次观测仍需完全相符。
+    if os.name == "nt":
+        return handle_identity[:-1] == path_identity[:-1]
+    return handle_identity == path_identity
+
+
 def _read_session_payload(path: Path, *, maximum_bytes: int | None = None, expected_identity=None) -> dict | None:
     limit = _session_byte_limit() if maximum_bytes is None else maximum_bytes
     try:
@@ -691,8 +699,8 @@ def _read_session_payload(path: Path, *, maximum_bytes: int | None = None, expec
         before = os.fstat(descriptor)
         if not stat.S_ISREG(before.st_mode):
             raise SessionReadError("unreadable", path)
-        identity = _file_identity(before)
-        if expected_identity is not None and identity != expected_identity:
+        opened_identity = _file_identity(before)
+        if expected_identity is not None and not _handle_matches_path(opened_identity, expected_identity):
             raise SessionReadError("changed", path)
         chunks = []
         remaining = limit + 1
@@ -703,12 +711,16 @@ def _read_session_payload(path: Path, *, maximum_bytes: int | None = None, expec
             chunks.append(chunk)
             remaining -= len(chunk)
         raw = b"".join(chunks)
-        after = os.fstat(descriptor)
+        after_read_identity = _file_identity(os.fstat(descriptor))
         try:
-            entry = path.stat(follow_symlinks=False)
+            entry_identity = _file_identity(path.stat(follow_symlinks=False))
         except OSError as exc:
             raise SessionReadError("changed", path) from exc
-        if identity != _file_identity(after) or identity != _file_identity(entry):
+        if (
+            opened_identity != after_read_identity
+            or not _handle_matches_path(after_read_identity, entry_identity)
+            or (expected_identity is not None and entry_identity != expected_identity)
+        ):
             raise SessionReadError("changed", path)
         if len(raw) > limit:
             raise SessionReadError("resource_limit", path, size_bytes=before.st_size, limit_bytes=limit)

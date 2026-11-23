@@ -237,12 +237,16 @@ def terminate_process_tree(
     runner=subprocess.run,
     force: bool = True,
     deadline: float | None = None,
+    windows_job=None,
 ) -> bool:
     """Return whether group/tree termination was accepted or the group is absent."""
     selected_os = os.name if os_name is None else os_name
     remaining = None if deadline is None else deadline-time.monotonic()
     if remaining is not None and remaining <= 0:
         return False
+    if windows_job is not None:
+        # 根进程退出后 PID 不能代表整组。保留 job 直到成员清空、句柄关闭。
+        return windows_job.retire()
     try:
         if selected_os != "nt":
             selected_signal = getattr(signal, "SIGKILL", signal.SIGTERM) if force else signal.SIGTERM

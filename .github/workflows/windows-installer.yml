@@ -25,7 +25,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install product and frozen-build tools
-        run: python -m pip install ".[dev]" pyinstaller==6.16.0
+        run: python -m pip install ".[dev]" pyinstaller==6.16.0 pyte==0.8.2
       - name: Run tracked installer contracts
         run: python -m pytest -q tests/test_windows_installer_release.py
       - name: Build and validate frozen product
@@ -65,53 +65,129 @@ jobs:
             "/DOutputDir=$PWD\dist\installer" `
             "packaging\windows\nz-coder.iss"
           if ($LASTEXITCODE -ne 0) { throw "ISCC.exe failed with exit code $LASTEXITCODE." }
-      - name: Test silent install upgrade product and safe uninstall
+      - name: Test Start Menu install upgrade frontend and safe uninstall
         shell: pwsh
         run: |
           Set-StrictMode -Version Latest
           $ErrorActionPreference = "Stop"
-          $artifact = @(Get-ChildItem dist/installer/NZ-Coder-*-windows-x64-setup.exe -File)
-          if ($artifact.Count -ne 1) { throw "Expected exactly one setup executable." }
-          $installRoot = Join-Path $env:RUNNER_TEMP "NZ Coder Install Path With Spaces"
-          $workspace = Join-Path $env:RUNNER_TEMP "NZ Coder Workspace"
-          New-Item -ItemType Directory -Force $workspace | Out-Null
-          Set-Content (Join-Path $workspace "workspace.env.sentinel") "preserve"
-          New-Item -ItemType Directory -Force (Join-Path $workspace ".nz-coder") | Out-Null
-          Set-Content (Join-Path $workspace ".nz-coder\workspace.state.sentinel") "preserve"
-          $arguments = @(
-            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER",
-            "/DIR=`"$installRoot`""
-          )
-          foreach ($attempt in 1..2) {
-            $install = Start-Process -FilePath $artifact[0].FullName -ArgumentList $arguments -Wait -PassThru
-            if ($install.ExitCode -ne 0) { throw "Silent install attempt $attempt failed." }
+          $artifacts = Join-Path $env:GITHUB_WORKSPACE 'artifacts'
+          $setups = @(Get-ChildItem dist/installer/NZ-Coder-*-windows-x64-setup.exe -File)
+          if ($setups.Count -ne 1) { throw 'Expected exactly one setup executable.' }
+          $installer = $setups[0].FullName
+          $installRoot = Join-Path $env:RUNNER_TEMP 'NZ Coder Install Path With Spaces'
+          $exe = Join-Path $installRoot 'nz-coder.exe'
+          $uninstaller = Join-Path $installRoot 'unins000.exe'
+          $silent = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER')
+          $installFlags = $silent + ('/DIR="{0}"' -f $installRoot)
+          $shell = New-Object -ComObject WScript.Shell
+          $workspace = Join-Path ($shell.SpecialFolders.Item('MyDocuments')) 'NZ-Coder Workspace'
+          $shortcutPath = Join-Path ($shell.SpecialFolders.Item('Programs')) 'NZ-Coder\NZ-Coder.lnk'
+
+          function Invoke-Installer([string]$file, [string[]]$flags) {
+            $process = Start-Process -FilePath $file -ArgumentList $flags -Wait -PassThru
+            if ($process.ExitCode -ne 0) { throw "$file exited with $($process.ExitCode)." }
           }
-          $exe = Join-Path $installRoot "nz-coder.exe"
-          & $exe --help | Out-File artifacts/installed-help.txt -Encoding utf8
-          if ($LASTEXITCODE -ne 0) { throw "Installed CLI help failed." }
-          & $exe platform --json | Out-File artifacts/installed-platform.json -Encoding utf8
-          if ($LASTEXITCODE -ne 0) { throw "Installed platform probe failed." }
-          & $exe config show --json | Out-File artifacts/installed-config.json -Encoding utf8
-          if ($LASTEXITCODE -ne 0) { throw "Installed config probe failed." }
-          $uninstaller = Join-Path $installRoot "unins000.exe"
-          $uninstall = Start-Process -FilePath $uninstaller `
-            -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER") `
-            -Wait -PassThru
-          if ($uninstall.ExitCode -ne 0) { throw "Silent uninstall failed." }
-          if (Test-Path -LiteralPath $exe) { throw "Uninstall left the product executable behind." }
-          foreach ($sentinel in @(
-            (Join-Path $workspace "workspace.env.sentinel"),
-            (Join-Path $workspace ".nz-coder\workspace.state.sentinel")
-          )) {
-            if (-not (Test-Path -LiteralPath $sentinel)) {
-              throw "Uninstall removed workspace-owned state: $sentinel"
+          function Read-InstalledShortcut {
+            if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) { throw 'Start Menu shortcut is missing.' }
+            $link = $shell.CreateShortcut($shortcutPath)
+            if ($link.TargetPath -ne $exe -or $link.Arguments -ne '') { throw 'Wrong Start Menu command.' }
+            if ($link.WorkingDirectory -ne $workspace -or -not (Test-Path -LiteralPath $workspace -PathType Container)) {
+              throw "Wrong Start Menu workspace: $($link.WorkingDirectory)"
             }
+            return $link
+          }
+
+          if ((Test-Path -LiteralPath $shortcutPath) -or (Test-Path -LiteralPath $workspace)) {
+            throw 'The clean installer test needs an unused Start Menu and project directory.'
+          }
+          Invoke-Installer $installer ($installFlags + '/MERGETASKS=!startmenu')
+          if ((Test-Path -LiteralPath $shortcutPath) -or (Test-Path -LiteralPath $workspace)) {
+            throw 'Opting out created a shortcut or workspace.'
+          }
+          Invoke-Installer $installer $installFlags
+          if ((Test-Path -LiteralPath $shortcutPath) -or (Test-Path -LiteralPath $workspace)) {
+            throw 'The upgrade forgot the previous Start Menu choice.'
+          }
+
+          # Old checkedonce installers could leave a link behind after saving the choice as unchecked.
+          New-Item -ItemType Directory -Path (Split-Path -Parent $shortcutPath) -Force | Out-Null
+          $oldLink = $shell.CreateShortcut($shortcutPath)
+          $oldLink.TargetPath = $exe
+          $oldLink.WorkingDirectory = $env:USERPROFILE
+          $oldLink.Arguments = '--help'
+          $oldLink.Description = 'My shortcut description'
+          $oldLink.Save()
+          Invoke-Installer $installer $installFlags
+          if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) { throw 'Upgrade removed a custom shortcut.' }
+          $oldLink = $shell.CreateShortcut($shortcutPath)
+          if ($oldLink.Arguments -ne '--help' -or $oldLink.WorkingDirectory -ne $env:USERPROFILE -or
+              (Test-Path -LiteralPath $workspace)) { throw 'Upgrade changed a custom shortcut or created its workspace.' }
+
+          $oldLink.Arguments = ''
+          $oldLink.Save()
+          Invoke-Installer $installer $installFlags
+          $repaired = Read-InstalledShortcut
+          if ($repaired.Description -ne 'My shortcut description') { throw 'Repair lost shortcut metadata.' }
+          $sentinel = Join-Path $workspace 'my-project.txt'
+          Set-Content -LiteralPath $sentinel -Value 'saved by user'
+          # Register the test-created link as installer-owned before the ordinary uninstall.
+          Invoke-Installer $installer ($installFlags + '/MERGETASKS=startmenu')
+          Invoke-Installer $uninstaller $silent
+
+          Invoke-Installer $installer $installFlags
+          $shortcut = Read-InstalledShortcut
+          # Recreate the shortcut shipped by the previous installer, then upgrade with default choices.
+          $shortcut.WorkingDirectory = $env:USERPROFILE
+          $shortcut.Save()
+          if ($shell.CreateShortcut($shortcutPath).WorkingDirectory -ne $env:USERPROFILE) {
+            throw 'Could not reproduce the previous shortcut before upgrading.'
+          }
+          Invoke-Installer $installer $installFlags
+          $shortcut = Read-InstalledShortcut
+          if ((Get-Content -LiteralPath $sentinel) -ne 'saved by user') { throw 'Upgrade changed project data.' }
+
+          python -m tests.windows_frontend_smoke --exe $shortcut.TargetPath --workspace $shortcut.WorkingDirectory | Tee-Object -FilePath (Join-Path $artifacts 'windows-frontend-smoke.txt')
+          if ($LASTEXITCODE -ne 0) { throw 'Interactive checks against the installed frontend failed.' }
+
+          $project = Join-Path $env:RUNNER_TEMP 'Existing NZ Coder Project'
+          New-Item -ItemType Directory -Path (Join-Path $project '.nz-coder') -Force | Out-Null
+          $projectConfig = Join-Path $project '.env'
+          $projectState = Join-Path $project '.nz-coder\workspace.state.sentinel'
+          Set-Content -LiteralPath $projectConfig -Value 'LOG_LEVEL=WARNING' -Encoding utf8
+          Set-Content -LiteralPath $projectState -Value 'preserve'
+          Push-Location $project
+          try {
+            & $exe --help | Out-File (Join-Path $artifacts 'installed-help.txt') -Encoding utf8
+            if ($LASTEXITCODE -ne 0) { throw 'Installed CLI help failed.' }
+            & $exe platform --json | Out-File (Join-Path $artifacts 'installed-platform.json') -Encoding utf8
+            if ($LASTEXITCODE -ne 0) { throw 'Installed platform probe failed.' }
+            $configPath = Join-Path $artifacts 'installed-config.json'
+            & $exe config show --json | Out-File $configPath -Encoding utf8
+            if ($LASTEXITCODE -ne 0) { throw 'Installed config probe failed.' }
+            $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+            if ($config.config_provenance.LOG_LEVEL.source -ne 'workspace' -or $config.config_provenance.LOG_LEVEL.value -ne 'WARNING') {
+              throw 'Starting from a terminal did not load the current project configuration.'
+            }
+          } finally { Pop-Location }
+
+          Invoke-Installer $uninstaller $silent
+          if ((Test-Path -LiteralPath $exe) -or (Test-Path -LiteralPath $shortcutPath)) {
+            throw 'Uninstall left the executable or shortcut behind.'
+          }
+          if ((Get-Content -LiteralPath $sentinel) -ne 'saved by user' -or
+              (Get-Content -LiteralPath $projectConfig) -ne 'LOG_LEVEL=WARNING' -or
+              (Get-Content -LiteralPath $projectState) -ne 'preserve') {
+            throw 'Uninstall changed user files.'
           }
           @{
-            artifact = $artifact[0].Name
-            install_attempts = 2
-            product_commands = @("--help", "platform --json", "config show --json")
-            uninstall_exit_code = $uninstall.ExitCode
+            artifact = $setups[0].Name
+            skipped_start_menu_preserved = $true
+            shortcut_repaired_on_upgrade = $true
+            previously_unchecked_shortcut_repaired = $true
+            custom_shortcut_preserved = $true
+            interactive_frontend_passed = $true
+            product_commands = @('--help', 'platform --json', 'config show --json')
+            uninstall_exit_code = 0
             workspace_preserved = $true
           } | ConvertTo-Json | Out-File artifacts/windows-installer-smoke.json -Encoding utf8
       - name: Create checksum and validate release tag
@@ -137,6 +213,7 @@ jobs:
             dist/installer/NZ-Coder-*-windows-x64-setup.exe
             artifacts/windows-frozen-contract.json
             artifacts/windows-installer-smoke.json
+            artifacts/windows-frontend-smoke.txt
             artifacts/installed-help.txt
             artifacts/installed-platform.json
             artifacts/installed-config.json

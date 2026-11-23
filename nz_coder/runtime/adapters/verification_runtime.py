@@ -18,6 +18,7 @@ from nz_coder.runtime.verification.domain.models import (
 from nz_coder.runtime.verification.domain.service import VerificationDomain
 from nz_coder.runtime.verification.domain.rules import observed_check_stage
 from nz_coder.runtime.process.workspace_snapshot import SnapshotError
+from .verification_authority import recover_user_contract as _recover_user_contract, recover_user_updates
 from .verification_facts import bind_execution_facts, command_capabilities, command_receipt, is_host_verification_tool
 from .verification_plans import check_spec, register_verification_plan
 from .verification_workspace import (
@@ -49,19 +50,18 @@ def _restore_verification_domain(state, *, session_id, workspace, interaction_ru
     elif not isinstance(saved, dict):
         return domain
     if state.task_authority_epoch > domain.task_definition.authority_revision:
-        from nz_coder.protocol.message_schema import is_synthetic_user_message
-        followup = next((m for m in (messages or []) if isinstance(m, dict) and m.get("role") == "user"
-            and not is_synthetic_user_message(m) and m.get("_nz_message_id") == state.task_authority_message_id), None)
-        if followup is None:
-            raise AuthoritySourceUnavailable()
         from nz_coder.runtime.adapters.context import new_runtime_state
         from nz_coder.runtime.agent.task_contract import parse_task_contract
+
+        updates = recover_user_updates(state, domain.task_definition, messages, session_id=session_id, workspace=workspace)
         rebuilt = new_runtime_state()
         rebuilt.initial_task_text = state.initial_task_text
-        rebuilt.task_contract = domain.task_definition.contract.to_dict() if domain.task_definition.contract else {}
-        rebuilt.apply_current_round_instruction(followup["content"], workspace=workspace, capture_task_references=False)
-        domain.declare_task(TaskDefinition(scope.task, state.task_authority_epoch, state.task_authority_message_id,
-                                          parse_task_contract(rebuilt.task_contract, workspace=workspace)))
+        previous = domain.task_definition.contract
+        rebuilt.task_contract = previous.to_dict() if previous else {}
+        for message in updates:
+            rebuilt.apply_current_round_instruction(message["content"], workspace=workspace, capture_task_references=False)
+        contract = parse_task_contract(rebuilt.task_contract, workspace=workspace)
+        domain.declare_task(TaskDefinition(scope.task, state.task_authority_epoch, state.task_authority_message_id, contract))
     # 域内定义才是已持久化权威，外层 RuntimeState 字段只是投影。
     contract = domain.task_definition.contract
     state.task_contract = contract.to_dict() if contract is not None else {}
@@ -69,46 +69,6 @@ def _restore_verification_domain(state, *, session_id, workspace, interaction_ru
     first = contract.acceptance_commands[0] if contract and contract.acceptance_commands else ""
     state.verification_definition = {"command": first, "targets": list(test_command_targets(first))} if first else {}
     return domain
-
-
-def _recover_user_contract(state, messages, *, session_id, workspace):
-    from nz_coder.protocol.message_schema import COMPACTION_KEY, SUMMARY_KEY, SESSION_SUMMARY_KEY, is_synthetic_user_message
-    from nz_coder.runtime.adapters.context import new_runtime_state
-    from nz_coder.runtime.verification.domain.checkpoint import AuthoritySourceUnavailable
-    if messages is None:
-        from nz_coder.state.sessions import load_session
-        from nz_coder.runtime.process.workdir import scoped_workdir
-        with scoped_workdir(workspace):
-            messages = load_session(session_id).get("messages", [])
-    if not isinstance(messages, list) or any(isinstance(m, dict) and any(
-            m.get(key) for key in (COMPACTION_KEY, SUMMARY_KEY, SESSION_SUMMARY_KEY)) for m in messages):
-        raise AuthoritySourceUnavailable()
-    users = [m for m in messages if isinstance(m, dict) and m.get("role") == "user"
-             and not is_synthetic_user_message(m) and isinstance(m.get("content"), str)]
-    from nz_coder.runtime.core.execution_context import explicit_replacement_task
-    bodies = [explicit_replacement_task(m) or m["content"].strip() for m in users]
-    starts = [i for i, text in enumerate(bodies) if text == state.initial_task_text.strip()]
-    if len(starts) != 1:
-        raise AuthoritySourceUnavailable()
-    users = users[starts[0]:]
-    if any(explicit_replacement_task(m) is not None for m in users[1:]):
-        raise AuthoritySourceUnavailable()
-    identities = {m.get("_nz_message_id") for m in users if m.get("_nz_message_id")}
-    required_ids = {ref.get("source_message_id") for ref in state.task_reference_evidence if ref.get("source_message_id")}
-    if (any(not m.get("_nz_message_id") for m in users)
-            or state.task_authority_message_id and state.task_authority_message_id not in identities
-            or not required_ids.issubset(identities)
-            or len(users) < max(1, state.task_authority_epoch)):
-        raise AuthoritySourceUnavailable()
-    rebuilt = new_runtime_state()
-    initial = explicit_replacement_task(users[0]) or users[0]["content"]
-    rebuilt.initial_task_text = initial
-    rebuilt.set_acceptance_criteria_from_text(initial, workspace=workspace)
-    for message in users[1:]:
-        rebuilt.apply_current_round_instruction(message["content"], workspace=workspace,
-            source_message_id=message["_nz_message_id"], capture_task_references=False)
-    from nz_coder.runtime.agent.task_contract import parse_task_contract
-    return parse_task_contract(rebuilt.task_contract, workspace=workspace)
 
 
 def preflight_runtime_restore(*, session_id, workspace, activation, settings):
@@ -528,7 +488,7 @@ class VerificationRuntime:
                 if not settlement.complete and state.mutation_generation != generation:
                     recorded.update({path: identity for path, identity in known_identities.items()
                                      if path in state.last_mutation_paths})
-                stage = result.workspace_scope.get("stage", "tool")
+                stage = settlement.stage
                 state.workspace_observation = {"reference": settlement.reference if settlement.complete else cursor.get("reference", ""),
                     "generation": state.mutation_generation, "complete": settlement.complete,
                     "stage": stage, "errors": settlement.errors}
@@ -598,10 +558,12 @@ class VerificationRuntime:
         self.domain.rebuild_from_current_acceptance()
 
     def _register_receipt_check(self, fact: ExecutionFact) -> None:
+        file_check = fact.in_process and fact.command.argv[:1] == ("verify_changed_files",)
         for capability in fact.capabilities:
             self.domain.register_check(check_spec(fact.command.original, fact.command.cwd, capability=capability,
                 required=False,
                 targets=fact.targets, stage="static" if capability in {"syntax", "symbol", "type", "lint", "build"} else "targeted",
+                coverage_mode="in_process" if file_check else "identity",
                 requirement_ids=()))
 
     def _receive_local_terminal(self, terminal):
@@ -741,6 +703,37 @@ class VerificationRuntime:
         if watermark is not None:
             from nz_coder.runtime.process.command_channel import current_command_client
             current_command_client().facts_sealed(watermark)
+
+    @contextmanager
+    def terminal_python_sources(self):
+        """从已捕获清单选取仍存在的 Python 文件，持同一运行锁交给结算方冻结。"""
+        from nz_coder.foundation.file_kinds import language_for_path
+        from nz_coder.runtime.process.workspace_scope import load
+
+        lock = self.run_context._state_lock
+        with lock:
+            observation = self.state.workspace_observation
+            reference = observation.get("reference") if observation.get("complete") else None
+            needs_manifest = any(language_for_path(path) == "python" for path in self.state.changed_files)
+        entries = None
+        if reference and needs_manifest:
+            try:
+                entries = load(self.store, reference)
+            except SnapshotError:
+                pass  # 签名清单不可读时只报告范围未知，不重新扫描正在变化的工作区。
+        with lock:
+            observation = self.state.workspace_observation
+            changed = [self.store.workspace / path for path in self.state.changed_files if language_for_path(path) == "python"]
+            if not changed:
+                sources = ()
+            elif (entries is None or not observation.get("complete") or observation.get("reference") != reference
+                  or observation.get("generation") != self.state.mutation_generation
+                  or any(not path.is_relative_to(self.store.workspace) or ".." in path.parts for path in changed)):
+                sources = None
+            else:
+                relative = (path.relative_to(self.store.workspace).as_posix() for path in changed)
+                sources = tuple(dict.fromkeys(path for path in relative if entries.get(path, {}).get("kind") == "file"))
+            yield sources
 
     def status(self) -> dict:
         return self.domain.snapshot().to_dict()

@@ -294,9 +294,11 @@ def test_default_sdk_completes_offline_model_tool_model(monkeypatch, tmp_path):
     events = []
     result = asyncio.run(AgentClient().run(request, on_event=events.append))
 
-    assert result.status is RunStatus.COMPLETED
-    assert result.final_text.startswith("workspace inspected\n\n")
-    assert "未评估" in result.final_text
+    # 这一提供方执行了目录读取，没有交付评审或测试回执；原稿仍可从该轮读取。
+    assert result.status is RunStatus.COMPLETED_UNVERIFIED
+    assert result.metadata["authored_content"] == "workspace inspected"
+    assert "workspace inspected" not in result.final_text
+    assert "本轮没有已采信的测试结果" in result.final_text and "/message" in result.final_text
     assert provider.calls == 2
     assert [event.name.value for event in events] == [
         "session.created",

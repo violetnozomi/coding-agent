@@ -215,6 +215,8 @@ def extract_structured_tool_error_code(content: str) -> str | None:
 
 
 def describe_transient_provider_retry(error: BaseException | str) -> str:
+    from nz_coder.runtime.model_gateway.errors import transport_interruption_kind
+
     name = getattr(error, "__class__", type(error)).__name__.lower()
     message = str(error).lower()
     if "streamincomplete" in name or "stream incomplete" in message:
@@ -223,8 +225,9 @@ def describe_transient_provider_retry(error: BaseException | str) -> str:
         return "Stream stalled"
     if "hard timeout" in message or "10 minutes" in message:
         return "Provider response timed out"
-    if isinstance(error, ConnectionError):
-        return "Provider connection error"
+    transport = transport_interruption_kind(error) if isinstance(error, BaseException) else None
+    if transport:
+        return "Provider request timed out" if transport == "timeout" else "Provider connection error"
     if any(item in message for item in (
         "socket hang up", "connection error", "econnrefused", "enotfound",
         "fetch failed", "network",

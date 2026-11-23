@@ -49,6 +49,8 @@ ASSISTANT_AGENT_KEY = "_nz_agent"
 ASSISTANT_PATH_KEY = "_nz_path"
 ASSISTANT_VARIANT_KEY = "_nz_variant"
 ASSISTANT_END_STATE_KEY = "_nz_end_state"
+MODEL_NOTE_KEY = "_nz_model_note"
+DEFERRED_MODEL_TEXT_KEY = "_nz_deferred_model_text"
 USER_TIME_KEY = ASSISTANT_TIME_KEY
 USER_AGENT_KEY = "_nz_user_agent"
 USER_MODEL_KEY = "_nz_user_model"
@@ -780,6 +782,30 @@ def attach_text_part(message: dict, part: dict[str, Any]) -> None:
     message[PARTS_KEY] = [normalized, *parts]
 
 
+def replace_assistant_final_text(message: dict, text: str, *, publish: Callable | None = None) -> None:
+    """把最终正文写入同一条消息和一个新版本的文本块，保留工具、推理等其他记录。"""
+    parts = message.get(PARTS_KEY) or []
+    now = time.time()
+    # 完成的文本块不可覆盖，新一代能让前端丢弃仍在路上的旧文本事件。
+    part = {
+        "id": f"part-{uuid.uuid4().hex}", "message_id": message[MESSAGE_ID_KEY],
+        "type": "text", "text": text, "time": {"start": now, "end": now},
+        "generation": max((p.get("generation", 0) for p in parts), default=0) + 1, "version": 1,
+    }
+    if interaction := message.get(INTERACTION_RUN_ID_KEY):
+        part.update(interaction_run_id=interaction, run_id=interaction)
+    message["content"] = text
+    if message.pop(DEFERRED_MODEL_TEXT_KEY, None):
+        # 旧记录可能有原本可见的推理块；公开宿主正文时不能顺带公开已暂存的模型推理。
+        for original in parts:
+            if original.get("type") == "reasoning":
+                original.update(visible=False, internal=True)
+    message[PARTS_KEY] = [p for p in parts if p.get("type") != "text"]
+    attach_text_part(message, part)
+    if publish is not None:
+        publish("message.part.updated", {"message_id": message[MESSAGE_ID_KEY], "part": part})
+
+
 def attach_file_parts(message: dict, attachments: list[dict]) -> list[dict]:
     """Persist validated user FileParts on an already identified message."""
     message_id = message.get(MESSAGE_ID_KEY)
@@ -987,12 +1013,21 @@ def cleanup_incomplete_tool_history(messages: list[dict]) -> list[dict]:
     return cleaned
 
 
+def public_message_content(message: dict) -> dict:
+    """终态到来前，内部历史保留真实候选供评审，公开会话仍可展示工具和权限。"""
+    if not message.get(DEFERRED_MODEL_TEXT_KEY):
+        return message
+    return {**message, "content": "", PARTS_KEY: [
+        part for part in message.get(PARTS_KEY, []) if part.get("type") not in {"text", "reasoning"}
+    ]}
+
+
 def legacy_messages(messages: list[dict]) -> list[dict]:
     """Return the pre-A022 conversation shape for backward compatibility."""
     projected = [
         project_public_protocol_value({
             key: copy.deepcopy(value)
-            for key, value in message.items()
+            for key, value in public_message_content(message).items()
             if not key.startswith("_nz_")
         })
         for message in messages
@@ -1010,6 +1045,7 @@ def message_records(messages: list[dict], session_id: str) -> list[dict]:
     for message in messages:
         if message.get(INTERNAL_KEY) is True or message.get(VISIBLE_KEY) is False:
             continue
+        message = public_message_content(message)
         message_id = message[MESSAGE_ID_KEY]
         raw_info = {
             key: copy.deepcopy(value)

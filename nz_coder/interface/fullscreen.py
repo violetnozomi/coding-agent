@@ -207,6 +207,7 @@ class FullscreenComposer:
         self._transcript_lines: tuple[tuple[tuple[str, str], ...], ...] = ((('', ''),),)
         self._message_anchors: tuple[MessageAnchor, ...] = ()
         self._projection_anchors: tuple[MessageAnchor, ...] = ()
+        self._open_transcript_detail = None
         self._expanded_tool_parts: set[str] = set()
         self._hovered_tool_part = ""
         self._output_lines: tuple[tuple[tuple[str, str], ...], ...] = ()
@@ -1010,6 +1011,7 @@ class FullscreenComposer:
 
     def _render_transcript_document(self, document, width: int) -> None:  # noqa: ANN001
         """Render bounded message blocks independently and record line anchors."""
+        self._open_transcript_detail = getattr(document, "open_detail", None)
         header, blocks = _bounded_transcript_document(document)
         lines = list(_markdown_lines(header, width))
         anchors: list[MessageAnchor] = []
@@ -1103,12 +1105,18 @@ class FullscreenComposer:
             return True
         if anchor.role not in {"user", "assistant"}:
             return False
-        label = f"Turn {anchor.turn_number}" if anchor.turn_number else "Assistant message"
+        label = f"Turn {anchor.turn_number}" if anchor.turn_number else f"{anchor.role.title()} message"
+        markdown = anchor.markdown
+        if self._open_transcript_detail is not None:
+            detail = self._open_transcript_detail(anchor.message_id)
+            if detail is None:
+                return False
+            label, markdown = detail
         self._selector = None
         self._dialog_kind = "detail"
         self._dialog_detail_title = label
         self._dialog_message = "Enter or Esc returns"
-        self._dialog_detail = anchor.markdown
+        self._dialog_detail = markdown
         self._detail_cache_text = ""
         self._detail_window.vertical_scroll = 0
         columns = shutil.get_terminal_size(fallback=(100, 30)).columns

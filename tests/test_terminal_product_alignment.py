@@ -9,7 +9,7 @@ from nz_coder.interface.commands import CommandContext, build_default_registry
 from nz_coder.interface.commands.handlers import core
 from nz_coder.interface.preferences import load_terminal_preferences
 from nz_coder.interface.terminal_input import TerminalInput
-from nz_coder.providers.models import DiscoveredModel, ModelSelection
+from nz_coder.providers.models import DiscoveredModel, ModelSelection, active_model_selection
 from nz_coder.runtime.process.workdir import scoped_workdir
 
 
@@ -30,6 +30,7 @@ class Agent:
         self.permissions = SimpleNamespace(mode="default")
         self.session_id = "session-1"
         self.closed = False
+        self.has_pending_settlement = False
 
     def close(self):
         self.closed = True
@@ -98,6 +99,7 @@ def test_connect_flow_masks_and_saves_credential_before_discovery(
 
     terminal = ConnectTerminal()
     context = _context(tmp_path, terminal, console)
+    previous_agent = context.agent
     monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "before")
     monkeypatch.setattr(config, "ANTHROPIC_API_BASE_URL", "https://before.example")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "before")
@@ -109,12 +111,6 @@ def test_connect_flow_masks_and_saves_credential_before_discovery(
         "discover_models",
         lambda *_args, **_kwargs: [DiscoveredModel("anthropic", "claude-test")],
     )
-    monkeypatch.setattr(
-        core,
-        "active_model_selection",
-        lambda: ModelSelection("anthropic", "claude-test", source="workspace"),
-    )
-    monkeypatch.setattr(core, "save_model_selection", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(core, "save_session", lambda *_args, **_kwargs: None)
 
     with scoped_workdir(tmp_path):
@@ -124,7 +120,10 @@ def test_connect_flow_masks_and_saves_credential_before_discovery(
     assert "ANTHROPIC_API_KEY=secret-value" in content
     assert terminal.prompts[0][1] is True
     assert all("secret-value" not in str(message) for message in console.messages)
-    assert context.agent is not None
+    assert active_model_selection(tmp_path) == ModelSelection(
+        "anthropic", "claude-test", source="workspace"
+    )
+    assert previous_agent.closed and context.agent is not previous_agent
 
 
 def test_command_registry_exposes_categories_keybinds_and_new_controls():

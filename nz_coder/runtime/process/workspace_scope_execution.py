@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import shlex
 import sys
@@ -76,12 +77,15 @@ def _bytecode_for_unchanged_source(path: str, before: dict, after: dict) -> bool
     return bool(original and original.get("kind") == "file" and original == after.get(source))
 
 
-def _unconfirmed_bytecode_reason(path: str, after: dict, store, interpreter) -> str:
+def _unconfirmed_bytecode_reason(path: str, after: dict, store, interpreters, project_interpreters) -> str:
     """核对稳定快照中的缓存头部与源码身份，不反序列化或执行字节码。"""
     from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 
     target = PurePosixPath(path)
     source = str(target.parent.parent / (target.name.rsplit(".cpython-", 1)[0] + ".py"))
+    if project_interpreters is not None:
+        # pytest 可导入本项目源码，py_compile 仅能解释本次传入文件的缓存。
+        interpreters = project_interpreters.get(None, set()) | project_interpreters.get(store.workspace / source, set())
     try:
         access = WorkspaceFileAccess(store.workspace)
         cache, cache_identity = access.read_bytes_with_identity(path, maximum=store.max_file_bytes)
@@ -92,11 +96,11 @@ def _unconfirmed_bytecode_reason(path: str, after: dict, store, interpreter) -> 
             or source_identity.content_hash != after[source].get("digest")
             or len(cache) <= 16):
         return "cache or source identity changed, or header was incomplete"
-    tag, magic = interpreter
-    if not target.name.startswith(f"{PurePosixPath(source).stem}.{tag}.") and not target.name.startswith(
-            f"{PurePosixPath(source).stem}.{tag}-pytest-"):
+    stem = PurePosixPath(source).stem
+    magics = {magic for tag, magic in interpreters if target.name.startswith((f"{stem}.{tag}.", f"{stem}.{tag}-pytest-"))}
+    if not magics:
         return "cache tag does not match a confirmed interpreter"
-    if cache[:4].hex() != magic:
+    if cache[:4].hex() not in magics:
         return "cache magic does not match the interpreter"
     flags = int.from_bytes(cache[4:8], "little")
     if flags in {1, 3}:
@@ -142,16 +146,62 @@ def removed_python_bytecode_paths(result, changes: dict, store) -> set[str]:
     return _cache_directories(files, directories, before)
 
 
+def _project_cache_check(result, workspace: Path):
+    """只有整批实际运行的程序均是直接 Python 检查时，才能归因项目里的缓存。"""
+    from nz_coder.runtime.verification.domain.identity import command_identity
+    from nz_coder.project_creation.verifier import ProjectPythonReceipt
+
+    receipts = result.execution_facts
+    if any(item.producer != "verify_project_build" for item in receipts):
+        return None
+    executed = [item for item in receipts if item.outcome != "not_executed"]
+    if not executed:
+        return None
+    directory = Path(executed[0].cwd)
+    if not directory.is_relative_to(workspace):
+        return None
+    representative = executed[0].command
+    interpreters = {}
+    for item in executed:
+        if (Path(item.cwd) != directory or item.outcome not in {"succeeded", "failed"}
+                or type(item.exit_code) is not int or not item.reliable or not item.output_complete):
+            return None
+        identity = command_identity(item.command, item.cwd)
+        argv = identity.argv
+        if identity.opaque or identity.environment:
+            return None
+        module = argv[2:3] if argv[:1] in {("python",), ("python3",)} and argv[1:2] == ("-m",) else ()
+        if item.capabilities == ("test",) and (argv[:1] == ("pytest",) or module == ("pytest",)):
+            # 任一条真实 pytest 可解释其运行记录，py_compile 只能解释字节码。
+            representative = item.command
+            sources = [None]
+        elif item.capabilities == ("syntax",) and module == ("py_compile",):
+            sources = [Path(os.path.normpath(directory / target)) for target in item.targets]
+        else:
+            return None
+        if isinstance(item, ProjectPythonReceipt) and item.bytecode_identity is not None:
+            for source in sources:
+                interpreters.setdefault(source, set()).add(item.bytecode_identity)
+    return representative, PurePosixPath(directory.relative_to(workspace).as_posix()), interpreters
+
+
 def python_verification_artifact_paths(result, changes: dict, store, *, python_verification_origin=None,
                                       unconfirmed=None) -> set[str]:
     """逐项核实可靠 Python 检查的缓存，不豁免其他输入变化。"""
-    if result.name not in {"bash", "process", "verify_changed_files"} or not changes:
+    if result.name not in {"bash", "process", "verify_changed_files", "verify_project_build"} or not changes:
         return set()
     from nz_coder.intelligence.verification_planner import (
         classify_verification_segments, verification_command_segments,
         verification_success_is_reliable,
     )
     command = str(result.tool_input.get("command") or "")
+    cache_scope = PurePosixPath(".")
+    project_interpreters = None
+    if result.name == "verify_project_build":
+        check = _project_cache_check(result, store.workspace)
+        if check is None:
+            return set()
+        command, cache_scope, project_interpreters = check
     if result.name == "process":
         operation = str(result.tool_input.get("operation") or "").strip().lower()
         if operation == "read":
@@ -203,9 +253,10 @@ def python_verification_artifact_paths(result, changes: dict, store, *, python_v
     if result.name == "bash" and any(receipt.producer == "bash" for receipt in result.execution_facts):
         interpreter = (result.metadata or {}).get("python_bytecode_identity") or interpreter
     for path in changes:
-        if changes[path] == "delete":
+        target = PurePosixPath(path)
+        if changes[path] == "delete" or not target.is_relative_to(cache_scope):
             continue
-        parts = PurePosixPath(path).parts
+        parts = target.parts
         if ".pytest_cache" in parts and pytest:
             tail = "/".join(parts[parts.index(".pytest_cache") + 1:])
             entry = after.get(path) or before.get(path) or {}
@@ -226,7 +277,7 @@ def python_verification_artifact_paths(result, changes: dict, store, *, python_v
                 cache_directories.add(path)
             continue
         if _bytecode_for_unchanged_source(path, before, after):
-            reason = _unconfirmed_bytecode_reason(path, after, store, interpreter)
+            reason = _unconfirmed_bytecode_reason(path, after, store, (interpreter,), project_interpreters)
             if not reason:
                 artifacts.add(path)
             elif unconfirmed is not None and len(unconfirmed) < 4:

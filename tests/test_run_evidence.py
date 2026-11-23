@@ -6,6 +6,34 @@ import json
 from nz_coder.runtime.observability.run_evidence import RunEvidence
 
 
+def test_report_and_review_export_scope_and_copy_behavior():
+    evidence = RunEvidence(
+        run_id="run-report",
+        task_assessment={"constraints": ["keep the public API"]},
+        project_spec={"name": "worker"},
+        blueprint={"files": ["worker.py"]},
+        created_files=["worker.py"],
+        child_outcomes=[{"status": "applied", "changed_files": ["worker.py"]}],
+    )
+    report = evidence.to_dict()
+    review = evidence.review_input()
+
+    assert set(report) - set(review) == {"run_id", "project_spec", "blueprint"}
+    assert review == {key: report[key] for key in review}
+    assert report["project_spec"] is evidence.project_spec
+    assert report["blueprint"] is evidence.blueprint
+
+    for exported in (report, review):
+        exported["task_assessment"]["constraints"].clear()
+        exported["created_files"].clear()
+        exported["child_outcomes"][0]["status"] = "reviewed"
+        assert exported["child_outcomes"][0]["changed_files"] is evidence.child_outcomes[0]["changed_files"]
+
+    assert evidence.task_assessment["constraints"] == ["keep the public API"]
+    assert evidence.created_files == ["worker.py"]
+    assert evidence.child_outcomes[0]["status"] == "applied"
+
+
 def test_child_outcome_keeps_lineage_and_applied_paths_separate():
     evidence = RunEvidence(run_id="run-child")
     child_metadata = {

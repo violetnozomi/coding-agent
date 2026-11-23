@@ -11,11 +11,13 @@ from typing import Callable, TextIO
 from nz_coder.interface.submission import build_user_submission, resolve_submission_files
 from nz_coder.foundation.json_safety import json_safe_value
 from nz_coder.providers.models import active_model_selection
+from nz_coder.protocol.message_schema import MODEL_NOTE_KEY
 from nz_coder.runtime.conversation import prompt
 from nz_coder.runtime.core.events import RuntimeEvent
 from nz_coder.runtime.core.profiles import MAIN_PROFILE
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.core.result import RunResult, RunStatus
+from nz_coder.runtime.verification.completion_gate import MODEL_NOTE_HINT
 from nz_coder.sdk import AgentClient
 from nz_coder.state.sessions import create_session_id, load_session
 from nz_coder.state.workdir import scoped_workdir
@@ -87,12 +89,18 @@ def _session_id(args) -> str:
     return args.session or create_session_id("run")
 
 
-def _result_record(result: RunResult) -> dict:
+def _result_record(result: RunResult, *, persist_session: bool = True) -> dict:
     usage = result.usage
+    text = result.final_text
+    if not persist_session and text.endswith(MODEL_NOTE_HINT):
+        # 一次性命令退出后无法再打开详情。只替换宿主附加的指引，保留普通答复的原文。
+        terminal = next((m for m in reversed(result.messages) if m.get("role") == "assistant"), {})
+        if terminal.get(MODEL_NOTE_KEY) and terminal.get("content") == text:
+            text = text.removesuffix(MODEL_NOTE_HINT) + "本次使用 --no-session，模型说明未保存。"
     record = {
         "session_id": result.session_id,
         "status": result.status.value,
-        "text": result.final_text,
+        "text": text,
         "usage": {
             "input_tokens": usage.input_tokens,
             "output_tokens": usage.output_tokens,
@@ -269,10 +277,10 @@ async def _run(args, *, stdin: TextIO, stdout: TextIO, client_factory: Callable)
             if isinstance(client, AgentClient):
                 run_kwargs["config_snapshot"] = workspace_snapshot
             result = await client.run(request, **run_kwargs)
-    record = _result_record(result)
+    record = _result_record(result, persist_session=not args.no_session)
     if args.output == "text":
-        if result.final_text:
-            stdout.write(result.final_text.rstrip("\n") + "\n")
+        if record["text"]:
+            stdout.write(record["text"].rstrip("\n") + "\n")
     elif args.output == "json":
         stdout.write(_json_record(record) + "\n")
     else:

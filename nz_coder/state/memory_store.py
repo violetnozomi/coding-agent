@@ -21,9 +21,12 @@ from nz_coder.protocol.public_error import (
 )
 
 
-_FIELDS = ("name", "type", "description", "content", "applicability", "source_refs")
+_TEXT_FIELDS = ("name", "type", "description", "content", "applicability")
+_FIELDS = (*_TEXT_FIELDS, "source_refs")
 _TARGET_ACTIONS = {"update", "archive", "restore", "delete", "assess"}
-_ACTIONS = {"create", *_TARGET_ACTIONS, "apply_proposal", "reject_proposal"}
+_PROPOSABLE_ACTIONS = {"create", "update", "assess"}
+_REVIEW_ACTIONS = {"apply_proposal", "reject_proposal"}
+_ACTIONS = {"create", *_TARGET_ACTIONS, *_REVIEW_ACTIONS}
 _IDENTITY_FIELDS = ("actor_id", "session_id", "parent_session_id", "child_session_id", "task_id")
 
 
@@ -34,7 +37,9 @@ class MemoryStoreUnavailable(PublicRuntimeError):
         super().__init__(PublicError("memory_unavailable", message))
 
 
-class _Result(Exception):
+class _MutationRejected(Exception):
+    """目标不存在或版本冲突时中止本次修改，调用方仍需保存操作回执。"""
+
     def __init__(self, result: dict):
         self.result = result
 
@@ -63,6 +68,16 @@ def _tokens(text: str) -> list[str]:
 
 def _content_hash(record: dict) -> str:
     return hashlib.sha256(_json({key: record[key] for key in _FIELDS}).encode()).hexdigest()
+
+
+def _embedding_is_current(record: dict | None, revision: int, content_hash: str) -> bool:
+    """向量的版本与内容指纹必须同时匹配当前可检索的记忆。"""
+    return (
+        record is not None
+        and record["status"] == "active"
+        and record["revision"] == revision
+        and _content_hash(record) == content_hash
+    )
 
 
 class SQLiteMemoryStore:
@@ -199,46 +214,70 @@ class SQLiteMemoryStore:
             event.setdefault("observed_at", None)
         return event
 
-    def _project(self, conn, record):
+    def _attach_assessments(self, conn, record):
+        """把核查意见和关联记忆附到读取的版本上，包括后来已解决的冲突。"""
         if record is None:
             return None
-        events = [self._event(row) for row in conn.execute("SELECT * FROM memory_events WHERE action='assess' ORDER BY seq")]
-        resolved_by: dict[str, list[str]] = {}
+        rows = conn.execute("SELECT * FROM memory_events WHERE action='assess' ORDER BY seq")
+        events = [self._event(row) for row in rows]
+
+        # 解决冲突的声明可能比被解决的事件晚写入，先按事件编号整理这些声明。
+        resolutions: dict[str, list[str]] = {}
         for event in events:
-            for event_id in event.get("resolves_event_ids", []):
-                resolved_by.setdefault(event_id, []).append(event["event_id"])
+            for resolved_event_id in event.get("resolves_event_ids", []):
+                resolutions.setdefault(resolved_event_id, []).append(event["event_id"])
         assessments = []
         relations = []
         for event in events:
-            event["resolved"] = event["event_id"] in resolved_by
-            event["resolved_by"] = resolved_by.get(event["event_id"], [])
+            resolving_events = resolutions.get(event["event_id"], [])
+            event["resolved"] = bool(resolving_events)
+            event["resolved_by"] = resolving_events
             if event["memory_id"] == record["id"]:
                 event["record_revision_matches"] = event["revision"] == record["revision"]
                 assessments.append(event)
-            endpoints = [{"memory_id": event["memory_id"], "expected_revision": event["revision"]},
-                         *event.get("related_records", [])]
-            own = next((item for item in endpoints if item["memory_id"] == record["id"]), None)
-            if own is None or not event.get("related_records") or event.get("resolves_event_ids"):
-                continue
-            for endpoint in endpoints:
-                if endpoint["memory_id"] == record["id"]:
-                    continue
-                head = conn.execute("SELECT revision FROM memory_records WHERE id=?", (endpoint["memory_id"],)).fetchone()
-                relations.append({"memory_id": endpoint["memory_id"], "revision": endpoint["expected_revision"],
-                                  "current_revision": head[0] if head else None,
-                                  "event_id": event["event_id"], "seq": event["seq"],
-                                  "resolved": event["resolved"], "resolved_by": event["resolved_by"],
-                                  "historical": own["expected_revision"] != record["revision"] or head is None
-                                      or endpoint["expected_revision"] != head[0],
-                                  "availability": "available" if head else "deleted"})
+            relations.extend(self._related_records_for_event(conn, record, event))
         record["assessments"] = assessments
         record["related_records"] = relations
         record["content_hash"] = _content_hash(record)
         return record
 
+    @staticmethod
+    def _related_records_for_event(conn, record, event) -> list[dict]:
+        related = event.get("related_records", [])
+        endpoints = [
+            {"memory_id": event["memory_id"], "expected_revision": event["revision"]},
+            *related,
+        ]
+        record_endpoint = next((item for item in endpoints if item["memory_id"] == record["id"]), None)
+        # 参与冲突的每条记忆都能查到关联记录。解决声明只更新原事件的状态。
+        if record_endpoint is None or not related or event.get("resolves_event_ids"):
+            return []
+
+        record_revision_changed = record_endpoint["expected_revision"] != record["revision"]
+        relations = []
+        for endpoint in endpoints:
+            other_id = endpoint["memory_id"]
+            if other_id == record["id"]:
+                continue
+            head = conn.execute("SELECT revision FROM memory_records WHERE id=?", (other_id,)).fetchone()
+            current_revision = head[0] if head is not None else None
+            expected_revision = endpoint["expected_revision"]
+            relations.append({
+                "memory_id": other_id,
+                "revision": expected_revision,
+                "current_revision": current_revision,
+                "event_id": event["event_id"],
+                "seq": event["seq"],
+                "resolved": event["resolved"],
+                "resolved_by": event["resolved_by"],
+                "historical": record_revision_changed or head is None or expected_revision != current_revision,
+                "availability": "available" if head is not None else "deleted",
+            })
+        return relations
+
     def read(self, memory_id, revision=None) -> dict | None:
         with self._snapshot() as conn:
-            return self._project(conn, self._read(conn, memory_id, revision))
+            return self._attach_assessments(conn, self._read(conn, memory_id, revision))
 
     def list_records(self, type=None, status="active", limit=50, cursor=None) -> dict:
         limit = max(1, min(int(limit), 1000))
@@ -253,7 +292,7 @@ class SQLiteMemoryStore:
             rows = conn.execute("SELECT v.* FROM memory_records r JOIN memory_versions v ON "
                                 "r.id=v.memory_id AND r.revision=v.revision WHERE " + " AND ".join(clauses)
                                 + " ORDER BY r.id LIMIT ?", [*args, limit + 1]).fetchall()
-            items = [self._project(conn, self._record(row)) for row in rows[:limit]]
+            items = [self._attach_assessments(conn, self._record(row)) for row in rows[:limit]]
             return {"items": items, "next_cursor": items[-1]["id"] if len(rows) > limit else None}
 
     def search(self, query, limit=5) -> list[dict]:
@@ -266,40 +305,47 @@ class SQLiteMemoryStore:
                 rows = conn.execute("""SELECT v.* FROM memory_records r JOIN memory_versions v
                     ON r.id=v.memory_id AND r.revision=v.revision
                     WHERE v.status='active' ORDER BY r.id LIMIT ?""", (limit,))
-                items = [self._project(conn, self._record(row)) for row in rows]
+                items = [self._attach_assessments(conn, self._record(row)) for row in rows]
             else:
                 items = self._search(conn, query, limit)
             return {"items": items, "generation": self._generation(conn)}
 
     def _search(self, conn, query, limit):
         limit = max(0, min(int(limit), 1000))
-        if not limit or not str(query).strip():
+        if not limit:
             return []
-        terms = _tokens(str(query))
-        exact = conn.execute("""SELECT v.* FROM memory_records r JOIN memory_versions v ON
+        query_text = str(query)
+        phrase = query_text.strip().casefold()
+        if not phrase:
+            return []
+        terms = _tokens(query_text)
+        exact_rows = conn.execute("""SELECT v.* FROM memory_records r JOIN memory_versions v ON
             r.id=v.memory_id AND r.revision=v.revision WHERE v.status='active' AND
             (r.id=? OR v.name=?) ORDER BY r.id""", (query, query)).fetchall()
-        ranked = []
+        ranked_rows = []
         if terms:
             # 用户输入只作为转义词元，不能注入 MATCH 运算符。
             match = " OR ".join('"' + token.replace('"', '""') + '"' for token in terms)
-            ranked = conn.execute("""SELECT v.*,bm25(memory_fts) AS score FROM memory_fts
+            ranked_rows = conn.execute("""SELECT v.*,bm25(memory_fts) AS score FROM memory_fts
                 JOIN memory_records r ON r.id=memory_fts.memory_id
                 JOIN memory_versions v ON v.memory_id=r.id AND v.revision=r.revision
                 WHERE memory_fts MATCH ? AND v.status='active' ORDER BY score,r.id LIMIT ?""",
                                   (match, max(limit * 4, 20))).fetchall()
-        records = {}
-        for row in [*exact, *ranked]:
+        records_by_id = {}
+        for row in [*exact_rows, *ranked_rows]:
             record = self._record(row)
             record.pop("score", None)
-            records.setdefault(record["id"], record)
-        exact_ids = {row["memory_id"] for row in exact}
-        phrase = str(query).strip().casefold()
-        ordered = sorted(records.values(), key=lambda record: (
-            record["id"] not in exact_ids,
-            not any(phrase in str(record[field]).casefold() for field in _FIELDS if field != "source_refs"),
-            list(records).index(record["id"]), record["id"]))
-        return [self._project(conn, record) for record in ordered[:limit]]
+            records_by_id.setdefault(record["id"], record)
+        exact_ids = {row["memory_id"] for row in exact_rows}
+
+        def match_priority(record):
+            exact_match = record["id"] in exact_ids
+            phrase_match = any(phrase in str(record[field]).casefold() for field in _TEXT_FIELDS)
+            return not exact_match, not phrase_match
+
+        # 精确命中优先，其次是完整短语。同一优先级沿用数据库返回的顺序。
+        ordered = sorted(records_by_id.values(), key=match_priority)
+        return [self._attach_assessments(conn, record) for record in ordered[:limit]]
 
     @staticmethod
     def _context(context) -> dict:
@@ -314,14 +360,14 @@ class SQLiteMemoryStore:
                      (event_id, action, memory_id, revision, _now(), _json(data)))
         return event_id
 
-    def _cas(self, conn, memory_id, expected_revision):
+    def _read_expected_revision(self, conn, memory_id, expected_revision):
         record = self._read(conn, memory_id)
         if record is None:
-            raise _Result({"status": "not_found", "memory_id": memory_id})
+            raise _MutationRejected({"status": "not_found", "memory_id": memory_id})
         if not isinstance(expected_revision, int) or isinstance(expected_revision, bool):
             raise PublicInputError("必须提供整数 expected_revision")
         if record["revision"] != expected_revision:
-            raise _Result({"status": "conflict", "memory_id": memory_id, "revision": record["revision"]})
+            raise _MutationRejected({"status": "conflict", "memory_id": memory_id, "revision": record["revision"]})
         return record
 
     @staticmethod
@@ -331,7 +377,7 @@ class SQLiteMemoryStore:
         if previous is not None:
             fields.update({key: previous[key] for key in _FIELDS})
         fields.update({key: command[key] for key in _FIELDS if key in command})
-        for key in _FIELDS[:-1]:
+        for key in _TEXT_FIELDS:
             if not isinstance(fields[key], str):
                 raise PublicInputError(f"{key} 必须是字符串")
         if not fields["name"].strip() or not fields["content"].strip():
@@ -369,34 +415,43 @@ class SQLiteMemoryStore:
             if endpoint_id == record["id"] or endpoint_id in related_ids:
                 raise PublicInputError("关联端点不得重复或指向自身")
             related_ids.add(endpoint_id)
-            self._cas(conn, endpoint_id, endpoint.get("expected_revision"))
+            self._read_expected_revision(conn, endpoint_id, endpoint.get("expected_revision"))
         if resolves:
-            if not isinstance(command.get("resolution_reason"), str) or not command["resolution_reason"].strip():
-                raise PublicInputError("明确解决声明必须说明 resolution_reason")
-            if any(not isinstance(event_id, str) for event_id in resolves) or len(resolves) != len(set(resolves)):
-                raise PublicInputError("解决引用必须是唯一的 event_id")
-            for event_id in resolves:
-                row = conn.execute("SELECT * FROM memory_events WHERE event_id=? AND action='assess'", (event_id,)).fetchone()
-                if row is None:
-                    raise PublicInputError("被解决事件不存在")
-                event = self._event(row)
-                endpoints = {event["memory_id"], *(item["memory_id"] for item in event.get("related_records", []))}
-                if record["id"] not in endpoints:
-                    raise PublicInputError("被解决事件与目标记录无关")
-                if not (endpoints - {record["id"]}).issubset(related_ids):
-                    raise PublicInputError("解决冲突时必须提供所有关联端点的当前版本")
+            self._validate_resolution(conn, record["id"], related_ids, resolves, command.get("resolution_reason"))
         evidence = command.get("evidence_refs", [])
         if not isinstance(evidence, list) or any(not isinstance(ref, dict) for ref in evidence):
             raise PublicInputError("evidence_refs 必须是对象列表")
 
-    def _validate(self, conn, command):
+    def _validate_resolution(self, conn, memory_id, checked_related_ids, event_ids, reason):
+        if not isinstance(reason, str) or not reason.strip():
+            raise PublicInputError("明确解决声明必须说明 resolution_reason")
+        if any(not isinstance(event_id, str) for event_id in event_ids) or len(event_ids) != len(set(event_ids)):
+            raise PublicInputError("解决引用必须是唯一的 event_id")
+        for event_id in event_ids:
+            row = conn.execute(
+                "SELECT * FROM memory_events WHERE event_id=? AND action='assess'", (event_id,),
+            ).fetchone()
+            if row is None:
+                raise PublicInputError("被解决事件不存在")
+            event = self._event(row)
+            affected_ids = {event["memory_id"], *(ref["memory_id"] for ref in event.get("related_records", []))}
+            if memory_id not in affected_ids:
+                raise PublicInputError("被解决事件与目标记录无关")
+            # 当前记录已核对版本，同一冲突涉及的其余记录也须逐一核对才能结清。
+            other_affected_ids = affected_ids - {memory_id}
+            if not other_affected_ids.issubset(checked_related_ids):
+                raise PublicInputError("解决冲突时必须提供所有关联端点的当前版本")
+
+    def _prepare_record(self, conn, command) -> dict:
+        """新建时返回正文字段，其余操作返回已核对版本的记录副本。审批时会再次读取当前版本。"""
         action = command["action"]
-        record = None
-        if action in _TARGET_ACTIONS:
-            record = self._cas(conn, command.get("memory_id"), command.get("expected_revision"))
-        if action in {"create", "update"}:
-            self._fields(command, record)
-        if action == "assess":
+        if action == "create":
+            return self._fields(command)
+
+        record = self._read_expected_revision(conn, command.get("memory_id"), command.get("expected_revision"))
+        if action == "update":
+            record.update(self._fields(command, record))
+        elif action == "assess":
             self._validate_assessment(conn, command, record)
         return record
 
@@ -408,65 +463,76 @@ class SQLiteMemoryStore:
         conn.execute("UPDATE memory_records SET revision=? WHERE id=?", (record["revision"], record["id"]))
         conn.execute("DELETE FROM memory_fts WHERE memory_id=?", (record["id"],))
         if record["status"] == "active":
-            text = " ".join(str(record[key]) for key in _FIELDS if key != "source_refs")
+            text = " ".join(str(record[key]) for key in _TEXT_FIELDS)
             conn.execute("INSERT INTO memory_fts(memory_id,tokens) VALUES (?,?)", (record["id"], " ".join(_tokens(text))))
 
     def _delete(self, conn, memory_id):
-        proposals = []
+        affected_proposals = []
         for row in conn.execute("SELECT * FROM memory_proposals"):
             proposal = self._proposal(row)
             command = proposal.get("command", {})
             if (proposal["memory_id"] == memory_id
                     or any(item.get("memory_id") == memory_id for item in command.get("related_records", []))):
-                proposals.append(proposal["id"])
-        # 关联核查和提案可能复制正文；删除时裁掉这些事件的所有自由文本。
+                affected_proposals.append(proposal["id"])
+
+        # 核查和审阅事件也可能保存正文副本。保留版本和事件编号，以便另一端仍能显示历史关联。
         for row in conn.execute("SELECT * FROM memory_events").fetchall():
             event = self._event(row)
             related = event.get("related_records", [])
-            if (event["memory_id"] == memory_id or event.get("proposal_id") in proposals
-                    or any(item.get("memory_id") == memory_id for item in related)):
-                safe = {"redacted": True}
-                if related:
-                    safe["related_records"] = [{"memory_id": item["memory_id"], "expected_revision": item["expected_revision"]}
-                                               for item in related]
-                if event.get("resolves_event_ids"):
-                    safe["resolves_event_ids"] = event["resolves_event_ids"]
-                conn.execute("UPDATE memory_events SET data=? WHERE event_id=?", (_json(safe), event["event_id"]))
-        for proposal_id in proposals:
+            references_memory = (
+                event["memory_id"] == memory_id
+                or event.get("proposal_id") in affected_proposals
+                or any(item.get("memory_id") == memory_id for item in related)
+            )
+            if not references_memory:
+                continue
+            retained = {"redacted": True}
+            if related:
+                retained["related_records"] = [
+                    {"memory_id": item["memory_id"], "expected_revision": item["expected_revision"]}
+                    for item in related
+                ]
+            if event.get("resolves_event_ids"):
+                retained["resolves_event_ids"] = event["resolves_event_ids"]
+            conn.execute("UPDATE memory_events SET data=? WHERE event_id=?", (_json(retained), event["event_id"]))
+
+        for proposal_id in affected_proposals:
             conn.execute("DELETE FROM memory_proposals WHERE id=?", (proposal_id,))
         conn.execute("DELETE FROM memory_fts WHERE memory_id=?", (memory_id,))
         conn.execute("DELETE FROM memory_records WHERE id=?", (memory_id,))
 
-    def _execute(self, conn, command, context):
+    def _apply_record_command(self, conn, command, context):
         action = command["action"]
-        previous = self._validate(conn, command)
+        record = self._prepare_record(conn, command)
         if action == "create":
             now = _now()
-            record = {"id": "mem_" + uuid4().hex, "revision": 1, "status": "active",
-                      "created_at": now, "updated_at": now, **self._fields(command)}
+            record.update(id="mem_" + uuid4().hex, revision=1, status="active", created_at=now, updated_at=now)
             conn.execute("INSERT INTO memory_records VALUES (?,?)", (record["id"], 1))
             self._put_version(conn, record)
-        else:
-            record = previous
-            if action in {"update", "archive", "restore"}:
-                record = {**record, "revision": record["revision"] + 1, "updated_at": _now()}
-                if action == "update":
-                    record.update(self._fields(command, previous))
-                else:
-                    record["status"] = "archived" if action == "archive" else "active"
-                self._put_version(conn, record)
-            elif action == "delete":
-                self._delete(conn, record["id"])
-        data = {}
+        elif action in {"update", "archive", "restore"}:
+            record["revision"] += 1
+            record["updated_at"] = _now()
+            if action == "archive":
+                record["status"] = "archived"
+            elif action == "restore":
+                record["status"] = "active"
+            self._put_version(conn, record)
+        elif action == "delete":
+            self._delete(conn, record["id"])
+
+        event_data = {}
         if action == "assess":
-            data = {key: command[key] for key in ("judgment", "evidence_refs", "related_records", "resolves_event_ids", "resolution_reason") if key in command}
-            observed = [ref["observed_at"] for ref in command.get("evidence_refs", [])
-                        if ref.get("binding") == "bound" and ref.get("observed_at") is not None]
-            # 多次观察各自留在证据快照里，不伪造一次共同的观察时间。
-            data["observed_at"] = observed[0] if len(observed) == 1 else None
+            # 核查意见附在被核查的版本上。只有一条已绑定且带时间的观察时，才给事件设置观察时间。
+            assessment_fields = ("judgment", "evidence_refs", "related_records", "resolves_event_ids", "resolution_reason")
+            event_data = {key: command[key] for key in assessment_fields if key in command}
+            observation_times = [
+                ref["observed_at"] for ref in command.get("evidence_refs", [])
+                if ref.get("binding") == "bound" and ref.get("observed_at") is not None
+            ]
+            event_data["observed_at"] = observation_times[0] if len(observation_times) == 1 else None
         elif action != "delete" and "reason" in command:
-            data["reason"] = command["reason"]
-        event_id = self._emit(conn, action, record["id"], record["revision"], context, **data)
+            event_data["reason"] = command["reason"]
+        event_id = self._emit(conn, action, record["id"], record["revision"], context, **event_data)
         return {"status": "saved", "memory_id": record["id"], "revision": record["revision"], "event_ids": [event_id]}
 
     @staticmethod
@@ -480,104 +546,153 @@ class SQLiteMemoryStore:
                          "action": row["action"], "memory_id": row["memory_id"]})
         return proposal
 
-    def _propose(self, conn, command, context):
-        self._validate(conn, command)
+    def _create_proposal(self, conn, command, context):
+        # 只保存提议修改的字段。批准时再与当前记录合并，提案等待期间的其他修改才能保留。
+        self._prepare_record(conn, command)
         proposal_id = "prop_" + uuid4().hex
         now = _now()
-        data = {"command": command, "context": self._context(context), "created_at": now, "updated_at": now,
-                "expected_revision": command.get("expected_revision"),
-                "operation_namespace": context["operation_namespace"], "operation_id": context["operation_id"]}
-        conn.execute("INSERT INTO memory_proposals VALUES (?,?,?,?,?,?)",
-                     (proposal_id, 1, "pending", command["action"], command.get("memory_id"), _json(data)))
-        event_id = self._emit(conn, "propose", command.get("memory_id"), command.get("expected_revision"), context,
-                              proposal_id=proposal_id, proposal_revision=1, proposed_action=command["action"])
+        memory_id = command.get("memory_id")
+        expected_revision = command.get("expected_revision")
+        data = {
+            "command": command,
+            "context": self._context(context),
+            "created_at": now,
+            "updated_at": now,
+            "expected_revision": expected_revision,
+            "operation_namespace": context["operation_namespace"],
+            "operation_id": context["operation_id"],
+        }
+        conn.execute(
+            "INSERT INTO memory_proposals VALUES (?,?,?,?,?,?)",
+            (proposal_id, 1, "pending", command["action"], memory_id, _json(data)),
+        )
+        event_id = self._emit(
+            conn, "propose", memory_id, expected_revision, context,
+            proposal_id=proposal_id, proposal_revision=1, proposed_action=command["action"],
+        )
         return {"status": "pending_review", "proposal_id": proposal_id, "proposal_revision": 1, "event_ids": [event_id]}
 
-    def _decide(self, conn, command, context):
+    @staticmethod
+    def _command_for_approval(proposal: dict, decision: dict) -> dict:
+        """沿用提案的修改内容，按审阅者看到的目标版本执行。"""
+        proposed = dict(proposal.get("command", {}))
+        if proposed.get("action") not in _PROPOSABLE_ACTIONS:
+            raise PublicInputError("该旧提案没有可接受的明确动作")
+        if proposed["action"] in _TARGET_ACTIONS:
+            proposed["expected_revision"] = decision.get("expected_revision")
+        if "related_records" in decision:
+            # 审阅者可以更新关联记忆的版本，但提案指向的记忆必须与提交时一致。
+            proposed_ids = {item["memory_id"] for item in proposed.get("related_records", [])}
+            reviewed_ids = {item["memory_id"] for item in decision["related_records"]}
+            if proposed_ids != reviewed_ids:
+                raise PublicInputError("接受提案只能核对关联端点版本，不能更换端点")
+            proposed["related_records"] = decision["related_records"]
+        return proposed
+
+    def _review_proposal(self, conn, command, context):
         proposal_id = command.get("proposal_id")
-        proposal = self._proposal(conn.execute("SELECT * FROM memory_proposals WHERE id=?", (proposal_id,)).fetchone())
+        row = conn.execute("SELECT * FROM memory_proposals WHERE id=?", (proposal_id,)).fetchone()
+        proposal = self._proposal(row)
         if proposal is None:
-            raise _Result({"status": "not_found", "proposal_id": proposal_id})
-        expected = command.get("expected_proposal_revision")
-        if not isinstance(expected, int) or isinstance(expected, bool):
+            raise _MutationRejected({"status": "not_found", "proposal_id": proposal_id})
+        expected_proposal_revision = command.get("expected_proposal_revision")
+        if not isinstance(expected_proposal_revision, int) or isinstance(expected_proposal_revision, bool):
             raise PublicInputError("必须提供整数 expected_proposal_revision")
-        if proposal["revision"] != expected or proposal["status"] not in {"pending", "pending_review"}:
-            raise _Result({"status": "conflict", "proposal_id": proposal_id, "proposal_revision": proposal["revision"]})
-        result = {"status": "saved", "event_ids": []}
+        is_pending = proposal["status"] in {"pending", "pending_review"}
+        if proposal["revision"] != expected_proposal_revision or not is_pending:
+            raise _MutationRejected({
+                "status": "conflict", "proposal_id": proposal_id, "proposal_revision": proposal["revision"],
+            })
+
+        # 提案版本保护审阅决定。批准涉及已有记忆的提案时，还要核对审阅者看到的正文版本。
         if command["action"] == "apply_proposal":
-            proposed = dict(proposal.get("command", {}))
-            if proposed.get("action") not in {"create", "update", "assess"}:
-                raise PublicInputError("该旧提案没有可接受的明确动作")
-            if proposed["action"] in _TARGET_ACTIONS:
-                proposed["expected_revision"] = command.get("expected_revision")
-            if "related_records" in command:
-                old_ids = {item["memory_id"] for item in proposed.get("related_records", [])}
-                new_ids = {item["memory_id"] for item in command["related_records"]}
-                if old_ids != new_ids:
-                    raise PublicInputError("接受提案只能核对关联端点版本，不能更换端点")
-                proposed["related_records"] = command["related_records"]
-            result = self._execute(conn, proposed, context)
-            status = "applied"
+            proposed = self._command_for_approval(proposal, command)
+            result = self._apply_record_command(conn, proposed, context)
+            proposal_status = "applied"
         else:
-            status = "rejected"
-        data = {key: value for key, value in proposal.items()
-                if key not in {"id", "proposal_id", "revision", "proposal_revision", "status", "action", "memory_id"}}
-        data.update(updated_at=_now(), decision_context=self._context(context), decision_reason=command.get("reason", ""))
-        revision = proposal["revision"] + 1
-        conn.execute("UPDATE memory_proposals SET status=?,revision=?,memory_id=?,data=? WHERE id=?",
-                     (status, revision, result.get("memory_id", proposal["memory_id"]), _json(data), proposal_id))
-        event_id = self._emit(conn, command["action"], result.get("memory_id", proposal["memory_id"]), result.get("revision"), context,
-                              proposal_id=proposal_id, proposal_revision=revision, reason=command.get("reason", ""))
-        result.update(proposal_id=proposal_id, proposal_revision=revision)
+            result = {"status": "saved", "event_ids": []}
+            proposal_status = "rejected"
+
+        memory_id = result.get("memory_id", proposal["memory_id"])
+        next_proposal_revision = proposal["revision"] + 1
+        reason = command.get("reason", "")
+        column_fields = {"id", "proposal_id", "revision", "proposal_revision", "status", "action", "memory_id"}
+        data = {key: value for key, value in proposal.items() if key not in column_fields}
+        data.update(updated_at=_now(), decision_context=self._context(context), decision_reason=reason)
+        conn.execute(
+            "UPDATE memory_proposals SET status=?,revision=?,memory_id=?,data=? WHERE id=?",
+            (proposal_status, next_proposal_revision, memory_id, _json(data), proposal_id),
+        )
+        event_id = self._emit(
+            conn, command["action"], memory_id, result.get("revision"), context,
+            proposal_id=proposal_id, proposal_revision=next_proposal_revision, reason=reason,
+        )
+        result.update(proposal_id=proposal_id, proposal_revision=next_proposal_revision)
         result["event_ids"].append(event_id)
         return result
 
     def mutate(self, command: dict, context: dict) -> dict:
+        """用同一笔事务提交记忆变更、审阅事件和回执，重复操作可按编号取回原结果。"""
         capability = context.get("capability")
         action = command.get("action")
         if context.get("scope_id") != self.scope_id or capability not in {"propose", "manage"}:
             return {"status": "denied", "reason": "记忆权限或 scope 不允许写入"}
-        if capability == "propose" and action not in {"create", "update", "assess"}:
+        if capability == "propose" and action not in _PROPOSABLE_ACTIONS:
             return {"status": "denied", "reason": "子任务仅能创建 create/update/assess 提案"}
         if action not in _ACTIONS:
             return {"status": "error", "reason": "未知记忆动作"}
-        namespace, operation_id = context.get("operation_namespace"), context.get("operation_id")
+
+        namespace = context.get("operation_namespace")
+        operation_id = context.get("operation_id")
         if not isinstance(namespace, str) or not namespace or not isinstance(operation_id, str) or not operation_id:
             return {"status": "error", "reason": "缺少可信 operation 身份"}
         try:
-            digest = hashlib.sha256(_json(command).encode()).hexdigest()
-            cancel = context.get("cancel_event")
+            command_digest = hashlib.sha256(_json(command).encode()).hexdigest()
+            cancel_event = context.get("cancel_event")
             deadline = context.get("deadline")
-            if cancel is not None and cancel.is_set():
+            if cancel_event is not None and cancel_event.is_set():
                 return {"status": "unavailable", "reason": "记忆操作已取消"}
-            timeout = 3.0 if deadline is None else min(3.0, max(0.0, deadline - time.monotonic()))
-            if deadline is not None and timeout <= 0:
-                return {"status": "unavailable", "reason": "记忆操作已超时"}
-            with self._connect(timeout) as conn:
+            lock_timeout = 3.0
+            if deadline is not None:
+                lock_timeout = min(lock_timeout, max(0.0, deadline - time.monotonic()))
+                if lock_timeout <= 0:
+                    return {"status": "unavailable", "reason": "记忆操作已超时"}
+
+            with self._connect(lock_timeout) as conn:
+                # 先拿写锁再查回执，两个进程同时重试同一操作时只会写一次。
                 conn.execute("BEGIN IMMEDIATE")
                 self._ready(conn)
-                receipt = conn.execute("SELECT digest,receipt FROM memory_operations WHERE namespace=? AND operation_id=?",
-                                       (namespace, operation_id)).fetchone()
-                if receipt:
-                    if receipt["digest"] != digest:
+                previous_operation = conn.execute(
+                    "SELECT digest,receipt FROM memory_operations WHERE namespace=? AND operation_id=?",
+                    (namespace, operation_id),
+                ).fetchone()
+                if previous_operation is not None:
+                    if previous_operation["digest"] != command_digest:
                         return {"status": "operation_conflict", "operation_id": operation_id}
-                    return json.loads(receipt["receipt"])
-                if cancel is not None and cancel.is_set():
+                    return json.loads(previous_operation["receipt"])
+
+                # 等锁期间也可能收到取消或到达期限。已有回执可以直接返回，新操作要重新检查。
+                if cancel_event is not None and cancel_event.is_set():
                     return {"status": "unavailable", "reason": "记忆操作已取消"}
                 if deadline is not None and time.monotonic() >= deadline:
                     return {"status": "unavailable", "reason": "记忆操作已超时"}
                 try:
                     if capability == "propose":
-                        result = self._propose(conn, command, context)
-                    elif action in {"apply_proposal", "reject_proposal"}:
-                        result = self._decide(conn, command, context)
+                        result = self._create_proposal(conn, command, context)
+                    elif action in _REVIEW_ACTIONS:
+                        result = self._review_proposal(conn, command, context)
                     else:
-                        result = self._execute(conn, command, context)
-                except _Result as exc:
+                        result = self._apply_record_command(conn, command, context)
+                except _MutationRejected as exc:
                     result = exc.result
+
+                # 版本冲突和目标缺失也保存回执。只有实际变更才推进记忆库的版本。
                 if result["status"] in {"saved", "pending_review"}:
                     self._bump(conn)
-                conn.execute("INSERT INTO memory_operations VALUES (?,?,?,?)", (namespace, operation_id, digest, _json(result)))
+                conn.execute(
+                    "INSERT INTO memory_operations VALUES (?,?,?,?)",
+                    (namespace, operation_id, command_digest, _json(result)),
+                )
                 conn.commit()
                 return result
         except (ValueError, TypeError, KeyError) as exc:
@@ -604,7 +719,7 @@ class SQLiteMemoryStore:
 
     def history(self, id) -> list:
         with self._snapshot() as conn:
-            return [self._project(conn, self._record(row)) for row in conn.execute(
+            return [self._attach_assessments(conn, self._record(row)) for row in conn.execute(
                 "SELECT * FROM memory_versions WHERE memory_id=? ORDER BY revision", (id,))]
 
     def ledger(self, limit=100) -> list:
@@ -700,7 +815,7 @@ class SQLiteMemoryStore:
         with self._snapshot() as conn:
             rows = conn.execute("""SELECT v.* FROM memory_records r JOIN memory_versions v
                 ON r.id=v.memory_id AND r.revision=v.revision ORDER BY r.id""")
-            records = [self._project(conn, self._record(row)) for row in rows]
+            records = [self._attach_assessments(conn, self._record(row)) for row in rows]
             proposals = [self._proposal(row) for row in conn.execute("SELECT * FROM memory_proposals ORDER BY id")]
             events = [self._event(row) for row in conn.execute("SELECT * FROM memory_events ORDER BY seq")]
             manifest = self._stored_import(conn)
@@ -709,7 +824,8 @@ class SQLiteMemoryStore:
                     "import_manifest": manifest["manifest"] if manifest else None}
 
     def embedding_candidates(self, encoder_id, limit=50) -> list[dict]:
-        if int(limit) <= 0:
+        limit = int(limit)
+        if limit <= 0:
             return []
         with self._snapshot() as conn:
             rows = conn.execute("""SELECT v.* FROM memory_records r JOIN memory_versions v ON
@@ -722,7 +838,7 @@ class SQLiteMemoryStore:
                                          (record["id"], encoder_id)).fetchone()
                 if embedding is None or embedding["revision"] != record["revision"] or embedding["content_hash"] != record["content_hash"]:
                     result.append(record)
-                    if len(result) >= max(0, int(limit)):
+                    if len(result) >= limit:
                         break
             return result
 
@@ -734,8 +850,7 @@ class SQLiteMemoryStore:
             conn.execute("BEGIN IMMEDIATE")
             self._ready(conn)
             record = self._read(conn, memory_id)
-            if (record is None or record["status"] != "active" or record["revision"] != revision
-                    or _content_hash(record) != content_hash):
+            if not _embedding_is_current(record, revision, content_hash):
                 return False
             conn.execute("INSERT OR REPLACE INTO memory_embeddings VALUES (?,?,?,?,?,?)", (
                 memory_id, revision, content_hash, encoder_id, len(values), _json(values)))
@@ -744,17 +859,23 @@ class SQLiteMemoryStore:
             return True
 
     def embeddings(self, encoder_id, limit=1000) -> list[dict]:
-        if int(limit) <= 0:
+        limit = int(limit)
+        if limit <= 0:
             return []
         with self._snapshot() as conn:
             result = []
             for row in conn.execute("""SELECT e.* FROM memory_embeddings e
                 JOIN memory_records r ON r.id=e.memory_id AND r.revision=e.revision
                 JOIN memory_versions v ON v.memory_id=r.id AND v.revision=r.revision
-                WHERE e.encoder_id=? AND v.status='active' ORDER BY e.memory_id LIMIT ?""", (encoder_id, int(limit))):
+                WHERE e.encoder_id=? AND v.status='active' ORDER BY e.memory_id LIMIT ?""", (encoder_id, limit)):
                 record = self._read(conn, row["memory_id"])
-                if (record is not None and record["status"] == "active" and record["revision"] == row["revision"]
-                        and _content_hash(record) == row["content_hash"]):
-                    result.append({**self._project(conn, record), "encoder_id": encoder_id, "content_hash": row["content_hash"],
-                                   "dimensions": row["dimensions"], "vector": json.loads(row["vector"])})
+                if not _embedding_is_current(record, row["revision"], row["content_hash"]):
+                    continue
+                result.append({
+                    **self._attach_assessments(conn, record),
+                    "encoder_id": encoder_id,
+                    "content_hash": row["content_hash"],
+                    "dimensions": row["dimensions"],
+                    "vector": json.loads(row["vector"]),
+                })
             return result

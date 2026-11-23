@@ -244,6 +244,27 @@ def test_export_database_failure_is_reported_without_partial_directory(tmp_path)
     assert not target.exists()
 
 
+def test_export_write_failure_discards_partial_files_and_allows_retry(tmp_path, monkeypatch):
+    store = _store(tmp_path / "memory")
+    target = tmp_path / "exports" / "snapshot"
+    target.parent.mkdir()
+    migration = _migration()
+    write_bytes = Path.write_bytes
+
+    def fail_on_events(path, data):
+        if path.name == "events.json":
+            raise OSError("disk full")
+        return write_bytes(path, data)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "write_bytes", fail_on_events)
+        result = migration.export_memories(store, target)
+
+    assert result["status"] == "error"
+    assert list(target.parent.iterdir()) == []
+    assert migration.export_memories(store, target)["status"] == "exported"
+
+
 def test_migration_source_read_error_keeps_path_without_private_exception(tmp_path, monkeypatch):
     root = tmp_path / "memory"
     path, _ = _write_memory(root)

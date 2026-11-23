@@ -7,6 +7,7 @@ source may be truncated or replaced with a tombstone.
 from __future__ import annotations
 
 import html
+from collections.abc import Iterable
 from pathlib import Path
 
 from nz_coder.protocol.attachments import (
@@ -37,6 +38,26 @@ _KINDS = {
     "document",
 }
 _READABLE_KINDS = {"file", "directory", "editor_context"}
+
+
+def user_instruction_text(message: dict) -> str | None:
+    """返回用户亲自输入的文字；已有附件展开、但原文遗失时不能借用附件正文。"""
+    if USER_TEXT_KEY in message or message.get(INPUT_EXPANSIONS_KEY):
+        text = message.get(USER_TEXT_KEY)
+    else:
+        text = message.get("content")
+    return text if isinstance(text, str) else None
+
+
+def render_attachment_list(text: str, files: Iterable[tuple[str, int]]) -> str:
+    """呈现终端提交时登记的文件清单；旧会话也能按同一格式核对原任务。"""
+    lines = [
+        "<attached-files>",
+        "The user explicitly attached these workspace files. Read them with the file tools when relevant:",
+    ]
+    lines.extend(f"- {path} ({size} bytes)" for path, size in files)
+    lines.extend(["</attached-files>", "", text])
+    return "\n".join(lines)
 
 
 def tag_file_attachments(

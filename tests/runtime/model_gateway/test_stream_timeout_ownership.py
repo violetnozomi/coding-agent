@@ -103,14 +103,16 @@ def test_stream_next_timeout_retains_inflight_and_blocks_new_request():
             assert release.wait(3)
             raise StopIteration
         def close(self): closed.set()
-    gateway, provider = _gateway([Raw()], max_retries=0)
+    gateway, provider = _gateway([Raw()], max_retries=3, wait=lambda _seconds: None)
     try:
         result = gateway.complete_stream_sync(replace(_call(), timeout_seconds=.05))
         assert entered.is_set()
         assert result.status.value == 'aborted'
+        assert result.public_error.code == 'model_timeout' and result.attempts == 1
         assert gateway.runtime.inflight_status()['inflight_calls'] == 1
         assert gateway.runtime.inflight_status()['tainted']
-        gateway.complete_stream_sync(replace(_call(), timeout_seconds=.05))
+        blocked = gateway.complete_stream_sync(replace(_call(), timeout_seconds=.05))
+        assert blocked.public_error.code == 'model_request_unsettled'
         assert len(provider.requests) == 1
     finally:
         release.set()

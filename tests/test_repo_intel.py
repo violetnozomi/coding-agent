@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import subprocess
+import os
 
 import pytest
 
@@ -533,13 +534,15 @@ def test_verify_changed_files_denied_bash_never_runs_project_checks(tmp_path, mo
     (tmp_path / "Cargo.toml").write_text('[package]\nname="demo"\nversion="0.1.0"')
     sentinel = tmp_path / "PROJECT_CHECK_RAN"
     calls = []
+    _init_repo(tmp_path)
+    run = subprocess.run
 
     def safe_run(argv, **kwargs):
         calls.append(list(argv))
         if argv[0] != "git":
             sentinel.write_text("unexpected project check")
-        output = "true\n" if argv[:2] == ["git", "rev-parse"] else "\n".join(changed) if argv[:2] == ["git", "diff"] else ""
-        return subprocess.CompletedProcess(argv, 0, output, "")
+            raise AssertionError("external check bypassed command authorization")
+        return run(argv, **kwargs)
 
     permissions = Permissions()
     monkeypatch.setattr(repo_intel.subprocess, "run", safe_run)
@@ -550,7 +553,10 @@ def test_verify_changed_files_denied_bash_never_runs_project_checks(tmp_path, mo
     assert result.executed and not result.dispatch_failed
     assert not sentinel.exists(), calls
     assert all(argv[0] == "git" for argv in calls)
-    assert result.execution_facts == ()
+    receipt, = result.execution_facts
+    assert receipt.targets == ("app.py",)
+    assert receipt.in_process and receipt.exit_code is None
+    assert receipt.capabilities == ("syntax",)
     assert "not executed" in result.output.lower()
     assert "bash/process" in result.output
 
@@ -575,13 +581,17 @@ def test_verify_changed_files_python_parses_in_process_without_command_receipt(t
     with scoped_workdir(tmp_path), bind_tool_state(change_tracker=tracker):
         result = repo_intel.verify_changed_files()
         assert str(result).startswith("OK: Python syntax"), result
-        assert result.execution_facts == ()
+        receipt, = result.execution_facts
+        assert receipt.outcome == "succeeded" and receipt.in_process
+        assert receipt.exit_code is None and receipt.targets == ("app.py",)
         assert not (tmp_path / "__pycache__").exists()
-        (tmp_path / "app.py").write_text("def broken(:\n")
+        (tmp_path / "app.py").write_text("return 1\n")
         result = repo_intel.verify_changed_files()
         assert str(result).startswith("FAIL:"), result
         assert "app.py" in result
-        assert result.execution_facts == ()
+        receipt, = result.execution_facts
+        assert receipt.outcome == "failed" and receipt.in_process
+        assert "outside function" in receipt.reason
 
 
 @pytest.mark.parametrize(
@@ -593,7 +603,7 @@ def test_verify_changed_files_python_parses_in_process_without_command_receipt(t
     ids=["utf8-bom", "coding-latin1"],
 )
 def test_verify_changed_files_accepts_python_source_encoding(
-    tmp_path, monkeypatch, encoding, source,
+    tmp_path, encoding, source,
 ):
     from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.tools import repo_intel
@@ -604,18 +614,7 @@ def test_verify_changed_files_accepts_python_source_encoding(
     (tmp_path / "plain.py").write_text("VALUE = 1\n", encoding="utf-8")
     (tmp_path / "broken.py").write_text("def broken(:\n", encoding="utf-8")
 
-    def git_query(args):
-        if args == ["rev-parse", "--is-inside-work-tree"]:
-            output = "true\n"
-        elif args == ["diff", "--name-only", "--", ".", ":!.nz-coder", ":!.nz-coder-runs"]:
-            output = "encoded.py\nplain.py\nbroken.py\n"
-        elif args == ["ls-files", "--others", "--exclude-standard"]:
-            output = ""
-        else:
-            raise AssertionError(f"unexpected Git query: {args!r}")
-        return subprocess.CompletedProcess(["git", *args], 0, output, "")
-
-    monkeypatch.setattr(repo_intel, "_run_git", git_query)
+    _init_repo(tmp_path)
     with scoped_workdir(tmp_path):
         result = repo_intel.verify_changed_files()
 
@@ -623,6 +622,104 @@ def test_verify_changed_files_accepts_python_source_encoding(
     assert "OK  plain.py" in result, result
     assert str(result).startswith("FAIL:"), result
     assert "FAIL broken.py" in result, result
-    assert result.execution_facts == ()
+    assert {receipt.targets: receipt.outcome for receipt in result.execution_facts} == {
+        ("encoded.py",): "succeeded", ("plain.py",): "succeeded", ("broken.py",): "failed",
+    }
     assert not sentinel.exists()
     assert not (tmp_path / "__pycache__").exists()
+
+
+def test_changed_file_receipts_use_workdir_for_index_and_working_tree(tmp_path):
+    from nz_coder.permissions import PermissionManager
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    _init_repo(tmp_path)
+    root = tmp_path / "project"
+    root.mkdir()
+    (tmp_path / "outside.py").write_text("return 0")
+    (root / "暂存 模型.py").write_text("return 1", encoding="utf-8")
+    (root / "both.py").write_text("x = 1")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    (root / "both.py").write_text("x = 2")
+    (root / "gone.py").write_text("x = 3")
+    subprocess.run(["git", "add", "gone.py"], cwd=root, check=True)
+    (root / "gone.py").unlink()
+    (root / "part.ts").write_text("export const x = 1")
+    (root / "tests").mkdir()
+    (root / "tests/test_changed.py").write_text("return 2")
+    (root / "new file.py").write_text("raise AssertionError('must not execute')")
+
+    with scoped_workdir(root):
+        executor = ToolExecutor(PermissionManager("auto"))
+        def verify(include_tests):
+            return executor.execute_one({"id": "check", "function": {
+                "name": "verify_changed_files", "arguments": {"include_tests": include_tests},
+            }}, 0)
+        regular, with_tests = verify(False), verify(True)
+
+    assert regular.executed and not regular.dispatch_failed
+    assert "SKIP gone.py" in regular.output and "WARN node" in regular.output
+    assert len(regular.execution_facts) == 3
+    assert {r.targets: r.outcome for r in regular.execution_facts} == {
+        ("暂存 模型.py",): "failed", ("both.py",): "succeeded", ("new file.py",): "succeeded",
+    }
+    assert len({r.command for r in regular.execution_facts}) == 3
+    assert all(r.producer == "verify_changed_files" and r.cwd == str(root)
+               and r.capabilities == ("syntax",) and r.in_process and r.exit_code is None
+               and r.test_count is None for r in regular.execution_facts)
+    assert len(with_tests.execution_facts) == 4
+    assert any(r.targets == ("tests/test_changed.py",) and r.outcome == "failed"
+               and r.capabilities == ("syntax",) for r in with_tests.execution_facts)
+
+
+def test_changed_file_read_failure_keeps_other_syntax_results(tmp_path, monkeypatch):
+    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.repo_intel import verify_changed_files
+
+    _init_repo(tmp_path)
+    for filename in ("a.py", "b.py", "c.py"):
+        (tmp_path / filename).write_bytes(b"x=1")
+    read = WorkspaceFileAccess.read_bytes
+    def read_with_error(access, path, **kwargs):
+        if path == "b.py":
+            raise PermissionError("fixture")
+        return read(access, path, **kwargs)
+
+    monkeypatch.setattr(WorkspaceFileAccess, "read_bytes", read_with_error)
+    with scoped_workdir(tmp_path):
+        result = verify_changed_files()
+    assert str(result).startswith("WARN:") and "b.py" in result
+    assert {r.targets for r in result.execution_facts} == {("a.py",), ("c.py",)}
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows file names use Unicode")
+def test_unrepresentable_git_path_keeps_other_receipts_json_encodable(tmp_path):
+    import json
+    from dataclasses import asdict
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.repo_intel import verify_changed_files
+
+    _init_repo(tmp_path)
+    with open(os.fsencode(tmp_path) + b"/file_\xff.py", "wb") as stream:
+        stream.write(b"x = 1")
+    (tmp_path / "ok.py").write_text("x = 2")
+    with scoped_workdir(tmp_path):
+        result = verify_changed_files()
+    assert str(result).startswith("WARN:") and r"file_\xff.py" in result
+    assert [r.targets for r in result.execution_facts] == [("ok.py",)]
+    assert json.dumps([str(result), *map(asdict, result.execution_facts)], ensure_ascii=False).encode()
+
+
+def test_unreadable_git_metadata_is_not_an_empty_successful_scan(tmp_path):
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tools.repo_intel import verify_changed_files
+
+    (tmp_path / ".git").write_text("gitdir: ./unavailable")
+    directory = tmp_path / "component"
+    directory.mkdir()
+    with scoped_workdir(directory):
+        result = verify_changed_files()
+    assert str(result).startswith("Error:") and "Git" in result
+    assert result.execution_facts == ()

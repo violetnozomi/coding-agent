@@ -162,6 +162,18 @@ class NZCoderClient:
     def messages(self, session_id: str) -> list[dict]:
         return self._request("GET", f"/session/{session_id}/messages")
 
+    def timeline(self, session_id: str, limit: int = 20) -> dict:
+        return self._request("GET", f"/session/{session_id}/timeline?{urlencode({'limit': limit})}")
+
+    def message_detail(self, session_id: str, turn: int | None) -> str | None:
+        selector = "last" if turn is None else f"{turn:d}"
+        try:
+            return self._request("GET", f"/session/{session_id}/messages/{selector}")["markdown"]
+        except NZCoderHTTPError as exc:
+            if exc.code == "turn_not_found":
+                return None
+            raise
+
     def diff(self, session_id: str) -> list[dict]:
         """Fetch the latest bounded snapshot-derived Session diff."""
         return self._request("GET", f"/session/{session_id}/diff")

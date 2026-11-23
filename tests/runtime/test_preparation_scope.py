@@ -88,6 +88,57 @@ def test_local_timeout_waits_for_retirement_but_task_deadline_interrupts(tmp_pat
         assert scope.close(deadline=time.monotonic() + 2)
 
 
+@pytest.mark.parametrize("condition", ["system-error", "recovered", "job-draining"])
+def test_preparation_timeout_explains_only_unconfirmed_group_cleanup(tmp_path, monkeypatch, condition):
+    from concurrent.futures import ThreadPoolExecutor
+    from nz_coder.runtime.process import preparation
+
+    scope = make_preparation_scope(tmp_path)
+    entered, release = threading.Event(), threading.Event()
+    launch = preparation.start_owned_pipe_command
+    terminate = preparation.terminate_process_tree
+    native_job = None
+
+    def start(*args, **kwargs):
+        nonlocal native_job
+        process, native_job = launch(*args, **kwargs)
+        # POSIX 测试机也能注入 Windows 作业正常等待最后一个成员的返回值。
+        return process, object() if condition == "job-draining" else native_job
+
+    def sweep(process, *, force, windows_job):
+        if not release.is_set():
+            entered.set()
+            if condition == "job-draining":
+                return False
+            raise OSError("test-only cleanup detail")
+        return terminate(process, force=force, windows_job=native_job)
+
+    monkeypatch.setattr(preparation, "start_owned_pipe_command", start)
+    monkeypatch.setattr(preparation, "terminate_process_tree", sweep)
+    with ThreadPoolExecutor(max_workers=1) as worker:
+        result = worker.submit(scope.run, (sys.executable, "-c", "print(7)"), cwd=tmp_path, timeout=4)
+        try:
+            assert entered.wait(2)
+            record = scope._record
+            if condition != "job-draining":
+                wait_until(lambda: record.cleanup_unconfirmed)
+            if condition == "recovered":
+                release.set()
+                assert result.result(timeout=2).stdout == "7\n"
+                assert not record.cleanup_unconfirmed
+            else:
+                scope._deadline = time.monotonic()
+                with pytest.raises(preparation.PreparationInterrupted) as stopped:
+                    result.result(timeout=2)
+                assert stopped.value.reason == "timeout"
+                assert ("process group cleanup" in str(stopped.value)) is (condition == "system-error")
+                assert "test-only" not in str(stopped.value)
+                assert scope._record is record and record.thread.is_alive()
+        finally:
+            release.set()
+            assert scope.close(deadline=time.monotonic() + 2)
+
+
 @pytest.mark.parametrize("fault", ["construct", "start_before", "start_after", "reader_construct", "reader_start_after"])
 def test_partial_start_and_reader_failure_keep_original_owner(tmp_path, git_program, monkeypatch, fault):
     from nz_coder.runtime.process import preparation

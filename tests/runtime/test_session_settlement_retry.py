@@ -7,11 +7,13 @@ import threading
 from dataclasses import replace
 import pytest
 
+from nz_coder.protocol.message_schema import MESSAGE_ID_KEY
 from nz_coder.protocol.public_error import PublicRuntimeError
+from nz_coder.runtime.core.result import TERMINAL_RESULT_KEY
 from nz_coder.runtime.execution import native_sdk
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state import sessions
-from settlement_scenarios import setup, payload, _reply
+from settlement_scenarios import check_settled_reply, setup, payload, _reply
 
 
 def scenario(monkeypatch, workspace, *, borrowed):
@@ -72,6 +74,8 @@ def test_explicit_retry_keeps_original_result_after_resources_exit(
         original = original_env.active_run_context
         assert original.terminal_status.value == "completed_unverified" and not original.finalized
         assert len(calls) == 1 and len(attempts) == 2
+        first = attempts[0]["messages"][-1]
+        frozen = check_settled_reply(first, "original answer")
         if not borrowed:
             assert runner.retry_cleanup(tmp_path, request.session_id)
             assert original_env.environment_cleanup_complete
@@ -91,8 +95,10 @@ def test_explicit_retry_keeps_original_result_after_resources_exit(
         data = payload(tmp_path, request)
         assert data["run_status"] == "completed_unverified"
         assert data["metadata"]["active_interaction_run_id"] == "original-run"
-        assert data["messages"][-1]["content"] == original.transcript[-1]["content"]
-        assert data["messages"][-1]["content"].endswith("original answer")
+        latest = data["messages"][-1]
+        assert latest[MESSAGE_ID_KEY] == first[MESSAGE_ID_KEY]
+        assert check_settled_reply(latest, "original answer") == frozen == original.transcript[-1]["content"]
+        assert data["metadata"][TERMINAL_RESULT_KEY]["last_result"]["answer"] == frozen
         assert data["metadata"]["_nz_session_snapshot"]["usage"]["input_tokens"] == 2
         assert len(calls) == 1
         assert (
@@ -125,14 +131,16 @@ def test_new_activation_settles_old_then_runs_new_message(
             asyncio.run(runner.run_result(next_request, options))
         assert caught.value.public_error.code == "session_commit_pending"
         assert len(calls) == 1
+        first = attempts[0]["messages"][-1]
+        frozen = check_settled_reply(first, "original answer")
         fault[0] = False
         result = asyncio.run(runner.run_result(next_request, options))
-        assert result.final_text.endswith("new answer") and len(calls) == 2
-        assert any(
-            isinstance(m.get("content"), str)
-            and m["content"].endswith("original answer")
-            for m in calls[-1]["messages"]
-        )
+        earlier, latest = [m for m in result.messages if m.get("role") == "assistant"]
+        assert earlier[MESSAGE_ID_KEY] == first[MESSAGE_ID_KEY]
+        assert check_settled_reply(earlier, "original answer") == frozen
+        assert check_settled_reply(latest, "new answer") == result.final_text and len(calls) == 2
+        assert any(m.get("role") == "assistant" and m.get("content") == frozen for m in calls[-1]["messages"])
+        assert "original answer" not in repr(calls[-1]["messages"])
         assert any(m.get("content") == "new actual task" for m in calls[-1]["messages"])
         assert (
             payload(tmp_path, request)["metadata"]["_nz_session_snapshot"]["usage"][

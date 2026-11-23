@@ -11,7 +11,7 @@ from nz_coder.runtime.adapters.lifecycle import lifecycle_context_from_legacy_ho
 from nz_coder.runtime.adapters.model import model_context_from_legacy_host
 from nz_coder.runtime.adapters.tool import tool_context_from_legacy_host
 from nz_coder.runtime.core.runner_context import RunnerExecutionContext
-from nz_coder.runtime.core.profiles import MAIN_PROFILE, profile_for_mode
+from nz_coder.runtime.core.profiles import MAIN_PROFILE, RunMode, profile_for_mode
 from nz_coder.runtime.core.request import AgentDefinition, RunRequest
 from nz_coder.runtime.conversation.message_runtime import LegacyMessageRuntime
 from nz_coder.runtime.agent.planning_runtime import LegacyPlanningRuntime
@@ -111,6 +111,18 @@ def _optional_text(value: object) -> str | None:
 
 def runner_context_from_legacy_host(host, services, run_context) -> RunnerExecutionContext:
     """Bind focused service owners once at the legacy composition boundary."""
+    from nz_coder.runtime.verification.sidecar_verifier import SidecarVerifierHook
+
+    review_hooks = getattr(getattr(host, "hooks", None), "completion_review_hooks", ())
+    has_reviewer = any(isinstance(hook, SidecarVerifierHook) for hook in review_hooks)
+    # CLI、HTTP 和 SDK 的主任务共用此交付边界。注入客户端或关闭评审时，仍按实际回执交付。
+    product_main = (
+        run_context.request.profile.mode is RunMode.MAIN
+        and getattr(host, "runtime_profile", None) is not None
+    )
+    run_context.uses_receipt_based_delivery = (
+        run_context.request.agent.output_schema is None and (product_main or has_reviewer)
+    )
     lifecycle = _LifecycleService(host, services, run_context)
     context = RunnerExecutionContext(
         session_id=str(getattr(host, "session_id", "") or run_context.session.session_id),
@@ -185,7 +197,37 @@ class _LifecycleService:
         self.publish_terminal(self.run_context._terminal_error)
 
     async def settle_session_checkpoints(self) -> None:
+        self.run_context.turn_count = self.host.runtime_state.turn_count
         await to_thread_settled(self.host._retire_session_checkpoints, self._writer)
+
+    def _deferred_delivery_events(self) -> tuple:
+        from nz_coder.protocol.message_schema import (
+            DEFERRED_MODEL_TEXT_KEY, MESSAGE_ID_KEY, PARTS_KEY, project_public_message_part,
+        )
+        from nz_coder.runtime.core.result import TERMINAL_RESULT_KEY
+        from nz_coder.runtime.verification.report_evidence import current_model_reply
+
+        run = self.run_context
+        if not (run.uses_receipt_based_delivery or run.defer_model_report):
+            return ()
+        answer = run.session.metadata[TERMINAL_RESULT_KEY]["last_result"]["answer"]
+        if not answer:
+            return ()
+        message = current_model_reply(run.transcript, session_id=run.session.session_id, interaction_id=run.interaction_run_id)
+        if not message or message.get(DEFERRED_MODEL_TEXT_KEY) or message.get("content") != answer:
+            return ()
+        # 即使展示回调在收尾中途抛错，仍用实际提交的正文和部件身份通知订阅者。
+        for part in message[PARTS_KEY]:
+            if part.get("type") == "text" and part.get("text") == answer and (public := project_public_message_part(part)):
+                message_id = message[MESSAGE_ID_KEY]
+                return (
+                    ("message.part.updated", {"message_id": message_id, "part": public}),
+                    ("session.message.completed", {
+                        "turn": run.turn_count, "message_id": message_id, "part_id": public["id"],
+                        "content": answer, "tool_calls": 0, "tools_executed_in_stream": False,
+                    }),
+                )
+        return ()
 
     def publish_terminal(self, error: BaseException | None = None) -> None:
         with self.host._session_checkpoint_lock:
@@ -196,24 +238,26 @@ class _LifecycleService:
             self.run_context._retain_terminal_commit = None
         self.host._complete_run_preparation(self.run_context)
         from nz_coder.protocol.public_error import to_public_error
-        from nz_coder.runtime.core.result import normalize_run_status
+        from nz_coder.runtime.core.events import frozen_run_error, terminal_event_name
+        from nz_coder.runtime.core.result import RunStatus, normalize_run_status
 
         status = self.run_context.session.status.value
         raw = str(self.run_context.metadata.get("raw_status") or "")
         # aborted 沿用既有 raw 协议，同时会话的规范状态仍是 error。
         if raw and raw != "running" and normalize_run_status(raw).value == status:
             status = raw
-        name = "session.run.cancelled" if status in {"cancelled", "interrupted"} else "session.run.completed"
+        name = terminal_event_name(status).value
         payload = {"status": status, "message_count": len(self.run_context.transcript)}
-        if error is not None and status == "error":
-            name = "session.run.failed"
-            public = to_public_error(error)
+        if normalize_run_status(status) is RunStatus.ERROR:
+            # 发布冻结结果中的同一个公开原因；正常结算的模型错误也能走到这里。
+            public = frozen_run_error(self.run_context) or to_public_error(error)
             payload.update(error_type=public.metadata.get("error_type", public.code), error=public.to_dict())
-        try:
-            self._publisher.publish(name, payload)
-        except Exception:
-            # 显示失败不能把已经持久完成的任务重新变成运行失败。
-            return
+        for event, properties in (*self._deferred_delivery_events(), (name, payload)):
+            try:
+                self._publisher.publish(event, properties)
+            except Exception:
+                # 一个部件通知失败时，仍尝试完整正文和运行终态。
+                continue
 
     def initialize(self, messages, stream):
         result = self.services.lifecycle.initialize(

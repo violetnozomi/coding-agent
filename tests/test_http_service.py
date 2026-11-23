@@ -318,6 +318,143 @@ def local_service(tmp_path):
             thread.join(timeout=2)
 
 
+def test_remote_message_detail_keeps_model_notes_separate_across_turns(local_service):
+    from nz_coder.interface.backend import RemoteTerminalBackend
+
+    client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
+    session_id = client.create_session()["id"]
+    backend = RemoteTerminalBackend(client, session_id)
+    session = local_service.manager.get(session_id)
+    session.history.extend([
+        {"role": "user", "content": "first request"},
+        {"role": "assistant", "content": "The command did not run.",
+         "_nz_model_note": "First model note."},
+        {"role": "user", "content": "pending internal follow-up", "_nz_synthetic": True},
+        {"role": "assistant", "content": "withdrawn answer", "_nz_visible": False,
+         "_nz_model_note": "Withdrawn note."},
+        {"role": "user", "content": "second request"},
+        {"role": "assistant", "content": "Checks passed.", "_nz_model_note": "Second model note."},
+    ])
+    assert "First model note." not in json.dumps(backend.messages())
+    assert "First model note." not in backend.export()["markdown"]
+    first = backend.message_detail(1)
+    assert "The command did not run." in first and "模型说明" in first and "First model note." in first
+    assert "Withdrawn note." not in first and "Second model note." not in first
+    assert "pending internal follow-up" not in first
+    assert "Second model note." in backend.message_detail(None)
+    assert backend.message_detail(3) is None
+
+
+def test_remote_history_turns_fork_prefix_and_missing_archive(local_service):
+    from nz_coder.interface.submission import build_user_submission
+    from nz_coder.interface.timeline import TurnHistory
+    from nz_coder.protocol.message_schema import COMPACTION_KEY, MESSAGE_ID_KEY, ensure_message_identities
+    from nz_coder.state import context, sessions
+    from tests.fixtures.compaction_summary import summary_json
+    from tests.test_context_budget import _CompactionClient
+
+    client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
+    session_id = client.create_session()["id"]
+    parent = local_service.manager.get(session_id)
+    literal = "<session-summary>A real submitted XML example</session-summary>"
+    original = []
+    for number, prompt in enumerate(("repeat", "repeat", literal, "fourth", "latest"), start=1):
+        user = build_user_submission(prompt, (), workspace=parent.workspace, session_id=session_id,
+                                     agent="build", provider_id="offline", model_id="offline")
+        original.extend([user,
+                         {"role": "assistant", "content": f"Receipt {number}", "_nz_model_note": f"Draft {number}"}])
+    ensure_message_identities(original, session_id)
+    with sessions.scoped_session(session_id):
+        compacted = context.auto_compact(original, _CompactionClient(summary_json("second-turn-only detail")), "offline")
+        ensure_message_identities(compacted, session_id)
+        archive = sessions.session_transcript_dir() / compacted[0][COMPACTION_KEY]["archive"].rsplit("/", 1)[-1]
+    parent.history[:] = copy.deepcopy(compacted)
+    first = client.message_detail(session_id, 1)
+    assert "Receipt 1" in first and "Draft 1" in first and "Draft 2" not in first
+    assert "Draft 2" in client.message_detail(session_id, 2)
+    view = TurnHistory.load(compacted, session_id=session_id, workspace=parent.workspace)
+    assert literal in view.detail(session_id, view.select(3))
+    assert literal in client.message_detail(session_id, 3)
+    projection = client.timeline(session_id, 3)
+    assert [row["number"] for row in projection["turns"]] == [3, 4, 5]
+    assert "Draft" not in json.dumps(projection) and "second-turn-only" not in json.dumps(projection)
+    assert "<session-summary>" in client.messages(session_id)[0]["content"]
+    assert client.message_detail(session_id, 6) is None
+    child_id = client.fork_session(session_id, 1)["id"]
+    child = local_service.manager.get(child_id)
+    assert [m["content"] for m in child.history] == ["repeat", "Receipt 1"]
+    assert child.history[0][MESSAGE_ID_KEY] != original[0][MESSAGE_ID_KEY]
+    assert child.history[1]["_nz_parent_id"] == child.history[0][MESSAGE_ID_KEY]
+
+    archive.unlink()
+    assert "Draft 5" in client.message_detail(session_id, None)
+    partial = client.timeline(session_id)
+    assert partial["notice"] and partial["turns"] and all(row["number"] is None for row in partial["turns"])
+    for operation in (lambda: client.message_detail(session_id, 1), lambda: client.fork_session(session_id)):
+        with pytest.raises(NZCoderHTTPError) as error:
+            operation()
+        assert (error.value.status, error.value.code) == (409, "history_unavailable")
+    assert parent.history == compacted
+    assert client.get_session(session_id)["children"] == [child_id]
+    assert "Draft 1" in client.message_detail(child_id, 1)
+
+
+def test_historical_fork_keeps_task_receipt_without_opening_a_later_child_session(local_service, monkeypatch):
+    from nz_coder.interface import cli
+    from nz_coder.protocol.message_schema import ensure_message_identities
+    from nz_coder.runtime.agent import subagent
+    from nz_coder.runtime.session.model import Session
+    from nz_coder.runtime.session.store import LegacyJsonSessionStore
+    from nz_coder.state import sessions
+    from tests.test_cli_commands import FakeAgent, FakeConsole
+
+    client = NZCoderClient(local_service.base_url, local_service.token, timeout=3)
+    parent_id = client.create_session()["id"]
+    parent = local_service.manager.get(parent_id)
+    workspace = parent.workspace
+    task = subagent._new_subagent_state(parent_id, "explore", ["read_file"])
+    task["status"] = "completed"
+    task_id = task["session_id"]
+    subagent._save_subagent_state(parent_id, task, workspace)
+    child_history = [{"role": "user", "content": "original task"}, {"role": "assistant", "content": "original receipt"},
+                     {"role": "user", "content": "later child requirement"}]
+    LegacyJsonSessionStore().save_session(Session.create(task_id, child_history, workspace=workspace,
+                                                         parent_session_id=parent_id))
+    receipt = {"id": "part-task", "message_id": "msg-task", "type": "tool", "tool": "task", "call_id": "t",
+               "state": {"status": "completed", "input": {"prompt": "original task"}, "output": "original receipt",
+                         "title": "explore", "time": {"start": 1, "end": 2}, "metadata": {"child_session_id": task_id}}}
+    original = [{"role": "user", "content": "inspect"}, {"role": "assistant", "content": "original receipt",
+                "_nz_message_id": "msg-task", "_nz_session_id": parent_id, "_nz_parts": [receipt]},
+                {"role": "user", "content": "later parent turn", "_nz_time": {"created": 3}},
+                {"role": "assistant", "content": "done"}]
+    ensure_message_identities(original, parent_id)
+    sessions.save_session(original, session_id=parent_id, activate=False)
+    parent.history[:] = copy.deepcopy(original)
+    monkeypatch.setattr(cli, "console", FakeConsole())
+    monkeypatch.setattr(cli, "_build_agent", lambda _sys, _renderer, sid, **kwargs: FakeAgent(sid))
+
+    def local_fork(number):
+        history = copy.deepcopy(original)
+        state = {"id": parent_id, "agent": FakeAgent(parent_id)}
+        assert cli.handle_command(f"/fork {number}", history, state, "sys", object())
+        assert state["id"] != parent_id
+        return state["id"]
+
+    for fork_id in (local_fork(1), client.fork_session(parent_id, 1)["id"]):
+        saved = sessions.load_session(fork_id)["messages"]
+        tool = next(part for part in saved[1]["_nz_parts"] if part["type"] == "tool")
+        assert tool["state"]["output"] == "original receipt"
+        assert "later" not in json.dumps(saved)
+        assert client.list_children(fork_id) == []
+        with pytest.raises(NZCoderHTTPError) as error:
+            client.get_child(fork_id, task_id)
+        assert error.value.status == 404
+    current_id = local_fork(2)
+    clone, = client.list_children(current_id)
+    assert clone["session_id"] != task_id
+    assert "later child requirement" in json.dumps(client.get_child(current_id, clone["session_id"]))
+
+
 def test_http_session_run_messages_and_sse_replay(local_service):
     client = NZCoderClient(local_service.base_url, local_service.token, timeout=2)
 
@@ -363,11 +500,20 @@ def test_http_session_run_messages_and_sse_replay(local_service):
     assert exc_info.value.code == "session_not_found"
 
 
-def test_http_default_native_run_commits_result_history_and_settled_state(monkeypatch, tmp_path):
+@pytest.mark.parametrize("oversized_input", [False, True], ids=["empty-workspace", "workspace-over-budget"])
+def test_http_default_native_run_commits_result_history_and_settled_state(monkeypatch, tmp_path, oversized_input):
+    import os
+
     from nz_coder.providers.capabilities import ModelCapabilities
     from nz_coder.runtime.execution import native_sdk
     from nz_coder.runtime.model_gateway import ResolvedModelRuntime
+    from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
     from nz_coder.sdk import AgentClient
+
+    if oversized_input:
+        limit = WorkspaceSnapshotStore(tmp_path, tmp_path / ".nz-coder").max_file_bytes
+        with (tmp_path / "fixture.bin").open("wb") as item:
+            item.truncate(limit + 1)
 
     class Provider:
         name = "offline"
@@ -412,13 +558,34 @@ def test_http_default_native_run_commits_result_history_and_settled_state(monkey
         assert info["status"] == "completed_unverified", info
         assert info["running"] is False
         assert info["last_error"] == ""
-        assert info["last_result"]["status"] == "completed_unverified"
-        answer = (
-            "本次执行已结束，验证尚未确认。\n\n**运行时验证记录**（来源：VerificationDomain）\n"
-            "- 未评估：本次没有已采信的验证执行。\n- 交付评审尚未确认。\n\n"
-            "模型交付说明（未经独立确认）：\nOFFLINE_DONE"
-        )
-        assert info["last_result"]["answer"] == answer
+        result = info["last_result"]
+        assert result["status"] == "completed_unverified"
+        assert result["metadata"]["authored_content"] == "OFFLINE_DONE"
+        evidence = result["metadata"]["verification"]
+        assert evidence["tests_passed"] is None
+        assert evidence["review_pending"] is True
+        if oversized_input:
+            assert evidence["mutation_scope_unknown"] is True
+        elif os.scandir in os.supports_fd:
+            assert evidence["mutation_scope_unknown"] is False
+        answer = result["answer"]
+        assert "本轮没有已采信的测试结果。" in answer
+        assert "（来源：VerificationDomain）" in answer
+        assert "交付评审尚未确认" in answer
+        assert "OFFLINE_DONE" not in answer
+        assert "/message" in answer
+        detail = client.message_detail(session_id, 1)
+        assert "模型说明（执行声明以本轮回执为准）" in detail
+        assert "\n```\nOFFLINE_DONE\n```" in detail
+        if evidence["mutation_scope_unknown"]:
+            assert evidence["verification_needed"] is True
+            assert "工作区范围尚未确认" in answer
+            assert "没有已采信的验证执行" not in answer
+        else:
+            assert evidence["verification_needed"] is False
+            assert "未评估：本次没有已采信的验证执行。" in answer
+            assert "没有待完成的必需检查" in answer
+            assert "工作区范围尚未确认" not in answer
         expected = [("user", "Reply with OFFLINE_DONE."), ("assistant", answer)]
         assert [(item["role"], item["content"]) for item in session.history] == expected
         assert [(item["role"], item["content"]) for item in client.messages(session_id)] == expected
@@ -1603,10 +1770,10 @@ def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch
             def response():
                 try:
                     if call_number == 1:
-                        yield chunk("partial")
+                        yield chunk("UNPUBLISHED_PARTIAL")
                         first_delta.set()
                         assert release_stream.wait(timeout=3)
-                        yield chunk("late")
+                        yield chunk("UNPUBLISHED_LATE")
                     else:
                         yield chunk("fresh")
                         yield chunk("", finish_reason="stop")
@@ -1649,6 +1816,9 @@ def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch
 
         client.run(session_id, "first", model="offline/offline-model")
         assert first_delta.wait(timeout=2), manager.get(session_id).info()
+        active = client.attach_snapshot(session_id)
+        assert active["settled"] is False
+        assert "UNPUBLISHED_PARTIAL" not in json.dumps(active)
         assert client.abort(session_id) == {"aborted": True}
         assert client.abort(session_id) == {"aborted": False}
 
@@ -1657,22 +1827,26 @@ def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch
         assert still_busy.value.status == 409
 
         release_stream.set()
-        _wait_for_status(client, session_id, "cancelled")
+        cancelled = _wait_for_status(client, session_id, "cancelled")
         assert provider_exited.is_set()
+        assert cancelled["last_result"]["answer"] == ""
+        assert cancelled["last_result"]["metadata"]["authored_content"] == ""
         events = manager.get(session_id).event_bus.recent(64)
         event_types = [event.type for event in events]
-        assert event_types.count("message.part.removed") == 1
-        removed_index = event_types.index("message.part.removed")
         cancelled_index = event_types.index("session.run.cancelled")
         settled_index = event_types.index("session.run.settled")
-        assert removed_index < cancelled_index < settled_index
-        late_parts = [
-            event for event in events[removed_index + 1:]
-            if event.type.startswith("message.part.")
-        ]
-        assert [event.type for event in late_parts] == ["message.part.updated"]
-        assert late_parts[0].properties["part"]["type"] == "step-finish"
-        assert late_parts[0].properties["part"]["reason"] == "cancelled"
+        finish_index = next(index for index, event in enumerate(events)
+                            if event.type == "message.part.updated"
+                            and event.properties["part"].get("type") == "step-finish"
+                            and event.properties["part"].get("reason") == "cancelled")
+        assert finish_index < cancelled_index < settled_index
+        assert not any(event.type.startswith("message.part.") for event in events[cancelled_index + 1:])
+        # 模型已经交出第一片，公开事件与消息详情都不应出现取消前后的草稿。
+        wire = json.dumps([event.to_dict() for event in events])
+        detail = client.message_detail(session_id, 1)
+        for marker in ("UNPUBLISHED_PARTIAL", "UNPUBLISHED_LATE"):
+            assert marker not in wire
+            assert marker not in detail
         cancelled_assistant = next(
             message for message in manager.get(session_id).history
             if message.get("role") == "assistant"
@@ -1682,8 +1856,26 @@ def test_http_abort_retires_stream_part_before_run_settles(tmp_path, monkeypatch
             for part in cancelled_assistant.get("_nz_parts", [])
         )
 
-        client.run(session_id, "second", model="offline/offline-model")
-        _wait_for_status(client, session_id, "completed_unverified")
+        second = client.run(session_id, "second", model="offline/offline-model")
+        run_id = second["active_interaction_run_id"]
+        assert run_id and run_id != events[settled_index].run_id
+        session = manager.get(session_id)
+        assert session.wait(timeout=10), (
+            session.status, [(event.run_id, event.type) for event in session.event_bus.recent(12)]
+        )
+        info = client.get_session(session_id)
+        assert info["active_interaction_run_id"] == run_id
+        assert info["status"] == "completed_unverified"
+        assert info["running"] is False
+        assert info["last_result"]["metadata"]["authored_content"] == "fresh"
+        second_events = [
+            event for event in session.event_bus.recent(64)
+            if event.run_id == run_id and event.type.startswith("session.run.")
+        ]
+        assert [event.type for event in second_events] == [
+            "session.run.started", "session.run.completed", "session.run.settled",
+        ]
+        assert second_events[-1].properties == {"status": "completed_unverified", "persisted": True}
         assert calls == 2
     finally:
         release_stream.set()
@@ -2436,7 +2628,8 @@ def test_http_abort_blocks_an_interaction_that_starts_after_cancel(local_service
 
     _wait_for_status(client, session_id, "cancelled")
     assert client.pending_questions(session_id) == []
-    assert client.messages(session_id)[-1]["content"] == "question:dismissed"
+    assert [message["content"] for message in client.messages(session_id)] == ["late-question"]
+    assert not any(event.type == "question.asked" for event in agent.event_bus.recent())
 
 
 def test_interaction_registration_and_asked_event_are_atomic():

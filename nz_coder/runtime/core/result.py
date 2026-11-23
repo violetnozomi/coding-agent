@@ -105,13 +105,51 @@ class RunResult:
 TERMINAL_RESULT_KEY = "_nz_terminal_result"
 
 
+def _fallback_answer(context, verification: dict, snapshot, stop_reason: str) -> str:
+    """提前取消或异常没有普通收尾结果，只恢复当前交互的可见内容。"""
+    from nz_coder.protocol.message_schema import (
+        DEFERRED_MODEL_TEXT_KEY, INTERACTION_RUN_ID_KEY, ensure_message_identities, replace_assistant_final_text, set_assistant_end_state,
+    )
+    from nz_coder.runtime.verification.completion_gate import host_execution_report, host_test_report
+
+    messages = context.transcript
+    current = [m for m in messages if m.get("role") == "assistant" and m.get(INTERACTION_RUN_ID_KEY) == context.interaction_run_id]
+    draft = next((m for m in reversed(current) if m.get("_nz_internal") is not True and m.get("_nz_visible") is not False
+                  and isinstance(m.get("content"), str) and m["content"].strip()), None)
+    text = draft["content"] if draft is not None else ""
+    if snapshot is not None and snapshot.latest_review is not None and not snapshot.latest_review.accepted:
+        text = ""
+    if context.request.agent.output_schema is not None:
+        if current and (current[-1].get("_nz_visible") is False or current[-1].get(DEFERRED_MODEL_TEXT_KEY)):
+            return ""
+        return text
+    if context.terminal_denied_commands.total:
+        answer = host_execution_report(context.terminal_denied_commands, verification, snapshot, stop_reason=stop_reason)
+    elif context.uses_receipt_based_delivery:
+        answer = host_test_report(snapshot, status=context.terminal_status.value, stop_reason=stop_reason)
+    else:
+        return text
+
+    # 原执行宿主已退出。把同一份正文写入会话，重开时仍能看到当时的执行记录。
+    if draft is None and not answer:
+        return ""
+    if draft is None or draft is not current[-1] or draft.get("tool_calls"):
+        draft = {"role": "assistant", "content": "", INTERACTION_RUN_ID_KEY: context.interaction_run_id}
+        messages.append(draft)
+    ensure_message_identities(messages, context.session.session_id)
+    replace_assistant_final_text(draft, answer)
+    set_assistant_end_state(draft, "interrupted" if context.terminal_status is RunStatus.CANCELLED else "errored")
+    return answer
+
+
 def freeze_terminal_result(context, raw_result: object = None) -> None:
     """在规范 Session 提交前冻结本次结果；不复制历史或嵌套终态载荷。"""
     from dataclasses import asdict
-    from nz_coder.protocol.message_schema import INTERACTION_RUN_ID_KEY
     from nz_coder.protocol.public_error import public_error_from_wire, to_public_error
     if TERMINAL_RESULT_KEY in context.session.metadata:
         return
+    if raw_result is None:
+        raw_result = context.prepared_terminal_result
     payload = raw_result if isinstance(raw_result, dict) else {}
     status = context.terminal_status
     metadata = copy.deepcopy(context.metadata)
@@ -121,25 +159,19 @@ def freeze_terminal_result(context, raw_result: object = None) -> None:
     if status is RunStatus.ERROR:
         public = public_error_from_wire(payload.get("public_error")) or to_public_error(context._terminal_error)
         metadata["public_error"] = public.to_dict()
+    snapshot = context.verification.snapshot() if context.verification is not None else None
+    verification = snapshot.to_dict() if snapshot is not None else copy.deepcopy(payload.get("verification") or {})
+    context.terminal_denied_commands.add_to_verification(verification)
     if "structured" in payload:
         metadata["structured"] = copy.deepcopy(payload["structured"])
-    verification = (context.verification.snapshot().to_dict() if context.verification is not None
-                    else copy.deepcopy(payload.get("verification") or {}))
+        verification["structured_output_source"] = "model"
     metadata.update(interaction_run_id=context.interaction_run_id,
                     runtime=copy.deepcopy(payload.get("runtime") or {}),
                     verification=verification,
                     authored_content=str(payload.get("authored_content") or ""),
                     raw_status=str(payload.get("status") or status.value))
-    if raw_result is None:
-        # 异常/取消可能没有产生新 assistant，不能认领上一轮正文。
-        answer = next((message["content"] for message in reversed(context.transcript)
-                       if message.get("role") == "assistant"
-                       and message.get(INTERACTION_RUN_ID_KEY) == context.interaction_run_id
-                       and message.get("_nz_internal") is not True and message.get("_nz_visible") is not False
-                       and isinstance(message.get("content"), str) and message["content"].strip()), "")
-    else:
-        answer = str(payload.get("content") or "")
     error = public.message if public is not None else ""
+    answer = _fallback_answer(context, verification, snapshot, error) if raw_result is None else str(payload.get("content") or "")
     context.session.metadata[TERMINAL_RESULT_KEY] = {
         "session_id": context.session.session_id,
         "workspace": str(context.session.workspace),
@@ -148,6 +180,7 @@ def freeze_terminal_result(context, raw_result: object = None) -> None:
         "last_result": {"status": status.value, "answer": answer, "active_agent": context.active_agent,
                         "error": error, "usage": asdict(context.usage), "metadata": metadata},
     }
+    context.prepared_terminal_result = None
 
 
 def saved_terminal_result(payload: dict) -> dict | None:

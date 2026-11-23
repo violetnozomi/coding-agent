@@ -377,7 +377,7 @@ def test_subagent_semantic_tier_publishes_route_facts(monkeypatch):
         assert route["duration_ms"] >= 0
         assert result.metadata["child_result"]["summary_kind"] == "excerpt"
         assert result.metadata["child_result"]["status"] == "completed_unverified"
-        assert result.metadata["child_result"]["digest"].startswith("本次执行已结束，验证尚未确认。")
+        assert result.metadata["child_result"]["digest"].startswith("本次执行已结束。")
         assert result.metadata["child_result"]["digest"].endswith("模型交付说明（未经独立确认）： done")
         assert "未评估" in result.metadata["child_result"]["digest"]
     finally:
@@ -939,6 +939,7 @@ def test_subagent_retries_transient_provider_error_on_same_assistant(monkeypatch
     config.SUBAGENT_TIMEOUT_SECONDS = 30
     attempts = []
     try:
+        subagent.set_parent_session("main-session")
         monkeypatch.setattr(subagent, "OpenAI", lambda **_kwargs: FakeClient([]))
         monkeypatch.setattr(
             RecoveryState,
@@ -971,7 +972,7 @@ def test_subagent_retries_transient_provider_error_on_same_assistant(monkeypatch
         assert len(assistants) == 1
         assert [part["attempt"] for part in retries] == [1, 2]
         assert all(part["error"]["name"] == "APIError" for part in retries)
-        assert assistants[0]["content"].startswith("本次执行已结束，验证尚未确认。")
+        assert assistants[0]["content"].startswith("本次执行已结束。")
         assert assistants[0]["content"].endswith("模型交付说明（未经独立确认）：\nrecovered")
         assert "未评估" in assistants[0]["content"]
         assert assistants[0]["_nz_end_state"] == {"reason": "completed"}

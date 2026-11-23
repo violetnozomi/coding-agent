@@ -84,14 +84,17 @@ def test_exact_compound_acceptance_does_not_expire_on_its_own_cache(tmp_path):
     assert snapshot.version.acceptance_generation == 0
 
 
-@pytest.mark.parametrize("suffix", [" && echo 'Ran 900 tests'", " && printf '900 passed\\n'"])
+@pytest.mark.parametrize("suffix", [
+    " && echo 'Ran 900 tests'", " && printf '900 passed\\n'",
+    " && echo '--- Test completed ---'", " && printf '%s\\n' '900 passed' finished",
+])
 def test_display_text_does_not_invent_the_subject_test_count(tmp_path, suffix):
     bare = _project(tmp_path)
     vm = _scenario(tmp_path, bare)
     result = _settle(vm, bare + suffix)
     fact, = vm.domain.snapshot().executions
     assert not result.command_failed, result.output
-    assert fact.test_count is None
+    assert fact.test_count == 1
     assert [decision.status for decision in _required(vm.domain.snapshot())] == ["passed"]
 
 
@@ -103,8 +106,10 @@ def test_display_zero_tests_text_does_not_turn_a_pass_into_empty_selection(tmp_p
     result = _settle(vm, command)
     fact, = vm.domain.snapshot().executions
     assert not result.command_failed and fact.exit_code == 0
-    assert fact.test_count is None and not fact.test_selection_failure
-    assert [decision.status for decision in _required(vm.domain.snapshot())] == ["passed"]
+    # tail -1 只留下 OK；echo 后的数字不能补足被裁去的运行数。
+    assert fact.test_count == (None if filtered else 1)
+    assert not fact.test_selection_failure
+    assert [decision.status for decision in _required(vm.domain.snapshot())] == ["pending" if filtered else "passed"]
 
 
 def test_real_empty_selection_stops_before_the_display_tail(tmp_path):
@@ -240,7 +245,9 @@ def test_foreign_cpython_timestamp_cache_uses_actual_shell_interpreter(tmp_path,
     import os
     import shutil
 
-    candidates = [os.environ.get("NZ_TEST_PROJECT_PYTHON"), shutil.which("python3.13"), shutil.which("python3.12")]
+    # 在多套独立 Conda 并存的机器上，PATH 的第一个外部 Python 不一定是受支持的系统解释器。
+    candidates = [os.environ.get("NZ_TEST_PROJECT_PYTHON")]
+    candidates.extend(shutil.which(name, path=os.defpath) for name in ("python3", "python3.13", "python3.12"))
     other = next((path for path in candidates if path and not os.path.samefile(path, sys.executable)), None)
     if not other or not sys.platform.startswith("linux"):
         pytest.skip("requires another installed CPython on Linux")

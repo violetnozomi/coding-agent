@@ -64,7 +64,13 @@ def test_failed_final_group_signal_retains_bash_owner_and_lease(tmp_path, monkey
             raise PermissionError('controlled group signal rejection')
         return real(pid, sig)
     monkeypatch.setattr(os, 'killpg', killpg)
-    scope = make_scope(tmp_path)
+    approvals = []
+
+    def approve_once(tool, arguments):
+        approvals.append((tool, arguments['workdir']))
+        return 'once'
+
+    scope = make_scope(tmp_path, command_authorizer=make_command_authorizer(tmp_path, asker=approve_once))
     script = ('import subprocess,sys; p=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"], '
               'stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); open("descendant.pid","w").write(str(p.pid))')
     record = None
@@ -73,6 +79,7 @@ def test_failed_final_group_signal_retains_bash_owner_and_lease(tmp_path, monkey
         scope.submit_request(1, 'bash', {'command': python_command(script)}, CommandPolicyRestriction())
         record = scope._requests[1]
         assert attempted.wait(2)
+        assert approvals == [('bash', str(tmp_path))]
         assert not record.execution._done.wait(.1)
         assert record.worker.is_alive() and record.lease_id
         assert scope.peek_reply() is None
@@ -134,7 +141,7 @@ def test_begin_reservation_survives_cancelled_blocked_io(tmp_path, monkeypatch):
     backend = ControlledBackend()
     backend.io_release.clear()
     monkeypatch.setattr(process_service, 'create_process_backend', lambda *a, **k: backend)
-    scope = make_scope(tmp_path, max_requests=2)
+    scope = make_scope(tmp_path, max_requests=2, command_authorizer=make_command_authorizer(tmp_path))
     try:
         started = json.loads(call(scope, 1, 'process', {'operation': 'start', 'command': 'controlled'}))
         process_id = started['process']['process_id']

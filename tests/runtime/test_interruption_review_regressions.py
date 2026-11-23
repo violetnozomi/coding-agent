@@ -5,7 +5,8 @@ import threading
 import time
 from dataclasses import replace
 import pytest
-from settlement_scenarios import setup, _reply
+from settlement_scenarios import check_settled_reply, setup, _reply
+from nz_coder.protocol.message_schema import MESSAGE_ID_KEY
 from nz_coder.runtime.execution import native_sdk
 
 
@@ -149,6 +150,9 @@ def test_http_cancel_during_frozen_commit_does_not_overwrite_pending(
         env = runner._pending_environments[runner._key(tmp_path, session.session_id)]
         owner = env.active_run_context
         assert owner.terminal_status.value in {"completed", "completed_unverified"}
+        first = owner.transcript[-1]
+        first_id = first[MESSAGE_ID_KEY]
+        frozen = check_settled_reply(first, "first result")
         assert session.abort()
         time.sleep(0.05)
         release.set()
@@ -161,20 +165,24 @@ def test_http_cancel_during_frozen_commit_does_not_overwrite_pending(
         )
         if write_failure:
             assert result.state == "committed"
+            with scoped_workdir(tmp_path):
+                data = sessions.load_session(session.session_id)
         else:
-            assert data["run_status"] == owner.terminal_status.value
-            assert any(
-                str(m.get("content", "")).endswith("first result")
-                for m in data["messages"]
-            )
-            manager.close()
-            restored = SessionManager(workspace_roots=[tmp_path], restore_saved=True)
-            try:
-                info = restored.get(session.session_id).info()
-                assert info["status"] == owner.terminal_status.value
-                assert info["last_result"]["answer"].endswith("first result")
-            finally:
-                restored.close()
+            assert result.state == "idle"
+        assert data["run_status"] == owner.terminal_status.value
+        saved = data["messages"][-1]
+        assert saved[MESSAGE_ID_KEY] == first_id
+        assert check_settled_reply(saved, "first result") == frozen
+        manager.close()
+        restored = SessionManager(workspace_roots=[tmp_path], restore_saved=True)
+        try:
+            reopened = restored.get(session.session_id)
+            info = reopened.info()
+            assert info["status"] == owner.terminal_status.value
+            assert info["last_result"]["answer"] == frozen
+            assert "first result" in reopened.message_detail(1)
+        finally:
+            restored.close()
     finally:
         release.set()
         manager.close()

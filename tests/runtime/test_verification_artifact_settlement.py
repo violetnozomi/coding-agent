@@ -30,7 +30,7 @@ def _project(root, effect="Path('scratch-container').mkdir(exist_ok=True)"):
     return f"{shlex.quote(sys.executable)} -m unittest discover -s tests -v"
 
 
-def _execute(scenario, command):
+def _execute(scenario, command, *, alter_scope=None):
     args = {"command": command, "workdir": str(scenario.root)}
     start = scenario.runtime.begin_tool({"function": {"name": "bash", "arguments": args}})
 
@@ -48,6 +48,8 @@ def _execute(scenario, command):
     with scoped_workdir(scenario.root):
         result = execute_observed(scenario.store, start.version.generation, actual,
             on_before=lambda ref: scenario.runtime.record_before(start, ref))
+        if alter_scope is not None:
+            result.workspace_scope = alter_scope(result.workspace_scope)
         scenario.runtime.record_result(result)
     assert not result.command_failed, result.output
     return result
@@ -177,16 +179,67 @@ def test_external_cache_creation_before_a_check_is_not_its_runtime_artifact(tmp_
         scenario.runtime.close()
 
 
-@pytest.mark.parametrize("proof", [{}, {"workspace": "/foreign"}, [], "bad-proof"])
+@pytest.mark.parametrize("proof", [{}, {"workspace": "/foreign", "stage": ["terminal"]}, [], "bad-proof"])
 def test_invalid_scope_remains_incomplete_instead_of_raising(tmp_path, proof):
     command = _project(tmp_path)
     scenario = _scenario(tmp_path, command)
     try:
         result = ToolExecutionResult("bash", {"command": command}, "", True, False, False, False,
                                      workspace_scope=proof)
-        settled = collect_workspace_settlement(result, scenario.store, 0,
-                                               dict(scenario.state.workspace_observation))
+        original = dict(scenario.state.workspace_observation)
+        settled = collect_workspace_settlement(result, scenario.store, 0, original)
         assert settled.changes is None
         assert not settled.complete and not settled.version_matches
+        _execute(scenario, command, alter_scope=lambda _: proof)
+        assert scenario.state.workspace_observation["reference"] == original["reference"]
+        assert scenario.state.workspace_observation["stage"] == "tool"
+        assert not scenario.state.workspace_observation["complete"]
+        assert not scenario.runtime.status()["completion_ready"]
+    finally:
+        scenario.runtime.close()
+
+
+@pytest.mark.parametrize("reported", [
+    [], "bad-errors", {1: "not a phase"}, {"after": [1]}, {"after": "capture failed"},
+], ids=["empty-list", "string", "invalid-phase", "invalid-message", "reported-failure"])
+def test_explicit_scope_error_keeps_last_reference_and_is_traced(tmp_path, reported):
+    command = _project(tmp_path, effect="")
+    scenario = _scenario(tmp_path, command)
+    traces = []
+    scenario.runtime.host.tracer.log = lambda event, **fields: traces.append((event, fields))
+    try:
+        previous = scenario.state.workspace_observation["reference"]
+        _execute(scenario, command, alter_scope=lambda scope: {**scope, "stage": "terminal", "errors": reported})
+        observation = scenario.state.workspace_observation
+        assert not observation["complete"] and observation["reference"] == previous
+        assert observation["stage"] == "terminal" and observation["errors"]
+        if reported == {"after": "capture failed"}:
+            assert observation["errors"] == reported
+        assert ("workspace_scope_incomplete", {"stage": "terminal", "errors": observation["errors"]}) in traces
+        assert not scenario.runtime.status()["completion_ready"]
+    finally:
+        scenario.runtime.close()
+
+
+@pytest.mark.parametrize("variant", ["missing", "none", "empty", "no-proof"])
+def test_optional_scope_and_errors_keep_existing_meaning(tmp_path, variant):
+    command = _project(tmp_path, effect="")
+    scenario = _scenario(tmp_path, command)
+    try:
+        previous = dict(scenario.state.workspace_observation)
+        def optional(scope):
+            if variant == "no-proof":
+                return None
+            if variant == "missing":
+                return scope
+            return {**scope, "errors": {} if variant == "empty" else None}
+
+        _execute(scenario, command, alter_scope=optional)
+        if variant == "no-proof":
+            assert scenario.state.workspace_observation == previous
+        else:
+            assert scenario.state.workspace_observation["complete"]
+            assert scenario.state.workspace_observation["errors"] == {}
+        assert scenario.runtime.status()["completion_ready"]
     finally:
         scenario.runtime.close()

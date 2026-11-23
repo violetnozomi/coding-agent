@@ -42,9 +42,10 @@ from nz_coder.interface.preferences import (
 )
 from nz_coder.foundation.private_paths import harden_private_path
 from nz_coder.foundation.user_paths import prepare_user_storage
-from nz_coder.foundation.user_paths import resolve_private_attachment
 from nz_coder.interface.selector import FuzzySelector
+from nz_coder.interface.submission import resolve_submission_file
 from nz_coder.runtime.process.workdir import current_workdir
+from nz_coder.state.input_expansion import render_attachment_list
 from nz_coder.state.sessions import list_session_ids
 
 
@@ -497,34 +498,13 @@ class TerminalInput:
             if strict:
                 raise ValueError("Use /attach PATH")
             return None
-        if raw.startswith("user-state://attachments/"):
-            try:
-                private = resolve_private_attachment(self.workspace, raw)
-                if private.is_symlink() or not private.is_file():
-                    raise ValueError("private attachment is missing or unsafe")
-                return AttachedFile(raw, private.stat().st_size, str(private))
-            except (OSError, ValueError) as exc:
-                if strict:
-                    raise ValueError("Private attachment is missing or unsafe") from exc
-                return None
-        candidate = Path(raw)
-        path = candidate if candidate.is_absolute() else self.workspace / candidate
-        if path.is_symlink():
-            if strict:
-                raise ValueError("Attachment symlinks are not allowed")
-            return None
         try:
-            resolved = path.resolve(strict=True)
-            relative = resolved.relative_to(self.workspace).as_posix()
-        except (OSError, ValueError) as exc:
+            attachment = resolve_submission_file(raw, self.workspace)
+        except ValueError:
             if strict:
-                raise ValueError("Attachment must be a file inside the workspace") from exc
+                raise
             return None
-        if not resolved.is_file():
-            if strict:
-                raise ValueError("Attachment must be a regular file")
-            return None
-        return AttachedFile(relative, resolved.stat().st_size)
+        return AttachedFile(attachment.path, attachment.size, attachment.host_path)
 
     def remove_attachment(self, value: str = "") -> int:
         """Remove one queued attachment, or all attachments when requested."""
@@ -601,13 +581,8 @@ class TerminalInput:
                 break
         if not attachments:
             return text, ()
-        lines = [
-            "<attached-files>",
-            "The user explicitly attached these workspace files. Read them with the file tools when relevant:",
-        ]
-        lines.extend(f"- {item.path} ({item.size} bytes)" for item in attachments)
-        lines.extend(["</attached-files>", "", text])
-        return "\n".join(lines), tuple(attachments)
+        content = render_attachment_list(text, ((item.path, item.size) for item in attachments))
+        return content, tuple(attachments)
 
     async def prompt_text_async(
         self,

@@ -152,17 +152,24 @@ class AdmissionInvariantSession:
         ):
             return
         name = str(getattr(result, "name", "") or "")
-        tool_input = getattr(result, "tool_input", {})
-        if not isinstance(tool_input, dict):
-            tool_input = {}
-        if name in {"verify_changed_files", "python_symbol_check"}:
-            self._add_evidence(name)
-        elif name == "bash":
-            from nz_coder.intelligence.verification_planner import classify_verification_segments
+        if name not in {"bash", "verify_changed_files", "python_symbol_check"}:
+            return
+        from nz_coder.intelligence.verification_planner import classify_verification_segments
+        from nz_coder.runtime.verification.domain.models import ExecutionReceipt
 
-            command = str(tool_input.get("command") or "").strip()
-            if classify_verification_segments(command):
-                self._add_evidence(command)
+        for receipt in getattr(result, "execution_facts", ()):
+            if (not isinstance(receipt, ExecutionReceipt) or receipt.producer != name
+                    or receipt.outcome != "succeeded" or not receipt.reliable
+                    or not receipt.output_complete or receipt.environment_error or receipt.test_count == 0):
+                continue
+            if name == "bash":
+                if receipt.exit_code == 0 and classify_verification_segments(receipt.command):
+                    self._add_evidence(receipt.command)
+            elif receipt.in_process:
+                # 混合结果逐项记录，语法通过不能替同一文件的符号或其他文件背书。
+                for path in receipt.targets:
+                    for capability in receipt.capabilities:
+                        self._add_evidence(f"{capability}: {path}")
 
     def record_committed_mutation(self, result) -> None:
         """Record one write only after its surrounding transaction commits."""

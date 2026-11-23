@@ -349,7 +349,7 @@ def test_real_diff_capture_cancel_or_deadline_never_spawns(
         if action == "stop":
             manager.stop([task], timeout_ms=0)
         assert job.done_event.wait(4)
-        assert not spawned and not (tmp_path / "model-probe.json").exists()
+        assert not spawned and not (tmp_path / ".nz-coder" / "model-probe.json").exists()
         native_exited(record)
         assert manager._load_raw(task)["status"] == (
             "cancelled" if action == "stop" else "timeout"
@@ -382,6 +382,16 @@ def init_real_repo(workspace):
     return git
 
 
+def assert_read_only_probe_delivered(state):
+    # 探针只调查和报告，没有执行验收或提交独立评审；收尾仍须交付模型的原文。
+    child = state["child_result"]
+    assert state["status"] == child["status"] == "completed_unverified"
+    assert "Offline probe finished." in child["final_text"]
+    verification = child["verification"]
+    assert verification["mutation_generation"] == 0
+    assert verification["acceptance_checks"] == [] and verification["review_pending"]
+
+
 def test_snapshot_precedes_spawn_and_resume_samples_again(tmp_path, monkeypatch):
     import json
     from nz_coder.runtime.agent import agent_manager
@@ -404,9 +414,9 @@ def test_snapshot_precedes_spawn_and_resume_samples_again(tmp_path, monkeypatch)
             manager, refs=["diff:app.py"], prompt="retrieval:evidence", read_only=True
         )
         assert job.done_event.wait(6)
-        assert manager._load_raw(task)["status"] == "completed"
+        assert_read_only_probe_delivered(manager._load_raw(task))
         first = "\n".join(
-            json.loads((tmp_path / "model-probe.json").read_text())["system"]
+            json.loads((tmp_path / ".nz-coder" / "model-probe.json").read_text())["system"]
         )
         assert "OLD_SNAPSHOT" in first and "NEW_SNAPSHOT" not in first
         manager._launch(
@@ -415,9 +425,9 @@ def test_snapshot_precedes_spawn_and_resume_samples_again(tmp_path, monkeypatch)
         )
         resumed = manager._jobs[task]
         assert resumed.done_event.wait(6)
-        assert manager._load_raw(task)["status"] == "completed"
+        assert_read_only_probe_delivered(manager._load_raw(task))
         second = "\n".join(
-            json.loads((tmp_path / "model-probe.json").read_text())["system"]
+            json.loads((tmp_path / ".nz-coder" / "model-probe.json").read_text())["system"]
         )
         assert (
             "NEW_SNAPSHOT" in second
@@ -463,7 +473,7 @@ def test_all_declared_diff_sampling_shares_total_deadline(tmp_path, monkeypatch)
         assert record.argv[-1] == "late.py"
         assert job.done_event.wait(4)
         assert manager._load_raw(task)["status"] == "timeout" and not spawned
-        assert not (tmp_path / "model-probe.json").exists()
+        assert not (tmp_path / ".nz-coder" / "model-probe.json").exists()
         native_exited(record)
     finally:
         _finish(manager)
@@ -602,8 +612,8 @@ def test_real_retrieval_success_preserves_results_and_policy(
         )
         assert job.done_event.wait(6)
         state = manager._load_raw(task)
-        assert state["status"] == "completed", state
-        facts = json.loads((tmp_path / "model-probe.json").read_text())
+        assert_read_only_probe_delivered(state)
+        facts = json.loads((tmp_path / ".nz-coder" / "model-probe.json").read_text())
         assert facts["model_calls"] == 2 and len(facts["tool_outputs"]) == 1
         from nz_coder.runtime.agent.subagent import _subagent_trace_dir
         import json as json_module

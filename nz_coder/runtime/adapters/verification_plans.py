@@ -26,6 +26,9 @@ def check_spec(
     id = check_id(identity, capability)
     if coverage_mode == "capability_targets":
         id += "-" + hashlib.sha256(json.dumps(targets).encode()).hexdigest()[:12]
+    elif coverage_mode == "in_process":
+        # 即使显示为同一句动作，外部命令和进程内工具各自产生证据。
+        id += "-in-process"
     return CheckSpec(id, identity, capability, targets, required, stage,
                      source, requirement_ids, native_runner_kind, covers, coverage_mode)
 

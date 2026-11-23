@@ -6,7 +6,9 @@ import copy
 
 import pytest
 
+from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, attach_message_identity
 from nz_coder.runtime.core import execution_context as context
+from nz_coder.runtime.process.workdir import scoped_workdir
 
 
 @pytest.mark.parametrize(
@@ -101,6 +103,7 @@ def test_native_activation_preview_matches_open_without_writing(tmp_path, native
         asyncio.run(store.save(session))
     before = copy.deepcopy(session)
     request = [{'role': 'user', 'content': 'go on'}]
+    new_id = attach_message_identity(request[0], session_id='child')
     preview = preview_activation_transcript(session, request)
     assert session == before
     request_run = RunRequest(
@@ -108,35 +111,61 @@ def test_native_activation_preview_matches_open_without_writing(tmp_path, native
         profile=READ_CHILD_PROFILE, messages=tuple(request), workspace=tmp_path,
         session_id='child', metadata={'parent_session_id': 'parent'},
     )
-    actual = asyncio.run(SessionRuntime(store).open(request_run))
-    assert [(x['role'], x.get('content')) for x in actual.session.transcript] == [(x['role'], x.get('content')) for x in preview]
+    runtime = SessionRuntime(store)
+    actual = asyncio.run(runtime.open(request_run))
+    try:
+        assert [(x['role'], x.get('content')) for x in actual.transcript] == [(x['role'], x.get('content')) for x in preview]
+        assert actual.transcript[-1][MESSAGE_ID_KEY] == preview[-1][MESSAGE_ID_KEY] == new_id
+    finally:
+        runtime.abandon(actual)
 
 
 def test_conflicting_preview_does_not_mutate_original_session(tmp_path):
     from nz_coder.runtime.session.model import Session
     from nz_coder.runtime.session.runtime import preview_activation_transcript
 
-    session = Session.create('child', [{'role': 'user', 'content': 'original', '_nz_message_id': 'one'}], workspace=tmp_path)
+    original = {'role': 'user', 'content': 'original'}
+    attach_message_identity(original, session_id='child')
+    session = Session.create('child', [original], workspace=tmp_path)
     before = copy.deepcopy(session.transcript)
     with pytest.raises(ValueError, match='conflicts'):
-        preview_activation_transcript(session, [{'role': 'user', 'content': 'conflict', '_nz_message_id': 'two'}])
+        preview_activation_transcript(session, [{**original, 'content': 'conflict'}])
     assert session.transcript == before
 
 
-def _initialization_context(persisted):
+def _initialization_context(workspace, messages, persisted):
     from types import SimpleNamespace
+    from nz_coder.runtime.adapters.verification_runtime import VerificationRuntime
     from nz_coder.runtime.core.lifecycle_context import LifecycleRunState
+    from nz_coder.runtime.core.profiles import READ_CHILD_PROFILE
+    from nz_coder.runtime.core.request import AgentDefinition, RunRequest
+    from nz_coder.runtime.core.run_context import RunContext
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
+    from nz_coder.runtime.session.model import Session
+    from nz_coder.runtime.verification.recovery import RecoveryState
 
+    request = RunRequest(agent=AgentDefinition('explore', 'inspect'), profile=READ_CHILD_PROFILE,
+                         messages=messages, workspace=workspace, session_id='child')
+    session = Session.create(request.session_id, messages, workspace=workspace)
+    run = RunContext(request, session, request.agent.name)
+    state = RuntimeState()
+    state.bind_run_context(run)
+    host = SimpleNamespace(
+        session_id=session.session_id, agent_id=request.agent.name, workdir=workspace,
+        runtime_state=state, workspace_snapshots=WorkspaceSnapshotStore(workspace, workspace / '.nz-coder' / 'snapshots'),
+        tracer=SimpleNamespace(log=lambda *args, **kwargs: None),
+    )
     return SimpleNamespace(
         run_state=LifecycleRunState(), clear_reverter=lambda: None,
-        verification_runtime=SimpleNamespace(initialize=lambda **_kwargs: None),
-        recovery=SimpleNamespace(start_tool_call_run=lambda: None),
+        verification_runtime=VerificationRuntime(host, run),
+        recovery=RecoveryState(),
         clear_read_cache=lambda: None, admission_handle=None,
         reset_hooks=lambda: None, clear_reasoning_escalation=lambda: None,
-        commit=lambda: None, restore_agent_role=lambda: None, session_id='child',
+        commit=lambda: None, restore_agent_role=lambda: None, session_id=session.session_id,
         bind_user_messages=lambda messages: None,
         prepare_runtime_state=lambda *a, **k: False,
-        runtime_state=SimpleNamespace(turn_count=0, initial_task_text=''),
+        runtime_state=state,
         start_run_evidence=lambda: None,
         persist_runtime_state=lambda **kwargs: persisted.set(),
         publish_started=lambda *args: None,
@@ -158,13 +187,13 @@ def test_commands_and_model_do_not_advance_before_policy_ack(tmp_path):
     parent, child = socket.socketpair()
     limits = CommandChannelLimits()
     client = ChildCommandClient(ChildCommandEndpoint(child, scope.authority.settlement_id), limits=limits, deadline=time.monotonic() + 5)
-    client.set_fact_receiver(lambda _fact: None)
     persisted, finished = threading.Event(), threading.Event()
     model_steps, errors = [], []
     def run():
         try:
-            with scoped_command_client(client), context.scoped_runtime_overrides(strict_local_tools=False):
-                ProductionRunLifecycle().initialize(_initialization_context(persisted), messages, False)
+            with scoped_workdir(tmp_path), scoped_command_client(client), context.scoped_runtime_overrides(strict_local_tools=False):
+                lifecycle_context = _initialization_context(tmp_path, messages, persisted)
+                ProductionRunLifecycle().initialize(lifecycle_context, messages, False)
                 model_steps.append('advance')
         except BaseException as exc:
             errors.append(exc)
@@ -194,7 +223,7 @@ def test_commands_and_model_do_not_advance_before_policy_ack(tmp_path):
         assert scope.close(deadline=time.monotonic() + 2)
 
 
-def test_policy_mismatch_stops_without_default_fallback(tmp_path, monkeypatch):
+def test_policy_mismatch_stops_without_default_fallback(tmp_path):
     import threading
     import time
     from nz_coder.protocol.public_error import PublicRuntimeError
@@ -208,12 +237,13 @@ def test_policy_mismatch_stops_without_default_fallback(tmp_path, monkeypatch):
     scope = make_command_scope(tmp_path, ready=False, policy=policy, errors=errors)
     endpoint = scope.start()
     client = ChildCommandClient(ChildCommandEndpoint(endpoint.socket.dup(), endpoint.settlement_id), limits=CommandChannelLimits(), deadline=time.monotonic() + 5)
-    client.set_fact_receiver(lambda _fact: None)
     endpoint.close()
     try:
-        with scoped_command_client(client), context.scoped_runtime_overrides(strict_local_tools=False):
+        with scoped_workdir(tmp_path), scoped_command_client(client), context.scoped_runtime_overrides(strict_local_tools=False):
+            messages = [{'role': 'user', 'content': 'pytest tests/changed'}]
+            lifecycle_context = _initialization_context(tmp_path, messages, threading.Event())
             with pytest.raises(PublicRuntimeError) as failed:
-                ProductionRunLifecycle().initialize(_initialization_context(threading.Event()), [{'role': 'user', 'content': 'pytest tests/changed'}], False)
+                ProductionRunLifecycle().initialize(lifecycle_context, messages, False)
         assert failed.value.public_error.code == 'child_command_channel_error'
         assert len(errors) == 1
         assert errors[0].code == 'child_command_channel_error'

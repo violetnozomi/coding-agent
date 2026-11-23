@@ -120,6 +120,120 @@ def test_question_dismissal_is_a_normal_tool_result():
     assert result.metadata == {"answers": [], "dismissed": True}
 
 
+@pytest.mark.parametrize("stop", ["timeout", "abort", "tool-cancel"])
+def test_http_wait_termination_reaches_tool_output_and_question_lifecycle(stop):
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    from nz_coder.http_service.interactions import InteractionBroker
+    from nz_coder.protocol.session_events import SessionEventBus
+    from nz_coder.tools import scoped_tool_cancellation
+    from nz_coder.tools.question import scoped_question_lifecycle_reporter
+
+    bus = SessionEventBus(session_id="question-timeout")
+    broker = InteractionBroker(session_id=bus.session_id, event_bus=bus, timeout_seconds=.05 if stop == "timeout" else 2)
+    broker.begin_run()
+    lifecycle = []
+    cancel = threading.Event()
+    events = bus.subscribe()
+
+    def ask():
+        with (
+            scoped_tool_cancellation(cancel),
+            scoped_question_asker(broker.ask_question),
+            scoped_question_lifecycle_reporter(lambda action, payload: lifecycle.append((action, payload))),
+        ):
+            return dispatch("question", {"questions": _questions()})
+
+    try:
+        with ThreadPoolExecutor(1) as pool:
+            waiting = pool.submit(ask)
+            asked = events.get(timeout=2)
+            if stop == "abort":
+                assert broker.cancel_all("aborted", block_new=True) == 1
+            elif stop == "tool-cancel":
+                cancel.set()
+            result = waiting.result(timeout=2)
+        ended = events.get(timeout=2)
+        reason = "timeout" if stop == "timeout" else "cancelled"
+        title = "Question timed out" if stop == "timeout" else "Question cancelled"
+        assert ended.type == "question.rejected"
+        assert ended.properties["reason"] == ("aborted" if stop == "abort" else reason)
+        assert ended.properties["request_id"] == asked.properties["id"] == lifecycle[-1][1]["request_id"]
+        assert [action for action, _ in lifecycle] == ["pending", "terminated"]
+        assert lifecycle[-1][1]["reason"] == reason
+        assert result == title + " without an answer."
+        assert result.title == title
+        assert result.metadata == {"answers": [], "reason": reason}
+    finally:
+        events.close()
+        broker.close()
+
+
+def test_callback_transport_timeout_remains_a_service_error():
+    from nz_coder.tools.question import scoped_question_lifecycle_reporter
+
+    def disconnected(_questions):
+        raise TimeoutError("connection to UI failed")
+
+    lifecycle = []
+    with (
+        scoped_question_asker(disconnected),
+        scoped_question_lifecycle_reporter(lambda action, _payload: lifecycle.append(action)),
+    ):
+        result = dispatch("question", {"questions": _questions()})
+    assert result.startswith("Error:")
+    assert lifecycle == ["pending", "error"]
+
+
+def test_question_after_abort_reports_cancelled_before_publication():
+    from nz_coder.http_service.interactions import InteractionBroker
+    from nz_coder.protocol.session_events import SessionEventBus
+
+    bus = SessionEventBus(session_id="late-user-question")
+    broker = InteractionBroker(session_id=bus.session_id, event_bus=bus)
+    broker.begin_run()
+    broker.cancel_all("aborted", block_new=True)
+    with scoped_question_asker(broker.ask_question):
+        result = dispatch("question", {"questions": _questions()})
+    assert result.metadata == {"answers": [], "reason": "cancelled"}
+    assert not bus.recent() and not broker.list()
+    broker.close()
+    with scoped_question_asker(broker.ask_question):
+        result = dispatch("question", {"questions": _questions()})
+    assert result == "Error: Interactive question service unavailable."
+
+
+@pytest.mark.parametrize("submit", ["reply", "reject"])
+def test_expired_question_rejects_input_before_timeout_worker_gets_lock(monkeypatch, submit):
+    from concurrent.futures import ThreadPoolExecutor
+    from nz_coder.http_service.interactions import InteractionBroker, InteractionNotFoundError
+    from nz_coder.protocol.session_events import SessionEventBus
+    from nz_coder.tools.question import QuestionWaitEnded
+
+    bus = SessionEventBus(session_id="late-question")
+    broker = InteractionBroker(session_id=bus.session_id, event_bus=bus, timeout_seconds=.2)
+    events = bus.subscribe()
+    broker.begin_run()
+    try:
+        with ThreadPoolExecutor(1) as pool:
+            waiting = pool.submit(broker.ask_question, _questions())
+            request = events.get(timeout=2).properties
+            monkeypatch.setattr("nz_coder.http_service.interactions.time.time", lambda: request["expires_at"])
+            with pytest.raises(InteractionNotFoundError):
+                if submit == "reply":
+                    broker.reply_question(request["id"], [["PostgreSQL"]])
+                else:
+                    broker.reject_question(request["id"])
+            with pytest.raises(QuestionWaitEnded) as caught:
+                waiting.result(timeout=2)
+            assert caught.value.reason == "timeout"
+        assert [event.type for event in bus.recent()] == ["question.asked", "question.rejected"]
+        assert bus.recent()[-1].properties["reason"] == "timeout"
+    finally:
+        events.close()
+        broker.close()
+
+
 def test_question_rejects_malformed_service_answers():
     with scoped_question_asker(lambda _questions: [[{"not": "text"}]]):
         result = dispatch("question", {"questions": _questions()})

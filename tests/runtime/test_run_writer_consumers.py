@@ -31,7 +31,8 @@ def test_swe_attempt_records_real_gateway_pairs_and_tool_result(monkeypatch, tmp
         with scoped_workdir(tmp_path):
             _bind_attempt_evidence(environment)
         result = asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request, options))
-        assert result.status.value == "completed"
+        # 观测只包含编码和工具执行，本次没有交付评审调用。
+        assert result.status.value == "completed_unverified"
         assert provider.calls == 2
         facts = [json.loads(row) for row in (tmp_path / ".nz-coder-runs/execution-facts.jsonl").read_text().splitlines()]
         starts = [row for row in facts if row["event"] == "model_call_start"]
@@ -78,7 +79,7 @@ def test_swe_evidence_observer_keeps_captured_owner_across_reuse(monkeypatch, tm
         runner = native_sdk.NativeSDKRunner(environment)
         first = await runner.run_result(request)
         second = await runner.run_result(replace(request, messages=(*first.messages, {"role": "user", "content": "Reply again."})))
-        assert second.status.value == "completed"
+        assert second.status.value == "completed_unverified"
         assert second.usage.input_tokens == 2
         assert second.usage.output_tokens == 1
 
@@ -196,7 +197,7 @@ def test_swe_attempt_records_default_image_gateway_evidence(monkeypatch, tmp_pat
         with scoped_workdir(tmp_path):
             _bind_attempt_evidence(environment)
         result = asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request))
-        assert result.status.value == "completed"
+        assert result.status.value == "completed_unverified"
         assert result.usage.input_tokens == 4 and result.usage.output_tokens == 2
         facts = [json.loads(row) for row in (tmp_path / ".nz-coder-runs/execution-facts.jsonl").read_text().splitlines()]
         starts = [row for row in facts if row["event"] == "model_call_start"]

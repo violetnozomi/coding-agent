@@ -8,7 +8,6 @@ import math
 import os
 from pathlib import Path
 import stat
-import tempfile
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -17,6 +16,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 from nz_coder.foundation import config
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.foundation.user_paths import prepare_user_storage
+from nz_coder.providers._model_file import write_private_model_file
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
     configured_model_capabilities,
@@ -488,21 +488,7 @@ def _write_state(target: Path, storage_root: Path, payload: dict) -> None:
     ).encode("utf-8")
     if len(encoded) > _MAX_STATE_BYTES:
         raise ValueError("Model state exceeds the size limit")
-    descriptor, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
-    try:
-        os.fchmod(descriptor, 0o600)
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, target)
-        os.chmod(target, 0o600)
-    except Exception:
-        try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
-        raise
+    write_private_model_file(target, encoded)
 
 
 def _nonempty_string(value: Any, name: str) -> str:

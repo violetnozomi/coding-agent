@@ -112,7 +112,7 @@ def test_resume_and_fork_keep_unapplied_changes_and_original_parent_baseline(tmp
         "app.py"
     ]
     forked = subagent._new_subagent_state("parent", "general-purpose", None)
-    subagent._clone_child_worktree(tmp_path, state, forked)
+    subagent._clone_child_worktree(tmp_path, state, forked, source_workspace=tmp_path)
     prepared_fork = prepare(forked)
     assert (
         prepared_fork.execution_root / "app.py"

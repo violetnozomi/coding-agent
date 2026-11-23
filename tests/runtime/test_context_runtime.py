@@ -406,7 +406,8 @@ def test_context_runtime_does_not_mutate_history_hidden_by_continuation_boundary
     assert messages[2]["content"] == old_output
     assert events == [(
         "context_continuation_boundary",
-        {"status": "max_turns", "dropped_messages": 5},
+        # 两条真人提问仍在；过滤了旧工具调用、工具结果和中断消息。
+        {"status": "max_turns", "dropped_messages": 3},
     )]
 
 

@@ -1,9 +1,6 @@
-"""Durable per-step and per-tool lifecycle state for the Agent loop.
+"""把模型回复和工具执行过程写进当前助手消息，供会话保存和恢复。
 
-The processor translates the provider/tool execution stream into additive
-message parts.  Provider-facing messages keep their legacy Chat Completions
-shape; Session consumers receive InfCode-style pending/running/completed/error
-state that survives save and resume.
+同一工具从登记、启动到结束始终更新同一条记录，订阅方据此显示进度。
 """
 from __future__ import annotations
 
@@ -22,6 +19,7 @@ from nz_coder.protocol.message_schema import (
     ASSISTANT_FINISH_KEY,
     ASSISTANT_TIME_KEY,
     MESSAGE_ID_KEY,
+    DEFERRED_MODEL_TEXT_KEY,
     PARTS_KEY,
     POLICY_SETTLEMENT_KEY,
     PROVIDER_EXTRA_KEY,
@@ -148,45 +146,23 @@ class SessionProcessor:
         return None
 
     def register_tool_calls(self, tool_calls: list[dict]) -> None:
-        """Create pending parts as soon as the assistant response is accepted."""
+        """登记完整调用。先按调用编号、再按序号查找已有的工具记录，沿用其标识。"""
         for index, tool_call in enumerate(tool_calls):
             call_id = str(tool_call.get("id") or tool_call.get("tool_call_id") or "")
-            fn = tool_call.get("function") if isinstance(tool_call.get("function"), dict) else {}
-            name = str(fn.get("name") or "unknown")
+            function = tool_call.get("function")
+            if not isinstance(function, dict):
+                function = {}
+            name = str(function.get("name") or "unknown")
             if not call_id:
                 continue
-            raw = fn.get("arguments", {})
-            existing = self._tool_part(call_id) or self._tool_part_by_index(index)
-            self._update({
-                "id": (existing or {}).get("id") or self._part_id("tool", str(index)),
-                "message_id": self.message_id,
-                "type": "tool",
-                "tool": name,
-                "call_id": call_id,
-                "index": index,
-                "state": {
-                    "status": "pending",
-                    "input": _arguments(raw),
-                    "raw": raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False),
-                },
-                **(
-                    {PROVIDER_TOOL_METADATA_KEY: dict(tool_call["provider_extra"])}
-                    if isinstance(tool_call.get("provider_extra"), dict)
-                    and tool_call["provider_extra"]
-                    else (
-                        {
-                            PROVIDER_TOOL_METADATA_KEY: dict(
-                                existing[PROVIDER_TOOL_METADATA_KEY]
-                            )
-                        }
-                        if isinstance(
-                            (existing or {}).get(PROVIDER_TOOL_METADATA_KEY),
-                            dict,
-                        )
-                        else {}
-                    )
-                ),
-            })
+            arguments = function.get("arguments", {})
+            existing = self._tool_part(call_id) or self._tool_part_by_index(index) or {}
+            self._update_pending_tool(
+                index, existing, call_id=call_id, name=name,
+                tool_input=_arguments(arguments),
+                raw=arguments if isinstance(arguments, str) else json.dumps(arguments, ensure_ascii=False),
+                provider_metadata=tool_call.get("provider_extra"),
+            )
 
     def stream_tool_delta(
         self,
@@ -199,45 +175,20 @@ class SessionProcessor:
     ) -> dict:
         """Persist a provider tool-input start/delta before the call is complete."""
         existing = self._tool_part(call_id) if call_id else None
-        existing = existing or self._tool_part_by_index(index)
-        previous_state = (existing or {}).get("state") or {}
-        selected_call_id = call_id or str((existing or {}).get("call_id") or f"pending-{index}")
-        selected_name = name or str((existing or {}).get("tool") or "unknown")
+        existing = existing or self._tool_part_by_index(index) or {}
+        previous_state = existing.get("state") or {}
         parsed = _arguments(arguments)
         if not parsed and isinstance(previous_state.get("input"), dict):
             parsed = dict(previous_state["input"])
-        return self._update({
-            "id": (existing or {}).get("id") or self._part_id("tool", str(index)),
-            "message_id": self.message_id,
-            "type": "tool",
-            "tool": selected_name,
-            "call_id": selected_call_id,
-            "index": max(0, int(index)),
-            "state": {
-                "status": "pending",
-                "input": parsed,
-                "raw": str(arguments),
-            },
-            **(
-                {PROVIDER_TOOL_METADATA_KEY: dict(metadata)}
-                if isinstance(metadata, dict) and metadata
-                else (
-                    {
-                        PROVIDER_TOOL_METADATA_KEY: dict(
-                            existing[PROVIDER_TOOL_METADATA_KEY]
-                        )
-                    }
-                    if isinstance(
-                        (existing or {}).get(PROVIDER_TOOL_METADATA_KEY),
-                        dict,
-                    )
-                    else {}
-                )
-            ),
-        })
+        return self._update_pending_tool(
+            index, existing,
+            call_id=call_id or str(existing.get("call_id") or f"pending-{index}"),
+            name=name or str(existing.get("tool") or "unknown"),
+            tool_input=parsed, raw=str(arguments), provider_metadata=metadata,
+        )
 
     def fail_unsettled(self, error: object, *, interrupted: bool = False) -> int:
-        """Settle all pending/running tools after a failed provider/tool attempt."""
+        """尝试失败时，已结算的工具保留结果，待执行和执行中的工具记为失败。"""
         count = 0
         for part in list(self.message.get(PARTS_KEY, [])):
             if not isinstance(part, dict) or part.get("type") != "tool":
@@ -249,7 +200,7 @@ class SessionProcessor:
         return count
 
     def settle_policy_failure(self, error: object) -> int:
-        """Hide an unapproved attempt and terminally settle every ToolPart."""
+        """策略拒绝整个尝试时撤回正文和推理，已结算的工具也须清除输入和结果。"""
         public = to_public_error(error)
         tool_status = (
             "blocked"
@@ -580,13 +531,15 @@ class SessionProcessor:
         continue_on_deny: bool = False,
         public_error: PublicError | None = None,
     ) -> None:
-        """Consume one tool-result/error event and update processor control state."""
+        """先发布工具的最终状态，再按拒绝原因决定后续步骤是否停止。"""
         if failed:
-            from nz_coder.protocol.public_error import TrustedPublicMessage
-            error = public_error if public_error is not None else (
-                TrustedPublicMessage("permission_stopped", output)
-                if denied and (metadata or {}).get("permission_source") else output
-            )
+            if public_error is not None:
+                error = public_error
+            elif denied and (metadata or {}).get("permission_source"):
+                # 有明确权限来源的拒绝提示可公开，普通工具输出仍须经过错误投影。
+                error = TrustedPublicMessage("permission_stopped", output)
+            else:
+                error = output
             self.fail_tool(call_id, error, interrupted=False, metadata=metadata)
         else:
             self.complete_tool(
@@ -599,6 +552,7 @@ class SessionProcessor:
         if denied and not continue_on_deny:
             from nz_coder.tool_platform.permissioning.interaction import approval_stop_message
             self._blocked = True
+            # 同批工具可能随拒绝一起取消，停止原因留给实际触发拒绝的调用。
             if not self.blocked_reason and (metadata or {}).get("permission_source") != "batch_cancelled":
                 self.blocked_reason = approval_stop_message(metadata or {})
 
@@ -611,7 +565,7 @@ class SessionProcessor:
         return "continue"
 
     def interrupt_unsettled(self) -> int:
-        """Turn every pending/running tool into a terminal interrupted error."""
+        """先中断待执行和执行中的工具，再关闭尚待用户回复的提问。"""
         count = self.fail_unsettled(
             TrustedPublicMessage(
                 "tool_cancelled",
@@ -823,6 +777,33 @@ class SessionProcessor:
                 return dict(part)
         return None
 
+    def _update_pending_tool(
+        self,
+        index: int,
+        existing: dict,
+        *,
+        call_id: str,
+        name: str,
+        tool_input: dict,
+        raw: str,
+        provider_metadata: object,
+    ) -> dict:
+        part = {
+            "id": existing.get("id") or self._part_id("tool", str(index)),
+            "message_id": self.message_id,
+            "type": "tool",
+            "tool": name,
+            "call_id": call_id,
+            "index": max(0, int(index)),
+            "state": {"status": "pending", "input": tool_input, "raw": raw},
+        }
+        # 签名等续传信息可能只在某个流式片段中出现，后续调用省略时沿用上一份。
+        if not isinstance(provider_metadata, dict) or not provider_metadata:
+            provider_metadata = existing.get(PROVIDER_TOOL_METADATA_KEY)
+        if isinstance(provider_metadata, dict):
+            part[PROVIDER_TOOL_METADATA_KEY] = dict(provider_metadata)
+        return self._update(part)
+
     def _question_part(self, call_id: str) -> dict | None:
         for part in self.message.get(PARTS_KEY, []):
             if (
@@ -861,6 +842,8 @@ class SessionProcessor:
                 part.setdefault("interaction_run_id", interaction_run_id)
             internal = self.message.get("_nz_internal") is True
             part.setdefault("visible", not internal)
+            if self.message.get(DEFERRED_MODEL_TEXT_KEY) and part.get("type") in {"text", "reasoning"}:
+                part["visible"] = False
             part.setdefault("internal", internal)
             part.setdefault("authoritative", True)
             normalized = upsert_message_part(self.message, part)

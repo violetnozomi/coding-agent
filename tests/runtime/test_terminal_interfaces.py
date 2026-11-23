@@ -182,7 +182,7 @@ def test_native_terminal_rules_run_once_per_candidate_after_reanimation(monkeypa
     assert candidates == ['draft-1', 'draft-2']
     assert provider.calls == 2
     assert result.status is RunStatus.COMPLETED_UNVERIFIED
-    assert 'draft-2' in result.final_text
+    assert 'draft-2' not in result.final_text and '/message' in result.final_text
     assert result.metadata['authored_content'] == 'draft-2'
 
 
@@ -219,8 +219,8 @@ def test_native_terminal_rule_downgrade_reaches_frozen_result(monkeypatch, tmp_p
     assert candidates == [draft]
     assert provider.calls == 1
     assert result.status is RunStatus.COMPLETED_UNVERIFIED
-    assert draft in result.final_text
-    assert "未经独立确认" in result.final_text
+    assert draft not in result.final_text
+    assert "没有已采信的测试结果" in result.final_text
     assert result.metadata['authored_content'] == draft
 
 
@@ -293,7 +293,7 @@ def test_reviewed_candidate_survives_stopped_terminal_summary(monkeypatch, tmp_p
     finally:
         environment.close()
     assert seen == ['CURRENT DRAFT']
-    assert result.final_text == 'PUBLIC STOP REASON'
+    assert 'PUBLIC STOP REASON' in result.final_text and 'CURRENT DRAFT' not in result.final_text
     assert result.metadata['authored_content'] == 'CURRENT DRAFT'
     from nz_coder.runtime.agent.child_contracts import evaluate_child_verification
     verdict = evaluate_child_verification({'min_final_text_chars': 15},

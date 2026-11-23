@@ -164,7 +164,7 @@ class ProductionContextManager:
         if (not request_overflow and not usage_overflow and attempt_state is not None
                 and attempt_state.suppressed_replay_version == source_version):
             return False
-        snapshot = request_snapshot or context.freeze_request(messages)
+        snapshot = _snapshot_for_compaction(context, messages, request_snapshot)
         attempt = attempt_state.reserve() if attempt_state is not None else None
         if on_text:
             on_text("[auto-compact triggered]")
@@ -286,7 +286,7 @@ class ProductionContextManager:
         if (not request_overflow and not usage_overflow and attempt_state is not None
                 and attempt_state.suppressed_replay_version == source_version):
             return False
-        snapshot = request_snapshot or context.freeze_request(messages)
+        snapshot = _snapshot_for_compaction(context, messages, request_snapshot)
         attempt = attempt_state.reserve() if attempt_state is not None else None
         if on_text:
             on_text("[auto-compact triggered]")
@@ -352,6 +352,23 @@ class ProductionContextManager:
             return normalized
         _trace_metric_repair(context, "projected_tokens")
         return max(0, estimate_tokens(messages))
+
+
+def _snapshot_for_compaction(
+    context: ContextExecutionContext, messages: list, request_snapshot: FrozenRequestSnapshot | None,
+) -> FrozenRequestSnapshot:
+    snapshot = request_snapshot or context.freeze_request(messages)
+    # 摘要只能缩短历史。工具声明本身已超出已知窗口时，直接报告可调整的开销。
+    limit = context.budget.usable_input_tokens
+    if limit:
+        tool_tokens = estimate_tokens(snapshot.tools)
+        if tool_tokens > limit:
+            raise PublicRuntimeError(PublicError(
+                "context_cannot_shrink",
+                f"工具声明预计占用 {tool_tokens} token，已超过可用输入上限 {limit} token。"
+                "请减少启用的工具，或选择上下文窗口更大的模型。",
+            ))
+    return snapshot
 
 
 def _request_usage_total(messages: list, snapshot: FrozenRequestSnapshot | None) -> int:
@@ -430,10 +447,20 @@ def accept_compaction(
         return False
     context.stamp_auto_compaction(candidate)
     _mark_compaction_trigger(candidate, trigger, physical)
-    messages[:] = candidate
+    install_compacted_history(messages, candidate)
     context.trace("compaction_candidate_installed", trigger=trigger,
                   before_tokens=before, after_tokens=after, operation_id=operation_id)
     return True
+
+
+def install_compacted_history(messages: list, candidate: list) -> None:
+    """只在压缩正式生效时保留被移出历史的宿主拒绝回执，原样保留的尾部仍由会话持有。"""
+    run = current_run_context()
+    if run is not None and run.transcript is messages:
+        retained = {message.get("_nz_message_id") for message in candidate}
+        removed = [message for message in messages if message.get("_nz_message_id") not in retained]
+        run.compacted_denied_commands = run.denied_commands_in(removed)
+    messages[:] = candidate
 
 
 def replay_compaction_pressure(context: ContextExecutionContext, messages: list) -> bool:

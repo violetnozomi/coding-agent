@@ -17,6 +17,7 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from itertools import chain
 
 from nz_coder.foundation import config
 from nz_coder.foundation.run_context import active_run_settings_object
@@ -26,7 +27,7 @@ from nz_coder.protocol.message_schema import (
     MESSAGE_ID_KEY,
     SESSION_SUMMARY_KEY,
     TOOL_COMPACTED_AT_KEY,
-    is_synthetic_user_message,
+    is_user_request_message,
 )
 from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
 from nz_coder.state.compaction_summary import (
@@ -45,10 +46,12 @@ _TIME_BASED_MC_GAP_MINUTES = 30
 
 _COMPACT_TAIL_TURNS = 2
 _COMPACT_INPUT_MAX_TOKENS = 20_000
+_COMPACTION_INPUT_HEADROOM = 1.15
 _COMPACT_RECENT_MIN_TOKENS = 2_000
 _COMPACT_RECENT_MAX_TOKENS = 8_000
 _SUMMARY_OPEN = "<session-summary>"
 _SUMMARY_CLOSE = "</session-summary>"
+_SUMMARY_CONTINUATION = "Continue from this summary and the preserved recent turns."
 _COMPACTION_RECOVERY_PREFIX = (
     "The previous compaction request exceeded the provider's 4MB payload limit.\n\n"
     "Older tool outputs and media attachments were removed from this compaction request."
@@ -167,10 +170,13 @@ def estimate_tokens(value: object) -> int:
     - 非 ASCII 字符：按 1 token/char 计（CJK 一个字约 1 token）
     """
     serialized = json.dumps(value, default=str, ensure_ascii=False)
-    ascii_bytes = sum(1 for c in serialized if ord(c) < 128)
-    non_ascii_chars = len(serialized) - ascii_bytes
-    # ASCII token 估算：4字节/token；非ASCII：1字节/token（CJK实际约1字/token）
-    return ascii_bytes // 4 + non_ascii_chars
+    return _text_token_quarters(serialized) // 4
+
+
+def _text_token_quarters(text: str) -> int:
+    """按四分之一 token 累加，整份输入只取整一次。"""
+    ascii_chars = len(text.encode("ascii", errors="ignore"))
+    return ascii_chars + 4 * (len(text) - ascii_chars)
 
 
 def estimate_request_tokens(messages: list, tools: list | None = None) -> int:
@@ -393,26 +399,37 @@ def _time_based_compaction_due(messages: list) -> bool:
 
 
 def _is_compaction_summary(message: dict) -> bool:
+    if message.get("role") != "user":
+        return False
+    if COMPACTION_KEY in message:
+        return True
+    # 旧会话用完整的外层标签标记摘要；用户正文和工具示例也可能提到标签名。
     content = message.get("content", "")
-    return message.get("role") == "user" and isinstance(content, str) and _SUMMARY_OPEN in content
+    if not isinstance(content, str) or not content.lstrip().startswith(_SUMMARY_OPEN):
+        return False
+    _, closing, suffix = content.rpartition(_SUMMARY_CLOSE)
+    if not closing or suffix.strip() not in ("", _SUMMARY_CONTINUATION):
+        return False
+    from nz_coder.state.input_expansion import USER_TEXT_KEY
+    # 字面输入旧摘要标签时，提交入口保留原文。宿主生成的旧摘要没有此凭据。
+    original = message.get(USER_TEXT_KEY)
+    return not isinstance(original, str) or original.strip() != content.strip()
 
 
 def _is_human_user_turn(message: dict) -> bool:
     """Return whether a message represents an actual user-authored turn."""
-    return (
-        message.get("role") == "user"
-        and not is_synthetic_user_message(message)
-        and not _is_compaction_summary(message)
-    )
+    return is_user_request_message(message) and not _is_compaction_summary(message)
 
 
 def _extract_previous_summary(messages: list[dict]) -> str:
     for message in reversed(messages):
+        if not _is_compaction_summary(message):
+            continue
         content = message.get("content", "")
         if not isinstance(content, str):
             continue
         start = content.find(_SUMMARY_OPEN)
-        end = content.find(_SUMMARY_CLOSE)
+        end = content.rfind(_SUMMARY_CLOSE)
         if start >= 0 and end > start:
             return content[start + len(_SUMMARY_OPEN):end].strip()
     return ""
@@ -508,37 +525,53 @@ def _select_compaction_parts(
     return list(messages), []
 
 
-def _select_summary_input(head: list[dict], max_tokens: int) -> list[dict]:
+def _original_user_message(message: dict) -> dict | None:
+    """为用户亲自输入的正文留位，包括和图片一起提交的文字。"""
+    public = _public_compaction_message(message)
+    user_text = message.get("_nz_user_text", public.get("content"))
+    if isinstance(user_text, list):
+        user_text = "\n".join(
+            part["text"] for part in user_text
+            if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str)
+        )
+    if not isinstance(user_text, str) or not user_text.strip():
+        return None
+    public["content"] = user_text
+    return public
+
+
+def _summary_choices(messages: list[dict], history_length: int):
+    """用户原文优先，其余证据按用途选取；近期历史只提供用户原文。"""
     candidates = [
         (index, message)
-        for index, message in enumerate(head)
+        for index, message in enumerate(messages)
         if not _is_compaction_summary(message)
     ]
-    selected: list[tuple[int, dict]] = []
-    remaining = max(1, int(max_tokens))
-
-    # A long single-turn coding run can fill the summary budget with recent
-    # tool evidence while silently dropping the original task. Reserve the
-    # first real user instruction before backfilling the newest evidence.
-    anchor = _compaction_task_anchor(head, natural_only=False)
-    anchor_index: int | None = None
-    if anchor is not None:
-        candidate_index, anchor_message = anchor
-        anchor_tokens = estimate_tokens(anchor_message)
-        if anchor_tokens > remaining:
-            anchor = _compaction_task_anchor(head, natural_only=True)
-            if anchor is not None:
-                candidate_index, anchor_message = anchor
-                anchor_tokens = estimate_tokens(anchor_message)
-        if anchor_tokens <= remaining:
-            selected.append((candidate_index, anchor_message))
-            remaining -= anchor_tokens
-            anchor_index = candidate_index
+    # 当前原文排在最前。首轮附件可能包含唯一的规格，留足原文后再尝试带上。
+    required = []
+    attachments = []
+    repeated_first = None
+    user_indices = [index for index, message in candidates if _is_human_user_turn(message)]
+    if user_indices:
+        first, latest = user_indices[0], user_indices[-1]
+        current = _original_user_message(messages[latest])
+        if current is not None:
+            required.append((latest, current))
+        first_full = _public_compaction_message(messages[first])
+        if first != latest and first_full == _public_compaction_message(messages[latest]):
+            repeated_first = first
+        first_text = _original_user_message(messages[first])
+        if first_text is not None:
+            if first != latest and repeated_first is None:
+                required.append((first, first_text))
+            if first < history_length and first_text != first_full:
+                # 相同规格在同一会话被重发时，附件可以复用，消息位置以最新提交为准。
+                attachments.append((latest if repeated_first is not None else first, first_full))
 
     # 先给已有修改、验证和存储句柄留位置，再用近期普通输出填充剩余预算。
     # 验证通过与失败同级，避免只选到旧失败而漏掉后续成功。
     prioritized = sorted(
-        reversed(candidates),
+        (item for item in reversed(candidates) if item[0] < history_length and item[0] != repeated_first),
         key=lambda item: (
             0 if (
                 _protected_tool_evidence(item[1])
@@ -546,36 +579,39 @@ def _select_summary_input(head: list[dict], max_tokens: int) -> list[dict]:
             ) else 1 if _artifact_references(item[1].get("content", "")) else 2
         ),
     )
-    for index, message in prioritized:
-        if index == anchor_index:
-            continue
-        public_message = _public_compaction_message(message)
-        tokens = estimate_tokens(public_message)
-        if tokens > remaining:
-            continue
-        selected.append((index, public_message))
-        remaining -= tokens
-        if remaining <= 0:
-            break
-    selected.sort(key=lambda item: item[0])
-    return [message for _, message in selected]
+    evidence = ((index, _public_compaction_message(message)) for index, message in prioritized)
+    return required, chain(attachments, evidence)
 
 
-def _compaction_task_anchor(
-    head: list[dict],
-    *,
-    natural_only: bool = True,
-) -> tuple[int, dict] | None:
-    """Return the earliest bounded, provider-visible human task message."""
-    for index, message in enumerate(head):
-        if not _is_human_user_turn(message):
-            continue
-        public_message = _public_compaction_message(message)
-        natural = message.get("_nz_user_text", public_message.get("content"))
-        if natural_only and isinstance(natural, str) and natural.strip():
-            public_message["content"] = natural
-        return index, public_message
-    return None
+def _select_summary_input(
+    messages: list[dict], max_tokens: int, *, history_length: int | None = None,
+    wire_limits: tuple[int, int] | None = None,
+) -> list[dict]:
+    """优先级决定谁先占位，按最终序列化尺寸分别核对选材额度和实际窗口。"""
+    groups = _summary_choices(messages, len(messages) if history_length is None else history_length)
+    selected: dict[int, tuple[dict, int, int]] = {}
+    remaining = 4 * max_tokens + 3  # 与 estimate_tokens 对整份输入向下取整一致。
+    used_wire = 0
+    for choices, wire_limit in zip(groups, wire_limits or (None, None)):
+        for index, message in choices:
+            previous, old_size, old_wire_size = selected.get(index, (None, 0, 0))
+            if previous == message:
+                continue
+            encoded = json.dumps(message, default=str, ensure_ascii=False)
+            # JSON 列表的括号和各项间的逗号空格，合计每条两个 ASCII 字符。
+            size = _text_token_quarters(encoded) + 2
+            if size - old_size > remaining:
+                continue
+            wire_size = 0
+            if wire_limit is not None:
+                # 列表作为请求正文中的字符串发送，内层引号与换行还会被转义一次。
+                wire_size = _text_token_quarters(json.dumps(encoded, ensure_ascii=False))
+                if used_wire + wire_size - old_wire_size > wire_limit:
+                    continue
+            used_wire += wire_size - old_wire_size
+            remaining -= size - old_size
+            selected[index] = (message, size, wire_size)
+    return [selected[index][0] for index in sorted(selected)]
 
 
 def _is_compaction_payload_error(error: Exception) -> bool:
@@ -664,12 +700,19 @@ def _create_compaction_completion(
     return outcome.content
 
 
+def _summary_request_messages(prompt: str, conversation: str) -> list[dict]:
+    return [
+        {"role": "system", "content": _COMPACTION_SYSTEM_PROMPT},
+        {"role": "user", "content": prompt + "\n\n" + conversation},
+    ]
+
+
 def _compaction_output_limit(messages: list[dict], budget: PromptBudget) -> int:
     """摘要沿用正常输出额度；完整摘要输入也必须留在模型窗口内。"""
     output = budget.output_reserve_tokens
     if budget.context_tokens > 0:
         # 与正式发送一致计算整个请求，并为本地 token 估算留出余量。
-        input_tokens = math.ceil(estimate_request_tokens(messages) * 1.15)
+        input_tokens = math.ceil(estimate_request_tokens(messages) * _COMPACTION_INPUT_HEADROOM)
         output = min(output, budget.context_tokens - input_tokens)
     if output <= 0:
         raise PublicRuntimeError(PublicError(
@@ -723,19 +766,12 @@ def auto_compact(
         _COMPACT_INPUT_MAX_TOKENS,
         max(2_000, int(usable * 0.65)),
     )
-    selected = _select_summary_input(head, summary_input_tokens)
-    if observer is not None:
-        observer("compaction_selection", {
-            "operation_id": operation_id,
-            **_selection_coverage(head, selected),
-            "input_budget_tokens": summary_input_tokens,
-            "selected_token_estimate": _estimate_compaction_messages(selected),
-            "current_facts_token_estimate": estimate_tokens(current_facts) if current_facts else 0,
-            "actual_cost": None,
-            "preceding_coding_usage": next((message.get("_nz_usage") for message in reversed(messages)
-                                             if message.get("role") == "assistant" and isinstance(message.get("_nz_usage"), dict)), None),
-        })
-    conv_text = json.dumps(selected, default=str, ensure_ascii=False)
+    # 最近历史由开发模型原样接收；摘要模型也需要其中最新的用户要求来写当前目标。
+    tail_users = [message for message in tail if _is_human_user_turn(message)]
+    tail_anchors = tail_users[-1:]
+    if not original_users and len(tail_users) > 1:
+        tail_anchors = [tail_users[0], tail_users[-1]]
+    sources = head + tail_anchors
 
     # 改进：summary prompt 包含文件修改状态，防止 compact 后丢失"已编辑"信息
     git_diff_context = _get_git_diff_summary()
@@ -757,6 +793,33 @@ def auto_compact(
     if focus:
         prompt += f"\nPay special attention to: {focus}\n"
 
+    def select_for_prompt(request_prompt: str) -> list[dict]:
+        wire_limits = None
+        if active_budget.context_tokens > 0:
+            envelope = json.dumps(_summary_request_messages(request_prompt, ""), ensure_ascii=False)
+            # 非空列表的括号和分隔符合计正好抵消逐项计入的引号。取整前允许余下三个四分位。
+            fixed_cost = _text_token_quarters(envelope)
+            def available(reserved_output: int) -> int:
+                input_limit = math.floor((active_budget.context_tokens - reserved_output) / _COMPACTION_INPUT_HEADROOM)
+                return 4 * input_limit + 3 - fixed_cost
+            # 用户原文可使用弹性窗口。旧工具与附件只占正常输出预留之外的空间。
+            wire_limits = (available(1), available(active_budget.output_reserve_tokens))
+        return _select_summary_input(sources, summary_input_tokens, history_length=len(head), wire_limits=wire_limits)
+
+    selected = select_for_prompt(prompt)
+    if observer is not None:
+        observer("compaction_selection", {
+            "operation_id": operation_id,
+            **_selection_coverage(sources, selected),
+            "input_budget_tokens": summary_input_tokens,
+            "selected_token_estimate": _estimate_compaction_messages(selected),
+            "current_facts_token_estimate": estimate_tokens(current_facts) if current_facts else 0,
+            "actual_cost": None,
+            "preceding_coding_usage": next((message.get("_nz_usage") for message in reversed(messages)
+                                             if message.get("role") == "assistant" and isinstance(message.get("_nz_usage"), dict)), None),
+        })
+    conv_text = json.dumps(selected, default=str, ensure_ascii=False)
+
     def request_summary(request_prompt: str, conversation: str):
         nonlocal request_index
         request_index += 1
@@ -769,10 +832,7 @@ def auto_compact(
                                 "compaction_request_id": request_id,
                                 "compaction_usage_known": known if name == "model_call_finish" else None,
                                 "price_version": payload.get("price_version")})
-        request_messages = [
-            {"role": "system", "content": _COMPACTION_SYSTEM_PROMPT},
-            {"role": "user", "content": request_prompt + "\n\n" + conversation},
-        ]
+        request_messages = _summary_request_messages(request_prompt, conversation)
         return _create_compaction_completion(
             client,
             provider,
@@ -795,7 +855,8 @@ def auto_compact(
             raise
         before_bytes = len(conv_text.encode("utf-8"))
         stripped_tools, degraded_expansions = _strip_compaction_payload(head)
-        recovered_input = _select_summary_input(head, summary_input_tokens)
+        recovery_prompt = _COMPACTION_RECOVERY_PREFIX + "\n\n" + prompt
+        recovered_input = select_for_prompt(recovery_prompt)
         recovered_text = json.dumps(
             recovered_input,
             default=str,
@@ -815,7 +876,7 @@ def auto_compact(
             recovery["retried"] = True
             try:
                 recovered_summary = request_summary(
-                    _COMPACTION_RECOVERY_PREFIX + "\n\n" + prompt,
+                    recovery_prompt,
                     recovered_text,
                 )
             except Exception as retry_error:
@@ -838,10 +899,7 @@ def auto_compact(
         })
     summary_message = {
         "role": "user",
-        "content": (
-            f"{_SUMMARY_OPEN}\n{summary}\n{_SUMMARY_CLOSE}\n\n"
-            "Continue from this summary and the preserved recent turns."
-        ),
+        "content": f"{_SUMMARY_OPEN}\n{summary}\n{_SUMMARY_CLOSE}\n\n{_SUMMARY_CONTINUATION}",
         COMPACTION_KEY: {
             "auto": bool(auto),
             "overflow": bool(overflow),
@@ -883,7 +941,7 @@ def auto_compact(
     return [summary_message, *original_users, *tail]
 
 
-def _selection_coverage(head: list, selected: list) -> dict:
+def _selection_coverage(messages: list, selected: list) -> dict:
     """数量只说明选材可达性，不将其当成摘要语义保真率。"""
     from collections import Counter
 
@@ -891,15 +949,20 @@ def _selection_coverage(head: list, selected: list) -> dict:
         return json.dumps(_public_compaction_message(message), ensure_ascii=False, sort_keys=True, default=str)
     remaining = Counter(key(message) for message in selected)
     categories = {}
-    candidates = [message for message in head if not _is_compaction_summary(message)]
+    candidates = [message for message in messages if not _is_compaction_summary(message)]
     for message in candidates:
         kind = str(message.get("_nz_evidence_kind") or message.get("role") or "unknown")
         bucket = categories.setdefault(kind, {"candidate": 0, "selected": 0, "omitted": 0})
         bucket["candidate"] += 1
-        included = remaining[key(message)] > 0
+        selected_key = key(message)
+        if not remaining[selected_key] and _is_human_user_turn(message):
+            original = _original_user_message(message)
+            if original is not None:
+                selected_key = key(original)
+        included = remaining[selected_key] > 0
         bucket["selected" if included else "omitted"] += 1
         if included:
-            remaining[key(message)] -= 1
+            remaining[selected_key] -= 1
     return {
         "candidate_messages": len(candidates), "selected_messages": len(selected),
         "candidate_tool_batches": sum(bool(message.get("tool_calls")) for message in candidates),

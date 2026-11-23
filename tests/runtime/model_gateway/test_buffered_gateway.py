@@ -385,6 +385,8 @@ def test_timeout_does_not_spawn_retry_or_new_worker_until_old_call_settles() -> 
     assert started.is_set()
     assert first.status is ModelCallStatus.ABORTED
     assert second.status is ModelCallStatus.ABORTED
+    assert first.public_error.code == "model_timeout"
+    assert second.public_error.code == "model_request_unsettled" and not second.public_error.retryable
     assert len(provider.calls) == 1
     assert runtime.inflight_status()["worker_still_running"] == 1
     release.set()
@@ -457,5 +459,7 @@ def test_logical_timeout_has_one_terminal_accounting_event() -> None:
     finishes = [payload for name, payload in events if name == "model_call_finish"]
     assert outcome.status is ModelCallStatus.ABORTED
     assert len(provider.calls) == 1
+    assert outcome.public_error.code == "model_timeout" and not outcome.public_error.retryable
+    assert outcome.public_error.metadata == {"attempts": 1}
     assert len(finishes) == 1
     assert finishes[0]["attempts"] == 1

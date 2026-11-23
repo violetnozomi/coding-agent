@@ -14,7 +14,7 @@ from nz_coder.runtime.core.request import RunOptions
 from nz_coder.runtime.execution import native_sdk
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state import sessions
-from tests.runtime.test_native_product_runtime import _completion, _install_runtime, _request
+from tests.runtime.test_native_product_runtime import _completion, _install_runtime, _offline_accept_review, _request
 
 
 def _durable_request(tmp_path):
@@ -33,13 +33,15 @@ def test_completed_run_rejects_captured_retry(monkeypatch, tmp_path):
     class Provider:
         name = "offline"
 
-        def create_completion(self, _client, **_kwargs):
+        def create_completion(self, _client, **kwargs):
+            if review := _offline_accept_review(kwargs, report_kind="ordinary"):
+                return review
             environment = captured["environment"]
             captured["retry"] = environment._gateway().observer
             captured["processor"] = environment._active_session_processor
             return _completion()
 
-    _install_runtime(monkeypatch, Provider())
+    _install_runtime(monkeypatch, Provider(), with_delivery_review=True)
     request = _durable_request(tmp_path)
     environment = native_sdk.build_product_run_environment(request, RunOptions())
     captured["environment"] = environment
@@ -137,6 +139,7 @@ def test_terminal_waits_for_real_checkpoint_without_blocking_loop(monkeypatch, t
     monkeypatch.setattr(SessionRuntime, "finalize", canonical_finalize)
 
     async def scenario():
+        expected_status = "cancelled" if cancel else "completed_unverified"
         task = asyncio.create_task(native_sdk.NativeSDKRunner().run_result(request))
         # 仅防失败实现把事件循环堵死；成功路径由测试显式放行。
         rescue = threading.Timer(2, release.set)
@@ -163,15 +166,15 @@ def test_terminal_waits_for_real_checkpoint_without_blocking_loop(monkeypatch, t
             except asyncio.CancelledError:
                 assert cancel
             else:
-                assert result.status.value == ("cancelled" if cancel else "completed")
+                assert result.status.value == expected_status
             await asyncio.to_thread(captured["worker"].join, 3)
         assert worker_finished.is_set()
         assert not errors
-        assert _payload(tmp_path, request)["run_status"] == ("cancelled" if cancel else "completed")
+        assert _payload(tmp_path, request)["run_status"] == expected_status
         context = captured["environment"].active_run_context
         assert context.usage.input_tokens == 2 and context.usage.output_tokens == 1
         restored = await captured["environment"].runtime_services.session_runtime.store.load(context.session.identity, tmp_path)
-        assert restored.status.value == ("cancelled" if cancel else "completed")
+        assert restored.status.value == expected_status
 
     try:
         asyncio.run(scenario())
@@ -218,7 +221,7 @@ def test_old_gateway_cannot_mutate_next_run_or_account_its_usage(monkeypatch, tm
         first = await runner.run_result(request)
         second_request = replace(request, messages=(*first.messages, {"role": "user", "content": "Reply again."}))
         result = await runner.run_result(second_request)
-        assert result.status.value == "completed"
+        assert result.status.value == "completed_unverified"
         assert result.usage.input_tokens < 1000
 
     try:
@@ -316,7 +319,7 @@ def test_terminal_learning_accounts_after_writer_retirement(monkeypatch, tmp_pat
     monkeypatch.setattr(environment.runtime_services.memory, "finalize", learn)
     try:
         result = asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request))
-        assert result.status.value == "completed"
+        assert result.status.value == "completed_unverified"
         assert result.usage.input_tokens == 24
         assert result.usage.output_tokens == 15
         assert environment.runtime_state.provider_usage_by_purpose["memory"]["input"] == 22
@@ -343,10 +346,13 @@ def test_finalsave_failure_keeps_writer_retired_and_original_error(monkeypatch, 
     environment = native_sdk.build_product_run_environment(request, RunOptions())
     captured["environment"] = environment
     original_write = sessions._publish_session_json
+    expected_status = "error" if execution_error else "completed_unverified"
+    failed_save = threading.Event()
 
     def fail_terminal(prepared, path):
         payload = json.loads(prepared.read_text())
-        if path.name == f"{request.session_id}.json" and payload.get("run_status") in {"completed", "error"}:
+        if path.name == f"{request.session_id}.json" and payload.get("run_status") == expected_status:
+            failed_save.set()
             raise OSError("terminal storage failed")
         return original_write(prepared, path)
 
@@ -360,6 +366,7 @@ def test_finalsave_failure_keeps_writer_retired_and_original_error(monkeypatch, 
     try:
         with pytest.raises(ValueError if execution_error else OSError, match="primary execution failed" if execution_error else "terminal storage failed"):
             asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request))
+        assert failed_save.is_set()
         writer = environment._session_checkpoint_writer
         assert writer.retired
         assert not writer.owner.finalized
@@ -394,7 +401,7 @@ def test_before_run_failure_retires_owner_and_environment_can_be_reused(monkeypa
         assert previous.retired and previous.owner.finalized
         monkeypatch.setattr(environment.runner._runtime_events, "before_run", original_before)
         result = asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request))
-        assert result.status.value == "completed"
+        assert result.status.value == "completed_unverified"
         assert environment._session_checkpoint_writer is not previous
     finally:
         environment.close()

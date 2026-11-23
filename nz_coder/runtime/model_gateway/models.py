@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass, field
 from enum import Enum
 
+from nz_coder.protocol.public_error import PublicError
 from nz_coder.runtime.model_gateway.usage import NormalizedUsage
 
 
@@ -112,6 +113,7 @@ class ModelCallOutcome:
     error: str = ""
     diagnostic: str = ""
     retryable: bool = False
+    public_error: PublicError | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, ModelCallStatus):

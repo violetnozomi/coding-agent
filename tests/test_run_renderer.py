@@ -293,7 +293,7 @@ def test_run_renderer_falls_back_when_callback_has_no_event_bus():
     rendered = output.getvalue()
     assert "Tool · grep_search" in rendered
     assert "one" not in rendered
-    assert "Run completed unverified" in rendered
+    assert "Run finished (see checks and delivery review)" in rendered
 
 
 def test_tool_detail_modes_hide_or_expand_output():
@@ -611,4 +611,4 @@ def test_unverified_completion_is_not_rendered_as_verified_success():
     view.finish({'status': 'completed_unverified'})
     rendered = output.getvalue()
     assert '✓' not in rendered
-    assert 'unverified' in rendered
+    assert 'Run finished (see checks and delivery review)' in rendered

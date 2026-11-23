@@ -151,6 +151,77 @@ def test_remote_attach_only_unavailable_does_not_create(tmp_path, monkeypatch):
         thread.join(timeout=5)
 
 
+def test_published_session_and_aliases_survive_discovery(tmp_path):
+    with scoped_workdir(tmp_path):
+        sessions.save_session([{'role': 'user', 'content': '第一条消息'}], session_id='published', model='test')
+        for selector in ('published', 'latest', 'active'):
+            assert sessions.load_session(selector)['messages'][0]['content'] == '第一条消息'
+    manager = SessionManager(workspace_roots=[tmp_path])
+    try:
+        view = manager.list()
+        assert [item['id'] for item in view['sessions']] == ['published']
+        assert view['unavailable'] == []
+        assert manager.get('published').history[0]['content'] == '第一条消息'
+    finally:
+        manager.close()
+
+
+def test_discovery_rejects_file_replaced_with_identical_bytes_and_mtime(tmp_path):
+    import os
+
+    with scoped_workdir(tmp_path):
+        path = sessions.save_session([], session_id='replacement', model='test')
+    manager = SessionManager(workspace_roots=[tmp_path])
+    try:
+        before = path.stat()
+        replacement = path.with_suffix('.new')
+        replacement.write_bytes(path.read_bytes())
+        os.utime(replacement, ns=(before.st_atime_ns, before.st_mtime_ns))
+        replacement.replace(path)
+        assert path.stat().st_mtime_ns == before.st_mtime_ns
+        view = manager.list()
+        assert view['sessions'] == []
+        assert [(row['candidate_id'], row['code']) for row in view['unavailable']] == [('replacement', 'changed')]
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize(('platform', 'handle_offsets', 'candidate_offset', 'limit', 'error_kind'), [
+    ('nt', (10, 10), 0, 128, None),
+    ('nt', (10, 10), 0, 1, 'resource_limit'),
+    ('nt', (10, 11), 0, 128, 'changed'),
+    ('nt', (10, 10), -1, 128, 'changed'),
+    ('posix', (10, 10), 0, 128, 'changed'),
+])
+def test_session_reader_compares_change_times_from_the_same_source(
+    tmp_path, monkeypatch, platform, handle_offsets, candidate_offset, limit, error_kind,
+):
+    import os
+    from types import SimpleNamespace
+
+    path = tmp_path / 'sample.json'
+    path.write_bytes(b'{"example":true}')
+    entry = path.stat(follow_symlinks=False)
+    expected = (entry.st_dev, entry.st_ino, entry.st_size, entry.st_mtime_ns, entry.st_ctime_ns + candidate_offset)
+    offsets = iter(handle_offsets)
+
+    # 重放原生记录中的时戳差异。文件读取和最终目录项查询都作用于真实文件。
+    def fstat(fd):
+        info = os.fstat(fd)
+        return SimpleNamespace(st_mode=info.st_mode, st_dev=info.st_dev, st_ino=info.st_ino,
+                               st_size=info.st_size, st_mtime_ns=info.st_mtime_ns,
+                               st_ctime_ns=entry.st_ctime_ns + next(offsets))
+
+    file_api = SimpleNamespace(**dict(vars(os), name=platform, fstat=fstat))
+    monkeypatch.setattr(sessions, 'os', file_api)
+    if error_kind is None:
+        assert sessions._read_session_payload(path, maximum_bytes=limit, expected_identity=expected) == {'example': True}
+    else:
+        with pytest.raises(sessions.SessionReadError) as error:
+            sessions._read_session_payload(path, maximum_bytes=limit, expected_identity=expected)
+        assert error.value.kind == error_kind
+
+
 @pytest.mark.parametrize('mutation', ['grow', 'replace'])
 def test_reader_detects_file_change_during_read(tmp_path, monkeypatch, mutation):
     import os
@@ -158,8 +229,9 @@ def test_reader_detects_file_change_during_read(tmp_path, monkeypatch, mutation)
         path = sessions.save_session([{'role': 'user', 'content': 'before'}], session_id='changing', activate=False, model='test')
         original_fstat = os.fstat
         calls = 0
+        replacement_blocked = False
         def mutate_after_read(fd):
-            nonlocal calls
+            nonlocal calls, replacement_blocked
             calls += 1
             if calls == 2:
                 if mutation == 'grow':
@@ -168,12 +240,24 @@ def test_reader_detects_file_change_during_read(tmp_path, monkeypatch, mutation)
                 else:
                     replacement = path.with_suffix('.replacement')
                     replacement.write_bytes(path.read_bytes())
-                    replacement.replace(path)
+                    try:
+                        replacement.replace(path)
+                    except PermissionError:
+                        if os.name != 'nt':
+                            raise
+                        replacement_blocked = True
             return original_fstat(fd)
         monkeypatch.setattr(os, 'fstat', mutate_after_read)
-        with pytest.raises(sessions.SessionReadError) as error:
-            sessions.load_session('changing')
-        assert error.value.kind == 'changed'
+        try:
+            value = sessions.load_session('changing')
+        except sessions.SessionReadError as error:
+            assert not replacement_blocked
+            assert error.kind == 'changed'
+        else:
+            # Windows 可在读取句柄关闭前拒绝替换。此时应读到原文件，关闭后可以替换。
+            assert replacement_blocked
+            assert value['messages'][0]['content'] == 'before'
+            path.with_suffix('.replacement').replace(path)
 
 
 def test_strict_read_never_requests_more_than_budget_plus_one(tmp_path, monkeypatch):

@@ -1,7 +1,10 @@
 """Deterministic context boundaries for continuing unfinished Agent runs."""
 from __future__ import annotations
 
+from collections import defaultdict, deque
+from collections.abc import Iterator
 import copy
+from dataclasses import dataclass
 import json
 import math
 from pathlib import Path
@@ -9,15 +12,31 @@ import re
 import time
 
 from nz_coder.protocol.message_schema import (
+    ASSISTANT_END_STATE_KEY,
+    ASSISTANT_ERROR_KEY,
+    ASSISTANT_PARENT_KEY,
+    ASSISTANT_TIME_KEY,
+    AUTHORITATIVE_KEY,
     COMPACTION_KEY,
     CONTINUATION_KEY,
+    INTERNAL_KEY,
+    MESSAGE_ID_KEY,
+    PARTS_KEY,
+    SESSION_ID_KEY,
+    VISIBLE_KEY,
     is_synthetic_user_message,
+    project_public_message_part,
 )
 
 
 CONTINUATION_VERSION = 1
 RESUMABLE_STATUSES = frozenset({"max_turns", "interrupted", "blocked"})
 MAX_CONTINUATION_CHARS = 6_000
+# 老会话的纯文本消息在加载时会补上身份、父消息、时间和文本块。
+_LEGACY_TEXT_FIELDS = frozenset({
+    "role", "content", "_timestamp", MESSAGE_ID_KEY, SESSION_ID_KEY, ASSISTANT_PARENT_KEY,
+    ASSISTANT_TIME_KEY, PARTS_KEY,
+})
 _CONTINUATION_ONLY_RE = re.compile(
     r"(?:please\s+)?(?:keep\s+going|go\s+on|continue|继续|keep\s+working)",
     re.IGNORECASE,
@@ -180,14 +199,15 @@ def has_authoritative_task(messages: list, runtime_state) -> bool:
 
 def project_continuation_messages(messages: list[dict], *, authoritative_state: bool = False) -> list[dict]:
     """Replace a resumable run prefix in the model view, never durable state."""
-    details = continuation_projection_details(messages)
-    if details is None:
+    projection = _continuation_projection(messages)
+    if projection is None:
         return messages
+    details, dialogue = projection
     boundary = details["boundary"]
     tail_start = details["tail_start"]
 
     projected = list(messages[tail_start:])
-    originals = [copy.deepcopy(message) for message in messages[:tail_start] if _is_human_user(message)]
+    originals = copy.deepcopy(dialogue)
     first_user = copy.deepcopy(projected[0])
     content = first_user.get("content")
     summary = _safe_context_text(str(boundary.get("background" if authoritative_state else "summary") or ""))
@@ -211,84 +231,156 @@ def project_continuation_messages(messages: list[dict], *, authoritative_state: 
     return [*originals, *projected]
 
 
-def _recent_check_receipts(snapshot) -> list[str]:
-    """执行来自宿主，只有当前检查决定能说明哪一项验证已获采信。"""
-    def quoted(value):
-        return _safe_context_text(json.dumps(_bounded_text(value, 320), ensure_ascii=False))
+def _check_value(value: str) -> str:
+    return _safe_context_text(json.dumps(_bounded_text(value, 320), ensure_ascii=False))
 
-    facts = {fact.execution_id: fact for fact in snapshot.executions if fact.scope == snapshot.scope}
-    order = {key: index for index, key in enumerate(facts)}
+
+def _execution_detail(fact, *, historical: bool, matched: bool, show_id: bool, known_reason: str = "") -> str:
+    kind = "Historical execution" if historical else "Recorded execution" if matched else "Execution only"
+    generation = str(fact.after.generation)
+    if fact.before.generation != fact.after.generation:
+        generation = f"{fact.before.generation}->{fact.after.generation}"
+    line = (f"{kind} ({fact.outcome}, exit={fact.exit_code}); generation={generation}; "
+            f"acceptance generation={fact.after.acceptance_generation}")
+    if fact.targets:
+        line += "; targets=" + _check_value(", ".join(fact.targets))
+    if not fact.output_complete:
+        reason = "incomplete output"
+    elif not fact.reliable and fact.command.opaque:
+        reason = "individual checks unproven; use current verified results and separate missing checks if needed"
+    elif not fact.reliable:
+        reason = "execution cannot establish a successful check"
+    elif fact.test_count == 0:
+        reason = "no tests executed"
+    elif not matched:
+        reason = "no matching check decision"
+    else:
+        reason = ""
+    if reason and reason != known_reason:
+        line += "; " + reason
+    if fact.reason and fact.reason != known_reason and fact.outcome != "succeeded":
+        line += "; " + _check_value(fact.reason)
+    if show_id:
+        line += "; receipt=" + _check_value(fact.execution_id)
+    return line + "."
+
+
+@dataclass
+class _CheckContext:
+    current: tuple[str, ...]
+    history: Iterator[str]
+
+
+def _execution_is_historical(fact, snapshot) -> bool:
+    return (fact.scope != snapshot.scope or snapshot.workspace_mutating
+            or fact.before.acceptance_generation != snapshot.version.acceptance_generation
+            or fact.after.acceptance_generation != snapshot.version.acceptance_generation)
+
+
+def _remaining_receipts(facts, rendered_ids, matched_ids, cross_command_ids, snapshot, specs):
+    for fact in reversed(facts):
+        if fact.execution_id in rendered_ids:
+            continue
+        matched = fact.execution_id in matched_ids
+        # 同一检查的旧回执失去当前决定的引用后，仍可解释上次运行了什么。
+        prior = not matched and any(spec.capability in fact.capabilities
+                                    and (not spec.targets or set(spec.targets).issubset(fact.targets)) for spec in specs)
+        yield _execution_detail(fact, historical=prior or _execution_is_historical(fact, snapshot),
+                                matched=matched, show_id=fact.execution_id in cross_command_ids)
+
+
+def _check_receipt_groups(snapshot, declarations) -> list[_CheckContext]:
+    """按完整命令身份组织；决定只引用自己的回执，写法不同的实际命令仍可追溯。"""
+    specs_by_command = defaultdict(list)
+    executions_by_command = defaultdict(list)
     decisions = {item.check_id: item for item in snapshot.checks}
-    matched = set()
-    checks = []
+    facts = {fact.execution_id: fact for fact in snapshot.executions
+             if fact.capabilities and fact.scope.task == snapshot.scope.task
+             and fact.scope.agent_id == snapshot.scope.agent_id}
+    for fact in facts.values():
+        executions_by_command[fact.command].append(fact)
+    matched_ids, cross_command_ids = set(), set()
     for spec in snapshot.specs:
         decision = decisions[spec.id]
         fact = facts.get(decision.execution_id)
-        if fact is None and not spec.required:
-            continue
-        identity = f"{quoted(spec.command.original)} cwd={quoted(spec.command.cwd)}"
-        label = f"{spec.capability}, {'required' if spec.required else 'observed'}"
-        if fact is not None:
-            matched.add(fact.execution_id)
-        current = (fact is not None and not snapshot.integrity_errors and not snapshot.rebuild_required
-                   and snapshot.version.scope_complete and fact.scope_complete
-                   and fact.before.scope_complete and fact.after.scope_complete
-                   and fact.before.acceptance_generation == fact.after.acceptance_generation
-                   == snapshot.version.acceptance_generation)
-        if decision.status == "passed" and current:
-            targets = " targets=" + quoted(", ".join(spec.targets)) if spec.targets else ""
-            line = (f"Verified check ({label}, current acceptance generation "
-                    f"{snapshot.version.acceptance_generation}): {identity}{targets}.")
-        else:
-            status = "current validity unknown" if decision.status == "passed" else decision.status
-            line = f"Check decision ({label}, {status}): {identity}."
-            if decision.status == "pending" and decision.reason:
-                line += f" Reason: {quoted(decision.reason)}."
-            if fact is not None:
-                line += f" Recorded execution: {fact.outcome}, exit={fact.exit_code}."
-        checks.append((not spec.required, decision.status in {"passed", "covered"},
-                       -order.get(decision.execution_id, -1), line))
+        if spec.required or fact or spec.command in executions_by_command:
+            specs_by_command[spec.command].append(spec)
+        if fact:
+            matched_ids.add(fact.execution_id)
+            if fact.command != spec.command:
+                cross_command_ids.add(fact.execution_id)
 
-    # 优先展示必需及未结清的检查，再合并原因相同的普通执行。
-    items = [entry[-1] for entry in sorted(checks)]
-    observed_reasons = set()
-    for fact in reversed(snapshot.executions):
-        if fact.scope != snapshot.scope or not fact.capabilities or fact.execution_id in matched:
-            continue
-        if not fact.output_complete:
-            reason = "incomplete output"
-        elif not fact.reliable and fact.command.opaque:
-            reason = "individual checks unproven; use current verified results and separate missing checks if needed"
-        elif not fact.reliable:
-            reason = "execution cannot establish a successful check"
-        elif fact.test_count == 0:
-            reason = "no tests executed"
+    declared = {item["check_ids"][0]: item for item in declarations}
+    groups = []
+    for command in dict.fromkeys((*specs_by_command, *executions_by_command)):
+        specs = specs_by_command[command]
+        declaration = next((declared[spec.id] for spec in specs if spec.id in declared), None)
+        identity = f"{_check_value(command.original)}; cwd={_check_value(command.cwd)}"
+        if declaration:
+            status = declaration["status"]
+            if status == "passed" and not all(snapshot.current_success(facts.get(decisions[check_id].execution_id))
+                                              for check_id in declaration["check_ids"]):
+                status = "pending"
+            header = f"Declared verification: status={status}; command={identity}."
         else:
-            reason = "no matching check decision"
-        if reason in observed_reasons:
-            continue
-        observed_reasons.add(reason)
-        candidates = " candidate targets=" + quoted(", ".join(fact.targets)) if fact.targets else ""
-        items.append(f"Execution only ({fact.outcome}, exit={fact.exit_code}): {quoted(fact.command.original)} "
-                     f"cwd={quoted(fact.command.cwd)}; {reason}.{candidates}")
-    return items
+            heading = "Check definition" if specs else "Executed command"
+            header = f"{heading}: {identity}."
+
+        lines = [header]
+        rendered_ids = set()
+        for spec in specs:
+            decision = decisions[spec.id]
+            fact = facts.get(decision.execution_id)
+            label = f"{spec.capability}, {'required' if spec.required else 'observed'}"
+            if decision.status == "passed" and snapshot.current_success(fact):
+                line = f"Verified check ({label}, current acceptance generation {snapshot.version.acceptance_generation})"
+            else:
+                status = "current validity unknown" if decision.status == "passed" else decision.status
+                line = f"Check decision ({label}, {status})"
+                if decision.reason:
+                    line += "; reason=" + _check_value(decision.reason)
+            if spec.targets and (not fact or fact.targets != spec.targets or fact.command != command):
+                line += "; targets=" + _check_value(", ".join(spec.targets))
+            if fact and fact.command != command:
+                # 预算可能裁掉来源所在的整组；保留此行时仍须说明哪一方实际执行。
+                line += "; a different command supplied the evidence (its details may be omitted); receipt=" + _check_value(fact.execution_id)
+            line += "."
+            if fact and fact.command == command and fact.execution_id not in rendered_ids:
+                line += " " + _execution_detail(fact, historical=_execution_is_historical(fact, snapshot),
+                                                matched=True, show_id=fact.execution_id in cross_command_ids,
+                                                known_reason=decision.reason)
+                rendered_ids.add(fact.execution_id)
+            lines.append(line)
+
+        remaining = _remaining_receipts(executions_by_command[command], rendered_ids, matched_ids,
+                                        cross_command_ids, snapshot, specs)
+        if not specs:
+            # 展示一次裸执行时，命令和最新结果组成同一个可独立理解的条目。
+            lines[0] += " " + next(remaining)
+        priority = (declaration is None, not any(spec.required for spec in specs),
+                    not any(decisions[spec.id].status in {"failed", "blocked_environment"} for spec in specs))
+        groups.append((priority, _CheckContext(tuple(lines), remaining)))
+    return [group for _, group in sorted(groups, key=lambda item: item[0])]
 
 
 def build_current_facts(runtime_state, *, workspace, run_evidence=None, max_tokens: int = 2000) -> str:
     """按完整条目呈现当前状态；摘要文本不能反向成为验证真值。"""
     from nz_coder.runtime.agent.planning_runtime import render_execution_handoff
     from nz_coder.runtime.conversation.prompt_builder import estimate_text_tokens
+    from nz_coder.runtime.execution.runtime_state import verification_snapshot_with_paths
     from nz_coder.runtime.verification.verification_contract import effective_acceptance_generation
     from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
 
-    domain = _field(runtime_state, "verification_domain", None)
-    snapshot = domain.snapshot() if domain is not None and not isinstance(runtime_state, dict) else None
+    if isinstance(runtime_state, dict):
+        snapshot, changed = None, runtime_state.get("changed_files", ())
+    else:
+        snapshot, changed = verification_snapshot_with_paths(runtime_state)
     if snapshot is not None and Path(snapshot.scope.task.workspace) != Path(workspace).resolve():
         return "<current-task-facts>Verification unknown for this workspace.</current-task-facts>"
     header = "<current-task-facts>\nCurrent authoritative state (hypotheses remain unverified)."
     closing = "\n</current-task-facts>"
-    generation = int(_field(runtime_state, "mutation_generation", 0))
-    acceptance = effective_acceptance_generation(runtime_state)
+    generation = snapshot.version.generation if snapshot else int(_field(runtime_state, "mutation_generation", 0))
+    acceptance = snapshot.version.acceptance_generation if snapshot else effective_acceptance_generation(runtime_state)
     base = f"\nWorkspace mutation generation: {generation}; acceptance generation: {acceptance}."
     handoff = (render_execution_handoff(runtime_state, workspace=workspace)
                if _field(runtime_state, "execution_handoff", None) else "")
@@ -297,38 +389,43 @@ def build_current_facts(runtime_state, *, workspace, run_evidence=None, max_toke
     limit = min(2000, max_tokens)
     if estimate_text_tokens(essential + omission + closing) > limit:
         raise PublicRuntimeError(PublicError("context_cannot_shrink", "Minimum current state exceeds the context budget."))
-    items = []
-    static_current = bool(
-        _field(runtime_state, "changed_files_verified", False)
-        and _field(runtime_state, "py_compile_ok", False)
-        and _field(runtime_state, "verification_generation", -1) == generation
-    )
-    if static_current:
-        items.append(f"Scoped changed-file verification: status=passed; recorded generation={generation}; not task acceptance.")
-    elif _field(runtime_state, "verification_attempts", 0):
-        items.append("Scoped changed-file verification: current validity unknown; rerun after mutations.")
-    from nz_coder.runtime.verification.verification_contract import declared_acceptance
-    checks = snapshot.acceptance_checks if snapshot is not None else declared_acceptance(runtime_state)
-    for check in checks:
-        items.append("Declared verification: status=" + check["status"] + "; command=" + check["command"]
-                     + "; cwd=" + str(check.get("cwd") or "."))
-    receipts = _recent_check_receipts(snapshot) if snapshot is not None else []
+    items: list[str | _CheckContext] = []
+    if snapshot is not None:
+        covered, complete = snapshot.syntax_coverage(changed)
+        if covered:
+            targets = ", ".join(_check_value(path) for path in covered)
+            status = "passed" if complete else "partial"
+            items.append(f"Scoped changed-file verification: status={status}; syntax targets={targets}; "
+                         f"recorded generation={snapshot.version.generation}; not task acceptance.")
+        checks = snapshot.acceptance_checks
+        receipts = _check_receipt_groups(snapshot, checks)
+        pending = [(item.requirement.id, item.status, item.requirement.description)
+                   for item in snapshot.requirements if item.status != "satisfied"]
+    else:
+        from nz_coder.runtime.verification.verification_contract import declared_acceptance
+
+        checks = declared_acceptance(runtime_state)
+        # 无来源的旧检查点只能传递验收定义，无法证明当前工作区已经通过。
+        receipts = [f"Declared verification: status=pending; command={_check_value(check['command'])}; "
+                    f"cwd={_check_value(str(check.get('cwd') or '.'))}." for check in checks]
+        pending = []
+        for item in _dict_field(runtime_state, "requirement_ledger").get("items") or []:
+            if isinstance(item, dict) and item.get("status") != "satisfied":
+                requirement = item.get("requirement") or {}
+                pending.append((requirement.get("id") or "?", item.get("status") or "pending",
+                                requirement.get("description") or ""))
     if not checks and receipts:
         items.append("No user-declared acceptance check. The following results apply to their own checks only.")
     elif not checks:
         items.append("Current verification unknown; no declared verification result for this generation.")
     items.extend(receipts)
-    for item in _dict_field(runtime_state, "requirement_ledger").get("items") or []:
-        if not isinstance(item, dict) or item.get("status") == "satisfied":
-            continue
-        requirement = item.get("requirement") or {}
-        items.append("Unresolved requirement: " + str(requirement.get("id") or "?") + " ["
-                     + str(item.get("status") or "pending") + "] " + str(requirement.get("description") or ""))
-    items.extend("Changed file: " + str(path) for path in _field(runtime_state, "changed_files", []))
-    if _field(runtime_state, "last_verification_failure", ""):
+    items.extend(f"Unresolved requirement: {key} [{status}] {description}" for key, status, description in pending)
+    items.extend("Changed file: " + str(path) for path in changed)
+    if snapshot is None and _field(runtime_state, "last_verification_failure", ""):
         items.append("Last verification failure (historical unless generation matches): "
                      + str(_field(runtime_state, "last_verification_failure", "")))
-    observations = [*_field(run_evidence, "verification_evidence", []), *_field(run_evidence, "verification_results", [])]
+    observations = [] if snapshot is not None else [
+        *_field(run_evidence, "verification_evidence", []), *_field(run_evidence, "verification_results", [])]
     seen_observations = set()
     for evidence in observations[-12:]:
         if not isinstance(evidence, dict):
@@ -340,18 +437,46 @@ def build_current_facts(runtime_state, *, workspace, run_evidence=None, max_toke
         # 观测只作为来源；没有可核对代次时明确未知，不伪造当前通过。
         items.append("Verification observation: " + str(evidence.get("tool") or evidence.get("stage") or "unknown")
                      + "; current validity unknown; command=" + str(evidence.get("command") or ""))
-    rendered = essential
+    remaining = limit - estimate_text_tokens(essential + omission + closing)
+    blocks: list[list[str]] = []
+    history = deque()
     omitted = False
-    for item in items:
-        if estimate_text_tokens(rendered + "\n" + item + omission + closing) <= limit:
-            rendered += "\n" + item
-        else:
+
+    def fits(line: str) -> bool:
+        nonlocal remaining, omitted
+        # 估算器按每四个 ASCII 字符取整。预留一格覆盖各条独立计数的进位。
+        cost = estimate_text_tokens("\n" + line) + 1
+        if cost > remaining:
             omitted = True
-    return rendered + (omission if omitted else "") + closing
+            return False
+        remaining -= cost
+        return True
+
+    for item in items:
+        lines = (item,) if isinstance(item, str) else item.current
+        if not fits(lines[0]):
+            continue
+        block = [lines[0], *(line for line in lines[1:] if fits(line))]
+        blocks.append(block)
+        if isinstance(item, _CheckContext):
+            history.append((block, item.history))
+    # 所有当前决定优先。剩余预算在已入选命令之间轮流分给最近的历史回执。
+    while history:
+        block, previous = history.popleft()
+        line = next(previous, None)
+        if line is not None and fits(line):
+            block.append(line)
+            history.append((block, previous))
+    return essential + "".join("\n" + line for block in blocks for line in block) + (omission if omitted else "") + closing
 
 
 def continuation_projection_details(messages: list[dict]) -> dict | None:
     """Describe an active unfinished-run projection for trace accounting."""
+    projection = _continuation_projection(messages)
+    return projection[0] if projection is not None else None
+
+
+def _continuation_projection(messages: list[dict]) -> tuple[dict, list[dict]] | None:
     boundary_index, boundary = _latest_resumable_boundary(messages)
     if boundary_index < 0 or boundary is None:
         return None
@@ -383,15 +508,89 @@ def continuation_projection_details(messages: list[dict]) -> dict | None:
         return None
     boundary_id = str(boundary_message.get("_nz_message_id") or boundary_index)
     current_id = str(current_message.get("_nz_message_id") or tail_start)
+    dialogue = _retained_dialogue(messages, tail_start)
     return {
         "boundary": boundary,
         "tail_start": tail_start,
         "activation_index": activation_index,
         "status": str(boundary.get("status") or ""),
-        "dropped_messages": tail_start,
+        "dropped_messages": tail_start - len(dialogue),
         "summary_chars": len(str(boundary.get("summary") or "")),
         "signature": f"{boundary_id}:{current_id}",
-    }
+    }, dialogue
+
+
+def _retained_dialogue(messages: list[dict], tail_start: int) -> list[dict]:
+    dialogue = []
+    reply_start = None
+    for index in range(tail_start):
+        if not _is_human_user(messages[index]):
+            continue
+        if reply_start is not None:
+            answer = _completed_reply(messages, reply_start, index)
+            if answer is not None:
+                dialogue.append({"role": "assistant", "content": answer})
+        dialogue.append(messages[index])
+        reply_start = index + 1
+    # 最后一个问题属于未完成轮，只保留原话；它的执行状态由恢复边界提供。
+    return dialogue
+
+
+def _completed_reply(messages: list[dict], start: int, stop: int) -> str | None:
+    """只返回本轮最后一次公开结算的答复正文。"""
+    for index in range(stop - 1, start - 1, -1):
+        message = messages[index]
+        if not isinstance(message, dict) or message.get("role") != "assistant":
+            continue
+        if (message.get(INTERNAL_KEY) is True or message.get(VISIBLE_KEY) is False
+                or message.get(AUTHORITATIVE_KEY) is False):
+            continue
+        if message.get(ASSISTANT_ERROR_KEY) or message.get("_nz_error") or CONTINUATION_KEY in message:
+            return None
+        legacy_reply = ASSISTANT_END_STATE_KEY not in message
+        if not legacy_reply:
+            end = message[ASSISTANT_END_STATE_KEY]
+            if not isinstance(end, dict) or end.get("reason") != "completed":
+                return None
+        else:
+            # 旧会话没有终态标记，只认两个真人提问之间唯一的纯文本回复。
+            if stop - start != 1 or not _LEGACY_TEXT_FIELDS.issuperset(message):
+                continue
+            user_id = messages[start - 1].get(MESSAGE_ID_KEY)
+            has_matching_identity = bool(user_id) == bool(message.get(MESSAGE_ID_KEY))
+            if not has_matching_identity or message.get(ASSISTANT_PARENT_KEY, user_id) != user_id:
+                return None
+        return _public_reply_text(message, legacy_reply)
+    return None
+
+
+def _public_reply_text(message: dict, legacy_reply: bool) -> str | None:
+    content = message.get("content")
+    if not isinstance(content, str) or not content.strip():
+        return None
+    if message.get("tool_calls") or message.get("function_call"):
+        return None
+    parts = message.get(PARTS_KEY, [])
+    if not isinstance(parts, list):
+        return None
+    if not parts:
+        return content
+    texts = []
+    for part in parts:
+        if not isinstance(part, dict) or part.get("type") == "tool":
+            return None
+        if part.get("type") != "text":
+            if legacy_reply:
+                return None
+            continue
+        public = project_public_message_part(part)
+        if (public.get("ignored") is True or public.get("authoritative") is False
+                or public.get("status") not in (None, "completed")
+                or not isinstance(public.get("text"), str)):
+            # 持久化层可能把合并正文写进第一个文本块。混有隐藏片段时无法可靠拆开。
+            return None
+        texts.append(public["text"])
+    return content if content in texts or "".join(texts) == content else None
 
 
 def is_continuation_activation(messages: list[dict]) -> bool:

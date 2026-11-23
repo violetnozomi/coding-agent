@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from nz_coder.protocol.message_schema import (
     ASSISTANT_PARENT_KEY,
     ASSISTANT_TIME_KEY,
+    DEFERRED_MODEL_TEXT_KEY,
     INTERACTION_RUN_ID_KEY,
     MESSAGE_ID_KEY,
     attach_message_identity,
@@ -25,6 +26,7 @@ from nz_coder.protocol.public_error import (
     PublicError,
     PublicRuntimeError,
     TrustedPublicMessage,
+    public_error_from_wire,
     to_public_error,
 )
 from nz_coder.runtime.verification.recovery import is_context_overflow_error
@@ -765,6 +767,9 @@ class AgentRunner:
                     output_guarded or internal_agent_result
                 )
                 assistant_message = {"role": "assistant", "content": ""}
+                if run_context.uses_receipt_based_delivery or run_context.defer_model_report:
+                    message_part[DEFERRED_MODEL_TEXT_KEY] = True
+                    assistant_message[DEFERRED_MODEL_TEXT_KEY] = True
                 assistant_message[INTERACTION_RUN_ID_KEY] = (
                     run_context.interaction_run_id
                 )
@@ -1159,7 +1164,7 @@ class AgentRunner:
                             return await services.model.complete_turn(
                                 resolve_model_runtime_context(), api_messages,
                                 stream=stream,
-                                on_token=(None if output_guarded else on_token),
+                                on_token=(None if output_guarded or message_part.get(DEFERRED_MODEL_TEXT_KEY) else on_token),
                                 message_part=message_part,
                                 stream_tool_handler=execute_stream_tools,
                             )
@@ -1346,7 +1351,7 @@ class AgentRunner:
                             "isRetryable": False,
                         },
                     }
-                    set_assistant_error(
+                    saved_error = set_assistant_error(
                         assistant_message,
                         TrustedPublicMessage(
                             "provider_error",
@@ -1360,10 +1365,7 @@ class AgentRunner:
                         ),
                         publish=context.messages.publish_event,
                     )
-                    processor.fail_unsettled(TrustedPublicMessage(
-                        "provider_error",
-                        "Provider request failed after retries",
-                    ))
+                    processor.fail_unsettled(public_error_from_wire(saved_error["data"]["public_error"]))
                     processor.finish_step(
                         "error",
                         snapshot=(

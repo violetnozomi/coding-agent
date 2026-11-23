@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
+from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
 from nz_coder.providers import create_provider
 from nz_coder.providers.capabilities import (
     ModelCapabilities,
@@ -21,6 +22,10 @@ from nz_coder.providers.capabilities import (
 )
 from nz_coder.providers.models import active_model_selection
 from nz_coder.providers.registry import ModelPricing, RegistryModel, registry_runtime_model
+
+
+class ModelDispatchBlocked(PublicRuntimeError):
+    """连接尚不可借用；调用方应保留原来的资源所有权。"""
 
 
 @dataclass
@@ -93,10 +98,10 @@ class ResolvedModelRuntime:
         """Register one transport worker, rejecting concurrent orphan growth."""
         with self._inflight_lock:
             if self._retiring:
-                raise RuntimeError("Model runtime is closing or closed")
+                raise ModelDispatchBlocked(PublicError("model_runtime_closed", "模型连接正在关闭或已关闭，本次请求未发送。"))
             self._retire_settled_inflight()
             if self._inflight:
-                raise RuntimeError("A previous Provider worker is still running")
+                raise ModelDispatchBlocked(PublicError("model_request_unsettled", "上一次模型请求仍未退出，本次请求未发送。"))
             call_id = self._next_inflight_id
             self._next_inflight_id += 1
             self._inflight[call_id] = _Inflight(worker, cancel, cleanup_complete)

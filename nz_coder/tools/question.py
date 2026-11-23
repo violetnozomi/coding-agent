@@ -14,6 +14,16 @@ from nz_coder.tools import ToolOutput, current_tool_call_id, register
 QuestionAsker = Callable[[list[dict]], list[list[str]] | None]
 QuestionLifecycleReporter = Callable[[str, dict], None]
 
+
+class QuestionWaitEnded(RuntimeError):
+    """等待超时或随运行取消，保留 None 作为用户主动关闭的回复。"""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        self.title = {"timeout": "Question timed out", "cancelled": "Question cancelled"}[reason]
+        super().__init__(self.title + " without an answer.")
+
+
 _QUESTION_ASKER: ContextVar[QuestionAsker | None] = ContextVar(
     "nz_coder_question_asker",
     default=None,
@@ -148,6 +158,11 @@ def question(questions: list) -> str:
         try:
             with _scoped_question_request_id(request_id):
                 answers = asker(normalized)
+        except QuestionWaitEnded as exc:
+            _report_lifecycle("terminated", {**lifecycle, "reason": exc.reason})
+            return ToolOutput(
+                str(exc), title=exc.title, metadata={"answers": [], "reason": exc.reason},
+            )
         except Exception as exc:
             _report_lifecycle("error", {**lifecycle, "error": str(exc)})
             raise

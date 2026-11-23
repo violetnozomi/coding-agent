@@ -75,7 +75,7 @@ from nz_coder.runtime.model_gateway import (
 )
 from nz_coder.runtime.session.session_processor import SessionProcessor
 from nz_coder.runtime.session.store import EphemeralSessionStore
-from nz_coder.protocol.public_error import TrustedPublicMessage
+from nz_coder.protocol.public_error import PublicRuntimeError, TrustedPublicMessage, public_error_from_wire
 from nz_coder.runtime.session.session_revert import SessionReverter
 from nz_coder.runtime.process.workspace_snapshot import WorkspaceSnapshotStore
 from nz_coder.state.sessions import (
@@ -152,6 +152,8 @@ from nz_coder.protocol.message_schema import (
     COMPACTION_KEY,
     INTERACTION_RUN_ID_KEY,
     MESSAGE_ID_KEY,
+    MODEL_NOTE_KEY,
+    DEFERRED_MODEL_TEXT_KEY,
     PARTS_KEY,
     SESSION_SUMMARY_KEY,
     SUMMARY_KEY,
@@ -159,6 +161,7 @@ from nz_coder.protocol.message_schema import (
     assistant_error_from_exception,
     attach_message_identity,
     attach_text_part,
+    replace_assistant_final_text,
     provider_private_envelope,
     provider_private_state,
     bind_assistant_context,
@@ -1351,6 +1354,7 @@ class ProductRunEnvironment:
         messages: list[dict],
         status: str,
         content_text: str = "",
+        *, replace_partial: bool = False, model_note: str = "",
     ) -> bool:
         """Persist terminal text and mark this User turn's final Assistant."""
         last_real_user = max(
@@ -1363,6 +1367,7 @@ class ProductRunEnvironment:
             ),
             default=-1,
         )
+        interaction_id = getattr(getattr(self, "event_publisher", None), "interaction_run_id", None)
         target = next(
             (
                 message
@@ -1370,6 +1375,7 @@ class ProductRunEnvironment:
                 if index > last_real_user
                 and isinstance(message, dict)
                 and message.get("role") == "assistant"
+                and (not interaction_id or message.get(INTERACTION_RUN_ID_KEY) == interaction_id)
                 and not message.get("tool_calls")
                 and (
                     isinstance(message.get(ASSISTANT_ERROR_KEY), dict)
@@ -1382,7 +1388,11 @@ class ProductRunEnvironment:
             ),
             None,
         )
-        if target is None:
+        run = getattr(self, "active_run_context", None)
+        deferred_delivery = bool((target and target.get(DEFERRED_MODEL_TEXT_KEY))
+                                 or (run and (run.uses_receipt_based_delivery or run.defer_model_report)))
+        # 最新的答复已被撤回时，另发终态，不能把更早的可见进展覆盖成停止原因。
+        if target is None or target.get("_nz_visible") is False or target.get("_nz_internal") is True:
             now = time.time()
             target = {
                 "role": "assistant",
@@ -1403,47 +1413,30 @@ class ProductRunEnvironment:
                 binder(target)
             session_id = str(getattr(self, "session_id", "") or "runtime-terminal")
             attach_message_identity(target, session_id=session_id)
+            if interaction_id:
+                target[INTERACTION_RUN_ID_KEY] = interaction_id
             if last_real_user >= 0:
                 parent_id = messages[last_real_user].get(MESSAGE_ID_KEY)
                 if isinstance(parent_id, str) and parent_id:
                     target[ASSISTANT_PARENT_KEY] = parent_id
             messages.append(target)
             ensure_message_identities(messages, session_id)
-        if target is None:
-            return False
-        persisted_content = False
-        if content_text.strip() and (
-            status in {"max_turns", "blocked", "completed", "completed_unverified"}
+        if model_note:
+            # 原稿仅供本轮消息详情查看；默认正文及模型的下一轮输入只使用交付回执。
+            target[MODEL_NOTE_KEY] = model_note
+        persisted_content = bool(content_text.strip()) and (
+            replace_partial or status in {"max_turns", "blocked", "completed", "completed_unverified"}
             or not str(target.get("content") or "").strip()
-        ):
-            content_changed = target.get("content") != content_text
-            target["content"] = content_text
-            if content_changed:
-                session_id = str(getattr(self, "session_id", None) or "runtime-terminal")
-                ensure_message_identities(messages, session_id)
-                parts = target[PARTS_KEY]
-                now = time.time()
-                # 已完成的文本块不可原地覆盖；用新代发布终态，隔离迟到的旧文本事件。
-                terminal_part = {
-                    "id": f"part-{uuid.uuid4().hex}",
-                    "message_id": target[MESSAGE_ID_KEY],
-                    "type": "text",
-                    "text": content_text,
-                    "time": {"start": now, "end": now},
-                    "generation": max((part.get("generation", 0) for part in parts), default=0) + 1,
-                    "version": 1,
-                }
-                interaction_id = target.get(INTERACTION_RUN_ID_KEY)
-                if interaction_id:
-                    terminal_part["interaction_run_id"] = interaction_id
-                    terminal_part["run_id"] = interaction_id
-                target[PARTS_KEY] = [part for part in parts if part.get("type") != "text"]
-                attach_text_part(target, terminal_part)
-                self._emit_session_event("message.part.updated", {
-                    "message_id": target[MESSAGE_ID_KEY],
-                    "part": terminal_part,
-                })
-            persisted_content = True
+        )
+        clear_draft = replace_partial and not persisted_content and target.get(DEFERRED_MODEL_TEXT_KEY)
+        if clear_draft or (persisted_content and (target.get("content") != content_text or target.get(DEFERRED_MODEL_TEXT_KEY))):
+            session_id = str(getattr(self, "session_id", None) or "runtime-terminal")
+            ensure_message_identities(messages, session_id)
+            # 先保存最终部件；受管答复由对应交互在终态提交后一次发布。
+            replace_assistant_final_text(
+                target, content_text if persisted_content else "",
+                publish=self._emit_session_event if persisted_content and not deferred_delivery else None,
+            )
         error = target.get(ASSISTANT_ERROR_KEY)
         if isinstance(error, dict) and error.get("name") == "MessageAbortedError":
             reason = "canceled"
@@ -1741,7 +1734,7 @@ class ProductRunEnvironment:
 
     def _finish_message_part(self, message_part: dict, text: str) -> dict | None:
         with message_part["lock"]:
-            if message_part["retired"]:
+            if message_part["retired"] or message_part.get(DEFERRED_MODEL_TEXT_KEY):
                 return None
             if not text and not message_part["started"]:
                 return None
@@ -2602,9 +2595,10 @@ class ProductRunEnvironment:
                     or (writer is not None and writer.retired)):
                 return
             if isinstance(processor, SessionProcessor):
+                issue = public_error_from_wire(payload.get("public_error"))
                 processor.add_retry(
                     int(payload.get("attempt") or 1),
-                    RuntimeError(str(payload.get("error") or "provider retry")),
+                    PublicRuntimeError(issue) if issue else RuntimeError("Provider retry"),
                     next_at=time.time() + float(payload.get("wait_seconds") or 0.0),
                     provider_id=provider_id,
                 )
@@ -2676,12 +2670,11 @@ class ProductRunEnvironment:
                 **common,
             )
         details = outcome.provider_metadata.get("error", {})
-        error_type = type(
-            str(details.get("name") or "ProviderError"),
-            (RuntimeError,),
-            {},
-        )
-        error = error_type(outcome.error or outcome.status.value)
+        if outcome.public_error is not None:
+            error = PublicRuntimeError(outcome.public_error)
+        else:
+            error_type = type(str(details.get("name") or "ProviderError"), (RuntimeError,), {})
+            error = error_type(outcome.error or outcome.status.value)
         for target, source in (
             ("status_code", "status_code"),
             ("headers", "headers"),
@@ -3339,13 +3332,16 @@ class ProductRunEnvironment:
             terminal_signal=final_signal,
             terminal_reason=final_reason,
         )
+        if message_part.get(DEFERRED_MODEL_TEXT_KEY) and not (result.tool_calls or result.tools_executed_in_stream):
+            # 宿主冻结后才确定公开正文和部件编号；撤回的候选不发布完成事件。
+            return
         self._emit_session_event(
             "session.message.completed",
             {
                 "turn": turn,
                 "message_id": message_part["message_id"],
                 "part_id": message_part["part_id"],
-                "content": result.content or "",
+                "content": "" if message_part.get(DEFERRED_MODEL_TEXT_KEY) else result.content or "",
                 "tool_calls": len(result.tool_calls or []),
                 "tools_executed_in_stream": bool(result.tools_executed_in_stream),
             },
@@ -4316,56 +4312,55 @@ class ProductRunEnvironment:
             self._collect_lsp_write_diagnostics(dispatched, operation=operation), messages,
         )
 
-    def _record_tool_result(self, result_r) -> bool:
-        """更新纯观察与控制记录；验证事实已在执行边界交接。"""
-        if result_r.executed and not result_r.dispatch_failed:
+    def _record_tool_result(self, result: ToolExecutionResult) -> bool:
+        """记录本次工具活动，返回派发是否失败，供批次决定是否回滚写入。"""
+        if result.executed and not result.dispatch_failed:
             self.tool_calls_this_run += 1
-            if result_r.name == "save_memory":
+            if result.name == "save_memory":
                 self.used_save_memory = True
-            if result_r.name == "bash":
-                classification = classify_bash(str((result_r.tool_input or {}).get("command") or ""))
+            tool_input = result.tool_input or {}
+            if result.name == "bash":
+                classification = classify_bash(str(tool_input.get("command") or ""))
                 if classification.get("dangerous") or classification.get("mutating"):
                     self._sidecar_risky_shell_ops += 1
-            if result_r.is_write and not str((result_r.tool_input or {}).get("path") or "").strip():
+            if result.is_write and not str(tool_input.get("path") or "").strip():
                 self._sidecar_unattributed_write_ops += 1
-        self._observe_write_tool(result_r)
-        self._observe_run_evidence(result_r)
+        self._observe_write_tool(result)
+        self._observe_run_evidence(result)
         if self._admission_session is not None:
-            self._admission_session.record_tool_result(result_r)
-        return result_r.dispatch_failed
+            self._admission_session.record_tool_result(result)
+        return result.dispatch_failed
 
-    def _observe_write_tool(self, result_r) -> None:
-        """写工具成功后激活路径相关 skill；验证失效只消费 RuntimeState 事实。"""
-        if not (result_r.is_write and result_r.executed and not result_r.dispatch_failed):
+    def _observe_write_tool(self, result: ToolExecutionResult) -> None:
+        """写入后按文件路径激活项目技能。"""
+        if not (result.is_write and result.executed and not result.dispatch_failed):
             return
-        edited_path = result_r.tool_input.get("path", "")
+        edited_path = result.tool_input.get("path", "")
         if not edited_path:
             return
         activated = self._skill_loader.activate_for_paths([str(current_workdir() / edited_path)])
         if activated:
             self.tracer.log("skills_activated", names=activated)
 
-
-    def _observe_run_evidence(self, result_r) -> None:
-        """Best-effort record structured evidence without affecting loop control."""
+    def _observe_run_evidence(self, result: ToolExecutionResult) -> None:
+        """先记录交付评审所需的证据，再记录供恢复用的子任务结果和产物。"""
         try:
             self.run_evidence.task_assessment = current_task_assessment(self.runtime_state)
             self.run_evidence.record_tool_result(
-                result_r.name,
-                result_r.tool_input,
-                result_r.output,
-                success=(result_r.executed and not result_r.dispatch_failed and not result_r.command_failed),
-                dispatch_failed=result_r.dispatch_failed,
-                command_failed=result_r.command_failed,
-                metadata=result_r.metadata,
+                result.name,
+                result.tool_input,
+                result.output,
+                success=result.executed and not result.dispatch_failed and not result.command_failed,
+                dispatch_failed=result.dispatch_failed,
+                command_failed=result.command_failed,
+                metadata=result.metadata,
             )
-            metadata = result_r.metadata if isinstance(result_r.metadata, dict) else {}
             child_outcome = ChildAgentResult.from_metadata(
-                metadata,
-                final_text=str(result_r.output or ""),
-                name=str(result_r.name or "child"),
+                result.metadata if isinstance(result.metadata, dict) else {},
+                final_text=str(result.output or ""),
+                name=str(result.name or "child"),
             )
-            if result_r.name in {"task", "apply_agent_changes"} and child_outcome is not None:
+            if result.name in {"task", "apply_agent_changes"} and child_outcome is not None:
                 self.lineage.append("child_outcome", {
                     "task_id": child_outcome.task_id,
                     "name": child_outcome.name,
@@ -4378,19 +4373,17 @@ class ProductRunEnvironment:
                     "limit_reached": child_outcome.limit_reached,
                     "interrupted": child_outcome.interrupted,
                 })
-            self._record_lineage_artifact(result_r)
+            self._record_lineage_artifact(result)
         except Exception as exc:
-            self.tracer.log("run_evidence_failed", tool=result_r.name, error=str(exc))
+            # 工具已经执行。记录证据出错时保留诊断，调用方仍能收到原工具结果。
+            self.tracer.log("run_evidence_failed", tool=result.name, error=str(exc))
 
-    def _record_lineage_artifact(self, result_r) -> None:
-        """Record bounded file, command, and attachment provenance for recovery."""
-        if not result_r.executed or result_r.dispatch_failed:
+    def _record_lineage_artifact(self, result: ToolExecutionResult) -> None:
+        """把涉及的文件、运行过的命令和附件名称写进恢复记录。"""
+        if not result.executed or result.dispatch_failed:
             return
-        payload: dict = {
-            "tool": str(result_r.name)[:120],
-            "action": "write" if result_r.is_write else "observe",
-        }
-        tool_input = result_r.tool_input if isinstance(result_r.tool_input, dict) else {}
+        tool_input = result.tool_input if isinstance(result.tool_input, dict) else {}
+        artifacts = {}
         paths: list[str] = []
         path = tool_input.get("path")
         if isinstance(path, str) and path.strip():
@@ -4404,13 +4397,14 @@ class ProductRunEnvironment:
                 if isinstance(candidate, str) and candidate.strip() and candidate not in paths:
                     paths.append(candidate.strip())
         if paths:
-            payload["paths"] = paths[:50]
-        if result_r.name == "bash" and isinstance(tool_input.get("command"), str):
-            payload["command"] = str(tool_input["command"])[:1000]
-            payload["status"] = "failed" if result_r.command_failed else "passed"
-        attachments = result_r.attachments if isinstance(result_r.attachments, list) else []
+            artifacts["paths"] = paths[:50]
+        command = tool_input.get("command")
+        if result.name == "bash" and isinstance(command, str):
+            artifacts["command"] = str(command)[:1000]
+            artifacts["status"] = "failed" if result.command_failed else "passed"
+        attachments = result.attachments if isinstance(result.attachments, list) else []
         if attachments:
-            payload["attachments"] = [
+            artifacts["attachments"] = [
                 {
                     "mime": str(item.get("mime") or "")[:200],
                     "filename": str(item.get("filename") or "")[:300],
@@ -4418,71 +4412,76 @@ class ProductRunEnvironment:
                 for item in attachments[:20]
                 if isinstance(item, dict)
             ]
-        if not any(key in payload for key in ("paths", "command", "attachments")):
+        if not artifacts:
             return
-        artifact_key = (
-            f"{self.tracer.run_id}:{self.tool_calls_this_run}:"
-            f"{result_r.name}:{hashlib.sha256(json.dumps(tool_input, sort_keys=True, default=str).encode()).hexdigest()[:16]}"
-        )
-        self.lineage.append_unique("artifact_ledger", artifact_key, payload)
+        # 同一运行和调用序号下，相同工具的同一份参数只登记一次，键的排列顺序不影响去重。
+        input_bytes = json.dumps(tool_input, sort_keys=True, default=str).encode()
+        input_digest = hashlib.sha256(input_bytes).hexdigest()[:16]
+        artifact_key = f"{self.tracer.run_id}:{self.tool_calls_this_run}:{result.name}:{input_digest}"
+        self.lineage.append_unique("artifact_ledger", artifact_key, {
+            "tool": str(result.name)[:120],
+            "action": "write" if result.is_write else "observe",
+            **artifacts,
+        })
 
     def _trace_tool_result(
         self,
-        result_r,
+        result: ToolExecutionResult,
         output: str,
         tool_call_id: str = "",
         index: int | None = None,
     ) -> None:
-        """记录工具调用 trace。"""
-        # stdout 可以包含错误样式的普通文字；两个展示通道只使用执行层结论。
-        status = "error" if result_r.dispatch_failed else "nonzero" if result_r.command_failed else "ok"
+        """用同一次执行的结果写入轨迹，并通知订阅工具进度的客户端。"""
+        # 命令可以成功打印含有 Error 的文本。这里的状态只取自执行器。
+        dispatch_failed = bool(result.dispatch_failed)
+        command_failed = bool(result.command_failed)
+        is_write = bool(result.is_write)
+        if dispatch_failed:
+            status = "error"
+        elif command_failed:
+            status = "nonzero"
+        else:
+            status = "ok"
+        call = {
+            "tool_call_id": tool_call_id or None,
+            "index": index,
+            "name": result.name,
+            "status": status,
+            "executed": bool(result.executed),
+        }
+        output_fields = {
+            "output_len": len(output),
+            "output": output,
+            "public_error": result.public_error,
+        }
+        duration_ms = round(float(getattr(result, "duration_ms", 0.0) or 0.0), 3)
+        reread_recorded_path = None
+        if result.name in {"read_file", "read_symbol"}:
+            reread_recorded_path = result.tool_input.get("path") in getattr(self, "_compaction_read_baseline", ())
         self.tracer.log(
             "tool_call",
             preceding_compaction_operation_id=getattr(self, "_last_compaction_operation_id", None),
-            read_cache_hit=(result_r.metadata or {}).get("read_cache_hit"),
-            reread_recorded_path=(
-                result_r.tool_input.get("path") in getattr(self, "_compaction_read_baseline", ())
-                if result_r.name in {"read_file", "read_symbol"} else None
-            ),
-            tool_call_id=tool_call_id or None,
-            index=index,
-            name=result_r.name,
-            status=status,
-            executed=bool(result_r.executed),
-            dispatch_failed=bool(result_r.dispatch_failed),
-            command_failed=bool(result_r.command_failed),
-            is_write=bool(result_r.is_write),
-            input=result_r.tool_input,
-            duration_ms=round(float(getattr(result_r, "duration_ms", 0.0) or 0.0), 3),
-            queue_wait_ms=round(float(getattr(result_r, "queue_wait_ms", 0.0) or 0.0), 3),
-            output_len=len(output),
-            output=output,
-            public_error=result_r.public_error,
+            read_cache_hit=(result.metadata or {}).get("read_cache_hit"),
+            reread_recorded_path=reread_recorded_path,
+            **call,
+            dispatch_failed=dispatch_failed,
+            command_failed=command_failed,
+            is_write=is_write,
+            input=result.tool_input,
+            duration_ms=duration_ms,
+            queue_wait_ms=round(float(getattr(result, "queue_wait_ms", 0.0) or 0.0), 3),
+            **output_fields,
         )
-        self._emit_session_event(
-            "session.tool.completed",
-            {
-                "tool_call_id": tool_call_id or None,
-                "index": index,
-                "name": result_r.name,
-                "status": status,
-                "executed": bool(result_r.executed),
-                "is_write": bool(result_r.is_write),
-                "command_failed": bool(result_r.command_failed),
-                "category": (
-                    str(getattr(result_r, "category", "") or "")
-                    or tool_category(result_r.name)
-                ),
-                "summary": format_tool_summary(result_r.name, result_r.tool_input),
-                "duration_ms": round(
-                    float(getattr(result_r, "duration_ms", 0.0) or 0.0),
-                    3,
-                ),
-                "output_len": len(output),
-                "output": output,
-                "public_error": result_r.public_error,
-            },
-        )
+        # 动态工具可能已重新注册，完成事件优先沿用执行时确认的类别。
+        self._emit_session_event("session.tool.completed", {
+            **call,
+            "is_write": is_write,
+            "command_failed": command_failed,
+            "category": str(getattr(result, "category", "") or "") or tool_category(result.name),
+            "summary": format_tool_summary(result.name, result.tool_input),
+            "duration_ms": duration_ms,
+            **output_fields,
+        })
 
     def _append_tool_recovery_diagnostic(self, messages: list, name: str, output: str) -> None:
         """Legacy wrapper retained for compatibility; runtime hooks emit diagnostics now."""

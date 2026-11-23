@@ -976,11 +976,13 @@ def test_current_round_requirements_extend_a_satisfied_task_contract(
     _review_requirement(state, accepted=True, fingerprint="initial review")
     assert not state.requirement_ledger_snapshot().unresolved()
     original_objective = state.task_contract["objective"]
-
-    state.apply_current_round_instruction(
+    old_check, = state.verification_domain.snapshot().to_dict()["acceptance_checks"]
+    followup = (
         "Continue the fix, update docs/parser.md, and run "
         "python -m pytest -q tests/test_new_parser.py."
     )
+    state.apply_current_round_instruction(followup, workspace=tmp_path)
+    state._scenario.runtime.synchronize_task()
 
     merged = state.requirement_ledger_snapshot()
     unresolved = merged.unresolved()
@@ -988,22 +990,21 @@ def test_current_round_requirements_extend_a_satisfied_task_contract(
         merged,
         mutation_generation=state.mutation_generation,
     )
-    assert state.task_contract["objective"] == original_objective
+    assert state.task_contract["objective"].startswith(original_objective)
+    assert state.task_contract["objective"].endswith(followup)
     assert all(
         merged.status(requirement_id) == "satisfied"
         for requirement_id in preserved_ids
     )
-    assert state.task_contract["acceptance_commands"] == [
-        "python -m pytest -q tests/test_new_parser.py",
-    ]
+    new_command = "python -m pytest -q tests/test_new_parser.py"
+    assert state.task_contract["acceptance_commands"] == [old_check["command"], new_command]
+    original, added = state.verification_domain.snapshot().to_dict()["acceptance_checks"]
+    assert original == old_check and original["status"] == "passed"
+    assert added["command"] == new_command and added["status"] == "pending"
+    assert added["check_ids"] != original["check_ids"]
     assert any(
         progress.requirement.kind == "docs"
         and progress.requirement.expected_artifacts == ("docs/parser.md",)
-        for progress in unresolved
-    )
-    assert any(
-        progress.requirement.kind == "verification"
-        and "tests/test_new_parser.py" in progress.requirement.description
         for progress in unresolved
     )
     assert all(
@@ -1096,6 +1097,7 @@ def test_no_command_read_only_followup_does_not_create_artifact_requirement(
     tmp_path,
 ):
     """Mentioning a path for inspection is not a deterministic write promise."""
+    from copy import deepcopy
     from nz_coder.runtime.execution.runtime_state import RuntimeState
     from nz_coder.runtime.agent.task_contract import derive_task_contract
 
@@ -1113,14 +1115,15 @@ def test_no_command_read_only_followup_does_not_create_artifact_requirement(
         acceptance_commands=(state.verification_contract["command"],),
         workspace=tmp_path,
     ))
-    before = state.task_contract
+    before = deepcopy(state.task_contract)
 
-    state.apply_current_round_instruction(
-        "Continue by reading docs/parser.md and explain what it means.",
-        workspace=tmp_path,
-    )
+    followup = "Continue by reading docs/parser.md and explain what it means."
+    state.apply_current_round_instruction(followup, workspace=tmp_path)
 
-    assert state.task_contract == before
+    objective = state.task_contract["objective"]
+    assert objective.startswith(before["objective"]) and objective.endswith(followup)
+    assert state.task_contract == {**before, "objective": objective}
+    assert all("docs/parser.md" not in item["expected_artifacts"] for item in state.task_contract["requirements"])
 
 
 def test_no_command_followup_keeps_positive_path_before_test_freeze(tmp_path):
@@ -1566,7 +1569,8 @@ def test_model_bash_settles_current_verification_contract_success():
     assert contract.attempts == 1
     assert contract.passed is True
     assert state.verification_generation == 1
-    assert state.changed_files_verified is True
+    assert not state.changed_files_verified
+    assert not state.py_compile_ok
 
 
 def test_model_bash_records_failed_contract_without_settling_generation():
@@ -2398,4 +2402,4 @@ def test_recent_scoped_verification_can_render_progress_without_task_category(tm
     _observe(state, "verify_changed_files", {}, "OK: passed")
     state.verification_attempts = 1
     assert state.py_compile_ok
-    assert "verify_changed_files passed" in state.build_prompt_block()
+    assert "Python compilation passed for the changed files" in state.build_prompt_block()

@@ -88,12 +88,20 @@ def test_resolver_binds_host_observation_and_preserves_partial_read(tmp_path):
     assert (result["offset"], result["limit"], result["complete"]) == (2, 1, False)
 
 
-@pytest.mark.parametrize("duplicate", ["owner", "result", "call", "part"])
-def test_resolver_rejects_ambiguous_tool_identity(tmp_path, duplicate):
+@pytest.mark.parametrize(("duplicate", "reason"), [
+    ("owner", "ambiguous_or_missing_owner"),
+    ("message_id", "ambiguous_or_invalid_owner"),
+    ("call", "ambiguous_or_invalid_owner"),
+    ("result", "ambiguous_or_missing_result"),
+    ("part", "ambiguous_or_missing_result"),
+])
+def test_resolver_rejects_ambiguous_tool_identity(tmp_path, duplicate, reason):
     api = _api()
     messages = _messages(tmp_path)
     if duplicate == "owner":
         messages.append(deepcopy(messages[0]))
+    elif duplicate == "message_id":
+        messages.append({"role": "user", "_nz_session_id": "session-one", "_nz_message_id": "msg-owner"})
     elif duplicate == "result":
         messages.append(deepcopy(messages[1]))
     elif duplicate == "call":
@@ -102,6 +110,7 @@ def test_resolver_rejects_ambiguous_tool_identity(tmp_path, duplicate):
         messages[0]["_nz_parts"].append(deepcopy(messages[0]["_nz_parts"][0]))
     result = api.resolve_source_refs([_ref(content_hash="0" * 64)], messages)[0]
     assert result["binding"] == "unbound"
+    assert result["binding_reason"] == reason
     assert "content_hash" not in result
 
 

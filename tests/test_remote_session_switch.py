@@ -116,7 +116,7 @@ def test_switch_session_follows_pending_interaction_before_next_input(
             assert "session.run.settled" in [event["type"] for event in events]
             assert session.info()["status"] == "completed_unverified"
             assert reads[-1]["run_state"] == "completed_unverified"
-            assert "Run completed unverified" in output.getvalue()
+            assert "Run finished (see checks and delivery review)" in output.getvalue()
             if interaction == "question":
                 assert session.agent.answers == [["Repository", "Current file"]]
                 assert "Repository" in client.messages(second)[-1]["content"]

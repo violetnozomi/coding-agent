@@ -14,7 +14,10 @@ from nz_coder.protocol.public_error import PublicError, to_public_error
 
 _CRITICAL_EVENTS = frozenset({
     "permission.asked",
+    "permission.replied",
     "question.asked",
+    "question.replied",
+    "question.rejected",
     "session.run.completed",
     "session.run.failed",
     "session.run.cancelled",

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 from dataclasses import replace
 from types import SimpleNamespace
@@ -14,14 +15,23 @@ from nz_coder.runtime.verification.hooks import AgentHooks, StopHookDecision
 from nz_coder.runtime.verification.sidecar_verifier import ResolvedVerifierProvider, create_sidecar_verifier_hook
 
 
-def test_unavailable_review_keeps_labelled_delivery_instructions(monkeypatch, tmp_path):
+def test_unavailable_review_keeps_delivery_instructions_in_message_details(monkeypatch, tmp_path):
+    from rich.console import Console
+    from nz_coder.interface.commands.handlers.core import handle_message_detail
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
     candidate = "Run python app.py --help to inspect the available commands."
     result, _hook, provider, _snapshot = run_probe(monkeypatch, tmp_path,
         reports=lambda *_: (accepted("unknown"), "tool_calls"), candidate=candidate)
     assert result.status.value == "completed_unverified"
-    assert candidate in result.final_text
-    assert "未经独立确认" in result.final_text
-    assert provider.mains == 1
+    assert "本轮没有已采信的测试结果" in result.final_text and "/message" in result.final_text
+    assert candidate not in result.final_text and provider.mains == provider.reviews == 1
+    printed = io.StringIO()
+    context = SimpleNamespace(args="1", session_id=result.session_id, history=list(result.messages),
+                              console=Console(file=printed, width=120, color_system=None))
+    with scoped_workdir(tmp_path):
+        asyncio.run(handle_message_detail(context))
+    assert "模型说明" in printed.getvalue() and candidate in printed.getvalue()
 
 
 def test_user_stop_hook_runs_even_with_no_reanimation_budget():
@@ -74,15 +84,17 @@ def test_denied_structured_candidate_is_not_republished(monkeypatch, tmp_path):
     result, _environment = structured_run(monkeypatch, tmp_path, verdict="revise")
     assert result.status.value == "blocked"
     assert "structured" not in result.metadata
+    assert "structured_output_source" not in result.metadata["verification"]
     assert "999" not in result.final_text
     assert "reported test count contradicts" in result.final_text
-    assert "999" in result.metadata["authored_content"]
+    assert not result.metadata["authored_content"]
 
 
 def test_unavailable_structured_review_preserves_schema_value_with_outer_status(monkeypatch, tmp_path):
     result, _environment = structured_run(monkeypatch, tmp_path, verdict="unavailable")
     assert result.status.value == "completed_unverified"
     assert result.metadata["structured"] == {"tests_passed": 999}
+    assert result.metadata["verification"]["structured_output_source"] == "model"
     assert result.metadata["verification"]["delivery_review"] is None
 
 
@@ -90,8 +102,12 @@ def test_accepted_structured_value_and_candidate_are_bound(monkeypatch, tmp_path
     from nz_coder.runtime.verification.domain.models import candidate_fingerprint
     result, _environment = structured_run(monkeypatch, tmp_path, verdict="accept")
     assert result.status.value == "completed"
-    assert result.metadata["structured"] == {"tests_passed": 999}
-    assert result.metadata["verification"]["candidate_fingerprint"] == candidate_fingerprint(
+    assert json.loads(result.final_text) == result.metadata["structured"] == {"tests_passed": 999}
+    verification = result.metadata["verification"]
+    assert "denied_commands" not in verification
+    assert verification["structured_output_source"] == "model"
+    assert verification["tests_passed"] is None and verification["last_verification"] is None
+    assert verification["candidate_fingerprint"] == candidate_fingerprint(
         '{"tests_passed":999}', {"tests_passed": 999})
 
 

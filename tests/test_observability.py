@@ -17,8 +17,14 @@ class _AllowPermissions:
 
 class _SleepExecutor:
     def execute_one(self, tool_call, index):
-        time.sleep(0.012 if tool_call["function"]["name"] == "read" else 0.003)
-        return index
+        from nz_coder.tool_platform.execution import ToolExecutionResult
+
+        name = tool_call["function"]["name"]
+        time.sleep(0.012 if name == "read" else 0.003)
+        return ToolExecutionResult(
+            name=name, tool_input={}, output=str(index),
+            executed=True, dispatch_failed=False, command_failed=False, is_write=False,
+        )
 
 
 def _mixed_calls():
@@ -115,10 +121,11 @@ def test_recovery_reports_streak_reset_reason_without_changing_observe_result():
     assert recovery.consume_tool_streak_event() is None
 
 
-def test_agent_trace_and_summary_expose_a013_observability(tmp_path):
+def test_agent_trace_and_summary_expose_a013_observability(tmp_path, request):
     from nz_coder.loop import AgentLoop
     from nz_coder.tools import register
     from nz_coder.state.trace import TraceRecorder, summarize_trace
+    from tests.test_loop_fake import _prepare_manual_run
 
     def read_probe():
         time.sleep(0.01)
@@ -151,6 +158,9 @@ def test_agent_trace_and_summary_expose_a013_observability(tmp_path):
             client=object(),
             tracer=tracer,
         )
+        request.addfinalizer(agent.close)
+        # 这里直接执行工具批次，手动完成正常运行入口负责的验证初始化。
+        _prepare_manual_run(agent)
         calls = [
             {"id": "r1", "function": {"name": "_observability_read_probe", "arguments": "{}"}},
             {"id": "r2", "function": {"name": "_observability_read_probe", "arguments": "{}"}},
@@ -234,6 +244,46 @@ def test_trace_summary_zero_recent_limit_emits_no_event_rows(tmp_path):
     summary = summarize_trace(tracer.path, max_events=0)
 
     assert summary.endswith("=== Recent events ===")
+
+
+def test_trace_summary_pairs_legacy_requests_in_file_order_while_running(tmp_path):
+    from nz_coder.state.trace import summarize_trace
+
+    path = tmp_path / "legacy.jsonl"
+    rows = [
+        {"event": "run_start", "ts": 10, "session_id": "legacy"},
+        {"event": "llm_response", "ts": 10},
+        {"event": "llm_request", "ts": 12, "token_estimate": 50},
+        {"event": "llm_request", "ts": 18, "token_estimate": 80},
+        {"event": "llm_response", "ts": 15},
+        {"event": "llm_response", "ts": 17},
+        {"event": "subagent_spawn", "ts": 20, "child_session_id": "child"},
+        {"event": "llm_request", "ts": 23},
+        {"event": "subagent_complete", "ts": 22, "child_session_id": "child"},
+    ]
+    complete_lines = "\n".join(json.dumps(row) for row in rows)
+    path.write_text(complete_lines + '\n{"event":', encoding="utf-8")
+
+    assert summarize_trace(path, max_events=2) == "\n".join([
+        f"Trace: {path}",
+        "",
+        "=== Summary ===",
+        "  Session          : legacy",
+        "  Agent            : -",
+        "  Agent type       : -",
+        "  Trace id         : -",
+        "  Total tool calls : 0  (ok=0, fail/error=0)",
+        "  Model calls      : 2",
+        "  Model wait       : total=3000.0ms avg=1500.0ms max=3000.0ms",
+        "  Input estimate   : first=50 max=80 tokens",
+        "  Child agent wait : total=2000.0ms",
+        "  Other/child wait : 9000.0ms",
+        "  Elapsed          : 12.0s (running)",
+        "",
+        "=== Recent events ===",
+        "- llm_request",
+        "- subagent_complete",
+    ])
 
 
 def test_trace_summary_skips_structurally_corrupt_numeric_rows(tmp_path):

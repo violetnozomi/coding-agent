@@ -220,3 +220,59 @@ def test_partial_text_failure_retries_stream_without_buffered_fallback() -> None
     assert outcome.content == "recovered"
     assert outcome.usage.total_tokens == 15
     assert [request.get("stream") for request in provider.requests] == [True, True]
+
+
+def test_stream_ending_without_finish_keeps_host_reason_and_attempt_count():
+    gateway, provider = _gateway(
+        [iter([chunk(content="unfinished")]) for _ in range(4)],
+        max_retries=3, wait=lambda _seconds: None,
+    )
+    outcome = gateway.complete_stream_sync(_call())
+
+    assert outcome.status is ModelCallStatus.ABORTED
+    assert outcome.public_error.code == "model_stream_interrupted"
+    assert outcome.public_error.metadata["attempts"] == outcome.attempts == len(provider.requests) == 4
+    assert "4 次" in outcome.public_error.message
+
+
+def test_connection_failure_during_buffered_fallback_counts_all_attempts():
+    import httpx
+
+    gateway, provider = _gateway(
+        [httpx.RemoteProtocolError("private early disconnect"), httpx.ReadError("private fallback failure")],
+        max_retries=0, wait=lambda _seconds: None,
+    )
+    outcome = gateway.complete_stream_sync(_call())
+    assert outcome.status is ModelCallStatus.ABORTED
+    assert outcome.public_error.code == "model_connection_failed"
+    assert outcome.public_error.metadata == {"attempts": len(provider.requests)}
+    assert "2 次" in outcome.public_error.message and "private" not in outcome.public_error.message
+
+
+def test_transport_timeout_during_stream_is_distinct_from_a_disconnect():
+    import httpx
+
+    def delayed():
+        yield chunk(content="partial")
+        raise httpx.ReadTimeout("private timeout diagnostic")
+
+    gateway, _ = _gateway([delayed()], max_retries=0)
+    outcome = gateway.complete_stream_sync(_call())
+    assert outcome.public_error.code == "model_timeout"
+    assert "超时" in outcome.public_error.message and outcome.public_error.metadata == {"attempts": 1}
+
+
+def test_unread_http_error_reports_status_without_consuming_the_stream():
+    import httpx
+
+    request = httpx.Request("GET", "https://unused.invalid")
+    response = httpx.Response(401, stream=httpx.ByteStream(b"private-body"), request=request)
+    failure = httpx.HTTPStatusError("private exception", request=request, response=response)
+    gateway, _ = _gateway([failure], max_retries=0)
+    try:
+        outcome = gateway.complete_stream_sync(_call())
+        assert outcome.public_error.code == "provider_error"
+        assert outcome.public_error.metadata["status_code"] == 401
+        assert not response.is_stream_consumed and "private" not in str(outcome.public_error)
+    finally:
+        response.close()

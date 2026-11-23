@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
+import stat
 from typing import Iterable
 
 from nz_coder.protocol.message_schema import bind_user_context
-from nz_coder.state.input_expansion import tag_file_attachments
+from nz_coder.state.context import _is_compaction_summary
+from nz_coder.state.input_expansion import USER_TEXT_KEY, tag_file_attachments
 from nz_coder.foundation.user_paths import resolve_private_attachment
 
 
@@ -19,6 +22,35 @@ class SubmissionFile:
     host_path: str = ""
 
 
+def resolve_submission_file(raw: str, workspace: Path) -> SubmissionFile:
+    """Validate one attachment against the resolved workspace root."""
+    if raw.startswith("user-state://attachments/"):
+        try:
+            actual = resolve_private_attachment(workspace, raw)
+            metadata = actual.lstat()
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ValueError
+            return SubmissionFile(raw, metadata.st_size, str(actual))
+        except (OSError, ValueError) as exc:
+            raise ValueError("Private attachment is missing or unsafe") from exc
+
+    target = workspace / Path(raw.strip())
+    try:
+        if target.is_symlink():
+            problem = "Attachment symlinks are not allowed"
+        else:
+            # realpath 保留循环软链的系统错误，隐式探测与显式附件共用同一个错误边界。
+            actual = Path(os.path.realpath(target, strict=True))
+            relative = actual.relative_to(workspace)
+            metadata = actual.lstat()
+            if stat.S_ISREG(metadata.st_mode):
+                return SubmissionFile(relative.as_posix(), metadata.st_size)
+            problem = "Attachment must be a regular file"
+    except (OSError, ValueError) as exc:
+        raise ValueError("Attachment must be a file inside the workspace") from exc
+    raise ValueError(problem)
+
+
 def resolve_submission_files(
     paths: Iterable[str], workspace: str | Path,
 ) -> list[SubmissionFile]:
@@ -26,27 +58,10 @@ def resolve_submission_files(
     root = Path(workspace).resolve(strict=True)
     resolved: list[SubmissionFile] = []
     for raw in paths:
-        if str(raw).startswith("user-state://attachments/"):
-            try:
-                actual = resolve_private_attachment(root, str(raw))
-                if actual.is_symlink() or not actual.is_file():
-                    raise ValueError
-            except (OSError, ValueError) as exc:
-                raise ValueError(f"Private attachment is missing or unsafe: {raw}") from exc
-            resolved.append(SubmissionFile(str(raw), actual.stat().st_size, str(actual)))
-            continue
-        candidate = Path(str(raw).strip())
-        target = candidate if candidate.is_absolute() else root / candidate
-        if target.is_symlink():
-            raise ValueError(f"Attachment must not be a symlink: {raw}")
         try:
-            actual = target.resolve(strict=True)
-            relative = actual.relative_to(root)
-        except (OSError, ValueError) as exc:
-            raise ValueError(f"Attachment is outside the workspace or missing: {raw}") from exc
-        if not actual.is_file():
-            raise ValueError(f"Attachment is not a file: {raw}")
-        resolved.append(SubmissionFile(relative.as_posix(), actual.stat().st_size))
+            resolved.append(resolve_submission_file(str(raw), root))
+        except ValueError as exc:
+            raise ValueError(f"{exc}: {raw}") from exc
     return resolved
 
 
@@ -64,6 +79,8 @@ def build_user_submission(
 ) -> dict:
     """Create the canonical user message and attach shared FilePart metadata."""
     message = {"role": "user", "content": str(text)}
+    if _is_compaction_summary(message):
+        message[USER_TEXT_KEY] = message["content"]
     bind_user_context(
         message,
         agent=agent,
@@ -81,4 +98,4 @@ def build_user_submission(
     return message
 
 
-__all__ = ["SubmissionFile", "build_user_submission", "resolve_submission_files"]
+__all__ = ["SubmissionFile", "build_user_submission", "resolve_submission_file", "resolve_submission_files"]

@@ -1,6 +1,7 @@
 """显式迁移旧文件；SQLite 就绪后，旧文件只作为历史原件保留。"""
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -96,9 +97,13 @@ def _verify_sources(root: Path, snapshots: list[dict]) -> None:
     for item in snapshots:
         path = root / item["path"]
         try:
-            if (path.is_symlink() or _stat_identity(path) != item["identity"]
-                    or _digest(path.read_bytes()) != item["sha256"]
-                    or _stat_identity(path) != item["identity"]):
+            # 读取前后都核对文件属性，才能发现复核读取期间的替换或改写。
+            if (
+                path.is_symlink()
+                or _stat_identity(path) != item["identity"]
+                or _digest(path.read_bytes()) != item["sha256"]
+                or _stat_identity(path) != item["identity"]
+            ):
                 raise PublicInputError("扫描期间源文件发生变化")
         except (OSError, ValueError) as exc:
             raise PublicInputError(f"{item['path']}: 扫描期间源文件发生变化，无法完成复核。") from exc
@@ -136,59 +141,86 @@ def _parse_record(data: bytes, relative: str, scope_id: str) -> dict:
             "legacy_metadata": metadata}
 
 
-def _parse_object(data: bytes) -> dict:
-    value = json.loads(data.decode("utf-8"))
+def _parse_json_object(text: str) -> dict:
+    value = json.loads(text)
     if not isinstance(value, dict):
         raise PublicInputError("旧 JSON 必须是对象")
     _json_text(value)
     return value
 
 
-def _prepare(snapshots: list[dict], scope_id: str) -> tuple[list, list, list, dict]:
-    records, proposals, events, mappings = [], [], [], []
-    for item in snapshots:
-        relative, kind, data = item["path"], item["kind"], item["data"]
+def _parse_proposal(data: bytes, relative: str, scope_id: str) -> dict:
+    legacy = _parse_json_object(data.decode("utf-8"))
+    fields = ("name", "description", "type", "content", "source_refs", "applicability")
+    command = {field: legacy[field] for field in fields if field in legacy}
+    # 旧提案缺少可复核的目标版本，按新建提案导入，保留原始决定供追溯。
+    command["action"] = "create"
+    return {
+        "id": _legacy_id(scope_id, relative, "proposal"),
+        "revision": 1,
+        "action": "create",
+        "memory_id": None,
+        "expected_revision": None,
+        "command": command,
+        "status": legacy.get("status", "pending_review"),
+        "created_at": legacy.get("created_at"),
+        "legacy_metadata": legacy,
+    }
+
+
+def _ledger_events(data: bytes, relative: str, scope_id: str) -> Iterator[dict]:
+    # 原文件行号参与事件标识，空行也要计数。
+    for line_number, line in enumerate(data.decode("utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            legacy = _parse_json_object(line)
+        except (ValueError, TypeError) as exc:
+            raise PublicInputError(f"第 {line_number} 行: 旧流水 JSON 格式无效。") from exc
+        yield {
+            "id": _legacy_id(scope_id, f"{relative}:{line_number}", "event"),
+            "action": legacy.get("action", "legacy"),
+            "memory_id": None,
+            "revision": None,
+            "created_at": legacy.get("timestamp"),
+            "legacy_metadata": legacy,
+        }
+
+
+def _prepare_import(snapshots: list[dict], scope_id: str) -> tuple[list, list, list, dict]:
+    records, proposals, events, record_entries = [], [], [], []
+    for source in snapshots:
+        relative, kind, data = source["path"], source["kind"], source["data"]
         try:
             if kind == "record":
                 record = _parse_record(data, relative, scope_id)
                 records.append(record)
-                mappings.append({"id": record["id"], "path": relative,
-                                 "content_sha256": _digest(record["content"].encode("utf-8"))})
+                record_entries.append({
+                    "id": record["id"],
+                    "path": relative,
+                    "content_sha256": _digest(record["content"].encode("utf-8")),
+                })
             elif kind == "proposal":
-                legacy = _parse_object(data)
-                # 旧提案只绑定可靠的显式ID；不能按名称/指纹猜测正式记忆。
-                command = {key: legacy[key] for key in
-                           ("name", "description", "type", "content", "source_refs", "applicability")
-                           if key in legacy}
-                command["action"] = "create"
-                proposals.append({"id": _legacy_id(scope_id, relative, "proposal"), "revision": 1,
-                                  "action": "create", "memory_id": None, "expected_revision": None,
-                                  "command": command, "status": legacy.get("status", "pending_review"),
-                                  "created_at": legacy.get("created_at"), "legacy_metadata": legacy})
+                proposals.append(_parse_proposal(data, relative, scope_id))
             elif kind == "ledger":
-                for line_number, line in enumerate(data.decode("utf-8").splitlines(), start=1):
-                    if not line.strip():
-                        continue
-                    try:
-                        legacy = _parse_object(line.encode("utf-8"))
-                    except (ValueError, TypeError) as exc:
-                        raise PublicInputError(f"第 {line_number} 行: 旧流水 JSON 格式无效。") from exc
-                    events.append({"id": _legacy_id(scope_id, f"{relative}:{line_number}", "event"),
-                                   "action": legacy.get("action", "legacy"), "memory_id": None,
-                                   "revision": None, "created_at": legacy.get("timestamp"),
-                                   "legacy_metadata": legacy})
+                events.extend(_ledger_events(data, relative, scope_id))
             elif kind == "auxiliary_json":
-                _parse_object(data)
+                _parse_json_object(data.decode("utf-8"))
             else:
                 data.decode("utf-8")
         except PublicInputError as exc:
             raise PublicInputError(f"{relative}: {to_public_error(exc).message}") from exc
         except (UnicodeError, ValueError, TypeError, yaml.YAMLError) as exc:
             raise PublicInputError(f"{relative}: 旧资料格式无效，无法解析。") from exc
-    files = [{key: item[key] for key in ("path", "kind", "size", "sha256")} for item in snapshots]
-    manifest = {"version": 1, "scope_id": scope_id, "files": files, "records": mappings,
-                "counts": {"records": len(records), "proposals": len(proposals), "events": len(events)},
-                "source_digest": _digest(_json_text(files).encode("utf-8"))}
+    files = [{key: source[key] for key in ("path", "kind", "size", "sha256")} for source in snapshots]
+    manifest = {
+        "version": 1,
+        "scope_id": scope_id,
+        "files": files,
+        "records": record_entries,
+        "counts": {"records": len(records), "proposals": len(proposals), "events": len(events)},
+        "source_digest": _digest(_json_text(files).encode("utf-8")),
+    }
     return records, proposals, events, manifest
 
 
@@ -206,9 +238,9 @@ def _write_backup(root: Path, snapshots: list[dict], manifest: dict) -> Path:
         manifest_path.write_text(_json_text(manifest), encoding="utf-8")
         manifest_path.chmod(0o444)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
-        destination = backup_root / f"{timestamp}-{uuid.uuid4().hex[:8]}"
-        staging.rename(destination)
-        return destination
+        backup_path = backup_root / f"{timestamp}-{uuid.uuid4().hex[:8]}"
+        staging.rename(backup_path)
+        return backup_path
     except OSError:
         shutil.rmtree(staging)
         raise
@@ -221,14 +253,17 @@ def migrate_legacy(memory_dir: Path, scope_id: str = "") -> dict:
     root = Path(memory_dir)
     try:
         store = SQLiteMemoryStore(root, scope_id=scope_id, ready=False)
-        existing = store.migration_manifest()
-        if existing is not None:
-            return {"status": "already_imported", "counts": existing["counts"],
-                    "manifest": existing, "precondition": _OLD_WRITER_PRECONDITION}
+        existing_manifest = store.migration_manifest()
+        if existing_manifest is not None:
+            return {"status": "already_imported", "counts": existing_manifest["counts"],
+                    "manifest": existing_manifest, "precondition": _OLD_WRITER_PRECONDITION}
         snapshots = _scan(root)
-        records, proposals, events, manifest = _prepare(snapshots, scope_id)
-        result = store.import_legacy(records, proposals, events, manifest,
-                                     verify_sources=lambda: _verify_sources(root, snapshots))
+        records, proposals, events, manifest = _prepare_import(snapshots, scope_id)
+        result = store.import_legacy(
+            records, proposals, events, manifest,
+            verify_sources=lambda: _verify_sources(root, snapshots),
+        )
+        # 拿到写锁前可能已有进程提交，只有实际导入的进程负责备份。
         if result["status"] == "already_imported":
             return {**result, "manifest": manifest, "precondition": _OLD_WRITER_PRECONDITION}
         if result["status"] not in {"imported", "saved", "migrated"}:
@@ -246,8 +281,51 @@ def migrate_legacy(memory_dir: Path, scope_id: str = "") -> dict:
         return {"status": "error", "error": to_public_error(exc).message, "precondition": _OLD_WRITER_PRECONDITION}
 
 
+def _write_export_file(staging: Path, relative: str, data: bytes) -> dict:
+    (staging / relative).write_bytes(data)
+    return {"path": relative, "size": len(data), "sha256": _digest(data)}
+
+
+def _write_export_snapshot(staging: Path, snapshot: dict) -> dict:
+    record_entries, files = [], []
+    for record in snapshot["records"]:
+        memory_id = str(record["id"])
+        # 编码后标识只占一个文件名，标识中的斜杠也不会变成目录分隔符。
+        relative = f"records/{memory_id.encode('utf-8').hex()}.md"
+        metadata = {key: value for key, value in record.items() if key != "content"}
+        body = record["content"]
+        frontmatter = yaml.safe_dump(metadata, allow_unicode=True, sort_keys=True)
+        markdown = "---\n" + frontmatter + "---\n" + body
+        (staging / relative).parent.mkdir(parents=True, exist_ok=True)
+        file_entry = _write_export_file(staging, relative, markdown.encode("utf-8"))
+        files.append(file_entry)
+        record_entries.append({
+            "id": memory_id,
+            "revision": record["revision"],
+            "path": relative,
+            "sha256": file_entry["sha256"],
+            "content_sha256": _digest(body.encode("utf-8")),
+        })
+    for key in ("proposals", "events"):
+        data = _json_text(snapshot[key]).encode("utf-8")
+        files.append(_write_export_file(staging, f"{key}.json", data))
+
+    manifest = {
+        "version": 1,
+        "snapshot": True,
+        "scope_id": snapshot["scope_id"],
+        "generation": snapshot["generation"],
+        "records": record_entries,
+        "files": files,
+        "counts": {key: len(snapshot[key]) for key in ("records", "proposals", "events")},
+        "import_manifest": snapshot.get("import_manifest"),
+    }
+    (staging / "manifest.json").write_text(_json_text(manifest), encoding="utf-8")
+    return manifest
+
+
 def export_memories(store: SQLiteMemoryStore, target: Path) -> dict:
-    """显式导出同一读事务的快照，包含ID、版本及正文hash。"""
+    """从同一读事务导出快照，清单记录每条记忆的标识、版本和正文摘要。"""
     target = Path(target)
     staging = None
     try:
@@ -256,31 +334,7 @@ def export_memories(store: SQLiteMemoryStore, target: Path) -> dict:
         snapshot = store.export_snapshot()
         target.parent.mkdir(parents=True, exist_ok=True)
         staging = Path(tempfile.mkdtemp(prefix=".memory-export-", dir=target.parent))
-        records, files = [], []
-        for record in snapshot["records"]:
-            memory_id = str(record["id"])
-            # 文件名来自ID的编码，避免名称/ID中路径分隔符影响导出目录。
-            filename = f"records/{memory_id.encode('utf-8').hex()}.md"
-            metadata = {key: value for key, value in record.items() if key != "content"}
-            body = record["content"]
-            text = "---\n" + yaml.safe_dump(metadata, allow_unicode=True, sort_keys=True) + "---\n" + body
-            destination = staging / filename
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            data = text.encode("utf-8")
-            destination.write_bytes(data)
-            files.append({"path": filename, "size": len(data), "sha256": _digest(data)})
-            records.append({"id": memory_id, "revision": record["revision"], "path": filename,
-                            "sha256": _digest(data), "content_sha256": _digest(body.encode("utf-8"))})
-        for key in ("proposals", "events"):
-            data = _json_text(snapshot[key]).encode("utf-8")
-            filename = f"{key}.json"
-            (staging / filename).write_bytes(data)
-            files.append({"path": filename, "size": len(data), "sha256": _digest(data)})
-        manifest = {"version": 1, "snapshot": True, "scope_id": snapshot["scope_id"],
-                    "generation": snapshot["generation"], "records": records, "files": files,
-                    "counts": {key: len(snapshot[key]) for key in ("records", "proposals", "events")},
-                    "import_manifest": snapshot.get("import_manifest")}
-        (staging / "manifest.json").write_text(_json_text(manifest), encoding="utf-8")
+        manifest = _write_export_snapshot(staging, snapshot)
         staging.rename(target)
         staging = None
         return {"status": "exported", "target": str(target), "counts": manifest["counts"],

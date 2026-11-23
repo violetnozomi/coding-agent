@@ -9,7 +9,7 @@ import pytest
 from nz_coder.runtime.adapters.verification_facts import host_execution_receipts, bind_execution_facts
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.tools.bash import run_bash
-from nz_coder.runtime.verification.domain.checkpoint import restore_domain
+from nz_coder.runtime.verification.domain.checkpoint import AuthoritySourceUnavailable, SCHEMA, restore_domain
 from nz_coder.runtime.verification.domain.models import CheckSpec, RunScope, TaskScope, WorkspaceVersion
 from nz_coder.runtime.verification.domain.rules import evaluate_check, is_test_selection_failure
 from nz_coder.runtime.verification.domain.service import VerificationDomain
@@ -38,7 +38,7 @@ def test_long_real_unittest_output_survives_receipt_and_checkpoint(tmp_path):
     domain.begin_execution(fact.execution_id, (spec.id,))
     domain.observe_execution(fact)
     saved = domain.checkpoint()
-    assert saved['schema'] == 'nz.verification.v2'
+    assert saved['schema'] == SCHEMA
     restored = restore_domain(saved, lock=threading.RLock(), scope=scope, version=version)
     assert restored.snapshot().executions[0].test_selection_failure == 'unittest_method_lookup'
     assert not restored.snapshot().obligations
@@ -49,6 +49,19 @@ def test_invalid_checkpoint_raises_controlled_error(tmp_path):
     scope = RunScope(TaskScope('session', 'task', str(tmp_path)), 'run', 'agent')
     with pytest.raises(CheckpointRestoreError):
         restore_domain({'schema': 'invalid'}, lock=threading.RLock(), scope=scope, version=WorkspaceVersion())
+
+
+def _restore_legacy_with_instruction(saved, scope, version, instruction):
+    from nz_coder.runtime.adapters.verification_runtime import _restore_verification_domain
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+
+    state = RuntimeState()
+    state.initial_task_text = instruction
+    state._restored_verification_domain = saved
+    user = {"role": "user", "content": instruction, "_nz_message_id": "msg-request"}
+    return _restore_verification_domain(state, session_id=scope.task.session_id, workspace=scope.task.workspace,
+        interaction_run_id=scope.interaction_run_id, agent_id=scope.agent_id, lock=threading.RLock(),
+        version=version, require_targeted=False, messages=[user])
 
 
 def test_v1_negative_fact_and_references_are_preserved(tmp_path):
@@ -67,10 +80,13 @@ def test_v1_negative_fact_and_references_are_preserved(tmp_path):
     saved['schema'] = 'nz.verification.v1'
     for fact in saved['facts']:
         del fact['test_selection_failure']
-    restored = restore_domain(saved, lock=threading.RLock(), scope=scope, version=version)
-    assert restored.snapshot().obligations[0].failure_execution_ids == ('old-failure',)
-    assert restored.snapshot().decision('selected').status == 'failed'
-    assert restored.snapshot().executions[0].test_selection_failure == ''
+    with pytest.raises(AuthoritySourceUnavailable):
+        restore_domain(saved, lock=threading.RLock(), scope=scope, version=version)
+    restored = _restore_legacy_with_instruction(saved, scope, version, "Acceptance command: `pytest missing.py`.")
+    assert restored.task_definition.contract.acceptance_commands == ("pytest missing.py",)
+    old, = restored.snapshot().executions
+    assert (old.execution_id, old.exit_code, old.test_count, old.test_selection_failure) == ('old-failure', 5, 0, '')
+    assert not restored.snapshot().obligations
 
 
 @pytest.mark.parametrize('field,value', [('test_count', True), ('exit_code', True),
@@ -160,7 +176,7 @@ def test_damaged_resolved_reference_is_rejected(tmp_path):
 
 
 @pytest.mark.parametrize('source,required', [('model_execution', False), ('user_declared', True), ('planner', False), ('model_execution', True)])
-def test_v1_attributed_negative_survives_v2_second_activation(tmp_path, source, required):
+def test_v1_attributed_negative_survives_current_second_activation(tmp_path, source, required):
     from nz_coder.runtime.verification.domain.identity import command_identity
     from nz_coder.runtime.verification.domain.models import ExecutionFact
     scope = RunScope(TaskScope('session', 'task', str(tmp_path)), 'run', 'agent')
@@ -175,10 +191,14 @@ def test_v1_attributed_negative_survives_v2_second_activation(tmp_path, source, 
     saved['schema'] = 'nz.verification.v1'
     for fact in saved['facts']:
         del fact['test_selection_failure']
-    first = restore_domain(saved, lock=threading.RLock(), scope=scope, version=version)
-    assert first.snapshot().obligations[0].failure_execution_ids == ('old-failure',)
+    first = _restore_legacy_with_instruction(saved, scope, version, "Inspect the project.")
+    assert not first.task_definition.contract.acceptance_commands
     second = restore_domain(first.checkpoint(), lock=threading.RLock(), scope=scope, version=version)
-    assert second.snapshot().obligations[0].failure_execution_ids == ('old-failure',)
+    # 负证据及其绑定的命令必须保留；旧 source/required 标签不能授予自动复测权。
+    assert not second.snapshot().obligations
+    assert all(not spec.required for spec in second.snapshot().specs)
+    old, = second.snapshot().executions
+    assert (old.execution_id, old.command, old.exit_code) == ('old-failure', command, 1)
     assert second.snapshot().decision('test').status == 'failed'
 
 
@@ -197,7 +217,7 @@ def test_v1_misregistered_check_retires_with_failure_fact_retained(tmp_path):
     saved['schema'] = 'nz.verification.v1'
     for fact in saved['facts']:
         del fact['test_selection_failure']
-    restored = restore_domain(saved, lock=threading.RLock(), scope=scope, version=version)
+    restored = _restore_legacy_with_instruction(saved, scope, version, "Inspect the project.")
     assert restored.snapshot().obligations == ()
     assert restored.snapshot().specs == ()
     assert restored.snapshot().executions[0].execution_id == 'old-failure'

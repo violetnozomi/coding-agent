@@ -297,7 +297,7 @@ def test_preparing_state_cannot_resume_or_clone(preparation_case, mode):
         subagent._ensure_subagent_worktree(root, state)
     clone = dict(state, session_id="clone")
     with pytest.raises(Exception, match="preparation|prepar"):
-        subagent._clone_child_worktree(root, state, clone)
+        subagent._clone_child_worktree(root, state, clone, source_workspace=root)
     assert (target / "user.txt").read_text() == "keep"
     assert not (manager.worktree_dir / "clone").exists()
 

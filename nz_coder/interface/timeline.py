@@ -2,21 +2,32 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable
 from dataclasses import dataclass
 import json
+from pathlib import Path
 import re
 
 from rich.table import Table
+from rich.text import Text
 
 from nz_coder.interface.presentation_tokens import clip_terminal_text
 from nz_coder.protocol.message_schema import (
     ASSISTANT_PARENT_KEY,
+    ASSISTANT_TIME_KEY,
+    INTERACTION_RUN_ID_KEY,
     MESSAGE_ID_KEY,
+    MODEL_NOTE_KEY,
     PARTS_KEY,
     SUMMARY_KEY,
-    is_synthetic_user_message,
+    USER_TIME_KEY,
+    is_user_request_message,
+    legacy_messages,
+    public_message_content,
     rebind_fork_history as rebind_fork_history,
 )
+from nz_coder.runtime.session.history import HistoryUnavailable, is_history_marker, restore_session_history
+from nz_coder.state.input_expansion import INPUT_EXPANSIONS_KEY, USER_TEXT_KEY, user_instruction_text
 from nz_coder.state.sessions import active_session_id, list_sessions, load_session, SessionReadError
 from nz_coder.tool_platform.permissioning.modes import MODES
 
@@ -26,8 +37,10 @@ class ConversationTurn:
     """One visible user turn and its following Agent messages."""
 
     number: int
+    message_id: str | None
     start: int
     end: int
+    assistant_indices: tuple[int, ...]
     user_text: str
     assistant_text: str
     tools: tuple[str, ...]
@@ -55,6 +68,7 @@ class TranscriptDocument:
 
     header: str
     blocks: tuple[TranscriptBlock, ...]
+    open_detail: Callable[[str], tuple[str, str] | None] | None = None
 
     def markdown(self) -> str:
         """Return the legacy whole-document Markdown representation."""
@@ -76,64 +90,58 @@ class SessionOption:
     unavailable: str = ""
 
 
-def conversation_turns(messages: list[dict]) -> list[ConversationTurn]:
+def conversation_turns(messages: list[dict], *, complete: bool = True) -> list[ConversationTurn]:
     """Group history at real user prompts while hiding injected diagnostics."""
-    starts = [
+    boundaries = [
         index for index, message in enumerate(messages)
         if isinstance(message, dict)
-        and message.get("role") == "user"
-        and not _is_synthetic_user(message)
+        and _is_turn_user(message)
     ]
-    real_user_ids = {
-        messages[index].get(MESSAGE_ID_KEY)
-        for index in starts
-        if isinstance(messages[index].get(MESSAGE_ID_KEY), str)
-    }
+    starts = [index for index in boundaries if _visible_message(messages[index])]
+    positions = dict.fromkeys(boundaries, -1)
+    positions.update({index: number for number, index in enumerate(starts)})
+    ends = dict(zip(boundaries, [*boundaries[1:], len(messages)]))
+    owners = {messages[index][MESSAGE_ID_KEY]: number for index, number in positions.items()
+              if isinstance(messages[index].get(MESSAGE_ID_KEY), str)}
+    grouped: list[list[int]] = [[] for _ in starts]
+    position = -1
+    # 旧记录靠排列顺序归属；已有父身份的迟到回复始终归到原问题。
+    for index, message in enumerate(messages):
+        if index in positions:
+            position = positions[index]
+        elif isinstance(message, dict) and message.get("role") == "assistant" and _visible_message(message):
+            parent = message.get(ASSISTANT_PARENT_KEY)
+            # 旧头缺失时，明指未知父消息的答复不能降级分配给当前尾轮。
+            owner = owners.get(parent, position if complete else -1) if isinstance(parent, str) else position
+            if owner >= 0:
+                grouped[owner].append(index)
     turns: list[ConversationTurn] = []
     for position, start in enumerate(starts):
-        end = starts[position + 1] if position + 1 < len(starts) else len(messages)
+        end = ends[start]
         user_text = _message_text(messages[start])
         assistant_text = ""
-        tools: list[str] = []
+        tools: dict[str, None] = {}
         changed_files, additions, deletions = _turn_diff(messages[start])
         user_id = messages[start].get(MESSAGE_ID_KEY)
-        for index, message in enumerate(messages):
-            if not isinstance(message, dict):
-                continue
-            if message.get("role") == "assistant":
-                if (
-                    message.get("_nz_internal") is True
-                    or message.get("_nz_visible") is False
-                ):
-                    continue
-                parent_id = message.get(ASSISTANT_PARENT_KEY)
-                graph_owned = (
-                    isinstance(user_id, str)
-                    and isinstance(parent_id, str)
-                    and parent_id == user_id
-                )
-                positional = start < index < end and parent_id not in real_user_ids
-                if not graph_owned and not positional:
-                    continue
-                text = _message_text(message)
-                if text:
-                    assistant_text = text
-                for call in message.get("tool_calls", []) or []:
-                    if not isinstance(call, dict):
-                        continue
+        for index in grouped[position]:
+            message = messages[index]
+            assistant_text = _message_text(message) or assistant_text
+            for call in message.get("tool_calls", []) or []:
+                if isinstance(call, dict):
                     name = str(call.get("function", {}).get("name") or "").strip()
-                    if name and name not in tools:
-                        tools.append(name)
-                for part in message.get(PARTS_KEY, []) or []:
-                    if not isinstance(part, dict) or part.get("type") != "tool":
-                        continue
+                    if name:
+                        tools[name] = None
+            for part in message.get(PARTS_KEY, []) or []:
+                if isinstance(part, dict) and part.get("type") == "tool":
                     name = str(part.get("tool") or "").strip()
-                    if name and name not in tools:
-                        tools.append(name)
+                    if name:
+                        tools[name] = None
         turns.append(ConversationTurn(
             number=position + 1,
+            message_id=user_id if isinstance(user_id, str) else None,
             start=start,
             end=end,
+            assistant_indices=tuple(grouped[position]),
             user_text=user_text,
             assistant_text=assistant_text,
             tools=tuple(tools),
@@ -144,14 +152,177 @@ def conversation_turns(messages: list[dict]) -> list[ConversationTurn]:
     return turns
 
 
+@dataclass
+class TurnHistory:
+    """历史命令共享一次还原，以及旧记录不能确认时仍可查看的尾部。"""
+
+    messages: list[dict]
+    turns: list[ConversationTurn]
+    unavailable: HistoryUnavailable | None = None
+
+    @classmethod
+    def load(cls, messages: list[dict], *, session_id: str, workspace: Path) -> TurnHistory:
+        try:
+            restored = restore_session_history(messages, session_id=session_id, workspace=workspace)
+        except HistoryUnavailable as exc:
+            return cls(exc.messages, conversation_turns(exc.messages, complete=False), exc)
+        return cls(list(restored), conversation_turns(restored))
+
+    @property
+    def readable(self) -> list[ConversationTurn]:
+        start = self.unavailable.complete_from if self.unavailable else 0
+        return [turn for turn in self.turns if turn.start >= start]
+
+    def label(self, turn: ConversationTurn) -> str:
+        if self.unavailable and not self.unavailable.numbers_known:
+            return "Latest user turn" if turn == self.turns[-1] else "User turn"
+        return f"Turn {turn.number}"
+
+    def select(self, number: int | None) -> ConversationTurn | None:
+        if self.unavailable and (not self.turns or number is not None and not self.unavailable.numbers_known):
+            raise self.unavailable
+        selected = len(self.turns) if number is None else number
+        if not 1 <= selected <= len(self.turns):
+            return None
+        turn = self.turns[selected - 1]
+        if self.unavailable and turn.start < self.unavailable.complete_from:
+            raise self.unavailable
+        return turn
+
+    def detail(self, session_id: str, turn: ConversationTurn, *, remote: bool = False) -> str:
+        return format_turn_detail(session_id, turn, self.messages, remote=remote, title=self.label(turn))
+
+    def export(self, session_id: str, *, title: str, tool_details: bool = True, remote: bool = False) -> dict[str, str]:
+        """以归档原序导出可公开的正文；明确标注只能还原部分记录的情况。"""
+        sources = self._export_messages()
+        display = _remote_transcript_messages(sources) if remote else sources
+        document = build_transcript_document(session_id, display, title=title, tool_details=tool_details)
+        payload = {"session_id": session_id}
+        if self.unavailable:
+            notice = f"Partial transcript. {self.unavailable}"
+            document = TranscriptDocument(f"{document.header}\n> {notice}\n", document.blocks)
+            payload["notice"] = notice
+        payload["markdown"] = document.markdown()
+        return payload
+
+    def _export_messages(self) -> list[dict]:
+        users = {turn.start for turn in self.turns}
+        hidden_user = any(_is_turn_user(message) and not _visible_message(message) for message in self.messages)
+        # 可确认的用户副本也有原文。回复和工具回执须先在原始图中确认归属，再移除身份字段。
+        if self.unavailable or hidden_user:
+            assistants = {index for turn in self.readable for index in turn.assistant_indices}
+        else:
+            assistants = {i for i, m in enumerate(self.messages) if m.get("role") == "assistant" and _visible_message(m)}
+        owners = _tool_result_owners(self.messages)
+        hidden_calls = {}
+        restricted = bool(self.unavailable) or any(not _visible_message(m) for m in self.messages)
+        result = []
+        for index, message in enumerate(self.messages):
+            if not _visible_message(message):
+                continue
+            role = message.get("role")
+            if role == "user" and index in users:
+                if USER_TEXT_KEY in message or message.get(INPUT_EXPANSIONS_KEY):
+                    message = {**message, "content": user_instruction_text(message) or ""}
+            elif role == "assistant" and index in assistants:
+                message, masked = _export_assistant(message)
+                if masked:
+                    hidden_calls[index] = masked
+                    restricted = True
+            elif role == "tool":
+                matches = owners.get(index, [])
+                if matches or restricted:
+                    if len(matches) != 1 or matches[0] not in assistants:
+                        continue
+                    if message.get("tool_call_id") in hidden_calls.get(matches[0], ()):
+                        continue
+            else:
+                continue
+            result.append(message)
+        return result
+
+    def fork_turn(self, number: int | None) -> ConversationTurn:
+        if self.unavailable:
+            raise self.unavailable
+        if not self.turns:
+            raise ValueError("No user turns are available to fork")
+        selected = self.select(number)
+        if selected is None:
+            raise ValueError(f"Turn must be between 1 and {len(self.turns)}")
+        return selected
+
+    def fork_prefix(self, turn: ConversationTurn) -> list[dict]:
+        if self.unavailable:
+            raise self.unavailable
+        prefix = self.messages[:turn.end]
+        if turn.end == len(self.messages):
+            return prefix
+        # 工具可能原地回写较早的助手消息。只有晚到的独立记录可以直接截去；
+        # 已被覆盖、无法证明当时内容的记录不能作为历史分支发布。
+        cutoff = _recorded_time(self.messages[turn.end], USER_TIME_KEY, "created")
+        undated_tools = {}
+        for index, message in enumerate(prefix):
+            if message.get("role") != "assistant":
+                continue
+            completed = _recorded_time(message, ASSISTANT_TIME_KEY, "completed")
+            if cutoff is not None and completed is not None and completed > cutoff:
+                raise HistoryUnavailable(self.messages, turn.end, True)
+            for part in message.get(PARTS_KEY, []) or []:
+                if not isinstance(part, dict):
+                    continue
+                state = part.get("state") if part.get("type") == "tool" else part
+                if not isinstance(state, dict):
+                    continue
+                end = _recorded_time(state, "time", "end")
+                if cutoff is not None and end is not None:
+                    if end > cutoff:
+                        raise HistoryUnavailable(self.messages, turn.end, True)
+                elif (part.get("type") == "tool" and state.get("status") in {"completed", "error"}
+                      and (cutoff is None or completed is None)):
+                    call_id = part.get("call_id")
+                    if not isinstance(call_id, str) or not call_id:
+                        raise HistoryUnavailable(self.messages, turn.end, True)
+                    error = state.get("error")
+                    output = state.get("output", error.get("message") if isinstance(error, dict) else error)
+                    undated_tools[index, call_id] = output
+        if undated_tools:
+            # 没有可比时间时，仅边界之前同一调用的独立回执能证明此输出已经存在。
+            for index, owners in _tool_result_owners(prefix).items():
+                if len(owners) == 1:
+                    receipt = prefix[index]
+                    key = (owners[0], receipt["tool_call_id"])
+                    if key in undated_tools and isinstance(receipt.get("content"), str) and receipt["content"] == undated_tools[key]:
+                        del undated_tools[key]
+            if undated_tools:
+                raise HistoryUnavailable(self.messages, turn.end, True)
+        return prefix
+
+    def timeline(self, limit: int) -> dict:
+        if not 1 <= limit <= 100:
+            raise ValueError("Timeline limit must be between 1 and 100")
+        known = self.unavailable is None or self.unavailable.numbers_known
+        rows = []
+        for turn in self.readable[-limit:]:
+            rows.append({
+                "number": turn.number if known else None,
+                "user": _preview(turn.user_text, 240), "assistant": _preview(turn.assistant_text, 240),
+                "tools": _preview(", ".join(turn.tools), 240),
+                "changes": (f"{len(turn.changed_files)} files +{turn.additions}/-{turn.deletions}"
+                            if turn.changed_files else ""),
+            })
+        return {"turns": rows, "notice": str(self.unavailable) if self.unavailable else ""}
+
+
+def _complete_turn_history(messages: list[dict]) -> TurnHistory:
+    if any(isinstance(message, dict) and is_history_marker(message) for message in messages):
+        raise ValueError("Compacted history must be restored from the original Session first.")
+    return TurnHistory(messages, conversation_turns(messages))
+
+
 def fork_history(messages: list[dict], turn_number: int) -> list[dict]:
     """Copy history through one complete visible user turn."""
-    turns = conversation_turns(messages)
-    if not turns:
-        raise ValueError("No user turns are available to fork")
-    if turn_number < 1 or turn_number > len(turns):
-        raise ValueError(f"Turn must be between 1 and {len(turns)}")
-    return copy.deepcopy(messages[:turns[turn_number - 1].end])
+    view = _complete_turn_history(messages)
+    return copy.deepcopy(view.fork_prefix(view.fork_turn(turn_number)))
 
 
 def forked_session_title(title: str) -> str:
@@ -164,25 +335,24 @@ def forked_session_title(title: str) -> str:
 
 def render_timeline(messages: list[dict], *, limit: int = 20) -> Table:
     """Build a bounded turn table suitable for Rich and plain capture."""
-    turns = conversation_turns(messages)[-max(1, min(int(limit), 100)):]
-    table = Table(title="Session timeline", show_lines=True, expand=True)
+    view = _complete_turn_history(messages)
+    return render_timeline_rows(view.timeline(max(1, min(int(limit), 100))))
+
+
+def render_timeline_rows(projection: dict, *, title: str = "Session timeline") -> Table:
+    table = Table(title=title, caption=projection["notice"] or None, show_lines=True, expand=True)
     table.add_column("Turn", justify="right", style="cyan", no_wrap=True)
     table.add_column("User")
     table.add_column("Agent")
     table.add_column("Tools", style="yellow")
     table.add_column("Changes", style="green", no_wrap=True)
-    for turn in turns:
+    for row in projection["turns"]:
         table.add_row(
-            str(turn.number),
-            _preview(turn.user_text, 240) or "(empty)",
-            _preview(turn.assistant_text, 240) or "(no final text)",
-            ", ".join(turn.tools) or "—",
-            (
-                f"{len(turn.changed_files)} files +{turn.additions}/-{turn.deletions}"
-                if turn.changed_files else "—"
-            ),
+            str(row["number"]) if row["number"] is not None else "—",
+            Text(row["user"] or "(empty)"), Text(row["assistant"] or "(no final text)"), Text(row["tools"] or "—"),
+            row["changes"] or "—",
         )
-    if not turns:
+    if not projection["turns"] and not projection["notice"]:
         table.add_row("—", "No user turns.", "—", "—", "—")
     return table
 
@@ -231,6 +401,102 @@ def format_transcript(
     ).markdown()
 
 
+def format_turn_detail(
+    session_id: str, turn: ConversationTurn, messages: list[dict], *, remote: bool = False, title: str = "",
+) -> str:
+    """仅在用户打开某轮详情时附上该轮保存的模型原稿。"""
+    # 继续执行时，较早请求的答复可能迟到。沿用时间线认定的归属，不靠它恰好排在哪条用户消息后面。
+    selected = _turn_messages(messages, turn)
+    # 远程客户端只取得原有公开消息字段，本地检查仍可展开工具详情。
+    display = selected
+    if remote:
+        visible = [message for message in selected if message.get("role") != "user" or _is_turn_user(message)]
+        display = _remote_transcript_messages(visible)
+    transcript = format_transcript(session_id, display, title=title or f"Turn {turn.number}")
+    for index in turn.assistant_indices:
+        message = messages[index]
+        note = message.get(MODEL_NOTE_KEY)
+        if message.get("_nz_authoritative") is not False and isinstance(note, str) and note.strip():
+            transcript += "\n### 模型说明（执行声明以本轮回执为准）\n\n" + _fenced(note) + "\n"
+    return transcript
+
+
+def _remote_transcript_messages(visible: list[dict]) -> list[dict]:
+    display = legacy_messages(visible)
+    # 服务端先识别用户亲自提交的标签示例。来源字段只供 Markdown 渲染，不进入远程协议。
+    for source, public in zip(visible, display):
+        if source.get("role") == "user" and USER_TEXT_KEY in source:
+            public[USER_TEXT_KEY] = source[USER_TEXT_KEY]
+    return display
+
+
+def _export_assistant(message: dict) -> tuple[dict, set[str]]:
+    message = public_message_content(message)
+    parts = message.get(PARTS_KEY) or []
+    hidden = [part for part in parts if isinstance(part, dict) and (
+        part.get("internal") is True or part.get("visible") is False
+        or part.get("type") == "text" and (part.get("ignored") or part.get("synthetic"))
+    )]
+    if not hidden:
+        return message, set()
+    visible = [part for part in parts if part not in hidden]
+    masked = {part["call_id"] for part in hidden if part.get("type") == "tool" and isinstance(part.get("call_id"), str)}
+    message = {**message, PARTS_KEY: visible}
+    if masked:
+        message["tool_calls"] = [call for call in message.get("tool_calls") or []
+                                 if isinstance(call, dict) and call.get("id") not in masked]
+    if any(part.get("type") == "text" for part in hidden):
+        # 原始 content 可能连着多个文本块。只要其中有撤回的块，就不能回退到整段。
+        message["content"] = "\n".join(part["text"] for part in visible if isinstance(part, dict)
+                                       and part.get("type") == "text" and isinstance(part.get("text"), str))
+    return message, masked
+
+
+def _turn_messages(messages: list[dict], turn: ConversationTurn) -> list[dict]:
+    assistants = set(turn.assistant_indices)
+    owners = _tool_result_owners(messages)
+    selected = []
+    for index, message in enumerate(messages):
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role")
+        belongs = turn.start <= index < turn.end
+        if role == "assistant":
+            belongs = index in assistants
+        elif index in owners:
+            matches = owners[index]
+            belongs = len(matches) == 1 and matches[0] in assistants
+        if belongs and message.get("_nz_visible") is not False and message.get("_nz_internal") is not True:
+            selected.append(message)
+    return selected
+
+
+def _tool_result_owners(messages: list[dict]) -> dict[int, list[int]]:
+    # 工具结果可能晚于下一次用户输入。记录实际发出调用的消息，正常结算后允许 ID 重用。
+    pending: dict[str, set[int]] = {}
+    owners = {}
+    for index, message in enumerate(messages):
+        if not isinstance(message, dict):
+            continue
+        if message.get("role") == "assistant":
+            calls = [call.get("id") for call in message.get("tool_calls") or [] if isinstance(call, dict)]
+            calls.extend(part.get("call_id") for part in message.get(PARTS_KEY) or []
+                         if isinstance(part, dict) and part.get("type") == "tool")
+            for call_id in calls:
+                if isinstance(call_id, str) and call_id:
+                    pending.setdefault(call_id, set()).add(index)
+        elif message.get("role") == "tool" and isinstance(call_id := message.get("tool_call_id"), str) and call_id:
+            candidates = pending.get(call_id, set())
+            run = message.get(INTERACTION_RUN_ID_KEY)
+            matches = [i for i in candidates if not run or messages[i].get(INTERACTION_RUN_ID_KEY) == run]
+            owners[index] = matches
+            if len(matches) == 1:
+                candidates.remove(matches[0])
+                if not candidates:
+                    del pending[call_id]
+    return owners
+
+
 def build_transcript_document(
     session_id: str,
     messages: list[dict],
@@ -239,23 +505,33 @@ def build_transcript_document(
     tool_details: bool = True,
     thinking: bool = True,
     compact_tools: bool = False,
+    open_detail: Callable[[str], tuple[str, str] | None] | None = None,
 ) -> TranscriptDocument:
     """Build the message-addressable projection used by the terminal surface."""
     heading = title.strip() or f"NZ-Coder session {session_id}"
     header = "\n".join((f"# {heading}", "", f"**Session ID:** {session_id}", "", "---", ""))
     blocks: list[TranscriptBlock] = []
+    number_turns = not any(isinstance(item, dict) and is_history_marker(item) for item in messages)
+    visible_assistants = None
+    tool_owners = {}
+    if any(isinstance(item, dict) and _is_turn_user(item) and not _visible_message(item) for item in messages):
+        visible_assistants = {i for turn in conversation_turns(messages) for i in turn.assistant_indices}
+        tool_owners = _tool_result_owners(messages)
     turn_number = 0
     last_message_id = ""
     for index, message in enumerate(messages):
         if not isinstance(message, dict):
             continue
+        message = public_message_content(message)
         role = str(message.get("role") or "")
-        if role == "assistant" and (
-            message.get("_nz_internal") is True
-            or message.get("_nz_visible") is False
-        ):
+        if not _visible_message(message):
             continue
-        if role == "user" and is_synthetic_user_message(message):
+        if visible_assistants is not None:
+            if role == "assistant" and index not in visible_assistants:
+                continue
+            if role == "tool" and not (len(owners := tool_owners.get(index, [])) == 1 and owners[0] in visible_assistants):
+                continue
+        if role == "user" and not _is_turn_user(message):
             continue
         message_id = str(message.get(MESSAGE_ID_KEY) or f"transcript-{role}-{index}")
         lines: list[str] = []
@@ -263,7 +539,7 @@ def build_transcript_document(
         block_turn: int | None = None
         if role == "user":
             turn_number += 1
-            block_turn = turn_number
+            block_turn = turn_number if number_turns else None
             navigable = bool(_message_text(message))
             lines.extend(("## User", "", _message_text(message), ""))
         elif role == "assistant":
@@ -309,7 +585,7 @@ def build_transcript_document(
             ))
         if role in {"user", "assistant"}:
             last_message_id = message_id
-    return TranscriptDocument(header=header, blocks=tuple(blocks))
+    return TranscriptDocument(header=header, blocks=tuple(blocks), open_detail=open_detail)
 
 
 def _assistant_tool_blocks(
@@ -455,6 +731,7 @@ def latest_assistant_text(messages: list[dict]) -> str:
     )
     if message is None:
         return ""
+    message = public_message_content(message)
     values = []
     for part in message.get(PARTS_KEY, []) or []:
         if not isinstance(part, dict) or part.get("type") != "text":
@@ -467,12 +744,22 @@ def latest_assistant_text(messages: list[dict]) -> str:
     return "\n".join(values).strip() or _message_text(message)
 
 
-def _is_synthetic_user(message: dict) -> bool:
-    return is_synthetic_user_message(message)
+def _is_turn_user(message: dict) -> bool:
+    return is_user_request_message(message) and not is_history_marker(message)
+
+
+def _visible_message(message: dict) -> bool:
+    return message.get("_nz_visible") is not False and message.get("_nz_internal") is not True
+
+
+def _recorded_time(owner: dict, key: str, moment: str) -> float | None:
+    timing = owner.get(key)
+    value = timing.get(moment) if isinstance(timing, dict) else None
+    return value if type(value) in (int, float) else None
 
 
 def _message_text(message: dict) -> str:
-    content = message.get("content", "")
+    content = public_message_content(message).get("content", "")
     if isinstance(content, str):
         return content.strip()
     if isinstance(content, list):
@@ -509,7 +796,12 @@ def _turn_diff(message: dict) -> tuple[tuple[str, ...], int, int]:
 
 
 def _preview(value: str, limit: int) -> str:
-    compact = " ".join(str(value).split())
+    # 工具或粘贴输入可有许多兆字节。终端列数无法限制组合字符，先限制预览的原文字数。
+    value = str(value)
+    cap = max(1, limit) * 8
+    compact = " ".join(value[:cap].split())
+    if len(value) > cap:
+        compact += "…"
     return clip_terminal_text(compact, limit)
 
 

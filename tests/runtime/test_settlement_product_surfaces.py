@@ -6,10 +6,12 @@ import json
 import pytest
 
 from nz_coder.runtime.execution import native_sdk
+from nz_coder.runtime.core.result import TERMINAL_RESULT_KEY
 from nz_coder.runtime.process.workdir import scoped_workdir
+from nz_coder.protocol.message_schema import MESSAGE_ID_KEY
 from nz_coder.protocol.public_error import PublicRuntimeError
 from nz_coder.state import sessions
-from settlement_scenarios import setup, _reply
+from settlement_scenarios import check_settled_reply, setup, _reply
 
 
 def product(monkeypatch, tmp_path):
@@ -77,12 +79,13 @@ def test_terminal_controller_recovers_original_before_stale_history(
         )
         assert result["status"] in {"completed", "completed_unverified"}
         assert len(calls) == 2
-        assert any(
-            isinstance(m.get("content"), str)
-            and m["content"].startswith("first result")
-            for m in calls[1]["messages"]
-        )
-        assert history[-1]["content"].startswith("second result")
+        first, second = [m for m in history if m.get("role") == "assistant"]
+        first_answer = check_settled_reply(first, "first result")
+        with scoped_workdir(tmp_path):
+            restored = sessions.load_session(request.session_id)
+        assert check_settled_reply(second, "second result") == restored["metadata"][TERMINAL_RESULT_KEY]["last_result"]["answer"]
+        assert any(m.get("role") == "assistant" and m.get("content") == first_answer for m in calls[1]["messages"])
+        assert "first result" not in repr(calls[1]["messages"])
     finally:
         env.close()
 
@@ -108,6 +111,9 @@ def test_http_preserves_pending_and_refreshes_canonical(
         ), session.info()
         env = runner._pending_environments[runner._key(tmp_path, session.session_id)]
         owner = env.active_run_context
+        first = owner.transcript[-1]
+        first_id = first[MESSAGE_ID_KEY]
+        first_answer = check_settled_reply(first, "first result")
         with scoped_workdir(tmp_path):
             path = sessions.session_dir() / (session.session_id + ".json")
         before = path.read_bytes()
@@ -126,17 +132,21 @@ def test_http_preserves_pending_and_refreshes_canonical(
             assert (
                 info["status"] == owner.terminal_status.value and not info["last_error"]
             )
-            assert info["last_result"]["answer"].startswith("first result")
+            assert info["last_result"]["answer"] == first_answer
+            assert "first result" in session.message_detail(1)
             snapshot = session.snapshot()
             assert snapshot["session"]["status"] == owner.terminal_status.value
         session.start_run("Inspect again.", model="offline/offline-model")
         assert session.wait(timeout=6)
         assert len(calls) == 2 and not session.last_error
-        assert any(
-            isinstance(m.get("content"), str)
-            and m["content"].startswith("first result")
-            for m in calls[1]["messages"]
-        )
+        assert any(m.get("role") == "assistant" and m.get("content") == first_answer for m in calls[1]["messages"])
+        assert "first result" not in repr(calls[1]["messages"])
+        messages = json.loads(path.read_bytes())["messages"]
+        earlier, latest = [m for m in messages if m.get("role") == "assistant"]
+        assert earlier[MESSAGE_ID_KEY] == first_id
+        assert check_settled_reply(earlier, "first result") == first_answer
+        assert check_settled_reply(latest, "second result") == session.info()["last_result"]["answer"]
+        assert "first result" in session.message_detail(1) and "second result" in session.message_detail(2)
         assert owner.finalized
     finally:
         manager.close()

@@ -91,7 +91,8 @@ def test_processor_interrupt_discards_unsettled_tool_output():
     tool = next(part for part in message["_nz_parts"] if part["type"] == "tool")
     assert tool["state"]["status"] == "error"
     assert tool["state"]["interrupted"] is True
-    assert tool["state"]["error"] == "Tool execution aborted"
+    assert tool["state"]["error"]["code"] == "tool_cancelled"
+    assert tool["state"]["error"]["message"] == "Tool execution aborted"
     assert "output" not in tool["state"]
 
 
@@ -203,6 +204,7 @@ def test_stream_tool_delta_reconciles_provisional_call_id_by_index():
         0,
         name="read_file",
         arguments='{"path":',
+        metadata={"thoughtSignature": "stream-only-signature"},
     )
     complete = [{
         "id": "call-late-id",
@@ -216,6 +218,7 @@ def test_stream_tool_delta_reconciles_provisional_call_id_by_index():
     assert tools[0]["id"] == provisional["id"]
     assert tools[0]["call_id"] == "call-late-id"
     assert tools[0]["state"]["input"] == {"path": "late.py"}
+    assert tools[0]["_nz_provider_metadata"] == {"thoughtSignature": "stream-only-signature"}
 
 
 def test_processor_preserves_provider_and_result_metadata():

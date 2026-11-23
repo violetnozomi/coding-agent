@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from nz_coder.foundation import config
 from nz_coder.http_service import NZCoderClient, SessionHTTPService, SessionManager
 from nz_coder.runtime.execution import native_sdk
-from tests.runtime.test_native_product_runtime import _install_runtime
+from tests.runtime.test_native_product_runtime import _install_runtime, _offline_accept_review
 
 
 def _response(*calls, content=''):
@@ -39,6 +39,8 @@ def test_mutation_verification_cleanup_completion_and_http_restore(tmp_path, mon
         ' def test_value(self): self.assertEqual(value(), 3)\n'
     )
     command = 'python -m pytest -q tests/test_probe.py'
+    piped_command = command + ' 2>&1 | tail -5'
+    review_feedback = 'Rerun the focused test against the cleaned workspace.'
     environments = []
     original_build = native_sdk.build_product_run_environment
     def capture_environment(*args, **kwargs):
@@ -50,8 +52,14 @@ def test_mutation_verification_cleanup_completion_and_http_restore(tmp_path, mon
     class Provider:
         name = 'offline'
         calls = 0
+        reviews = 0
         after_copy = None
         def create_completion(self, _client, **kwargs):
+            if review := _offline_accept_review(kwargs, report_kind='ordinary'):
+                self.reviews += 1
+                if self.reviews == 1:
+                    return _response(_call('review', 'emit_sidecar_verdict', verdict='revise', reason=review_feedback))
+                return review
             self.calls += 1
             step = self.calls
             if step == 1:
@@ -64,20 +72,21 @@ def test_mutation_verification_cleanup_completion_and_http_restore(tmp_path, mon
                 self.after_copy = copy.deepcopy(environments[0].verification_runtime.status())
                 return _response(_call(step, 'write_file', path='.verify/probe.py', content='print("probe")\n'))
             if step == 5:
-                return _response(_call(step, 'bash', command=command + ' 2>&1 | tail -5'))
+                return _response(_call(step, 'bash', command=piped_command))
             if step == 6:
                 return _response(_call(step, 'bash', command='rm -rf .verify'))
             if step == 7:
+                assert environments[0].verification_runtime.status()['verification_state'] == 'unverified'
                 return _response(content='UNSUPPORTED_SUCCESS_DRAFT')
             if step == 8:
-                assert any('Verification remains unconfirmed' in str(m.get('content')) for m in kwargs['messages'])
+                assert any(review_feedback in str(m.get('content')) for m in kwargs['messages'])
                 return _response(_call('static', 'bash', command='python -m py_compile pkg/module.py'),
                                  _call('test', 'bash', command=command))
             assert step == 9, 'unexpected model request'
             return _response(content='VERIFIED_FINAL_DRAFT')
 
     provider = Provider()
-    _install_runtime(monkeypatch, provider)
+    _install_runtime(monkeypatch, provider, with_delivery_review=True)
     monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path / 'user-config'))
     for setting in ('PLANNING_ENABLED',):
         monkeypatch.setattr(config, setting, False)
@@ -100,20 +109,29 @@ def test_mutation_verification_cleanup_completion_and_http_restore(tmp_path, mon
         assert session.wait(.1), session.info()
         info = client.get_session(session_id)
         assert info['status'] == 'completed', {'calls': provider.calls, 'result': info['last_result']}
-        assert provider.calls == 9
-        assert provider.after_copy['verification_needed'] is True
-        assert provider.after_copy['verification_state'] != 'passed'
+        assert (provider.calls, provider.reviews) == (9, 2)
+        assert provider.after_copy['verification_state'] == 'unverified'
         assert not (workspace / '.verify').exists()
         result = info['last_result']
         assert result['metadata']['authored_content'] == 'VERIFIED_FINAL_DRAFT'
-        assert result['answer'].startswith('VERIFIED_FINAL_DRAFT')
+        assert 'VERIFIED_FINAL_DRAFT' in result['answer']
+        assert command in result['answer']
         verification = result['metadata']['verification']
-        # 完整范围核对包含 shell 的副作用；清理之后的新鲜验证可以结清。
+        assert verification['verification_state'] == 'passed'
         assert verification['verification_needed'] is False
         assert verification['mutation_scope_unknown'] is False
+        assert verification['delivery_review']['accepted'] is True
         assert '范围未知' not in result['answer']
-        assert all(item['status'] == 'passed' for item in verification['test_obligations'])
-        assert all(item.get('scope') == str(workspace) for item in verification['test_obligations'])
+        # 两轮真实测试各执行一个用例，清理前的回执只能证明旧版本。
+        snapshot = environments[0].verification_runtime.domain.snapshot()
+        before_cleanup, retest = [fact for fact in snapshot.executions if 'test' in fact.capabilities]
+        assert before_cleanup.command.original == piped_command
+        assert retest.command.original == command
+        for fact in (before_cleanup, retest):
+            assert fact.test_count == 1 and fact.outcome == 'succeeded'
+            assert fact.command.cwd == str(workspace)
+        assert before_cleanup.after.acceptance_generation < retest.after.acceptance_generation
+        assert retest.after.acceptance_generation == verification['acceptance_mutation_generation']
         assert 'UNSUPPORTED_SUCCESS_DRAFT' not in result['answer']
     finally:
         service.shutdown()
@@ -122,7 +140,12 @@ def test_mutation_verification_cleanup_completion_and_http_restore(tmp_path, mon
     restored = SessionManager(workspace_roots=[workspace])
     try:
         recovered = restored.get(session_id).info()
-        assert recovered['last_result'] == result
+        # 资源回收发生在终态冻结之后，重启可恢复冻结时的完整结果。
+        assert result['metadata']['environment_cleanup_complete'] is True
+        frozen = copy.deepcopy(result)
+        for key in ('changed_files', 'environment_cleanup_complete', 'environment_cleanup_failures'):
+            del frozen['metadata'][key]
+        assert recovered['last_result'] == frozen
         assert recovered['status'] == 'completed'
     finally:
         restored.close()

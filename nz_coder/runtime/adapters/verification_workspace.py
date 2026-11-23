@@ -23,6 +23,7 @@ class WorkspaceSettlement:
     errors: dict[str, str] = field(default_factory=dict)
     execution_unchanged: bool = False
     unconfirmed_caches: dict[str, str] = field(default_factory=dict)
+    stage: str = "tool"
 
 
 def mutation_path_identities(workspace: Path, paths) -> dict:
@@ -61,12 +62,26 @@ def collect_workspace_settlement(result, store, generation: int, cursor: dict, *
     proof = result.workspace_scope
     if proof is None:
         return WorkspaceSettlement(None, {}, bool(cursor.get("complete", True)), True)
+    if not isinstance(proof, dict):
+        return WorkspaceSettlement(None, {}, False, False, errors={"proof": "invalid workspace scope proof"})
+    stage = proof.get("stage")
+    if not isinstance(stage, str) or not stage:
+        stage = "tool"
+    reported = proof.get("errors")
+    if reported is not None and (not isinstance(reported, dict) or not all(
+        isinstance(phase, str) and isinstance(reason, str) for phase, reason in reported.items()
+    )):
+        return WorkspaceSettlement(None, {}, False, False, stage=stage,
+            errors={"proof": "invalid workspace scope errors"})
+    errors = dict(reported or {})
     anchor = cursor.get("reference")
-    errors = dict(proof.get("errors") or {})
     changes, matches = settled_changes(result, store, generation,
         anchor=anchor if cursor.get("complete", True) else None)
+    # 宿主已报告采集失败时，旧快照即使仍可读取，也不能证明本次操作完整。
+    if errors:
+        return WorkspaceSettlement(None, {}, False, matches, stage=stage, errors=errors)
     complete = matches and changes is not None
-    if not complete and not errors:
+    if not complete:
         errors["comparison"] = ("workspace scope generation or workspace mismatch" if not matches
             else "workspace scope before/after proof is unavailable or incomplete")
     observed = dict(changes or {})
@@ -97,7 +112,8 @@ def collect_workspace_settlement(result, store, generation: int, cursor: dict, *
     execution_unchanged = complete and changes == {}
     if complete and not cursor.get("complete", True):
         changes = unaccounted_workspace_changes(store, observed, cursor)
-    return WorkspaceSettlement(changes, observed, complete, matches, reference, errors, execution_unchanged, unconfirmed)
+    return WorkspaceSettlement(changes, observed, complete, matches, reference, errors,
+        execution_unchanged=execution_unchanged, unconfirmed_caches=unconfirmed, stage=stage)
 
 
 def collect_artifact_facts(snapshot, workspace: Path, operations: dict, generation: int) -> tuple[ArtifactFact, ...]:

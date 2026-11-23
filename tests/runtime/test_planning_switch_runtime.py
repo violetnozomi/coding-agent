@@ -72,7 +72,9 @@ def _prepare(monkeypatch, workspace, *, enabled):
     )
 
 
-def _run_case(monkeypatch, workspace, *, case, enabled, planner, edit=EDIT, verify_changed=False):
+def _run_case(
+    monkeypatch, workspace, *, case, enabled, planner, edit=EDIT, verify_changed=False, review_verdict="accept",
+):
     _prepare(monkeypatch, workspace, enabled=enabled)
     before = (workspace / "index.js").read_bytes()
     test_bytes = (workspace / "literal.test.cjs").read_bytes()
@@ -82,7 +84,7 @@ def _run_case(monkeypatch, workspace, *, case, enabled, planner, edit=EDIT, veri
     actions.append("The scripted action sequence has ended.")
     result, state, trace, requests, auxiliary, permissions = _run(
         monkeypatch, workspace, actions, task=TASK, limit=len(actions),
-        planning_response=planner,
+        planning_response=planner, semantic_response=review_verdict,
     )
     after = (workspace / "index.js").read_bytes()
     frozen = subprocess.run(
@@ -156,7 +158,7 @@ def _run_case(monkeypatch, workspace, *, case, enabled, planner, edit=EDIT, veri
         )))
         (target / "frozen-test-stdout.txt").write_text(frozen.stdout)
         (target / "frozen-test-stderr.txt").write_text(frozen.stderr)
-    return summary, state, trace, requests
+    return summary, state, trace, requests, auxiliary, result
 
 
 @pytest.mark.parametrize("verify_changed", [False, True], ids=["direct-test", "with-changed-file-check"])
@@ -165,7 +167,7 @@ def test_planning_switch_delivers_workset_to_actual_main_request(monkeypatch, no
     case = "B-on" if enabled else "A-off"
     if verify_changed:
         case += "-with-changed-file-check"
-    summary, state, trace, requests = _run_case(
+    summary, state, trace, requests, *_ = _run_case(
         monkeypatch, node_project, case=case, enabled=enabled,
         planner=json.dumps(PLANNER), verify_changed=verify_changed,
     )
@@ -192,7 +194,7 @@ def test_planning_switch_delivers_workset_to_actual_main_request(monkeypatch, no
 @pytest.mark.parametrize("kind", ["unavailable", "invalid"])
 def test_planning_failure_preserves_empty_contract_and_real_execution(monkeypatch, node_project, kind):
     planner = RuntimeError("controlled planning provider unavailable") if kind == "unavailable" else "{"
-    summary, state, trace, _ = _run_case(
+    summary, state, trace, *_ = _run_case(
         monkeypatch, node_project, case=f"control-{kind}", enabled=True, planner=planner,
     )
     # 规划调用可由现有Gateway重试；逐次请求与逻辑调用分别计数，不能把重试漏算。
@@ -216,15 +218,37 @@ def test_planning_failure_preserves_empty_contract_and_real_execution(monkeypatc
     assert any(event["event"] == expected for event in trace)
 
 
-def test_planning_switch_retains_real_failed_test_facts(monkeypatch, node_project):
+@pytest.mark.parametrize(("review_verdict", "expected_status"), [("revise", "max_turns"), ("accept", "completed")])
+def test_planning_switch_retains_real_failed_test_facts(monkeypatch, node_project, review_verdict, expected_status):
     wrong_edit = [_tool("edit_file", path="index.js", old_text="x.replace(/-/g, '\\\\-')", new_text="'['")]
-    summary, _, _, requests = _run_case(
-        monkeypatch, node_project, case="control-failed-test", enabled=True,
-        planner=json.dumps(PLANNER), edit=wrong_edit,
+    summary, _, _, requests, auxiliary, result = _run_case(
+        monkeypatch, node_project, case=f"control-failed-test-{review_verdict}", enabled=True,
+        planner=json.dumps(PLANNER), edit=wrong_edit, review_verdict=review_verdict,
     )
     assert summary["first_main_has_plan"] is True
     assert summary["first_main_has_implementation_bundle"] is True
-    assert summary["frozen_test_exit"] != 0
-    assert summary["bash_outcomes"][-1]["command_failed"] is True
-    assert summary["status"] == "max_turns"
-    assert "Invalid regular expression" in str(requests[4]["messages"])
+    assert summary["frozen_test_exit"] == 1
+    assert summary["status"] == expected_status
+    assert summary["sidecar_results"] == [{"verdict": review_verdict, "trace": "verifier_ok"}]
+    assert len(summary["bash_outcomes"]) == 2
+    assert all(run["executed"] and run["command_failed"] and not run["dispatch_failed"]
+               for run in summary["bash_outcomes"])
+
+    # 错误编辑引起的新失败应同时送达主模型和交付评审；初始版本失败的具体原因不同。
+    failure = "Unterminated character class"
+    assert any(failure in str(message["content"]) for message in requests[-1]["messages"])
+    review, = [request for request in auxiliary
+               if any(tool["function"]["name"] == "emit_sidecar_verdict" for tool in request.get("tools", []))]
+    assert any(message["role"] == "user" and failure in message["content"] for message in review["messages"])
+
+    verification = result.metadata["verification"]
+    assert verification["delivery_review"]["accepted"] is (review_verdict == "accept")
+    assert verification["acceptance_checks"] == []
+    assert verification["tests_passed"] is None
+    command = "node --test literal.test.cjs"
+    assert [(item["command"], item["generation"], item["exit_code"]) for item in verification["ordinary_failures"]] == [
+        (command, 0, 1), (command, 1, 1),
+    ]
+    assert verification["last_verification"]["status"] == "failed"
+    assert failure in verification["last_verification"]["output"]
+    assert command in result.final_text and "退出码 1" in result.final_text

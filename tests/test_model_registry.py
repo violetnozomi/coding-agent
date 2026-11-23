@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from nz_coder.foundation import config
+from nz_coder.foundation.private_paths import inspect_private_path
 from nz_coder.foundation.user_paths import user_storage_layout
 from nz_coder.providers import configured_model_capabilities
 from nz_coder.providers.cli import models_main
@@ -111,6 +112,7 @@ def _registry_path(workspace):
 
 
 def test_registry_sync_projects_exact_capabilities(tmp_path, registry_server, monkeypatch):
+    monkeypatch.delattr(os, "fchmod", raising=False)
     monkeypatch.setattr(config, "MODEL_CATALOG_JSON", "")
     monkeypatch.setattr(config, "MODEL_CATALOG_PATH", "")
     result = sync_model_registry(registry_server, workspace=tmp_path)
@@ -118,7 +120,7 @@ def test_registry_sync_projects_exact_capabilities(tmp_path, registry_server, mo
     assert result.refreshed is True
     assert (result.provider_count, result.model_count) == (1, 1)
     target = _registry_path(tmp_path)
-    assert os.stat(target).st_mode & 0o777 == 0o600
+    assert inspect_private_path(target).hardened
     persisted = json.loads(target.read_text(encoding="utf-8"))
     assert persisted["schema"] == "models.dev.normalized/v1"
     assert len(persisted["content_digest"]) == 64
@@ -176,10 +178,14 @@ def test_registry_freshness_and_force_refresh(tmp_path, registry_server):
     assert registry_status(tmp_path)["fresh"] is True
 
 
+@pytest.mark.parametrize(
+    "cache_path", [".nz-coder/models/registry.json", "custom/snapshot.json"],
+    ids=["default-cache", "custom-cache"],
+)
 def test_concurrent_sync_uses_one_cross_process_refresh(
-    tmp_path,
-    registry_server,
+    tmp_path, registry_server, monkeypatch, cache_path,
 ):
+    monkeypatch.setattr(config, "MODEL_REGISTRY_PATH", cache_path)
     with ThreadPoolExecutor(max_workers=4) as executor:
         results = list(
             executor.map(

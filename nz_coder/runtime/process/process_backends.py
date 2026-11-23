@@ -434,6 +434,26 @@ def create_process_backend(
         raise
 
 
+def start_owned_pipe_command(argv, *, cwd: Path, env):
+    """准备和检索命令的根进程、后代及两根输出管道由同一调用方管理。"""
+    if os.name != "nt":
+        return subprocess.Popen(
+            argv, cwd=str(cwd), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, bufsize=0, start_new_session=True,
+        ), None
+
+    from nz_coder.runtime.process.windows_job_control import start_job_command
+
+    job = _WindowsJob.create()
+    try:
+        return start_job_command(job, argv, cwd, env), job
+    except BaseException:
+        # 即使创建进程本身失败，尚未交给调用方的作业句柄也要释放。
+        job.close_acquired_handle(job.handle)
+        job.handle = None
+        raise
+
+
 def _retire_failed_start(process, *, os_name, conpty=False, job=None, fds=()) -> None:
     """包装失败仍由创建者持有资源；确认退出和句柄释放前不交还调用方。"""
     retry_delays = iter((0.05, 0.1, 0.2, 0.5))
@@ -493,136 +513,153 @@ def _set_posix_terminal_size(fd: int, *, rows: int, cols: int) -> None:
 
 
 class _WindowsJob:
-    """Best-effort Job Object binding; unavailable platforms return ``None``."""
+    """严格启动先创建作业；交互终端仍可尝试接管已经启动的进程。"""
 
     def __init__(self, handle, kernel32) -> None:
         self.handle = handle
         self.kernel32 = kernel32
+        self._termination_requested = False
+
+    @classmethod
+    def create(cls, *, kernel32=None):
+        import ctypes
+        from ctypes import wintypes
+
+        selected_kernel = kernel32 or ctypes.WinDLL("kernel32", use_last_error=True)
+        if kernel32 is None:
+            # ctypes defaults function returns to 32-bit ``c_int``.  A
+            # HANDLE is pointer-sized, so omitting these declarations
+            # truncates real Job/process handles on 64-bit Windows while
+            # injected Python fakes continue to work without ctypes APIs.
+            selected_kernel.CreateJobObjectW.argtypes = [
+                ctypes.c_void_p,
+                wintypes.LPCWSTR,
+            ]
+            selected_kernel.CreateJobObjectW.restype = wintypes.HANDLE
+            selected_kernel.SetInformationJobObject.argtypes = [
+                wintypes.HANDLE,
+                ctypes.c_int,
+                ctypes.c_void_p,
+                wintypes.DWORD,
+            ]
+            selected_kernel.SetInformationJobObject.restype = wintypes.BOOL
+            selected_kernel.OpenProcess.argtypes = [
+                wintypes.DWORD,
+                wintypes.BOOL,
+                wintypes.DWORD,
+            ]
+            selected_kernel.OpenProcess.restype = wintypes.HANDLE
+            selected_kernel.AssignProcessToJobObject.argtypes = [
+                wintypes.HANDLE,
+                wintypes.HANDLE,
+            ]
+            selected_kernel.AssignProcessToJobObject.restype = wintypes.BOOL
+            selected_kernel.TerminateJobObject.argtypes = [
+                wintypes.HANDLE,
+                wintypes.UINT,
+            ]
+            selected_kernel.TerminateJobObject.restype = wintypes.BOOL
+            selected_kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+            selected_kernel.CloseHandle.restype = wintypes.BOOL
+        ulong_ptr = ctypes.c_size_t
+
+        class _BasicLimitInformation(ctypes.Structure):
+            _fields_ = [
+                ("PerProcessUserTimeLimit", ctypes.c_longlong),
+                ("PerJobUserTimeLimit", ctypes.c_longlong),
+                ("LimitFlags", wintypes.DWORD),
+                ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t),
+                ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ulong_ptr),
+                ("PriorityClass", wintypes.DWORD),
+                ("SchedulingClass", wintypes.DWORD),
+            ]
+
+        class _IoCounters(ctypes.Structure):
+            _fields_ = [
+                ("ReadOperationCount", ctypes.c_ulonglong),
+                ("WriteOperationCount", ctypes.c_ulonglong),
+                ("OtherOperationCount", ctypes.c_ulonglong),
+                ("ReadTransferCount", ctypes.c_ulonglong),
+                ("WriteTransferCount", ctypes.c_ulonglong),
+                ("OtherTransferCount", ctypes.c_ulonglong),
+            ]
+
+        class _ExtendedLimitInformation(ctypes.Structure):
+            _fields_ = [
+                ("BasicLimitInformation", _BasicLimitInformation),
+                ("IoInfo", _IoCounters),
+                ("ProcessMemoryLimit", ctypes.c_size_t),
+                ("JobMemoryLimit", ctypes.c_size_t),
+                ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                ("PeakJobMemoryUsed", ctypes.c_size_t),
+            ]
+
+        handle = selected_kernel.CreateJobObjectW(None, None)
+        if not handle:
+            raise OSError("Could not create a Windows command job")
+        job = cls(handle, selected_kernel)
+        try:
+            limits = _ExtendedLimitInformation()
+            limits.BasicLimitInformation.LimitFlags = 0x00002000  # KILL_ON_JOB_CLOSE
+            if not selected_kernel.SetInformationJobObject(
+                handle, 9, ctypes.byref(limits), ctypes.sizeof(limits),
+            ):
+                raise OSError("Could not configure the Windows command job")
+            return job
+        except BaseException:
+            job.close_acquired_handle(handle)
+            raise
 
     @classmethod
     def bind(cls, pid: int, *, os_name: str | None = None, kernel32=None):
-        selected_os = os.name if os_name is None else os_name
-        if selected_os != "nt":
+        if (os.name if os_name is None else os_name) != "nt":
             return None
-        handle = process_handle = None
-        selected_kernel = None
+        job = None
+        process_handle = None
+        assigned = False
         try:
-            import ctypes
-            from ctypes import wintypes
-
-            selected_kernel = kernel32 or ctypes.WinDLL("kernel32", use_last_error=True)
-            if kernel32 is None:
-                # ctypes defaults function returns to 32-bit ``c_int``.  A
-                # HANDLE is pointer-sized, so omitting these declarations
-                # truncates real Job/process handles on 64-bit Windows while
-                # injected Python fakes continue to work without ctypes APIs.
-                selected_kernel.CreateJobObjectW.argtypes = [
-                    ctypes.c_void_p,
-                    wintypes.LPCWSTR,
-                ]
-                selected_kernel.CreateJobObjectW.restype = wintypes.HANDLE
-                selected_kernel.SetInformationJobObject.argtypes = [
-                    wintypes.HANDLE,
-                    ctypes.c_int,
-                    ctypes.c_void_p,
-                    wintypes.DWORD,
-                ]
-                selected_kernel.SetInformationJobObject.restype = wintypes.BOOL
-                selected_kernel.OpenProcess.argtypes = [
-                    wintypes.DWORD,
-                    wintypes.BOOL,
-                    wintypes.DWORD,
-                ]
-                selected_kernel.OpenProcess.restype = wintypes.HANDLE
-                selected_kernel.AssignProcessToJobObject.argtypes = [
-                    wintypes.HANDLE,
-                    wintypes.HANDLE,
-                ]
-                selected_kernel.AssignProcessToJobObject.restype = wintypes.BOOL
-                selected_kernel.TerminateJobObject.argtypes = [
-                    wintypes.HANDLE,
-                    wintypes.UINT,
-                ]
-                selected_kernel.TerminateJobObject.restype = wintypes.BOOL
-                selected_kernel.CloseHandle.argtypes = [wintypes.HANDLE]
-                selected_kernel.CloseHandle.restype = wintypes.BOOL
-            ulong_ptr = ctypes.c_size_t
-
-            class _BasicLimitInformation(ctypes.Structure):
-                _fields_ = [
-                    ("PerProcessUserTimeLimit", ctypes.c_longlong),
-                    ("PerJobUserTimeLimit", ctypes.c_longlong),
-                    ("LimitFlags", wintypes.DWORD),
-                    ("MinimumWorkingSetSize", ctypes.c_size_t),
-                    ("MaximumWorkingSetSize", ctypes.c_size_t),
-                    ("ActiveProcessLimit", wintypes.DWORD),
-                    ("Affinity", ulong_ptr),
-                    ("PriorityClass", wintypes.DWORD),
-                    ("SchedulingClass", wintypes.DWORD),
-                ]
-
-            class _IoCounters(ctypes.Structure):
-                _fields_ = [
-                    ("ReadOperationCount", ctypes.c_ulonglong),
-                    ("WriteOperationCount", ctypes.c_ulonglong),
-                    ("OtherOperationCount", ctypes.c_ulonglong),
-                    ("ReadTransferCount", ctypes.c_ulonglong),
-                    ("WriteTransferCount", ctypes.c_ulonglong),
-                    ("OtherTransferCount", ctypes.c_ulonglong),
-                ]
-
-            class _ExtendedLimitInformation(ctypes.Structure):
-                _fields_ = [
-                    ("BasicLimitInformation", _BasicLimitInformation),
-                    ("IoInfo", _IoCounters),
-                    ("ProcessMemoryLimit", ctypes.c_size_t),
-                    ("JobMemoryLimit", ctypes.c_size_t),
-                    ("PeakProcessMemoryUsed", ctypes.c_size_t),
-                    ("PeakJobMemoryUsed", ctypes.c_size_t),
-                ]
-
-            handle = selected_kernel.CreateJobObjectW(None, None)
-            if not handle:
-                return None
-            limits = _ExtendedLimitInformation()
-            limits.BasicLimitInformation.LimitFlags = 0x00002000
-            configured = selected_kernel.SetInformationJobObject(
-                handle,
-                9,
-                ctypes.byref(limits),
-                ctypes.sizeof(limits),
-            )
-            if not configured:
-                return None
-            process_handle = selected_kernel.OpenProcess(0x0101, False, int(pid))
-            if not process_handle:
-                return None
-            assigned = selected_kernel.AssignProcessToJobObject(handle, process_handle)
-            if not assigned:
-                return None
-            job = cls(handle, selected_kernel)
-            handle = None
-            return job
+            job = cls.create(kernel32=kernel32)
+            process_handle = job.kernel32.OpenProcess(0x0101, False, int(pid))
+            assigned = bool(process_handle and job.kernel32.AssignProcessToJobObject(job.handle, process_handle))
+            return job if assigned else None
         except (AttributeError, OSError, ValueError):
             return None
         finally:
-            # 尚未交接给 backend 的句柄仍归创建者，关闭失败不能丢弃引用。
-            for acquired in (process_handle, handle):
-                if acquired:
-                    owned = cls(acquired, selected_kernel)
-                    retry_delays = iter((0.05, 0.1, 0.2, 0.5))
-                    while True:
-                        try:
-                            owned.close()
-                            break
-                        except Exception:
-                            time.sleep(next(retry_delays, 1.0))
+            if job is not None:
+                job.close_acquired_handle(process_handle)
+                if not assigned:
+                    job.close_acquired_handle(job.handle)
+
+    def close_acquired_handle(self, handle) -> None:
+        # 启动方持有尚未移交的句柄。关闭遇到临时错误时不能先忘记该句柄。
+        if handle:
+            retry_delays = iter((0.05, 0.1, 0.2, 0.5))
+            while not self.kernel32.CloseHandle(handle):
+                time.sleep(next(retry_delays, 1.0))
 
     def terminate(self) -> bool:
         try:
             return bool(self.kernel32.TerminateJobObject(self.handle, 1))
         except (AttributeError, OSError, ValueError):
             return False
+
+    def retire(self) -> bool:
+        """即使直属进程先退出，job 仍能确认并回收属于这条命令的后代。"""
+        from nz_coder.runtime.process.windows_job_control import active_job_processes
+
+        if self.handle is None:
+            return True
+        if active_job_processes(self.kernel32, self.handle):
+            if not self._termination_requested:
+                if not self.terminate():
+                    raise OSError("Windows command job termination was not accepted")
+                self._termination_requested = True
+            # 让所有者继续排空管道、检查总期限，再回来确认内核的实际成员数。
+            return False
+        self.close()
+        return True
 
     def close(self) -> None:
         if self.handle is not None:

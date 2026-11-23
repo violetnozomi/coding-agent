@@ -65,7 +65,7 @@ class ToolExecutionResult:
     workspace_scope: dict | None = None
     execution_facts: tuple[ExecutionReceipt, ...] = ()
     execution_id: str = ""
-    # 仅由宿主异常边界产生，不从工具 metadata 或输出字符串恢复信任。
+    # 宿主异常或内置命令回执产生的公开原因，工具自报的 metadata 不能赋予它可信身份。
     public_error: PublicError | None = None
     # 宿主在事实提交时生成历史标签，延迟展示不能改用批末版本或公开 metadata。
     evidence_metadata: dict = field(default_factory=dict)

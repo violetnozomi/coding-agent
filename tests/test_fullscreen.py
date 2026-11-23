@@ -391,11 +391,15 @@ def test_fullscreen_sticky_tail_can_be_suspended_and_restored():
 
 
 def test_fullscreen_message_navigation_and_toolpart_activation_share_anchors():
-    document = build_transcript_document("session-1", [
+    from nz_coder.interface.cli import _terminal_transcript
+
+    state = {"id": "session-1"}
+    document = _terminal_transcript(state, [
         {"role": "user", "content": "first", "_nz_message_id": "user-1"},
         {
             "role": "assistant",
             "content": "answer",
+            "_nz_model_note": "Inspect-only draft for the first request",
             "_nz_message_id": "assistant-1",
             "_nz_parts": [{
                 "id": "part-1",
@@ -410,7 +414,7 @@ def test_fullscreen_message_navigation_and_toolpart_activation_share_anchors():
             }],
         },
         {"role": "user", "content": "second", "_nz_message_id": "user-2"},
-    ], compact_tools=True)
+    ])
     composer = FullscreenComposer(
         transcript_provider=lambda: document,
         status_provider=lambda: "provider/model",
@@ -446,6 +450,10 @@ def test_fullscreen_message_navigation_and_toolpart_activation_share_anchors():
     assert composer.activate_transcript_line(user_anchor.start) is True
     assert composer._dialog_kind == "detail"
     assert "first" in composer._dialog_detail
+    assert "Inspect-only draft for the first request" in composer._dialog_detail
+    assert "Inspect-only draft" not in document.markdown()
+    state["id"] = "another-session"
+    assert composer.activate_transcript_line(user_anchor.start) is False
 
 
 def test_fullscreen_detail_scroll_hover_and_drag_activation_are_independent():

@@ -531,6 +531,193 @@ def test_normal_reconnect_preserves_pending_prompt(ui):
     asyncio.run(scenario())
 
 
+def _question_request(request_id, title):
+    return {"id": request_id, "questions": [{
+        "header": title, "question": title, "options": [{"label": "Yes"}],
+    }]}
+
+
+@pytest.fixture
+def prompts(ui, monkeypatch):
+    opened = []
+
+    async def select(_self, *, title, **kwargs):
+        answer = asyncio.get_running_loop().create_future()
+        opened.append((title, answer))
+        return await answer
+
+    monkeypatch.setattr(remote.TerminalInput, "select_async", select)
+    return opened
+
+
+@pytest.mark.parametrize("settlement", ["permission.replied", "question.replied", "question.rejected"])
+def test_settled_prompt_withdraws_only_matching_kind_and_id(ui, prompts, settlement):
+    async def scenario():
+        backend = Backend()
+        task = await start(backend, ui)
+        permission = event("permission.asked", id="shared", permission="write_file")
+        question = event("question.asked", **_question_request("shared", "Scope"))
+        first, other = (permission, question) if settlement == "permission.replied" else (question, permission)
+        backend.items.put(first)
+        try:
+            await wait_for(lambda: len(prompts) == 1)
+            backend.items.put(other)
+            backend.items.put(event("question.asked", **_question_request("queued", "Queued")))
+            backend.items.put(event("question.rejected", request_id="queued", reason="timeout"))
+            backend.items.put(event(settlement, request_id="shared"))
+            backend.items.put(first)  # 重放不能复活已结清的表单。
+            await wait_for(lambda: prompts[0][1].cancelled() and len(prompts) >= 2)
+            assert prompts[1][0] == ("Scope" if other is question else "Permission required")
+            prompts[1][1].set_result(None)
+            await wait_for(lambda: bool(backend.replies))
+            assert backend.replies == ([("shared",)] if other is question else [("shared", "reject")])
+            assert len(prompts) == 2 and backend.aborts == 0
+        finally:
+            backend.finish()
+            await task
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("disconnect", [False, True])
+def test_authoritative_snapshot_withdraws_missing_prompts_and_keeps_active_input(ui, prompts, disconnect):
+    async def scenario():
+        old = _question_request("old", "Old")
+        kept = _question_request("kept", "Kept")
+        dropped = _question_request("dropped", "Dropped")
+
+        class SnapshotBackend(Backend):
+            pending = {"questions": [old, dropped, kept]}
+
+            def attach_snapshot(self):
+                return {**super().attach_snapshot(), "pending": self.pending}
+
+        backend = SnapshotBackend()
+        task = await start(backend, ui)
+        try:
+            await wait_for(lambda: bool(prompts))
+            backend.pending = {"questions": [kept]}
+            backend.items.put(None if disconnect else event("server.snapshot", pending=backend.pending))
+            await wait_for(lambda: prompts[0][1].cancelled() and len(prompts) >= 2)
+            assert [title for title, _ in prompts] == ["Old", "Kept"]
+            # 再取同一快照应保留已经打开的输入框和当前选择。
+            backend.items.put(event("server.snapshot", pending=backend.pending))
+            backend.items.put(event("question.asked", **old))
+            backend.items.put(event("question.asked", **dropped))
+            backend.items.put(event("question.asked", **_question_request("next", "Next")))
+            prompts[1][1].set_result(None)
+            await wait_for(lambda: len(prompts) >= 3 and bool(backend.replies))
+            assert [title for title, _ in prompts] == ["Old", "Kept", "Next"]
+            assert backend.replies == [("kept",)]
+            assert backend.streams == (2 if disconnect else 1)
+        finally:
+            backend.finish()
+            await task
+    asyncio.run(scenario())
+
+
+def test_late_inflight_reply_reports_already_closed_once(ui):
+    async def scenario():
+        from nz_coder.http_service.client import NZCoderHTTPError
+
+        entered, release = threading.Event(), threading.Event()
+
+        class ReplyBackend(Backend):
+            def reply_permission(self, *args):
+                self.replies.append(args)
+                entered.set()
+                assert release.wait(3)
+                raise NZCoderHTTPError(404, "interaction_not_found", "gone")
+
+        backend = ReplyBackend()
+        ui.key = "escape"
+        task = await start(backend, ui)
+        asked = event("permission.asked", id="racing", permission="write")
+        try:
+            backend.items.put(asked)
+            await wait_for(entered.is_set)
+            backend.items.put(event("permission.replied", request_id="racing", reply="once"))
+            backend.items.put(asked)
+            backend.finish()
+            await wait_for(backend.closed.is_set)
+            assert not task.done()
+        finally:
+            release.set()
+            backend.finish()
+            await task
+        assert backend.replies == [("racing", "reject")]
+        assert ui.selectors == 1 and backend.aborts == 0
+        output = ui.output.getvalue()
+        assert output.count("本次回复未被接收") == 1
+        assert "Remote request ended:" not in output
+    asyncio.run(scenario())
+
+
+def test_repeated_settlement_allows_input_cleanup_without_submitting_its_late_value():
+    async def scenario():
+        opened, cleaning, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+        class Bridge:
+            async def _ask_permission(self, *_args):
+                opened.set()
+                try:
+                    await asyncio.Future()
+                except asyncio.CancelledError:
+                    cleaning.set()
+                    await release.wait()
+                    return "always"
+
+        backend = Backend()
+        registry = remote._InteractionTaskRegistry()
+        task = remote._register_interaction_payload(
+            backend, Bridge(), event("permission.asked", id="closing"), registry,
+        )
+        await asyncio.wait_for(opened.wait(), 2)
+        registry.resolve("permission", "closing")
+        await asyncio.wait_for(cleaning.wait(), 2)
+        registry.resolve("permission", "closing")
+        registry.retain_pending(set())
+        registry.seal()
+        release.set()
+        await asyncio.wait_for(task, 2)
+        assert backend.replies == []
+    asyncio.run(scenario())
+
+
+def test_withdrawn_reply_still_queued_in_executor_never_reaches_backend(ui):
+    from concurrent.futures import ThreadPoolExecutor
+
+    async def scenario():
+        backend = Backend()
+        work = remote._RemoteFollowWork(backend, ui.console)
+        registry = remote._InteractionTaskRegistry(work=work)
+        busy, release = threading.Event(), threading.Event()
+
+        def occupy_worker():
+            busy.set()
+            assert release.wait(3)
+
+        class Bridge:
+            async def _ask_permission(self, *_args):
+                return "always"
+
+        asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(1))
+        occupant = asyncio.create_task(asyncio.to_thread(occupy_worker))
+        try:
+            await wait_for(busy.is_set)
+            remote._register_interaction_payload(
+                backend, Bridge(), event("permission.asked", id="queued-reply"), registry,
+            )
+            await wait_for(lambda: bool(work.tasks))
+            registry.resolve("permission", "queued-reply")
+            await registry.wait()
+        finally:
+            release.set()
+            await occupant
+            await work.close()
+        assert backend.replies == []
+    asyncio.run(scenario())
+
+
 def test_abort_failure_is_collected_but_authoritative_completion_wins(ui):
     async def scenario():
         class FailingAbortBackend(Backend):

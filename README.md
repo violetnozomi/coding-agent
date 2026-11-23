@@ -40,6 +40,9 @@ tests and workflows rather than by unversioned local documentation.
 Windows 10/11 x64 users can install the self-contained setup executable produced
 by the `Windows Installer` workflow without Python or Git. Verify its SHA-256
 against the uploaded `SHA256SUMS.txt`, then use `/connect` for API configuration.
+The Start Menu shortcut opens `NZ-Coder Workspace` in your Documents folder.
+Your projects in that folder survive upgrades and uninstall. To work on an
+existing project, open a terminal in its directory and run `nz-coder`.
 
 Install from a checkout (editable mode is only needed for development):
 
@@ -95,6 +98,15 @@ flag set to `false`. See `verification_pipeline` for individual check results.
 `tests_passed` reports the aggregate for required tests or strict-mode testing.
 It can be `null` when only agent-selected tests ran. A required test can pass
 while `review_pending` still indicates an unconfirmed delivery review.
+
+In the main conversation, the delivery review classifies the model's reply.
+Ordinary explanations appear directly with a model attribution. For test
+reports and replies without a reliable classification, the default answer
+shows what NZ-Coder actually ran, including the command, directory and exit
+code when available. Use `/message N` to open the submitted model text for
+that turn. SDK and HTTP clients can also read it from `metadata.authored_content`.
+The existing review handles the classification in the same request.
+
 After a process interruption, use `/resume` or `run --resume SESSION_ID` to
 reopen the saved session and continue from the current workspace.
 
@@ -167,9 +179,11 @@ retain the plain input fallback and picker commands report that a TTY is require
 Forks are independent top-level Sessions: NZ-Coder rekeys their complete
 Message/Part reference graph and numbers titles as `(fork #1)`, `(fork #2)`,
 and so on. Workspace files remain shared until an Agent explicitly edits them.
-Task-child Sessions referenced by forked history are cloned as separate child
-identities; write-capable children receive separate managed worktrees carrying
-their recorded changed and deleted file state.
+When the local terminal forks the latest turn, each referenced task-child
+Session gets a new identity. Write-capable children receive separate managed
+worktrees with their recorded changes and deletions. Local forks of earlier
+turns and forks through the HTTP service carry the tool receipts in the
+selected history. Child Sessions and their worktrees stay with the parent.
 While an Agent is running, a new terminal submission is queued. The current
 Provider stream and tool step settle normally, then the old turn is marked
 interrupted before another model request so the queued follow-up can take over.
@@ -468,7 +482,11 @@ events were filtered or discarded, but it must not revive an ID already
 tombstoned by `removed`. A stream failure before its first text chunk creates no
 part and therefore emits no `removed` event.
 
-HTTP abort retires the active attempt, emits one `removed` for a started part,
+During delivery review, tool and permission events remain visible. The main
+conversation publishes prose after it has selected the final answer. A draft
+kept private throughout its lifetime has no public text part to remove.
+
+HTTP abort retires the active attempt, emits one `removed` for a started public part,
 and suppresses later deltas from the provider worker. Because Python cannot
 forcibly stop an already-running worker thread, the Session remains busy until
 that worker returns; this prevents a new run from overlapping the retired one.

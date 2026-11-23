@@ -252,11 +252,13 @@ def test_stream_tool_only_runs_after_finish_and_never_replays_after_tail_error(t
         assert len(outputs) == 1
         assert 'real safe tool output' in outputs[0]
         assert result.tools_executed_in_stream is True
-        assert result.post_tool_stream_error
+        assert result.assistant_error["data"]["public_error"]["code"] == "model_stream_interrupted"
+        assert "1 次" in result.post_tool_stream_error
     else:
         assert len(requests) == config.PROVIDER_MAX_RETRIES + 1
         assert outputs == []
         assert result.aborted is True
+        assert result.assistant_error["data"]["public_error"]["metadata"]["attempts"] == len(requests)
 
 
 def test_anthropic_usage_delta_alone_is_not_a_finish_event():

@@ -9,7 +9,6 @@ import math
 import os
 from pathlib import Path
 import stat
-import tempfile
 import time
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -17,8 +16,10 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from nz_coder.foundation import config
+from nz_coder.foundation.file_lock import exclusive_file_lock
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.foundation.user_paths import prepare_user_storage
+from nz_coder.providers._model_file import write_private_model_file
 from nz_coder.runtime.process.workdir import current_workdir
 
 _MAX_REGISTRY_BYTES = 10_000_000
@@ -104,19 +105,15 @@ def sync_model_registry(
     target.parent.mkdir(parents=True, exist_ok=True)
     cache_root = prepare_user_storage(root).workspace_cache
     lock_path = _safe_child(cache_root, cache_root / _LOCK_RELATIVE_PATH)
-    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(lock_path, flags, 0o600)
-    try:
-        _lock_file(descriptor)
+    # 自定义快照可以放在其他目录，并发首次刷新仍需同一份工作区锁。
+    lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with exclusive_file_lock(lock_path):
         if not force and _is_fresh(target, source):
             return _result(load_registry_snapshot(root, strict=True), False)
         raw = _get_json(source, timeout)
         snapshot = _normalize_registry(raw, source)
         _write_snapshot(target, snapshot)
         return _result(snapshot, True)
-    finally:
-        _unlock_file(descriptor)
-        os.close(descriptor)
 
 
 def load_registry_snapshot(
@@ -586,39 +583,7 @@ def _write_snapshot(target: Path, snapshot: dict[str, Any]) -> None:
     ).encode("utf-8")
     if len(encoded) > _MAX_REGISTRY_BYTES:
         raise ValueError("Normalized model registry exceeds the size limit")
-    descriptor, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
-    try:
-        os.fchmod(descriptor, 0o600)
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, target)
-        os.chmod(target, 0o600)
-    except Exception:
-        try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
-        raise
-
-
-def _lock_file(descriptor: int) -> None:
-    try:
-        import fcntl
-
-        fcntl.flock(descriptor, fcntl.LOCK_EX)
-    except ImportError:
-        return
-
-
-def _unlock_file(descriptor: int) -> None:
-    try:
-        import fcntl
-
-        fcntl.flock(descriptor, fcntl.LOCK_UN)
-    except ImportError:
-        return
+    write_private_model_file(target, encoded)
 
 
 def _validated_timeout(value: Any) -> float:

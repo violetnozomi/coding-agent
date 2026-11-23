@@ -1201,7 +1201,7 @@ class BackgroundAgentManager:
                     )
             except PreparationInterrupted as exc:
                 preparation_interrupted = exc.reason
-                result = "Preparation cancelled." if exc.reason == "cancelled" else "Timed out during child preparation."
+                result = str(exc)
             except Exception as exc:
                 execution_error = to_public_error(exc)
                 result = execution_error.message

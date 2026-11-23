@@ -6,6 +6,7 @@ import os
 import pytest
 
 from nz_coder.foundation import config
+from nz_coder.foundation.private_paths import inspect_private_path
 from nz_coder.providers.configuration import (
     clear_provider_connection_overrides,
     provider_connection,
@@ -43,7 +44,9 @@ def test_save_connection_preserves_unrelated_env_and_applies_process_state(tmp_p
     assert "API_BASE_URL=https://api.example.test/v1" in content
     assert connection.api_key == "secret-test-key"
     assert connection.base_url == "https://api.example.test/v1"
-    assert os.stat(target).st_mode & 0o777 == 0o600
+    assert inspect_private_path(target).hardened
+    if os.name == "posix":
+        assert target.stat().st_mode & 0o777 == 0o600
 
 
 def test_environment_key_rotation_changes_credential_generation(monkeypatch):
@@ -126,11 +129,13 @@ def test_provider_connection_hardens_final_credential_file(tmp_path, monkeypatch
     import nz_coder.providers.connect as connect
 
     hardened = []
-    monkeypatch.setattr(
-        connect,
-        "harden_private_path",
-        lambda path: hardened.append(os.fspath(path)),
-    )
+    apply_permissions = connect.harden_private_path
+
+    def record_permissions(path):
+        hardened.append(os.fspath(path))
+        return apply_permissions(path)
+
+    monkeypatch.setattr(connect, "harden_private_path", record_permissions)
     try:
         target = tmp_path.parent / f"{tmp_path.name}-user.env"
         save_provider_connection(

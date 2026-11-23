@@ -28,6 +28,7 @@ def _context(tmp_path, *, history=None, terminal=None):
     permissions = SimpleNamespace(mode="default")
     agent = SimpleNamespace(
         session_id="session-1",
+        has_pending_settlement=False,
         permissions=permissions,
         model_capabilities=SimpleNamespace(available_variants=("low", "high")),
     )

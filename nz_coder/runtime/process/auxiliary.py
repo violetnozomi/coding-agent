@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Callable, Mapping
 from nz_coder.foundation.process_runner import LineCommandResult, ProcessInterrupted
 from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
 from nz_coder.runtime.process.platform_runtime import terminate_process_tree
+from nz_coder.runtime.process.process_backends import _WindowsJob, start_owned_pipe_command
 
 if TYPE_CHECKING:
     from nz_coder.runtime.process.command_broker import CommandAuthority
@@ -55,6 +56,7 @@ class _Command:
     stop: threading.Event = field(default_factory=threading.Event)
     handoff: threading.Event = field(default_factory=threading.Event)
     process: object | None = None
+    windows_job: _WindowsJob | None = None
     streams: list[_Stream] = field(default_factory=list)
     error: BaseException | None = None
     returncode: int | None = None
@@ -209,16 +211,8 @@ class AuxiliaryCommandRunner:
                 environment.pop("RIPGREP_CONFIG_PATH", None)
             else:
                 environment.update(GIT_TERMINAL_PROMPT="0", GIT_ASKPASS="")
-            record.process = subprocess.Popen(
-                record.argv,
-                cwd=str(record.cwd),
-                env=environment,
-                shell=False,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                start_new_session=os.name != "nt",
-                bufsize=0,
+            record.process, record.windows_job = start_owned_pipe_command(
+                record.argv, cwd=record.cwd, env=environment,
             )
             record.streams = [
                 _Stream(record.process.stdout),
@@ -268,6 +262,7 @@ class AuxiliaryCommandRunner:
                         process,
                         force=now - stopping_at
                         >= self.authority.run_settings.process_kill_grace,
+                        windows_job=record.windows_job,
                     )
                 except (OSError, subprocess.SubprocessError):
                     self._error(
@@ -291,10 +286,12 @@ class AuxiliaryCommandRunner:
                     )
             if waited and not swept:
                 try:
-                    swept = terminate_process_tree(process, force=True)
+                    swept = terminate_process_tree(process, force=True, windows_job=record.windows_job)
+                    # Windows job 的成员正在退出时，下一轮再查询即可。
+                    if not swept and record.windows_job is None:
+                        raise OSError("Process group termination was not confirmed")
                 except (OSError, subprocess.SubprocessError):
                     swept = False
-                if not swept:
                     self._error(
                         record,
                         _failure(

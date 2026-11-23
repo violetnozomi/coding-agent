@@ -1,8 +1,12 @@
 """真实类型投影经 HTTP 管理器落盘与恢复，保留同一安全错误。"""
 from __future__ import annotations
 
+import json
+import threading
+
 import pytest
 
+from nz_coder.http_service import NZCoderClient, SessionHTTPService
 from nz_coder.http_service.manager import SessionManager
 from nz_coder.protocol.public_error import PublicError
 from nz_coder.runtime.core.result import RunStatus, freeze_terminal_result
@@ -10,6 +14,51 @@ from nz_coder.runtime.core.run_context import RunContext
 from nz_coder.runtime.session.model import Session
 from nz_coder.runtime.execution.runner import _typed_result
 from tests.test_http_result_recovery import RecoveryAgent
+
+
+def test_native_http_provider_failure_keeps_the_same_public_error_in_the_answer(monkeypatch, tmp_path):
+    from nz_coder.providers.http import ProviderHTTPError
+    from tests.runtime.test_native_product_runtime import _install_runtime
+
+    class Provider:
+        name = "offline"
+
+        def create_completion(self, _client, **_kwargs):
+            raise ProviderHTTPError(401, {}, "PRIVATE_PROVIDER_RESPONSE")
+
+    _install_runtime(monkeypatch, Provider())
+    manager = SessionManager(workspace_roots=[tmp_path], restore_saved=False)
+    service = SessionHTTPService(port=0, manager=manager, token="offline-http-error-token")
+    server = threading.Thread(target=service.serve_forever, daemon=True)
+    server.start()
+    try:
+        client = NZCoderClient(service.base_url, service.token, timeout=5)
+        workspace = next(item["id"] for item in client.list_workspaces() if item["path"] == str(tmp_path))
+        session_id = client.create_session("default", workspace)["id"]
+        client.run(session_id, "Answer a question.", model="offline/offline-model")
+        assert manager.get(session_id).wait(timeout=10)
+        snapshot = client.snapshot(session_id)
+        info = snapshot["session"]
+        result = info["last_result"]
+        wire = next(m["info"]["error"]["data"]["public_error"] for m in snapshot["messages"]
+                    if m["info"].get("error"))
+        assert wire["code"] == "provider_error" and wire["metadata"]["status_code"] == 401
+        assert info["status"] == result["status"] == "error"
+        assert info["last_error"] == result["error"] == wire["message"]
+        assert result["metadata"]["public_error"] == wire
+        assert wire["message"] in result["answer"]
+        assert client.messages(session_id)[-1]["content"] == result["answer"]
+        assert "PRIVATE_PROVIDER_RESPONSE" not in json.dumps(snapshot)
+    finally:
+        service.shutdown()
+        server.join(timeout=2)
+    restored = SessionManager(workspace_roots=[tmp_path])
+    try:
+        recovered = restored.get(session_id).info()["last_result"]
+        assert recovered["metadata"]["public_error"] == wire
+        assert recovered["answer"] == result["answer"]
+    finally:
+        restored.close()
 
 
 @pytest.mark.parametrize('backend', ['native', 'agent'])

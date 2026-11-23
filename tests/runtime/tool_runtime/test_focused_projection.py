@@ -7,43 +7,39 @@ from nz_coder.runtime.tool_runtime.result_projection import ProductionToolResult
 from nz_coder.tool_platform.results import ToolResultBudget, ToolResultProjector
 
 
-def test_projection_appends_contiguous_result_and_runs_post_hook() -> None:
-    """Bypassing focused callbacks would lose accounting or post-result hooks."""
+def test_projection_keeps_batch_results_together_before_hooks_append_messages() -> None:
     traced: list[tuple[str, str]] = []
-    hooked: list[tuple[str, str]] = []
+
+    def append_followup(messages, _result, output):
+        messages.append({"role": "user", "content": f"follow up on {output}"})
+
     context = ToolProjectionContext(
         signal_from_metadata=lambda metadata: metadata.get("handoff") if metadata else None,
         record_result=lambda _result: False,
-        trace_result=lambda result, output, **_kwargs: traced.append((result.name, output)),
-
-        after_result=lambda _messages, result, output: hooked.append((result.name, output)),
+        trace_result=lambda _result, output, **event: traced.append((event["tool_call_id"], output)),
+        after_result=append_followup,
     )
-    result = ToolExecutionResult(
-        name="read_file",
-        tool_input={"path": "a.py"},
-        output="contents",
-        executed=True,
-        dispatch_failed=False,
-        command_failed=False,
-        is_write=False,
-    )
-    call = {"id": "call-read", "function": {"name": "read_file", "arguments": {}}}
+    dispatched = []
+    for index, filename in enumerate(["a.py", "b.py"]):
+        tool_input = {"path": filename}
+        call = {"id": f"read-{index}", "function": {"name": "read_file", "arguments": tool_input}}
+        result = ToolExecutionResult(
+            name="read_file", tool_input=tool_input, output=f"contents of {filename}",
+            executed=True, dispatch_failed=False, command_failed=False, is_write=False,
+        )
+        dispatched.append((index, call, result))
     messages: list[dict] = []
 
-    state = ProductionToolResultProjector().consume(
-        context,
-        [(0, call, result)],
-        messages,
-    )
+    state = ProductionToolResultProjector().consume(context, dispatched, messages)
 
     assert state["all_succeeded"] is True
-    assert messages == [{
-        "role": "tool",
-        "tool_call_id": "call-read",
-        "content": "contents",
-    }]
-    assert traced == [("read_file", "contents")]
-    assert hooked == [("read_file", "contents")]
+    assert messages == [
+        {"role": "tool", "tool_call_id": "read-0", "content": "contents of a.py"},
+        {"role": "tool", "tool_call_id": "read-1", "content": "contents of b.py"},
+        {"role": "user", "content": "follow up on contents of a.py"},
+        {"role": "user", "content": "follow up on contents of b.py"},
+    ]
+    assert traced == [("read-0", "contents of a.py"), ("read-1", "contents of b.py")]
 
 
 def test_projection_applies_one_budget_before_every_model_visible_consumer() -> None:

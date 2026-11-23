@@ -244,6 +244,31 @@ def test_question_bridge_cancel_dismisses_remaining_questions():
     assert renderer.paused == renderer.resumed == 1
 
 
+def test_question_bridge_reports_run_cancellation_and_releases_the_selector():
+    import threading
+    from nz_coder.tools import scoped_tool_cancellation
+
+    async def scenario():
+        opened = asyncio.Event()
+        cancel = threading.Event()
+        renderer = FakeRenderer()
+
+        class Terminal:
+            async def select_async(self, **kwargs):
+                opened.set()
+                await asyncio.Future()
+
+        bridge = TerminalInteractionBridge(Terminal(), renderer, asyncio.get_running_loop())
+        with scoped_tool_cancellation(cancel), scoped_question_asker(bridge.ask_question):
+            task = asyncio.create_task(asyncio.to_thread(dispatch, "question", {"questions": [_question()]}))
+        await asyncio.wait_for(opened.wait(), 2)
+        cancel.set()
+        result = await asyncio.wait_for(task, 2)
+        assert result.metadata == {"answers": [], "reason": "cancelled"}
+        assert renderer.paused == renderer.resumed == 1
+    asyncio.run(scenario())
+
+
 def test_bridge_conservatively_rejects_on_event_loop_thread():
     async def scenario():
         terminal = FakeTerminalInput(["once"])

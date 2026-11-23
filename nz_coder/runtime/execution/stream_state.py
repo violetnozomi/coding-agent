@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
+from nz_coder.protocol.message_schema import DEFERRED_MODEL_TEXT_KEY
 
 
 class StreamAttemptBuffer:
@@ -28,6 +29,7 @@ class StreamAttemptBuffer:
         self.message_part = message_part
         self.processor = processor
         self.publish = bool(publish)
+        self.publish_text = self.publish and not (message_part or {}).get(DEFERRED_MODEL_TEXT_KEY)
         self.text: list[str] = []
         self._pending_text: list[str] = []
         self._pending_chars = 0
@@ -82,7 +84,7 @@ class StreamAttemptBuffer:
     def flush_text(self, *, force: bool = False) -> int:
         """Publish one coalesced text delta and its matching Part snapshot."""
         if (
-            not self.publish
+            not self.publish_text
             or self.message_part is None
             or not self._pending_text
         ):
@@ -138,7 +140,7 @@ class StreamAttemptBuffer:
     def flush_reasoning(self, *, force: bool = False) -> int:
         """Publish one coalesced reasoning snapshot at a bounded cadence."""
         if (
-            not self.publish
+            not self.publish_text
             or self.processor is None
             or not self._pending_reasoning_chars
         ):

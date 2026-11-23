@@ -1,11 +1,8 @@
 """Built-in CLI slash commands."""
 from __future__ import annotations
 
-import os
 import json
 import sqlite3
-from pathlib import Path
-import tempfile
 import time
 
 from rich.console import Group
@@ -47,6 +44,7 @@ from nz_coder.interface.preferences import (
     update_terminal_preferences,
 )
 from nz_coder.interface.selector import SelectorActionResult
+from nz_coder.interface.transcript_export import write_transcript
 from nz_coder.foundation.async_utils import to_thread_settled
 from nz_coder.runtime.session.lifecycle import delete_session
 from nz_coder.state.sessions import (
@@ -56,13 +54,13 @@ from nz_coder.state.sessions import (
     save_session,
 )
 from nz_coder.interface.timeline import (
-    conversation_turns,
+    ConversationTurn,
+    TurnHistory,
     format_transcript,
-    fork_history,
     forked_session_title,
     rebind_fork_history,
     render_sessions,
-    render_timeline,
+    render_timeline_rows,
     session_options,
 )
 from nz_coder.tools.todo import render as render_todo
@@ -240,7 +238,7 @@ def register_core_commands(registry: CommandRegistry) -> None:
     registry.register(
         Command(
             "message",
-            "Inspect one historical turn with full tool details",
+            "Inspect a turn's tool details and retained model note",
             "/message [TURN]",
             handle_message_detail,
             category="Session",
@@ -936,10 +934,12 @@ async def handle_rename(ctx: CommandContext) -> None:
 def handle_copy(ctx: CommandContext) -> None:
     from nz_coder.interface.clipboard import copy_text
 
-    transcript = _current_transcript(ctx)
     try:
-        copied = copy_text(transcript)
-    except ValueError as exc:
+        transcript = _current_transcript(ctx)
+        if notice := transcript.get("notice"):
+            ctx.console.print(f"[info]{notice}[/info]")
+        copied = copy_text(transcript["markdown"])
+    except (OSError, ValueError) as exc:
         ctx.console.print(f"[error]Error: {exc}[/error]")
         return
     if copied:
@@ -976,11 +976,13 @@ def handle_copy_last(ctx: CommandContext) -> None:
 def handle_export(ctx: CommandContext) -> None:
     raw = ctx.args.strip() or f"session-{ctx.session_id[:24]}.md"
     try:
-        target = _safe_export_path(raw)
-        _write_text_atomic(target, _current_transcript(ctx))
+        transcript = _current_transcript(ctx)
+        target = write_transcript(raw, transcript, workspace=current_workdir())
     except (OSError, ValueError) as exc:
         ctx.console.print(f"[error]Error: {exc}[/error]")
         return
+    if notice := transcript.get("notice"):
+        ctx.console.print(f"[info]{notice}[/info]")
     ctx.console.print(f"[success]Session exported: {target}[/success]")
 
 
@@ -1086,56 +1088,17 @@ def handle_exit(ctx: CommandContext) -> None:
     ctx.session_state["exit_requested"] = True
 
 
-def _current_transcript(ctx: CommandContext) -> str:
+def _current_transcript(ctx: CommandContext) -> dict[str, str]:
     payload = load_session(ctx.session_id)
-    return format_transcript(
+    view = TurnHistory.load(ctx.history, session_id=ctx.session_id, workspace=current_workdir())
+    return view.export(
         ctx.session_id,
-        ctx.history,
         title=str(payload.get("title") or ""),
         tool_details=(
             getattr(getattr(ctx.terminal_input, "preferences", None), "tool_details", "compact")
             != "hidden"
         ),
     )
-
-
-def _safe_export_path(value: str) -> Path:
-    root = current_workdir().resolve()
-    raw = Path(value).expanduser()
-    candidate = raw if raw.is_absolute() else root / raw
-    if candidate.is_symlink():
-        raise ValueError("Export target symlinks are not allowed")
-    resolved = candidate.resolve()
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise ValueError("Export path must stay inside the workspace") from exc
-    if resolved.exists() and not resolved.is_file():
-        raise ValueError("Export target must be a regular file")
-    return resolved
-
-
-def _write_text_atomic(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-    )
-    temp_path = Path(temporary)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        temp_path.replace(path)
-    except Exception:
-        try:
-            os.close(descriptor)
-        except OSError:
-            pass
-        temp_path.unlink(missing_ok=True)
-        raise
 
 
 async def handle_compact(ctx: CommandContext) -> None:
@@ -1616,7 +1579,8 @@ def handle_timeline(ctx: CommandContext) -> None:
     except ValueError:
         ctx.console.print("[error]Usage: /timeline [LIMIT between 1 and 100][/error]")
         return
-    ctx.console.print(render_timeline(ctx.history, limit=limit))
+    view = TurnHistory.load(ctx.history, session_id=ctx.session_id, workspace=current_workdir())
+    ctx.console.print(render_timeline_rows(view.timeline(limit)))
 
 
 def handle_message_navigation(ctx: CommandContext) -> None:
@@ -1629,43 +1593,42 @@ def handle_message_navigation(ctx: CommandContext) -> None:
 
 async def handle_message_detail(ctx: CommandContext) -> None:
     """Open one complete user/Assistant turn without changing Session state."""
-    turns = conversation_turns(ctx.history)
-    if not turns:
-        ctx.console.print("[info]No historical turns are available.[/info]")
+    session_id = ctx.session_id
+    view = TurnHistory.load(ctx.history, session_id=session_id, workspace=current_workdir())
+    try:
+        if ctx.args.strip():
+            turn = view.select(int(ctx.args))
+        elif _picker_available(ctx) and view.readable:
+            if view.unavailable:
+                ctx.console.print(f"[info]{view.unavailable}[/info]")
+            turn = await _pick_history_turn(ctx, view, fork=False)
+            if turn is None or session_id != ctx.session_id:
+                return
+        else:
+            turn = view.select(None)
+    except ValueError as exc:
+        ctx.console.print(f"[error]{escape(str(exc))}[/error]")
         return
-    raw = ctx.args.strip()
-    if raw:
-        try:
-            number = int(raw)
-        except ValueError:
-            number = 0
-    elif _picker_available(ctx):
-        selected = await ctx.terminal_input.select_async(
-            title="Inspect message",
-            values=[
-                (turn.number, f"Turn {turn.number}: {_choice_preview(turn.user_text)}")
-                for turn in reversed(turns)
-            ],
-            text="Enter opens full ToolPart details · Esc returns",
-        )
-        if selected is None:
-            return
-        number = int(selected)
-    else:
-        number = turns[-1].number
-    if number < 1 or number > len(turns):
-        ctx.console.print(
-            f"[error]Turn must be between 1 and {len(turns)}.[/error]"
-        )
+    if turn is None:
+        text = f"Turn must be between 1 and {len(view.turns)}." if view.turns else "No historical turns are available."
+        ctx.console.print(f"[info]{text}[/info]")
         return
-    turn = turns[number - 1]
-    transcript = format_transcript(
-        ctx.session_id,
-        ctx.history[turn.start:turn.end],
-        title=f"Turn {number}",
-        tool_details=True,
+    ctx.console.print(Markdown(view.detail(session_id, turn)))
+
+
+async def _pick_history_turn(ctx: CommandContext, view: TurnHistory, *, fork: bool) -> ConversationTurn | None:
+    turns = view.readable
+    if not fork:
+        turns.reverse()
+    # 新会话用消息身份选中重复正文；缺少身份的旧内存记录仅在该次已捕获的列表里取值。
+    choices = {turn.message_id or turn.number: turn for turn in turns}
+    selected = await ctx.terminal_input.select_async(
+        title="Fork session" if fork else "Inspect message",
+        values=[(key, f"{view.label(turn)}: {_choice_preview(turn.user_text)}") for key, turn in choices.items()],
+        text=("Fork through the selected completed user turn. Workspace files stay shared." if fork
+              else "Enter opens full ToolPart details · Esc returns"),
     )
-    ctx.console.print(Markdown(transcript))
+    return choices.get(selected)
 
 
 def handle_agents(ctx: CommandContext) -> None:
@@ -1821,17 +1784,21 @@ async def handle_subagent_route(ctx: CommandContext) -> None:
 
 def handle_fork(ctx: CommandContext) -> None:
     ctx.ensure_environment_replaceable()
-    turns = conversation_turns(ctx.history)
-    if not turns:
-        ctx.console.print("[error]No user turns are available to fork.[/error]")
-        return
+    view = TurnHistory.load(ctx.history, session_id=ctx.session_id, workspace=current_workdir())
     try:
-        turn_number = int(ctx.args) if ctx.args else turns[-1].number
-        forked = fork_history(ctx.history, turn_number)
+        turn = view.fork_turn(int(ctx.args) if ctx.args else None)
     except ValueError as exc:
-        ctx.console.print(f"[error]Error: {exc}[/error]")
+        ctx.console.print(f"[error]Error: {escape(str(exc))}[/error]")
         return
+    _fork_selected_turn(ctx, view, turn)
 
+
+def _fork_selected_turn(ctx: CommandContext, view: TurnHistory, turn: ConversationTurn) -> None:
+    try:
+        prefix = view.fork_prefix(turn)
+    except ValueError as exc:
+        ctx.console.print(f"[error]{escape(str(exc))}[/error]")
+        return
     from nz_coder.runtime.agent.subagent import clone_referenced_subagents, discard_cloned_subagents
     from nz_coder.runtime.session.model import Session, SessionIdentity
     from nz_coder.runtime.session.store import LegacyJsonSessionStore, SessionHistoryUnconfirmed
@@ -1852,18 +1819,24 @@ def handle_fork(ctx: CommandContext) -> None:
             if artifact.exists():
                 shutil.rmtree(artifact)
     try:
-        save_session(ctx.history, mode=ctx.agent.permissions.mode, session_id=old_session_id,
-                     activate=False, require_aliases=False)
         original = load_session(old_session_id)
+        if "messages" not in original:
+            save_session(ctx.history, mode=ctx.agent.permissions.mode, session_id=old_session_id,
+                         activate=False, require_aliases=False)
+            original = load_session(old_session_id)
+        elif original["messages"] != ctx.history:
+            raise ValueError("Saved session history changed. Resume the session before forking.")
         fork_title = forked_session_title(str(original.get("title") or "New Session"))
         new_session_id = create_session_id("fork")
-        forked = rebind_fork_history(forked, new_session_id)
+        forked = rebind_fork_history(prefix, new_session_id)
         from nz_coder.runtime.session.session_revert import copy_fork_snapshots
         copy_fork_snapshots(current_workdir(), old_session_id, new_session_id, forked)
         new_agent = ctx.build_agent(ctx.system_prompt, ctx.renderer, new_session_id,
                                     permission_mode=ctx.agent.permissions.mode, activate_session_on_build=False)
-        clones = clone_referenced_subagents(old_session_id, new_session_id, forked,
-                    parent_agent_id=new_agent.agent_id, workspace_root=current_workdir())
+        # 子任务可被后续轮继续执行。目前只有它的最新原件；早于末轮的分支只继承当时的工具回执。
+        if turn.end == len(view.messages):
+            clones = clone_referenced_subagents(old_session_id, new_session_id, forked,
+                        parent_agent_id=new_agent.agent_id, workspace_root=current_workdir())
         candidate = Session.create(new_session_id, forked, workspace=current_workdir(),
                                    parent_session_id=old_session_id,
                                    metadata={"title": fork_title, "permission_mode": new_agent.permissions.mode})
@@ -1893,28 +1866,26 @@ def handle_fork(ctx: CommandContext) -> None:
     if "session_title" in ctx.session_state:
         ctx.session_state["session_title"] = fork_title
     ctx.console.print(
-        f"[success]Forked turn {turn_number} into {new_session_id} "
+        f"[success]Forked turn {turn.number} into {new_session_id} "
         f"({len(ctx.history)} messages). Workspace files were not changed.[/success]"
     )
 
 
 async def handle_fork_picker(ctx: CommandContext) -> None:
-    turns = conversation_turns(ctx.history)
-    if not turns:
+    ctx.ensure_environment_replaceable()
+    view = TurnHistory.load(ctx.history, session_id=ctx.session_id, workspace=current_workdir())
+    if view.unavailable:
+        ctx.console.print(f"[error]{view.unavailable}[/error]")
+        return
+    if not view.turns:
         ctx.console.print("[error]No user turns are available to fork.[/error]")
         return
     if not _picker_available(ctx):
         return
-    selected = await ctx.terminal_input.select_async(
-        title="Fork session",
-        values=[
-            (turn.number, f"Turn {turn.number}: {_choice_preview(turn.user_text)}")
-            for turn in turns
-        ],
-        text="Fork through the selected completed user turn. Workspace files stay shared.",
-    )
-    if selected is not None:
-        handle_fork(_context_with_args(ctx, str(selected)))
+    session_id = ctx.session_id
+    turn = await _pick_history_turn(ctx, view, fork=True)
+    if turn is not None and ctx.session_id == session_id:
+        _fork_selected_turn(ctx, view, turn)
 
 
 def handle_new_session(ctx: CommandContext) -> None:

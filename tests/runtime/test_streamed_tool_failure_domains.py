@@ -275,7 +275,8 @@ def test_genuine_provider_stream_failure_remains_fatal(monkeypatch, tmp_path):
     capture = _run(monkeypatch, tmp_path, command='printf recovered', provider_error=True)
     assert len(capture['requests']) == 1
     assert capture['result']['status'] == 'error'
-    assert any('ConnectionError' in stack for stack in capture['exceptions'])
+    assert capture['result']['metadata']['public_error']['code'] == 'model_stream_interrupted'
+    assert len(capture['tools']) == 1 and capture['tools'][0]['executed']
     assert not any('StreamToolExecutionFailed' in stack for stack in capture['exceptions'])
 
 

@@ -390,7 +390,7 @@ def test_output_guardrail_never_leaks_raw_delta(tmp_path, monkeypatch):
     assert result["verification"]["last_verification"] is None
     assert result["verification"]["delivery_review"] is None
     assert result["authored_content"] == "safe-output"
-    assert result["content"].startswith("本次执行已结束，验证尚未确认。")
+    assert result["content"].startswith("本次执行已结束。")
     assert result["content"].endswith("模型交付说明（未经独立确认）：\nsafe-output")
     assert messages[-1]["content"] == result["content"]
     assert "raw-secret" not in repr(messages)
@@ -552,7 +552,7 @@ def test_output_guardrail_tool_turn_never_materializes_private_text(
     assert result["verification"]["last_verification"] is None
     assert result["verification"]["delivery_review"] is None
     assert result["authored_content"] == "safe-output"
-    assert result["content"].startswith("本次执行已结束，验证尚未确认。")
+    assert result["content"].startswith("本次执行已结束。")
     assert result["content"].endswith("模型交付说明（未经独立确认）：\nsafe-output")
     assert messages[-1]["content"] == result["content"]
     assert "raw-secret" not in public_state
@@ -1133,7 +1133,7 @@ def test_stream_retry_removes_old_part_everywhere(tmp_path, monkeypatch):
     assert result["verification"]["last_verification"] is None
     assert result["verification"]["delivery_review"] is None
     assert result["authored_content"] == "complete-new"
-    assert result["content"].startswith("本次执行已结束，验证尚未确认。")
+    assert result["content"].startswith("本次执行已结束。")
     assert result["content"].endswith("模型交付说明（未经独立确认）：\ncomplete-new")
     assert messages[-1]["content"] == result["content"]
     assert "partial-old" not in repr(messages[-1].get(PARTS_KEY, []))

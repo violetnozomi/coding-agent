@@ -501,6 +501,26 @@ class ManagedSession:
             self._refresh_committed_result()
             return legacy_messages(self.history)
 
+    def _turn_history(self):
+        from nz_coder.interface.timeline import TurnHistory
+
+        self._refresh_committed_result()
+        return TurnHistory.load(self.history, session_id=self.session_id, workspace=self.workspace)
+
+    def timeline(self, limit: int) -> dict:
+        with self._lock:
+            return self._turn_history().timeline(limit)
+
+    def export(self) -> dict[str, str]:
+        with self._lock:
+            return self._turn_history().export(self.session_id, title=self.title, remote=True)
+
+    def message_detail(self, number: int | None) -> str | None:
+        with self._lock:
+            view = self._turn_history()
+            turn = view.select(number)
+            return view.detail(self.session_id, turn, remote=True) if turn is not None else None
+
     def diff(self) -> list[dict]:
         """Return the latest bounded snapshot-derived Session diff."""
         with self._lock:
@@ -1722,7 +1742,7 @@ class SessionManager:
         return self.info(session_id)
 
     def fork(self, session_id: str, turn_number: int | None = None) -> dict:
-        from nz_coder.interface.timeline import fork_history, forked_session_title, conversation_turns
+        from nz_coder.interface.timeline import forked_session_title
         from nz_coder.protocol.message_schema import rebind_fork_history
         from nz_coder.runtime.session.session_revert import copy_fork_snapshots
 
@@ -1730,11 +1750,10 @@ class SessionManager:
         with parent._lock:
             if parent._run_thread is not None:
                 raise SessionBusyError("cannot fork an active session run")
-            turns = conversation_turns(parent.history)
-            if not turns:
-                raise ValueError("No user turns are available to fork")
-            selected = int(turn_number) if turn_number is not None else turns[-1].number
-            parent_history = copy.deepcopy(parent.history)
+            view = parent._turn_history()
+            turn = view.fork_turn(turn_number)
+            # 历史详情会找回迟到回执；分支只能取得下一次用户提交前已存在的内容。
+            parent_history = copy.deepcopy(view.fork_prefix(turn))
             title = forked_session_title(parent.title)
             mode = parent.permission_mode
             workspace_id = parent.workspace_id
@@ -1748,7 +1767,7 @@ class SessionManager:
                 new_id = create_session_id("fork")
                 if new_id not in self._sessions and not self._find_candidates(new_id):
                     break
-            history = rebind_fork_history(fork_history(parent_history, selected), new_id)
+            history = rebind_fork_history(parent_history, new_id)
             copy_fork_snapshots(workspace, session_id, new_id, history)
             child = self._build_session(
                 session_id=new_id,

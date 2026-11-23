@@ -178,26 +178,21 @@ class ProductionRunLifecycle:
             from nz_coder.runtime.verification.domain.models import candidate_fingerprint
             runtime.domain.set_completion_candidate(candidate_fingerprint(resolved_content, outputs.get(active_agent)))
         watermark = runtime.prepare_freeze()
-        from nz_coder.runtime.core.result import normalize_run_status
-        with runtime.run_context._state_lock:
+        from nz_coder.runtime.core.result import RunStatus, normalize_run_status
+        with runtime.terminal_python_sources() as changed_python_sources:
             context.recovery.reset_tool_call_history(reason="terminal", context_changed=True)
             status = context.assert_terminal(status)
             snapshot = runtime.domain.snapshot()
             status = snapshot.assess_completion(status).status
-            runtime.run_context.freeze_execution(normalize_run_status(status))
+            runtime.run_context.freeze_execution(normalize_run_status(status), changed_python_sources=changed_python_sources)
             snapshot = runtime.domain.snapshot()
             verification = snapshot.to_dict()
         runtime.finish_freeze(watermark)
         context.finish_lineage(status, messages)
-        if status == "aborted" and not resolved_content:
-            resolved_content = (
-                f"Agent aborted after {context.recovery.consecutive_errors} "
-                "consecutive errors"
-            )
-            content_source = "status"
-        authored_content = str(runtime.run_context.metadata.get("authored_content") or "")
+        run = runtime.run_context
+        submitted = str(run.metadata.get("authored_content") or "")
         terminal_error = None
-        if status == "error":
+        if run.terminal_status is RunStatus.ERROR:
             # 仅当前交互的宿主错误可以成为终态原因，不能捡起历史错误或原始异常文本。
             interaction = runtime.run_context.interaction_run_id
             for message in reversed(messages):
@@ -207,42 +202,98 @@ class ProductionRunLifecycle:
                 terminal_error = public_error_from_wire(value.get("data", {}).get("public_error"))
                 break
             terminal_error = terminal_error or to_public_error(None)
-            if not resolved_content:
+            if status == "aborted" or not resolved_content:
                 resolved_content, content_source = terminal_error.message, "public_error"
-        rejected = snapshot.latest_review is not None and not snapshot.latest_review.accepted
+        review = snapshot.latest_review
+        rejected = review is not None and not review.accepted
+        denied = run.terminal_denied_commands
+        structured = context.output_schema_requested()
+        denied.add_to_verification(verification)
+        publish_structured = active_agent in outputs and status in {"completed", "completed_unverified"} and not rejected
+        if publish_structured:
+            verification["structured_output_source"] = "model"
+        report_options = {}
+        authored_content = "" if rejected else submitted
+        host_test_summary = run.uses_receipt_based_delivery and (review is None or review.test_report_kind != "ordinary")
+        if denied.total or host_test_summary:
+            from nz_coder.runtime.verification.report_evidence import current_model_reply
+
+            source = current_model_reply(messages, session_id=run.session.session_id, interaction_id=run.interaction_run_id)
+            final_candidate = status in {"completed", "completed_unverified"} and submitted == resolved_content
+            # 确定的验收阻塞可以取代默认答复，仍允许在详情里读到本轮已提交且未撤回的原稿。
+            blocked_candidate = not denied.total and not rejected and status == "blocked" and content_source == "boundary"
+            if not source or submitted != source.get("content") or not (final_candidate or blocked_candidate):
+                authored_content = ""
         if rejected:
-            from nz_coder.runtime.verification.completion_gate import verification_appendix
             outputs.pop(active_agent, None)
-            reason = resolved_content if resolved_content != authored_content else "Delivery review identified unresolved requirements."
+        stop_reason = ""
+        if terminal_error is not None:
+            stop_reason = terminal_error.message
+        elif status == "blocked" and content_source == "boundary" and resolved_content != submitted:
+            # 中断回调可能再次传回刚撤回的原文，只有独立的收尾消息能解释这次停止。
+            if not any(m.get("role") == "assistant" and m.get(INTERACTION_RUN_ID_KEY) == run.interaction_run_id
+                       and m.get("content") == resolved_content for m in messages):
+                stop_reason = resolved_content
+        if denied.total and not structured:
+            from nz_coder.runtime.verification.completion_gate import host_execution_report
+            resolved_content = host_execution_report(denied, verification, snapshot,
+                stop_reason=stop_reason, model_note=bool(authored_content))
+            report_options["replace_partial"] = True
+            if authored_content:
+                report_options["model_note"] = authored_content
+        elif rejected:
+            from nz_coder.runtime.verification.completion_gate import verification_appendix
+            reason = stop_reason or "Delivery review identified unresolved requirements."
             paths = sorted({fact.path for fact in snapshot.artifacts if fact.operation in {"create", "change", "delete"}})
             changes = "\n\n已记录的文件变更：" + ", ".join(paths) if paths else ""
             resolved_content = "本次交付尚未完成。\n\n" + reason + changes + "\n\n" + verification_appendix(verification)
+        elif host_test_summary:
+            from nz_coder.runtime.verification.completion_gate import host_test_report
+
+            resolved_content = host_test_report(
+                snapshot, model_note=bool(authored_content), status=run.terminal_status.value, stop_reason=stop_reason,
+            )
+            report_options["replace_partial"] = True
+            if authored_content:
+                report_options["model_note"] = authored_content
         elif (status in {"completed", "completed_unverified"}
                 and "verification_state" in verification
-                and not context.output_schema_requested()):
+                and not structured and not denied.total):
             from nz_coder.runtime.verification.completion_gate import verification_appendix
+            if run.uses_receipt_based_delivery:
+                # 评审只判断答复的用途。即使评为普通说明，正文也不构成宿主执行证明。
+                resolved_content = "模型说明（测试执行以宿主回执为准）：\n" + resolved_content
+            elif status == "completed_unverified":
+                reviewed = review is not None and review.accepted
+                heading = "模型交付说明：" if reviewed else "模型交付说明（未经独立确认）："
+                resolved_content = heading + "\n" + resolved_content
             if status == "completed_unverified":
-                resolved_content = ("本次执行已结束，验证尚未确认。\n\n" + verification_appendix(verification)
-                    + "\n\n模型交付说明（未经独立确认）：\n" + resolved_content)
+                resolved_content = ("本次执行已结束。\n\n" + verification_appendix(verification)
+                    + "\n\n" + resolved_content)
             else:
                 resolved_content = (resolved_content.rstrip() + "\n\n" + verification_appendix(verification)).lstrip()
-        persisted_into_assistant = bool(
-            context.persist_assistant_end(messages, status, resolved_content)
-        )
+        persisted_into_assistant = bool(context.persist_assistant_end(messages, status, resolved_content, **report_options))
+        runtime = context.runtime_summary()
+        errors = context.recovery.consecutive_errors if status in {"aborted", "max_turns"} else 0
+        if status == "aborted" and terminal_error is not None:
+            errors = terminal_error.metadata.get("attempts", errors)
+        state.last_status = {
+            "status": status,
+            "content": resolved_content,
+            "authored_content": authored_content,
+            "errors": errors,
+            **verification,
+            "verification": verification,
+            "runtime": runtime,
+        }
+        if terminal_error is not None:
+            state.last_status.update(public_error=terminal_error.to_dict(), last_error=terminal_error.message)
+        if publish_structured:
+            state.last_status["structured"] = copy.deepcopy(outputs[active_agent])
+        run.prepared_terminal_result = state.last_status
         if status == "aborted":
             if on_text:
                 on_text(resolved_content)
-            runtime = context.runtime_summary()
-            state.last_status = {
-                "status": "aborted",
-                "content": resolved_content,
-                "authored_content": authored_content,
-                "errors": context.recovery.consecutive_errors,
-                "last_error": context.recovery.last_error,
-                **verification,
-                "verification": verification,
-                "runtime": runtime,
-            }
             context.commit()
             context.trace(
                 "terminal_content_persisted",
@@ -253,7 +304,7 @@ class ProductionRunLifecycle:
             ProductionRunLifecycle._trace_evidence(context)
             context.trace(
                 "run_end", status="aborted",
-                errors=context.recovery.consecutive_errors,
+                errors=errors,
                 runtime=runtime,
                 **context.verification_runtime.status(),
             )
@@ -276,23 +327,6 @@ class ProductionRunLifecycle:
                 on_token(resolved_content)
             on_token(None)
 
-        runtime = context.runtime_summary()
-        state.last_status = {
-            "status": status,
-            "content": resolved_content,
-            "authored_content": authored_content,
-            "errors": (
-                context.recovery.consecutive_errors if status == "max_turns" else 0
-            ),
-            **verification,
-            "verification": verification,
-            "runtime": runtime,
-        }
-        if terminal_error is not None:
-            state.last_status["public_error"] = terminal_error.to_dict()
-            state.last_status["last_error"] = terminal_error.message
-        if active_agent in outputs and status in {"completed", "completed_unverified"} and not rejected:
-            state.last_status["structured"] = copy.deepcopy(outputs[active_agent])
         context.commit()
         context.trace(
             "terminal_content_persisted",

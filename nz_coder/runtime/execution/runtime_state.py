@@ -18,6 +18,7 @@ import math
 import re
 import threading
 import time
+from contextlib import nullcontext
 from dataclasses import dataclass, field, fields as dataclass_fields
 from pathlib import Path
 
@@ -46,6 +47,15 @@ from nz_coder.tools import (
     collect_filesystem_mutation_paths,
     is_filesystem_mutation_tool,
 )
+
+
+def verification_snapshot_with_paths(state):
+    """在同一把运行锁内确定证据的版本和作用路径，避免把下一代修改拼入旧快照。"""
+    context = getattr(state, "_verification_context", None)
+    with context._state_lock if context is not None else nullcontext():
+        domain = getattr(state, "verification_domain", None)
+        return (domain.snapshot() if domain is not None else None,
+                tuple(getattr(state, "changed_files", ())))
 
 
 STRICT_INVESTIGATION_SOFT_LIMIT = 12
@@ -1000,13 +1010,13 @@ class RuntimeState:
 
     @property
     def changed_files_verified(self) -> bool:
-        domain = self.verification_domain
-        return bool(domain and domain.snapshot().execution_ready and any(
-            item.status == "passed" for item in domain.snapshot().checks))
+        snapshot, paths = verification_snapshot_with_paths(self)
+        return bool(snapshot and snapshot.syntax_coverage(paths)[1])
 
     @property
     def py_compile_ok(self) -> bool:
-        return self.changed_files_verified
+        snapshot, paths = verification_snapshot_with_paths(self)
+        return bool(snapshot and snapshot.syntax_coverage(paths, python_only=True)[1])
 
     @property
     def verification_generation(self) -> int:
@@ -1025,7 +1035,6 @@ class RuntimeState:
 
     def to_dict(self, active: bool = True) -> dict:
         """对外投影；恢复只接受 build_runtime_checkpoint 的域快照。"""
-        from contextlib import nullcontext
         context = self._verification_context
         with context._state_lock if context is not None else nullcontext():
             data = build_runtime_checkpoint(self, active=active)
@@ -1943,7 +1952,7 @@ class RuntimeState:
         elif include_current_facts and self.py_compile_ok and self.has_diff and self.verification_attempts >= 1:
             if self.turn_count - self.last_edit_turn <= 2:
                 reminders.append(
-                    "verify_changed_files passed. Check what this evidence covers against "
+                    "Python compilation passed for the changed files. Check this evidence against "
                     "the remaining requirements; static checks alone do not confirm behavior."
                 )
 

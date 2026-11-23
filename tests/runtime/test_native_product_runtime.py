@@ -58,8 +58,26 @@ def _completion(text="done", *, tool=None):
     )
 
 
-def _install_runtime(monkeypatch, provider):
-    runtime = replace(_runtime(), provider=provider)
+def _offline_accept_review(request, *, report_kind=None):
+    tools = [tool["function"]["name"] for tool in request.get("tools", [])]
+    if tools != ["emit_sidecar_verdict"]:
+        return None
+    report = {"verdict": "accept", "reason": "Controlled offline review",
+              "delivery_assessment": {"status": "reviewed", "issues": []}}
+    if report_kind:
+        report["test_report_kind"] = report_kind
+    call = SimpleNamespace(function=SimpleNamespace(name="emit_sidecar_verdict", arguments=json.dumps(report)))
+    return SimpleNamespace(choices=[SimpleNamespace(
+        message=SimpleNamespace(content="", tool_calls=[call]), finish_reason="tool_calls",
+    )])
+
+
+def _install_runtime(monkeypatch, provider, *, with_delivery_review=False):
+    if with_delivery_review:
+        # 产品工厂只为自有客户端注册默认评审；测试的评审也要走同一个离线 provider。
+        monkeypatch.delenv("KODAX_VERIFIER_PROVIDER", raising=False)
+        monkeypatch.delenv("KODAX_VERIFIER_MODEL", raising=False)
+    runtime = replace(_runtime(), provider=provider, owns_client=with_delivery_review)
     used = False
     def resolve(_selection):
         nonlocal used
@@ -87,11 +105,13 @@ def test_native_running_tool_checkpoint_preserves_store_policy(
         def __init__(self):
             self.calls = 0
 
-        def create_completion(self, _client, **_kwargs):
+        def create_completion(self, _client, **kwargs):
+            if review := _offline_accept_review(kwargs):
+                return review
             self.calls += 1
             return _completion(tool="list_directory") if self.calls == 1 else _completion()
 
-    _install_runtime(monkeypatch, Provider())
+    _install_runtime(monkeypatch, Provider(), with_delivery_review=True)
     request = replace(_request(tmp_path), metadata={
         "permission_mode": "auto", "persist_session": persist_session,
     })
@@ -569,13 +589,14 @@ def test_agent_client_forwards_product_interaction_ports(tmp_path):
 
 def test_agent_client_external_bus_returns_result_and_preserves_event_identity(monkeypatch, tmp_path):
     from nz_coder.protocol.session_events import SessionEventBus
-    from nz_coder.runtime.execution import native_sdk
     from nz_coder.sdk import AgentClient
 
     class Provider:
         name = "offline"
 
-        def create_completion(self, _client, **_kwargs):
+        def create_completion(self, _client, **kwargs):
+            if review := _offline_accept_review(kwargs, report_kind="ordinary"):
+                return review
             return SimpleNamespace(
                 choices=[SimpleNamespace(
                     message=SimpleNamespace(content="OFFLINE_DONE", tool_calls=[]),
@@ -584,9 +605,7 @@ def test_agent_client_external_bus_returns_result_and_preserves_event_identity(m
                 usage=None,
             )
 
-    runtime = replace(_runtime(), provider=Provider())
-    monkeypatch.setattr(native_sdk, "resolve_model_runtime", lambda _: runtime)
-    monkeypatch.setattr("nz_coder.runtime.execution.loop.resolve_model_runtime", lambda _: runtime)
+    _install_runtime(monkeypatch, Provider(), with_delivery_review=True)
     request = replace(
         _request(tmp_path),
         interaction_run_id="sdk-external-interaction",
@@ -599,8 +618,10 @@ def test_agent_client_external_bus_returns_result_and_preserves_event_identity(m
             request, event_bus=bus, permission_asker=lambda *_: True,
         ))
         assert result.status.value == "completed"
-        assert result.final_text.startswith("OFFLINE_DONE\n\n")
+        assert "模型说明" in result.final_text and "测试执行以宿主回执为准" in result.final_text
+        assert result.metadata["authored_content"] == "OFFLINE_DONE"
         assert "未评估" in result.final_text
+        assert "交付评审已通过" in result.final_text
         assert result.messages[-1]["content"] == result.final_text
         assert json.loads(json.dumps(copy.deepcopy(result.metadata))) == result.metadata
         completed = [event for event in bus.recent(100) if event.type == "session.run.completed"]
@@ -635,6 +656,8 @@ def test_product_default_retrieval_reaches_provider(monkeypatch, tmp_path, metad
         name = "offline"
 
         def create_completion(self, _client, **kwargs):
+            if review := _offline_accept_review(kwargs):
+                return review
             requests.append(copy.deepcopy(kwargs))
             return SimpleNamespace(
                 choices=[SimpleNamespace(
@@ -644,9 +667,7 @@ def test_product_default_retrieval_reaches_provider(monkeypatch, tmp_path, metad
                 usage=None,
             )
 
-    runtime = replace(_runtime(), provider=Provider())
-    monkeypatch.setattr(native_sdk, "resolve_model_runtime", lambda _: runtime)
-    monkeypatch.setattr("nz_coder.runtime.execution.loop.resolve_model_runtime", lambda _: runtime)
+    _install_runtime(monkeypatch, Provider(), with_delivery_review=True)
     request = replace(
         _request(tmp_path),
         messages=({"role": "user", "content": "Explain `charge`"},),
@@ -747,9 +768,13 @@ def test_native_runner_carries_edit_recovery_into_next_model_request(monkeypatch
     environment = native_sdk.build_product_run_environment(request, options)
     try:
         result = asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request, options))
-        # 原来 SDK 折叠了未完成的 static 验证；当前保留真实义务。
+        # 普通任务的实际测试已通过；模拟器只回文本，所以仍没有独立交付评审。
         assert result.status is RunStatus.COMPLETED_UNVERIFIED
-        assert result.metadata["verification"]["verification_needed"] is True
+        verification = result.metadata["verification"]
+        assert verification["verification_needed"] is False
+        assert verification["last_verification"]["status"] == "passed"
+        assert verification["last_verification"]["command"] == "python -m pytest -q tests/test_module.py"
+        assert verification["review_pending"] and "交付评审尚未确认" in result.final_text
         assert target.read_text(encoding="utf-8") == "value = 2\n"
         assert len(requests) >= 4
         second_request = "\n".join(
@@ -765,7 +790,10 @@ def test_native_runner_carries_edit_recovery_into_next_model_request(monkeypatch
         environment.close()
 
 
-@pytest.mark.parametrize('tail,after_static,expected,calls', [(True,False,'completed',2), (True,True,'completed',3), (False,False,'completed',2)])
+@pytest.mark.parametrize('tail,after_static,expected,calls', [
+    (True, False, 'completed', 2), (True, True, 'completed', 3),
+    (False, False, 'completed', 2), (False, False, 'completed_unverified', 2),
+])
 def test_real_tool_verification_is_frozen_in_result_and_durable_session(monkeypatch, tmp_path, tail, after_static, expected, calls):
     from nz_coder.runtime.execution import native_sdk
     from nz_coder.runtime.session.model import SessionIdentity
@@ -778,6 +806,8 @@ def test_real_tool_verification_is_frozen_in_result_and_durable_session(monkeypa
         name='offline'
         calls=0
         def create_completion(self,_client,**kwargs):
+            if review := _offline_accept_review(kwargs):
+                return _completion("Review unavailable") if expected == "completed_unverified" else review
             self.calls+=1
             result=_completion('Actual run finished')
             if self.calls==1 or (after_static and self.calls==2):
@@ -786,7 +816,7 @@ def test_real_tool_verification_is_frozen_in_result_and_durable_session(monkeypa
                 result.choices[0].finish_reason='tool_calls'
             return result
     provider=Provider()
-    _install_runtime(monkeypatch,provider)
+    _install_runtime(monkeypatch, provider, with_delivery_review=True)
     request=replace(_request(tmp_path), metadata={'permission_mode':'auto','persist_session':True,'max_turns':20})
     options=RunOptions(permission_asker=lambda *_:True)
     environment=native_sdk.build_product_run_environment(request,options)
@@ -796,10 +826,16 @@ def test_real_tool_verification_is_frozen_in_result_and_durable_session(monkeypa
         assert provider.calls==calls
         verification=result.metadata['verification']
         assert verification['verification_needed'] is False
-        if tail:
-            assert verification['tests_passed'] is None
-            assert verification['ignored_verifications']
-        assert '运行时验证记录' in result.final_text
+        # Shell 执行器能为显示用的 tail 提供原测试进程的回执；单条自选测试不等于全套验收。
+        assert verification['tests_passed'] is None
+        assert not verification['ignored_verifications']
+        accepted_tests = [item['last_command'] for stage in verification['verification_pipeline']['stages']
+                          for item in stage['commands'] if item['capability'] == 'test' and item['status'] == 'passed']
+        assert command in accepted_tests
+        assert '已有通过的测试回执' in result.final_text
+        assert verification['review_pending'] is (expected == 'completed_unverified')
+        review_label = '交付评审尚未确认' if verification['review_pending'] else '交付评审已通过'
+        assert review_label in result.final_text
         assert result.messages[-1]['content']==result.final_text
         store=environment.runtime_services.session_runtime.store
         restored=asyncio.run(store.load(SessionIdentity(request.session_id),tmp_path))
@@ -813,6 +849,10 @@ def test_real_tool_verification_is_frozen_in_result_and_durable_session(monkeypa
 
 def test_interrupted_verification_obligation_survives_real_runtime_restart(monkeypatch,tmp_path):
     from nz_coder.runtime.execution import native_sdk
+
+    cancellation = threading.Event()
+    command = "python -m unittest discover -s tests"
+
     class Provider:
         name='offline'
         calls=0
@@ -822,33 +862,41 @@ def test_interrupted_verification_obligation_survives_real_runtime_restart(monke
             if self.calls==1:
                 result.choices[0].message=SimpleNamespace(content='',tool_calls=[SimpleNamespace(
                     id='call-before-interrupt',type='function',function=SimpleNamespace(name='bash',
-                        arguments=json.dumps({'command':'python -m unittest discover -s tests 2>&1 | tail -8'})))])
+                        arguments=json.dumps({'command': command})))])
                 result.choices[0].finish_reason='tool_calls'
+            elif self.calls == 2:
+                # 用户在失败回执已结算后中断；恢复时必须还能看到原来的验收义务。
+                cancellation.set()
             return result
     tests=tmp_path/'tests'
     tests.mkdir()
     (tests/'test_ok.py').write_text('import unittest\nclass T(unittest.TestCase):\n def test_ok(self): self.assertTrue(False)\n')
     provider=Provider()
     _install_runtime(monkeypatch,provider)
-    options=RunOptions(permission_asker=lambda *_:True)
-    request=replace(_request(tmp_path),metadata={'permission_mode':'auto','persist_session':True,'max_turns':2})
+    options=RunOptions(permission_asker=lambda *_:True, cancellation=cancellation)
+    request=replace(_request(tmp_path),
+        messages=({"role": "user", "content": f"Run the tests. Acceptance command: `{command}`."},),
+        metadata={'permission_mode':'auto','persist_session':True,'max_turns':5})
     environment=native_sdk.build_product_run_environment(request,options)
     try:
         first=asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request,options))
-        assert first.status.value=='max_turns'
+        assert first.status.value == 'cancelled'
         assert first.metadata['verification']['verification_needed'] is True
         original_failures = first.metadata['verification']['test_obligations'][0]['failure_execution_ids']
+        assert original_failures
     finally:
         environment.close()
     resumed=replace(request,messages=(*first.messages,{'role':'user','content':'go on'}),
         metadata={**request.metadata,'max_turns':20})
+    options = replace(options, cancellation=None)
     environment=native_sdk.build_product_run_environment(resumed,options)
     try:
         result=asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(resumed,options))
-        assert result.status.value=='completed_unverified'
+        assert result.status.value == 'blocked'
         assert result.metadata['verification']['verification_needed'] is True
-        assert result.metadata['verification']['test_obligations'][0]['failure_execution_ids'] == original_failures
-        assert environment.runtime_state.completion_gate_prompts==2
-        assert provider.calls==5
+        obligation, = result.metadata['verification']['test_obligations']
+        assert obligation['status'] == 'pending'
+        assert obligation['command'] == command
+        assert obligation['failure_execution_ids'][:len(original_failures)] == original_failures
     finally:
         environment.close()

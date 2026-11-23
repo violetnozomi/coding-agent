@@ -12,6 +12,7 @@ from nz_coder.tool_platform.permissioning.interaction import (
 )
 from nz_coder.tool_platform.policies.command_policy import classify_bash
 from nz_coder.tools import current_tool_cancel_event
+from nz_coder.tools.question import QuestionWaitEnded
 
 
 class TerminalInteractionBridge:
@@ -27,17 +28,17 @@ class TerminalInteractionBridge:
         """Return once/always/reject without blocking the event-loop thread."""
         return self._submit(
             self._ask_permission(tool_name, tool_input),
-            default="reject", permission=True,
+            default="reject", kind="permission",
         )
 
     def ask_question(self, questions: list[dict]) -> list[list[str]] | None:
         """Return normalized structured answers or None when dismissed."""
-        return self._submit(self._ask_questions(questions), default=None)
+        return self._submit(self._ask_questions(questions), default=None, kind="question")
 
     def ask_workflow_approval(self, summary: dict) -> str:
         """Return approve/deny/cancel for one digest-bound Workflow summary."""
         return self._submit(
-            self._ask_workflow_approval(dict(summary)), default="cancel"
+            self._ask_workflow_approval(dict(summary)), default="cancel", kind="workflow",
         )
 
     async def ask_auto_permission(
@@ -77,10 +78,10 @@ class TerminalInteractionBridge:
             raise PermissionInteractionError("unavailable") from None
         return "reject" if result is None else normalize_permission_reply(result)
 
-    def _submit(self, coroutine, *, default, permission=False):  # noqa: ANN001
+    def _submit(self, coroutine, *, default, kind):  # noqa: ANN001
         if threading.get_ident() == self.owner_thread or self.loop.is_closed():
             coroutine.close()
-            if permission:
+            if kind == "permission":
                 raise PermissionInteractionError("unavailable")
             return default
         cancel_event = current_tool_cancel_event()
@@ -91,8 +92,10 @@ class TerminalInteractionBridge:
             interaction_task = asyncio.current_task()
             if cancel_event is not None and cancel_event.is_set():
                 coroutine.close()
-                if permission:
+                if kind == "permission":
                     raise PermissionInteractionError("cancelled")
+                if kind == "question":
+                    raise QuestionWaitEnded("cancelled")
                 return default
             return await coroutine
 
@@ -113,13 +116,16 @@ class TerminalInteractionBridge:
                         cancel_requested = True
                         # 取消循环内的 Task，保留同一个 future 等待 finally 真正退出。
                         self.loop.call_soon_threadsafe(cancel_interaction)
-        except PermissionInteractionError:
+        except (PermissionInteractionError, QuestionWaitEnded):
             raise
         except (FutureCancelledError, RuntimeError):
             future.cancel()
-            if permission:
-                reason = "cancelled" if cancel_event is not None and cancel_event.is_set() else "unavailable"
+            cancelled = cancel_event is not None and cancel_event.is_set()
+            if kind == "permission":
+                reason = "cancelled" if cancelled else "unavailable"
                 raise PermissionInteractionError(reason) from None
+            if kind == "question" and cancelled:
+                raise QuestionWaitEnded("cancelled") from None
             return default
 
     async def _ask_permission(self, tool_name: str, tool_input: dict) -> str:

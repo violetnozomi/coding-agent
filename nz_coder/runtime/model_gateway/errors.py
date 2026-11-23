@@ -69,6 +69,17 @@ def should_fallback_for_forced_tool_choice(error: BaseException) -> bool:
     return explicitly_rejected or bool(status is not None and 500 <= status <= 599)
 
 
+def transport_interruption_kind(error: BaseException) -> str | None:
+    from httpx import NetworkError, RemoteProtocolError, TimeoutException
+    from openai import APIConnectionError, APITimeoutError
+
+    if isinstance(error, (TimeoutError, TimeoutException, APITimeoutError)):
+        return "timeout"
+    if isinstance(error, (ConnectionError, NetworkError, RemoteProtocolError, APIConnectionError)):
+        return "connection"
+    return None
+
+
 def classify_provider_error(error: BaseException) -> str:
     """Classify in strict precedence order used by every model consumer."""
     if is_context_overflow_error(error):
@@ -77,6 +88,6 @@ def classify_provider_error(error: BaseException) -> str:
         return "fatal"
     if is_provider_client_error(error):
         return "client_error"
-    if RecoveryState.is_retryable(error):
+    if transport_interruption_kind(error) or RecoveryState.is_retryable(error):
         return "retryable"
     return "fatal"

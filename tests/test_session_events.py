@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from nz_coder.providers.normalized import chunk as protocol_chunk
 from nz_coder.protocol.session_events import (
     EventCursorExpiredError,
     EventSubscriptionGapError,
@@ -702,7 +703,7 @@ def test_agent_loop_publishes_native_session_lifecycle(tmp_path, monkeypatch):
     result = asyncio.run(agent.run(messages, stream=False))
     events = _drain(subscription)
 
-    assert result["status"] == "completed"
+    assert result["status"] == "completed_unverified"
     assert [event.type for event in events] == [
         "session.run.started",
         "message.part.updated",
@@ -725,8 +726,9 @@ def test_agent_loop_publishes_native_session_lifecycle(tmp_path, monkeypatch):
     assert part["message_id"] == events[4].properties["message_id"]
     assert messages[-1]["_nz_message_id"] == part["message_id"]
     final_text = (
-        "done\n\n**运行时验证记录**（来源：VerificationDomain）\n"
-        "- 未评估：本次没有已采信的验证执行。"
+        "本次执行已结束。\n\n**运行时验证记录**（来源：VerificationDomain）\n"
+        "- 未评估：本次没有已采信的验证执行。当前没有待完成的必需检查。\n"
+        "- 交付评审尚未确认。\n\n模型交付说明（未经独立确认）：\ndone"
     )
     assert events[-3].properties["part"]["id"] != part["id"]
     assert events[-3].properties["part"]["message_id"] == part["message_id"]
@@ -745,7 +747,7 @@ def test_agent_loop_publishes_native_session_lifecycle(tmp_path, monkeypatch):
     )
     assert step_start["snapshot"].startswith("snap-")
     assert step_finish["snapshot"] == step_start["snapshot"]
-    assert events[-1].properties["status"] == "completed"
+    assert events[-1].properties["status"] == result["status"]
     assert all(event.session_id == "event-session" for event in events)
 
     agent.close()
@@ -756,6 +758,7 @@ def test_agent_loop_publishes_native_session_lifecycle(tmp_path, monkeypatch):
 
 def test_agent_stream_publishes_incremental_text_part_lifecycle(tmp_path, monkeypatch):
     from nz_coder.foundation import config
+    from nz_coder.providers.normalized import chunk
     from nz_coder.runtime.execution.loop import AgentLoop
 
     chunks = [
@@ -773,6 +776,7 @@ def test_agent_stream_publishes_incremental_text_part_lifecycle(tmp_path, monkey
                 reasoning_content=None,
             ))],
         ),
+        chunk(finish_reason="stop"),
     ]
 
     class Completions:
@@ -800,7 +804,7 @@ def test_agent_stream_publishes_incremental_text_part_lifecycle(tmp_path, monkey
     )
     events = _drain(subscription)
 
-    assert result["status"] == "completed"
+    assert result["status"] == "completed_unverified"
     assert [event.type for event in events] == [
         "session.run.started",
         "message.part.updated",
@@ -825,8 +829,9 @@ def test_agent_stream_publishes_incremental_text_part_lifecycle(tmp_path, monkey
     assert second_delta.properties["delta"] == " world"
     assert completed.properties["part"]["text"] == "hello world"
     final_text = (
-        "hello world\n\n**运行时验证记录**（来源：VerificationDomain）\n"
-        "- 未评估：本次没有已采信的验证执行。"
+        "本次执行已结束。\n\n**运行时验证记录**（来源：VerificationDomain）\n"
+        "- 未评估：本次没有已采信的验证执行。当前没有待完成的必需检查。\n"
+        "- 交付评审尚未确认。\n\n模型交付说明（未经独立确认）：\nhello world"
     )
     assert events[-3].properties["part"]["id"] != completed.properties["part"]["id"]
     assert events[-3].properties["part"]["message_id"] == completed.properties["part"]["message_id"]
@@ -875,12 +880,13 @@ def test_stream_tool_input_is_durable_before_tool_dispatch(tmp_path, monkeypatch
                 tool_calls=[tool_arguments],
                 reasoning_content=None,
             ))]),
+            protocol_chunk(finish_reason="tool_calls"),
         ],
         [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(
             content="done",
             tool_calls=None,
             reasoning_content=None,
-        ))])],
+        ))]), protocol_chunk(finish_reason="stop")],
     ]
 
     class Completions:
@@ -904,7 +910,7 @@ def test_stream_tool_input_is_durable_before_tool_dispatch(tmp_path, monkeypatch
     result = asyncio.run(agent.run(messages, stream=True))
     events = _drain(subscription)
 
-    assert result["status"] == "completed"
+    assert result["status"] == "completed_unverified"
     pending_indexes = [
         index for index, event in enumerate(events)
         if event.type == "message.part.updated"
@@ -1025,7 +1031,7 @@ def test_stream_executes_tool_before_consuming_trailing_usage(tmp_path, monkeypa
         part for part in first_assistant["_nz_parts"]
         if part["type"] == "step-finish"
     )
-    assert result["status"] == "completed"
+    assert result["status"] == "completed_unverified"
     assert order.index("tool-result") < order.index("stream-tail")
     assert finish["tokens"] == {"input": 3, "output": 2, "total": 5}
     assert first_assistant["_nz_usage"] == {"input": 3, "output": 2, "total": 5}
@@ -1269,7 +1275,7 @@ def test_stream_retry_removes_partial_part_before_new_attempt(tmp_path, monkeypa
             self.calls += 1
             if self.calls == 1:
                 return broken_stream()
-            return iter([chunk("complete")])
+            return iter([chunk("complete"), protocol_chunk(finish_reason="stop")])
 
     bus = SessionEventBus(session_id="retry-session")
     subscription = bus.subscribe()
@@ -1318,6 +1324,7 @@ def test_stream_retry_removes_partial_part_before_new_attempt(tmp_path, monkeypa
 
 def test_stream_retry_settles_incomplete_tool_part(tmp_path, monkeypatch):
     from nz_coder.foundation import config
+    from nz_coder.providers.normalized import chunk
     from nz_coder.runtime.execution.loop import AgentLoop
 
     tool_start = SimpleNamespace(
@@ -1347,7 +1354,7 @@ def test_stream_retry_settles_incomplete_tool_part(tmp_path, monkeypatch):
                 content="recovered",
                 tool_calls=None,
                 reasoning_content=None,
-            ))])])
+            ))]), chunk(finish_reason="stop")])
 
     monkeypatch.setattr(config, "WORKDIR", tmp_path)
     agent = AgentLoop(
@@ -1362,15 +1369,16 @@ def test_stream_retry_settles_incomplete_tool_part(tmp_path, monkeypatch):
 
     result = asyncio.run(agent.run(messages, stream=True))
 
-    assert result["status"] == "completed"
+    assert result["status"] == "completed_unverified"
     assistant = next(message for message in messages if message.get("role") == "assistant")
     retry = next(part for part in assistant["_nz_parts"] if part["type"] == "retry")
     assert all(part["type"] != "tool" for part in assistant["_nz_parts"])
     assert "call-incomplete" not in repr(messages)
     assert retry["attempt"] == 1
     assert assistant["content"] == (
-        "recovered\n\n**运行时验证记录**（来源：VerificationDomain）\n"
-        "- 未评估：本次没有已采信的验证执行。"
+        "本次执行已结束。\n\n**运行时验证记录**（来源：VerificationDomain）\n"
+        "- 未评估：本次没有已采信的验证执行。当前没有待完成的必需检查。\n"
+        "- 交付评审尚未确认。\n\n模型交付说明（未经独立确认）：\nrecovered"
     )
 
     agent.close()

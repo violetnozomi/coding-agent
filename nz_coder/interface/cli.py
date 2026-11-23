@@ -938,14 +938,31 @@ def _terminal_transcript(
     tool_details: str = "compact",
 ):  # noqa: ANN202
     """Build the full-screen transcript from the same durable message graph."""
-    from nz_coder.interface.timeline import build_transcript_document
+    from nz_coder.interface.timeline import TurnHistory, build_transcript_document
+
+    session_id = str(session_state.get("id") or "session")
+
+    def open_detail(message_id: str) -> tuple[str, str] | None:
+        if session_id != str(session_state.get("id") or "session"):
+            return None
+        view = TurnHistory.load(history, session_id=session_id, workspace=current_workdir())
+        for turn in view.turns:
+            for index in (turn.start, *turn.assistant_indices):
+                message = view.messages[index]
+                identity = message.get("_nz_message_id") or f"transcript-{message['role']}-{index}"
+                if identity == message_id:
+                    if view.unavailable and turn.start < view.unavailable.complete_from:
+                        return "Session history", str(view.unavailable)
+                    return view.label(turn), view.detail(session_id, turn)
+        return None
 
     return build_transcript_document(
-        str(session_state.get("id") or "session"),
+        session_id,
         history,
         title="NZ-Coder Session",
         tool_details=tool_details != "hidden",
         compact_tools=tool_details == "compact",
+        open_detail=open_detail,
     )
 
 

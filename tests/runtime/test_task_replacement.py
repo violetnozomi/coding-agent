@@ -15,7 +15,7 @@ from nz_coder.runtime.execution.run_lifecycle import ProductionRunLifecycle
 from nz_coder.runtime.execution.runtime_state import RuntimeState
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state import sessions
-from test_native_product_runtime import _request, _runtime, _install_runtime, _completion
+from test_native_product_runtime import _request, _runtime, _install_runtime, _completion, _offline_accept_review
 
 
 OLD_TASK = (
@@ -237,6 +237,8 @@ def test_native_cancel_then_explicit_independent_task_completes_without_old_gate
             self.calls = 0
 
         def create_completion(self, _client, **kwargs):
+            if review := _offline_accept_review(kwargs, report_kind="ordinary"):
+                return review
             self.calls += 1
             if self.calls == 1:
                 call = SimpleNamespace(id="create-old", type="function", function=SimpleNamespace(
@@ -251,7 +253,7 @@ def test_native_cancel_then_explicit_independent_task_completes_without_old_gate
             return _completion("SWITCH_TARGET_OK")
 
     provider = Provider()
-    _install_runtime(monkeypatch, provider)
+    _install_runtime(monkeypatch, provider, with_delivery_review=True)
     request = replace(_request(tmp_path), messages=({"role": "user", "content": OLD_TASK},), metadata={
         "permission_mode": "default", "persist_session": True,
     })
@@ -282,7 +284,8 @@ def test_native_cancel_then_explicit_independent_task_completes_without_old_gate
         start = max(i for i, m in enumerate(current) if m.get("content") == SWITCH)
         assert not any("<requirement-completion-gate>" in str(m.get("content")) for m in current[start:]), "Cancelled R1 must not gate the independent task"
         assert result.status.value == "completed"
-        assert result.final_text.startswith("SWITCH_TARGET_OK")
+        assert result.metadata["authored_content"] == "SWITCH_TARGET_OK"
+        assert result.final_text.index("模型说明") < result.final_text.index("SWITCH_TARGET_OK")
         assert provider.calls == 2
         assert not any(m.get("tool_calls") for m in current[start:])
         with scoped_workdir(tmp_path):

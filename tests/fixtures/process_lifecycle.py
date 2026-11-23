@@ -134,12 +134,11 @@ def make_command_authority(tmp_path, child='child', *, max_requests=4, read_only
     from dataclasses import replace
     from nz_coder.runtime.core.run_settings import RunSettings
     from nz_coder.runtime.core.execution_context import CommandExecutionPolicy
-    from nz_coder.runtime.process.command_broker import CommandAuthority
+    from nz_coder.runtime.process.command_broker import CommandAuthority, command_directory_identity
 
-    info = tmp_path.stat()
     authority = CommandAuthority(
         workspace=tmp_path, execution_root=tmp_path,
-        execution_identity=(info.st_dev, info.st_ino),
+        execution_identity=command_directory_identity(tmp_path),
         parent_session_id='parent', child_session_id=child,
         settlement_id='settlement-' + child, agent_type='explore' if read_only else 'general',
         read_only=read_only, allowed_tools=frozenset({'bash', 'process'}),
@@ -193,11 +192,11 @@ def complete_prepared_evidence(prepared, state, preparation):
     return replace(prepared, diff_evidence=snapshot)
 
 
-def make_command_authorizer(workspace):
+def make_command_authorizer(workspace, *, asker=None):
     """正向进程生命周期用例显式模拟宿主已委托的自动权限域。"""
     from nz_coder.permissions import PermissionManager
     from nz_coder.runtime.process.workdir import scoped_workdir
     from nz_coder.tool_platform.permissioning.command_authorization import CommandAuthorizer
 
     with scoped_workdir(workspace):
-        return CommandAuthorizer(PermissionManager("auto")).fork(workspace)
+        return CommandAuthorizer(PermissionManager("auto", asker=asker)).fork(workspace)

@@ -45,6 +45,50 @@ def test_summary_keeps_full_suite_after_later_api_subset(tmp_path):
         assert text.count(API) == 1
 
 
+def test_accepted_test_and_outstanding_review_survive_a_documentation_edit(tmp_path):
+    _project(tmp_path)
+    with scoped_workdir(tmp_path):
+        vm = VerificationScenario(workspace=tmp_path, plan={"stages": []})
+        _observe(vm, tmp_path, FULL)
+        _observe(vm, tmp_path, "python -m py_compile app.py")
+        (tmp_path / "README.md").write_text("How to run the project\n")
+        vm.mutate(1, ["README.md"])
+        vm.domain.set_completion_candidate("current answer")
+        snapshot = vm.runtime.status()
+        assert snapshot["verification_needed"] is False
+        assert snapshot["tests_passed"] is None  # 普通任务没有另行指定必需测试。
+        assert snapshot["review_pending"] is True
+        text = verification_appendix(snapshot)
+        assert "已有通过的测试回执" in text
+        assert FULL in text
+        assert "交付评审尚未确认" in text
+
+
+def test_static_check_does_not_report_passing_tests(tmp_path):
+    _project(tmp_path)
+    vm = VerificationScenario(workspace=tmp_path, plan={"stages": []})
+    _observe(vm, tmp_path, "python -m py_compile app.py")
+    text = verification_appendix(vm.runtime.status())
+    assert "已有通过的检查记录" in text
+    assert "没有已采信的测试通过回执" in text
+    assert "已有通过的测试回执" not in text
+
+
+def test_optional_test_environment_failure_remains_visible_after_another_test_passes(tmp_path):
+    _project(tmp_path)
+    vm = VerificationScenario(workspace=tmp_path, plan={"stages": []})
+    failed = "pytest tests/test_api.py"
+    vm.command_result({"command": failed}, "pytest: command not found", False, True, exit_code=127)
+    for has_pass in (False, True):
+        if has_pass:
+            _observe(vm, tmp_path, API)
+        snapshot = vm.runtime.status()
+        assert snapshot["environment_blocker"] is None and not snapshot["verification_needed"]
+        text = verification_appendix(snapshot)
+        assert failed in text and "环境问题" in text and "此次没有得到测试结果" in text
+        assert ("已有通过的测试回执" in text) is has_pass
+
+
 def test_contract_satisfied_plan_is_not_reported_as_executed(tmp_path):
     _project(tmp_path)
     unexecuted = 'python -m py_compile app.py'

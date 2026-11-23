@@ -45,7 +45,8 @@ class _Backend:
 
 @pytest.mark.parametrize('runtime_status,settled_status', [
     ('completed', 'cancelled'), ('interrupted', 'interrupted'),
-    ('completed_unverified', 'completed_unverified'), ('blocked', 'blocked'), ('max_turns', 'max_turns'),
+    ('completed_unverified', 'completed_unverified'), ('completed', 'completed_unverified'),
+    ('blocked', 'blocked'), ('max_turns', 'max_turns'),
 ])
 @pytest.mark.parametrize('stale', [False, True])
 def test_remote_follow_uses_current_settled_status(monkeypatch, runtime_status, settled_status, stale):
@@ -57,7 +58,10 @@ def test_remote_follow_uses_current_settled_status(monkeypatch, runtime_status, 
     finally:
         backend.bus.close()
     rendered = output.getvalue()
-    assert f'Run {settled_status.replace("_", " ")}' in rendered
+    if settled_status == 'completed_unverified':
+        assert '! Run finished (see checks and delivery review)' in rendered
+    else:
+        assert f'Run {settled_status.replace("_", " ")}' in rendered
     assert rendered.count('Run ') == 1
 
 

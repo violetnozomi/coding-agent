@@ -320,22 +320,45 @@ def test_apply_patch_tool():
 
 
 def test_memory_manager_crud():
-    import tempfile
-    import shutil
+    from tempfile import TemporaryDirectory
+
     from nz_coder.state.memory import MemoryManager
 
-    tmpdir = Path(tempfile.mkdtemp())
-    try:
-        mgr = MemoryManager(tmpdir)
-        assert "Saved memory" in mgr.save("Project Fact", "A useful fact", "project", "Details")
-        assert "Project Fact" in mgr.list_memories()
-        block = mgr.build_prompt_block()
-        assert "background notes" in block  # CHANGED: 与新版 build_prompt_block 文案一致
-        assert "Deleted memory" in mgr.delete("Project Fact")
-        assert "No memories saved" in mgr.list_memories()
-        print("OK: memory CRUD works")
-    finally:
-        shutil.rmtree(str(tmpdir), ignore_errors=True)
+    with TemporaryDirectory() as directory:
+        manager = MemoryManager(Path(directory))
+        created = manager.mutate({
+            "action": "create",
+            "name": "Project Fact",
+            "type": "project",
+            "description": "A useful fact",
+            "content": "Details",
+        })
+        assert created["status"] == "saved"
+        memory_id = created["memory_id"]
+        assert manager.read(memory_id)["content"] == "Details"
+        listed_records = json.loads(manager.list_memories())["items"]
+        assert [item["name"] for item in listed_records] == ["Project Fact"]
+        block = manager.build_prompt_block()
+        assert "background notes" in block.lower()
+        assert "A useful fact" in block
+
+        updated = manager.mutate({
+            "action": "update",
+            "memory_id": memory_id,
+            "expected_revision": created["revision"],
+            "content": "New details",
+        })
+        assert updated["status"] == "saved"
+        assert manager.read(memory_id)["content"] == "New details"
+
+        deleted = manager.mutate({
+            "action": "delete",
+            "memory_id": memory_id,
+            "expected_revision": updated["revision"],
+        })
+        assert deleted["status"] == "saved"
+        assert json.loads(manager.list_memories())["items"] == []
+    print("OK: memory CRUD works")
 
 
 def test_command_policy():

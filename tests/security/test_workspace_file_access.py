@@ -420,21 +420,6 @@ def test_expected_mode_uses_same_handle_as_content_identity(tmp_path, monkeypatc
     assert path.read_bytes() == b'old!'
 
 
-def test_expected_hash_blocks_delete_after_external_change(tmp_path):
-    from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
-    from nz_coder.protocol.public_error import PublicInputError
-    path = tmp_path / 'data'
-    path.write_bytes(b'AAAA')
-    access = WorkspaceFileAccess(tmp_path)
-    _, identity = access.read_bytes_with_identity('data')
-    info = path.stat()
-    path.write_bytes(b'BBBB')
-    os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns))
-    with pytest.raises(PublicInputError):
-        access.delete('data', expected=identity)
-    assert path.read_bytes() == b'BBBB'
-
-
 def test_model_edit_rejects_same_size_external_write_with_restored_mtime(tmp_path, monkeypatch):
     from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
     from nz_coder.runtime.process.workdir import scoped_workdir

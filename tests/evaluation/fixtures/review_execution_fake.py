@@ -8,6 +8,7 @@ import threading
 
 class ExecutionFake(ThreadingHTTPServer):
     daemon_threads = True
+    models = ()
 
     def __init__(self, *, cancel=False, input_counter=None):
         self.requests = []
@@ -81,6 +82,19 @@ class FormalFake(ExecutionFake):
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass
+
+    def do_GET(self):
+        if self.path != "/v1/models" or not self.server.models:
+            self.send_error(404)
+            return
+        data = json.dumps({"object": "list", "data": [
+            {"id": model, "object": "model"} for model in self.server.models
+        ]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_POST(self):
         raw = self.rfile.read(int(self.headers["Content-Length"]))

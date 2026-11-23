@@ -51,6 +51,19 @@ def test_create_keeps_similar_names_as_separate_ids_and_searches_chinese(store):
     assert store.generation() == (2, 0)
 
 
+def test_search_ranks_exact_name_then_phrase_then_tied_terms(store):
+    exact = create(store, "exact", name="build cache")["memory_id"]
+    phrase = create(store, "phrase", name="notes", content="reset the build cache")["memory_id"]
+    tied = [
+        create(store, op, name="notes", content="build steps reuse the cache")["memory_id"]
+        for op in ("first partial", "second partial")
+    ]
+
+    results = store.search("build cache")
+
+    assert [record["id"] for record in results] == [exact, phrase, *sorted(tied)]
+
+
 def test_revision_cas_and_operation_digest_are_persistent(store, tmp_path):
     original = create(store)
     assert create(SQLiteMemoryStore(tmp_path, scope_id="project-a")) == original
@@ -114,7 +127,9 @@ def test_child_writes_stay_pending_and_parent_rechecks_revisions(store):
     assert store.read_proposal(proposal["id"])["status"] == "pending"
     apply["expected_revision"] = 2
     assert store.mutate(apply, ctx("apply-current"))["status"] == "saved"
-    assert store.read(target)["content"] == "子任务候选"
+    applied = store.read(target)
+    assert applied["content"] == "子任务候选"
+    assert applied["description"] == "父方已改"
     assert store.read_proposal(proposal["id"])["revision"] == 2
 
 

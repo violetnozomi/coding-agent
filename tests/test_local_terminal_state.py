@@ -264,6 +264,7 @@ def test_preopen_failure_restores_exact_previous_commit_without_claiming_new_suc
 def test_real_cancel_preserves_committed_parts_and_next_cli_turn(
     tmp_path, monkeypatch, terminal, boundary,
 ):
+    from nz_coder.providers.normalized import chunk
     from nz_coder.runtime.execution.loop import AgentLoop
     from tests.test_loop_fake import (
         FakeDelta, FakeDeltaToolCall, FakeStreamChunk, FakeStreamingClient,
@@ -276,12 +277,16 @@ def test_real_cancel_preserves_committed_parts_and_next_cli_turn(
         first_response.append(FakeStreamChunk(FakeDelta(tool_calls=[FakeDeltaToolCall(
             0, name="list_directory", arguments='{"path":".","depth":1}',
         )])))
+    first_response.append(chunk(finish_reason="tool_calls" if boundary == "checkpoint" else "stop"))
     client = FakeStreamingClient([
-        first_response, [FakeStreamChunk(FakeDelta(content=next_marker))],
+        first_response, [FakeStreamChunk(FakeDelta(content=next_marker)), chunk(finish_reason="stop")],
     ])
     observed = {}
     reads = 0
     entered, release = threading.Event(), threading.Event()
+    # 本场景关闭交付评审。终态冻结后到达的取消必须保留已选定的结果。
+    final_status = "completed_unverified"
+    first_status = "cancelled" if boundary == "checkpoint" else final_status
 
     def read():
         nonlocal reads
@@ -289,26 +294,27 @@ def test_real_cancel_preserves_committed_parts_and_next_cli_turn(
         if reads == 1:
             return "Reply briefly without using tools."
         if reads == 2:
-            observed["cancelled"] = _read_exact()
+            observed["first"] = _read_exact()
             observed["transcript"] = inputs[0].transcript_provider().markdown()
             return "Give another brief response."
         return "exit"
 
     async def scenario(environment):
-        store = environment.runtime_services.session_runtime.store
         runtime = environment.runtime_services.session_runtime
-        original_save = store._save_sync
+        publish = sessions._publish_session_json
 
-        def observed_save(session):
-            if boundary == "terminal_save" and session.status.value == "completed" and not entered.is_set():
+        def observed_publish(prepared, path):
+            if path.name != f"{SESSION_ID}.json":
+                return publish(prepared, path)
+            status = json.loads(prepared.read_text(encoding="utf-8"))["run_status"]
+            if boundary == "terminal_save" and status == final_status and not entered.is_set():
                 entered.set()
                 assert release.wait(5), "terminal writer not released"
-            result = original_save(session)
-            if session.status.value == "cancelled":
-                observed["runtime_cancelled"] = copy.deepcopy(sessions.load_session(SESSION_ID))
-            return result
+            publish(prepared, path)
+            if status == first_status and "runtime_commit" not in observed:
+                observed["runtime_commit"] = json.loads(path.read_text(encoding="utf-8"))
 
-        monkeypatch.setattr(store, "_save_sync", observed_save)
+        monkeypatch.setattr(sessions, "_publish_session_json", observed_publish)
         if boundary == "checkpoint":
             original_checkpoint = runtime.checkpoint
             checkpoint_release = asyncio.Event()
@@ -351,25 +357,26 @@ def test_real_cancel_preserves_committed_parts_and_next_cli_turn(
         )
         install(environment, read)
         asyncio.run(scenario(environment))
-        cancelled = observed["cancelled"]
-        assert cancelled["run_status"] == "cancelled"
-        assert cancelled["messages"] == observed["runtime_cancelled"]["messages"]
-        assert marker in json.dumps(cancelled["messages"])
-        assert sum(len(item.get("_nz_parts", [])) for item in cancelled["messages"]) >= 4
+        first = observed["first"]
+        assert first["run_status"] == first_status
+        assert first["messages"] == observed["runtime_commit"]["messages"]
+        assert marker in json.dumps(first["messages"])
+        assert sum(len(item.get("_nz_parts", [])) for item in first["messages"]) >= 4
         if boundary == "checkpoint":
             assert any(
                 part.get("type") == "tool" and part.get("state", {}).get("status") == "completed"
-                for message in cancelled["messages"]
+                for message in first["messages"]
                 for part in message.get("_nz_parts", [])
             )
             assert "list_directory" in observed["transcript"]
             assert "./ (empty)" in observed["transcript"]
         else:
             assert marker in observed["transcript"]
-        assert not any(item.get("_nz_synthetic") for item in cancelled["messages"])
+        assert not any(item.get("_nz_synthetic") for item in first["messages"])
         saved = _read_exact()
-        assert saved["run_status"] == "completed"
-        for current, previous in zip(saved["messages"], cancelled["messages"]):
+        assert saved["run_status"] == final_status
+        assert len(saved["messages"]) > len(first["messages"])
+        for current, previous in zip(saved["messages"], first["messages"]):
             assert current["_nz_message_id"] == previous["_nz_message_id"]
             assert current["role"] == previous["role"]
             assert current["content"] == previous["content"]
@@ -380,9 +387,9 @@ def test_real_cancel_preserves_committed_parts_and_next_cli_turn(
                 (part["id"], part["type"], part.get("text"), part.get("state", {}).get("status"))
                 for part in previous.get("_nz_parts", [])
             ]
-        assert next_marker in json.dumps(saved["messages"])
+        assert saved["metadata"]["authored_content"] == next_marker
         assert client.chat.completions.calls == 2
-        _assert_discovered(tmp_path, "completed", len(saved["messages"]))
+        _assert_discovered(tmp_path, final_status, len(saved["messages"]))
 
 
 def test_runner_commit_failure_is_reported_by_cli_and_closes_owner(tmp_path, monkeypatch, terminal):

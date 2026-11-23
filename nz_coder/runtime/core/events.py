@@ -8,7 +8,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Protocol, runtime_checkable
 
-from nz_coder.protocol.public_error import to_public_error
+from nz_coder.protocol.public_error import PublicError, public_error_from_wire, to_public_error
+from nz_coder.runtime.core.result import TERMINAL_RESULT_KEY, RunStatus, normalize_run_status
 
 
 def _utc_timestamp() -> str:
@@ -32,6 +33,25 @@ class RuntimeEventName(str, Enum):
     TOOL_FAILED = "session.tool.failed"
     CHILD_STARTED = "session.child.started"
     CHILD_FINISHED = "session.child.finished"
+
+
+def terminal_event_name(status: object) -> RuntimeEventName:
+    """两种发布入口按同一规范终态通知订阅者；兼容入口的 aborted 也属于失败。"""
+    normalized = normalize_run_status(status)
+    if normalized in {RunStatus.CANCELLED, RunStatus.INTERRUPTED}:
+        return RuntimeEventName.RUN_CANCELLED
+    if normalized in {RunStatus.ERROR, RunStatus.BLOCKED}:
+        return RuntimeEventName.RUN_FAILED
+    return RuntimeEventName.RUN_COMPLETED
+
+
+def frozen_run_error(context) -> PublicError | None:
+    """仅读本次交互已冻结的错误。普通的阻塞没有传输异常。"""
+    metadata = getattr(getattr(context, "session", None), "metadata", {})
+    frozen = metadata.get(TERMINAL_RESULT_KEY)
+    if not frozen or frozen.get("interaction_run_id") != context.interaction_run_id:
+        return None
+    return public_error_from_wire(frozen["last_result"]["metadata"].get("public_error"))
 
 
 @dataclass(frozen=True)
@@ -94,15 +114,13 @@ class RuntimeEventMiddleware:
     async def after_run(self, context, result) -> None:
         if not self.emit_run_events:
             return
-        status = result.get("status") if isinstance(result, dict) else "completed"
-        name = (
-            RuntimeEventName.RUN_CANCELLED
-            if status in {"cancelled", "interrupted"}
-            else RuntimeEventName.RUN_FAILED
-            if status in {"error", "blocked"}
-            else RuntimeEventName.RUN_COMPLETED
-        )
-        self._emit(context, name, {"status": str(status)})
+        status = result.get("status") if isinstance(result, dict) else getattr(result, "status", "completed")
+        status = getattr(status, "value", status) or RunStatus.ERROR.value
+        payload = {"status": str(status)}
+        if normalize_run_status(status) is RunStatus.ERROR:
+            if issue := frozen_run_error(context):
+                payload["error"] = issue.to_dict()
+        self._emit(context, terminal_event_name(status), payload)
 
     async def on_run_error(self, context, error) -> None:
         if not self.emit_run_events:

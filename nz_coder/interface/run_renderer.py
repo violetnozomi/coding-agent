@@ -356,7 +356,7 @@ class TerminalRunRenderer:
         if event.type == "session.run.failed":
             self._pending_terminal = (
                 str(properties.get("status") or "failed"),
-                public_error_message(properties.get("error")),
+                public_error_message(properties["error"]) if properties.get("error") else "",
             )
             return
         if event.type == "session.run.cancelled":
@@ -637,7 +637,9 @@ class TerminalRunRenderer:
         else:
             icon, style = "✗", "error"
         suffix = f" · {self._summary_tool_count()} tool(s) · {elapsed:.1f}s"
-        line = f"{icon} Run {normalized.replace('_', ' ')}{suffix}"
+        # 终态事件只有运行状态。测试结果和交付评审分别显示在冻结的答复中。
+        label = "finished (see checks and delivery review)" if normalized == "completed_unverified" else normalized.replace("_", " ")
+        line = f"{icon} Run {label}{suffix}"
         printer(f"[{style}]{line}[/{style}]", highlight=False)
         footer = self._assistant_footer()
         if footer:

@@ -14,6 +14,8 @@ import pytest
 def _race_worker(workspace, kind, mutation, output):
     from tests.test_http_service import FakeAgent
     from nz_coder.http_service import SessionManager
+    from nz_coder.tool_platform.permissioning.interaction import PermissionInteractionError
+    from nz_coder.tools.question import QuestionWaitEnded
 
     go = threading.Event()
     decided = threading.Event()
@@ -31,10 +33,13 @@ def _race_worker(workspace, kind, mutation, output):
                 actor_ids.add(threading.get_ident())
                 agent_ready.set()
                 assert go.wait(4)
-            if kind == 'permission':
-                self.permission_asker('bash', {'command': 'echo ok'})
-            else:
-                self.question_asker([])
+            try:
+                if kind == 'permission':
+                    self.permission_asker('bash', {'command': 'echo ok'})
+                else:
+                    self.question_asker([])
+            except (PermissionInteractionError, QuestionWaitEnded) as error:
+                assert error.reason == 'cancelled'
             # 把取消保留在执行阶段，不让假模型提前冻结为完成。
             await asyncio.sleep(30)
             return {'status': 'completed'}
@@ -99,19 +104,20 @@ def _race_worker(workspace, kind, mutation, output):
     else:
         assert published.wait(4)
         request = session.interactions.list()[0]
+        publisher = session.event_bus.for_interaction(session.info()['active_interaction_run_id'])
 
         def mutate():
             actor_ids.add(threading.get_ident())
             assert go.wait(4)
             if mutation == 'cancel':
-                session.interactions.cancel_all('race', block_new=True)
+                assert session.interactions.cancel_all('aborted', block_new=True) == 1
             elif kind == 'permission':
                 session.interactions.reply_permission(request['id'], 'once')
             else:
                 session.interactions.reply_question(request['id'], [])
             # 超过旧256条窗口，不能再用该窗口证明pending准确。
             for index in range(260):
-                session.event_bus.publish('message.part.delta', {'delta': str(index)})
+                publisher.publish('message.part.delta', {'delta': str(index)})
             decided.set()
         writer = threading.Thread(target=mutate, daemon=True)
         gated.set()
@@ -144,6 +150,7 @@ def _race_worker(workspace, kind, mutation, output):
     result['aborted'] = session.abort()
     result['settled'] = session.wait(4)
     result['pending_after_abort'] = session.interactions.list()
+    result['final_status'] = session.info()['status']
     manager.close(timeout=1)
     output.put(result)
     output.close()
@@ -174,6 +181,7 @@ def test_attach_and_interaction_changes_serialize_without_deadlock(tmp_path, kin
         status = 'waiting_' + kind if expected_pending else 'running'
         assert snapshot['session']['runtime_status'] == snapshot['run']['status'] == status
         assert result['aborted'] and result['settled']
+        assert result['final_status'] == 'cancelled'
         assert result['pending_after_abort'] == []
     finally:
         if process.is_alive():
@@ -241,15 +249,22 @@ def test_failed_checkpoint_releases_interaction_lock(tmp_path, monkeypatch, meth
 def test_expired_interaction_is_absent_from_snapshot_after_replay_overflow(tmp_path, kind):
     from tests.test_http_service import FakeAgent
     from nz_coder.http_service import SessionManager
+    from nz_coder.http_service.interactions import InteractionNotFoundError
+    from nz_coder.tool_platform.permissioning.interaction import PermissionInteractionError
+    from nz_coder.tools.question import QuestionWaitEnded
 
     expired = threading.Event()
 
     class Agent(FakeAgent):
         async def run(self, messages, **kwargs):
             if kind == 'permission':
-                self.permission_asker('bash', {'command': 'echo ok'})
+                with pytest.raises(PermissionInteractionError) as caught:
+                    self.permission_asker('bash', {'command': 'echo ok'})
+                assert caught.value.reason == 'timed_out'
             else:
-                self.question_asker([])
+                with pytest.raises(QuestionWaitEnded) as caught:
+                    self.question_asker([])
+                assert caught.value.reason == 'timeout'
             expired.set()
             await asyncio.Event().wait()
 
@@ -262,13 +277,23 @@ def test_expired_interaction_is_absent_from_snapshot_after_replay_overflow(tmp_p
         session.start_run('offline timeout')
         assert expired.wait(3)
         terminal = next(event for event in session.event_bus.recent(100) if event.properties.get('reason') == 'timeout')
+        publisher = session.event_bus.for_interaction(terminal.run_id)
         for index in range(260):
-            session.event_bus.publish('message.part.delta', {'delta': str(index)})
+            publisher.publish('message.part.delta', {'delta': str(index)})
         snapshot = session.attach_snapshot()
-        assert snapshot['cursor']['sequence'] > terminal.sequence
+        assert snapshot['cursor']['sequence'] >= terminal.sequence + 260
+        assert len(snapshot['events']) == 256
+        assert all(event['meta']['sequence'] > terminal.sequence for event in snapshot['events'])
         assert snapshot['pending'] == snapshot['run']['pending'] == {'permissions': [], 'questions': []}
         assert snapshot['session']['pending_interaction_count'] == 0
         assert snapshot['session']['runtime_status'] == snapshot['run']['status'] == 'running'
+        with pytest.raises(InteractionNotFoundError):
+            if kind == 'permission':
+                session.interactions.reply_permission(terminal.properties['request_id'], 'once')
+            else:
+                session.interactions.reply_question(terminal.properties['request_id'], [])
+        assert session.abort()
+        assert session.wait(3) and session.info()['status'] == 'cancelled'
     finally:
         session.abort()
         assert session.wait(3)

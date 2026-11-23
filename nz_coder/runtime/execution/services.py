@@ -360,39 +360,57 @@ class ProductionRuntimeEventSink:
 
 
 class ProductionMemoryService:
-    """按持久代次缓存背景投影；终态不自动改写知识。"""
+    """为当前请求准备长期记忆提示，在记录版本和检索设置相同时复用上次结果。"""
 
     def prompt_block(self, context, query: str) -> str:
         if strict_local_tools():
             return ""
+
         settings = current_run_settings()
         try:
-            generation = tuple(context.manager.generation())
+            current_generation = tuple(context.manager.generation())
             from nz_coder.state.memory import configured_embedding_provider
+
             provider = configured_embedding_provider()
-            retrieval_identity = (settings.memory_retrieval_mode, settings.memory_embedding_model, getattr(provider, "identity", "lexical"))
-            key = (context.manager.scope_id, generation, query, settings.memory_llm_rerank, retrieval_identity)
-            if key == context.recall.cache_key:
-                return context.recall.last_block
-            projection = context.manager.build_prompt_snapshot(
-                query=query or None, max_items=5, max_chars=2000, embedding_provider=provider,
-                rerank_client=context.client if settings.memory_llm_rerank else None,
-                model=context.model_id if settings.memory_llm_rerank else None,
-                rerank_provider=context.provider if settings.memory_llm_rerank else None,
-                rerank_capabilities=context.capabilities if settings.memory_llm_rerank else None,
-                rerank_observer=context.observer if settings.memory_llm_rerank else None,
-                rerank_runtime=context.model_runtime if settings.memory_llm_rerank else None,
+            rerank_enabled = settings.memory_llm_rerank
+            retrieval_identity = (
+                settings.memory_retrieval_mode,
+                settings.memory_embedding_model,
+                getattr(provider, "identity", "lexical"),
             )
-            block = projection["block"]
+
+            def cache_key_for(generation):
+                return (context.manager.scope_id, tuple(generation), query, rerank_enabled, retrieval_identity)
+
+            if cache_key_for(current_generation) == context.recall.cache_key:
+                return context.recall.last_block
+
+            snapshot = context.manager.build_prompt_snapshot(
+                query=query or None,
+                max_items=5,
+                max_chars=2000,
+                embedding_provider=provider,
+                rerank_client=context.client if rerank_enabled else None,
+                model=context.model_id if rerank_enabled else None,
+                rerank_provider=context.provider if rerank_enabled else None,
+                rerank_capabilities=context.capabilities if rerank_enabled else None,
+                rerank_observer=context.observer if rerank_enabled else None,
+                rerank_runtime=context.model_runtime if rerank_enabled else None,
+            )
+            block = snapshot["block"]
             if settings.memory_retrieval_mode == "hybrid" and provider is None:
-                block = "<memory-diagnostic>Semantic encoder is not configured/available; using lexical retrieval.</memory-diagnostic>\n" + block
-            key = (context.manager.scope_id, tuple(projection["generation"]), query, settings.memory_llm_rerank, retrieval_identity)
+                block = (
+                    "<memory-diagnostic>Semantic encoder is not configured/available; "
+                    "using lexical retrieval.</memory-diagnostic>\n" + block
+                )
+            # 检查缓存和实际检索之间可能有写入，缓存版本必须取自生成这段提示的快照。
+            snapshot_key = cache_key_for(snapshot["generation"])
         except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
-            # 不把记忆存储故障伪装成“确实没有相关记忆”。
+            # 空结果可以缓存。存储故障要让模型看见，也要让下一次请求有机会重试。
             return f"<long-term-memory status='unavailable'>{to_public_error(exc).message}</long-term-memory>"
         context.recall.last_query = query
         context.recall.last_block = block
-        context.recall.cache_key = key
+        context.recall.cache_key = snapshot_key
         context.commit_recall(context.recall)
         return block
 

@@ -1,8 +1,111 @@
 """Tests for the workspace-persistent incremental code index."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import shutil
 import sqlite3
 from types import SimpleNamespace
+
+import pytest
+
+
+@pytest.mark.parametrize("spelling", [
+    "parent",
+    pytest.param("8.3", marks=pytest.mark.skipif(os.name != "nt", reason="Windows 8.3 names")),
+])
+def test_equivalent_cache_paths_reopen_the_same_index(tmp_path, monkeypatch, spelling):
+    from nz_coder.intelligence.code_index import PersistentCodeIndex
+
+    profile = tmp_path.resolve() / "Local profile with long names"
+    profile.mkdir()
+    alternate = profile / ".." / profile.name
+    if spelling == "8.3":
+        import ctypes
+
+        result = ctypes.create_unicode_buffer(32768)
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        if not kernel.GetShortPathNameW(str(profile), result, len(result)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        alternate = Path(result.value)
+        if alternate == profile:
+            pytest.skip("This Windows volume does not assign short names")
+
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    (workspace / "notes.py").write_text("def record(): pass\n", encoding="utf-8")
+    setting = "LOCALAPPDATA" if os.name == "nt" else "XDG_CACHE_HOME"
+    monkeypatch.setenv(setting, str(alternate))
+    first = PersistentCodeIndex(workspace)
+    assert first.update_paths(["notes.py"]).indexed == 1
+    monkeypatch.setenv(setting, str(profile))
+    reopened = PersistentCodeIndex(workspace)
+    assert first.database_path == reopened.database_path
+    assert first._lock is reopened._lock
+    assert reopened.snapshot().files[0].symbols[0].name == "record"
+
+
+def test_index_rechecks_original_cache_ancestors_after_open(tmp_path, monkeypatch):
+    from nz_coder.intelligence.code_index import PersistentCodeIndex
+
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    ancestor = tmp_path / "ordinary"
+    ancestor.mkdir()
+    setting = "LOCALAPPDATA" if os.name == "nt" else "XDG_CACHE_HOME"
+    monkeypatch.setenv(setting, str(ancestor / ".." / "profile"))
+    index = PersistentCodeIndex(workspace)
+    original = tmp_path / "renamed"
+    ancestor.rename(original)
+    ancestor.symlink_to(original, target_is_directory=True)
+    # 解析后的数据库地址仍相同；原路径出现链接后，再次连接也要拒绝。
+    with pytest.raises(ValueError, match="alias"):
+        index.snapshot()
+
+
+def test_index_connections_finish_transactions_and_release_files(tmp_path):
+    from nz_coder.intelligence.code_index import PersistentCodeIndex
+
+    index = PersistentCodeIndex(tmp_path)
+    with index._connect() as committed:
+        committed.execute("INSERT INTO metadata VALUES ('probe', 'saved')")
+    with pytest.raises(RuntimeError, match="abort update"):
+        with index._connect() as aborted:
+            aborted.execute("UPDATE metadata SET value = 'unsaved' WHERE key = 'probe'")
+            raise RuntimeError("abort update")
+    with index._connect() as reader:
+        value = reader.execute("SELECT value FROM metadata WHERE key = 'probe'").fetchone()
+        assert value[0] == "saved"
+
+    # 强引用一直保留到这里，避免垃圾回收掩盖仍在使用的文件句柄。
+    for connection in (committed, aborted, reader):
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            connection.execute("SELECT 1")
+    shutil.rmtree(index.database_path.parent)
+    assert not index.database_path.parent.exists()
+
+
+def test_index_closes_connection_if_pragma_is_rejected(tmp_path, monkeypatch):
+    from nz_coder.intelligence.code_index import PersistentCodeIndex
+
+    connect = sqlite3.connect
+    opened = []
+
+    def reject_pragma(action, *_args):
+        return sqlite3.SQLITE_DENY if action == sqlite3.SQLITE_PRAGMA else sqlite3.SQLITE_OK
+
+    def connect_with_authorizer(*args, **kwargs):
+        connection = connect(*args, **kwargs)
+        opened.append(connection)
+        connection.set_authorizer(reject_pragma)
+        return connection
+
+    monkeypatch.setattr(sqlite3, "connect", connect_with_authorizer)
+    with pytest.raises(sqlite3.DatabaseError, match="not authorized"):
+        PersistentCodeIndex(tmp_path)
+    assert len(opened) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+        opened[0].execute("SELECT 1")
 
 
 def test_index_persists_symbols_and_references_across_instances(tmp_path):

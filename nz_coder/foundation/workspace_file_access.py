@@ -24,6 +24,20 @@ def _stable_stat_tuple(info):
     return (*_stat_tuple(info), int(info.st_ctime_ns), int(info.st_mode))
 
 
+def _hash_delete_target(descriptor: int, before: os.stat_result) -> str:
+    digest = hashlib.sha256()
+    remaining = before.st_size
+    while remaining:
+        chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+        if not chunk:
+            break
+        digest.update(chunk)
+        remaining -= len(chunk)
+    if remaining or _stable_stat_tuple(before) != _stable_stat_tuple(os.fstat(descriptor)):
+        raise PublicInputError("Workspace file changed while it was read")
+    return digest.hexdigest()
+
+
 @dataclass(frozen=True)
 class WorkspaceFileStat:
     """Public metadata captured from the same opened object used for I/O."""
@@ -1013,6 +1027,7 @@ class WorkspaceFileAccess:
     ) -> None:
         import ctypes
         from ctypes import wintypes
+        import msvcrt
         import ntpath
 
         from nz_coder.foundation.project_control import (
@@ -1024,10 +1039,11 @@ class WorkspaceFileAccess:
         handles, handle, _lexical_parent = self._open_windows_parent(
             relative, create=False,
         )
-        parent_path = Path(_windows_final_path(handle))
         target_handle: int | None = None
+        target_fd: int | None = None
         receipt = None
         try:
+            parent_path = Path(_windows_final_path(handle))
             if transaction is not None and getattr(transaction, "active", False):
                 receipt = transaction.track_anchored(
                     relative.as_posix(), windows_parent_handle=handle,
@@ -1040,10 +1056,17 @@ class WorkspaceFileAccess:
                 wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
             )
             create_file.restype = wintypes.HANDLE
+            needs_hash = expected is not None and bool(expected.content_hash)
+            access = 0x00010000 | 0x00000080  # DELETE | FILE_READ_ATTRIBUTES
+            share = 0x00000001 | 0x00000002  # FILE_SHARE_READ | FILE_SHARE_WRITE
+            if needs_hash:
+                access |= 0x80000000  # GENERIC_READ
+                # 校验的内容要一直保持到删除提交，期间只允许并发读取。
+                share = 0x00000001
             opened = create_file(
                 str(parent_path / relative.name),
-                0x00010000 | 0x00000080,  # DELETE | FILE_READ_ATTRIBUTES
-                0x00000001 | 0x00000002,  # share read/write, but not delete
+                access,
+                share,
                 None,
                 3,  # OPEN_EXISTING
                 0x00000080 | 0x00200000,  # normal + open reparse point
@@ -1057,7 +1080,7 @@ class WorkspaceFileAccess:
                 raise OSError(error, "Workspace target cannot be opened for deletion")
             target_handle = value
 
-            attributes, device, inode, size = _windows_handle_info(
+            attributes, device, inode, _size = _windows_handle_info(
                 target_handle, full=True,
             )
             if attributes & 0x00000400 or attributes & 0x00000010:
@@ -1067,23 +1090,25 @@ class WorkspaceFileAccess:
                 os.fspath(parent_path)
             ):
                 raise ValueError("Workspace parent identity changed")
-            current_info = os.stat(target_path, follow_symlinks=False)
-            current_mode = current_info.st_mode
-            content_hash = ""
-            if expected is not None and expected.content_hash:
-                _data, identity, current_mode = self._read_windows_with_identity_and_mode(relative, maximum=None)
-                if (identity.device, identity.inode) != (int(device), int(inode)):
-                    raise PublicInputError("File changed after it was read; re-read before editing.")
-                content_hash = identity.content_hash
-            if expected_mode is not None and stat.S_IMODE(current_mode) != expected_mode:
-                raise PublicInputError("File mode changed after it was read; re-read before editing.")
+            # fd 接管这个句柄，核对版本和提交删除都作用于同一个已打开的文件。
+            target_fd = msvcrt.open_osfhandle(target_handle, os.O_RDONLY | os.O_BINARY)
+            info = os.fstat(target_fd)
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError("Workspace target is not a regular file")
+            content_hash = _hash_delete_target(target_fd, info) if needs_hash else ""
+            if expected_mode is not None:
+                # Windows 的路径模式包含文件名派生的执行位，快照也按此记录。
+                # 目标句柄禁止重命名，查询的仍是本次删除已确认的文件。
+                mode = os.stat(target_path, follow_symlinks=False).st_mode
+                if stat.S_IMODE(mode) != expected_mode:
+                    raise PublicInputError("File mode changed after it was read; re-read before editing.")
             self._validate_expected(
                 WorkspaceFileIdentity(
                     True,
                     int(device),
                     int(inode),
-                    int(size),
-                    int(current_info.st_mtime_ns),
+                    int(info.st_size),
+                    int(info.st_mtime_ns),
                     content_hash,
                 ),
                 expected,
@@ -1112,10 +1137,14 @@ class WorkspaceFileAccess:
                 receipt.applied = True
                 receipt.published_version = WorkspaceFileIdentity.missing()
         finally:
-            if target_handle is not None:
-                _windows_close(target_handle)
-            for owned in reversed(handles):
-                _windows_close(owned)
+            try:
+                if target_fd is not None:
+                    os.close(target_fd)
+                elif target_handle is not None:
+                    _windows_close(target_handle)
+            finally:
+                for owned in reversed(handles):
+                    _windows_close(owned)
 
     def _open_windows_parent(
         self, relative: Path, *, create: bool,

@@ -18,6 +18,7 @@ from nz_coder.foundation.user_paths import prepare_user_storage
 from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
 from nz_coder.runtime.process.command_broker import command_directory_identity
 from nz_coder.runtime.process.platform_runtime import terminate_process_tree
+from nz_coder.runtime.process.process_backends import _WindowsJob, start_owned_pipe_command
 from nz_coder.runtime.worktree.models import Worktree
 
 if TYPE_CHECKING:
@@ -26,9 +27,12 @@ if TYPE_CHECKING:
 
 
 class PreparationInterrupted(Exception):
-    def __init__(self, reason: Literal["cancelled", "timeout"]):
+    def __init__(self, reason: Literal["cancelled", "timeout"], *, cleanup_unconfirmed: bool = False):
         self.reason = reason
-        super().__init__("Preparation cancelled." if reason == "cancelled" else "Preparation timed out.")
+        message = "Preparation cancelled." if reason == "cancelled" else "Timed out during child preparation."
+        if reason == "timeout" and cleanup_unconfirmed:
+            message += " The command exited, but process group cleanup could not be confirmed."
+        super().__init__(message)
 
 
 class PreparationFailure(PublicRuntimeError):
@@ -68,9 +72,11 @@ class _Command:
     native_done: threading.Event = field(default_factory=threading.Event)
     stop: threading.Event = field(default_factory=threading.Event)
     process: object | None = None
+    windows_job: _WindowsJob | None = None
     streams: list[_Stream] = field(default_factory=list)
     error: BaseException | None = None
     returncode: int | None = None
+    cleanup_unconfirmed: bool = False
     output_bytes: int = 0
 
 
@@ -124,7 +130,9 @@ class PreparationScope:
         if self._cancel.is_set() or self._stop.is_set():
             raise PreparationInterrupted("cancelled")
         if time.monotonic() >= self._deadline:
-            raise PreparationInterrupted("timeout")
+            with self._lock:
+                unresolved = self._record is not None and self._record.cleanup_unconfirmed
+            raise PreparationInterrupted("timeout", cleanup_unconfirmed=unresolved)
         try:
             if command_directory_identity(self.workspace) != self._identity:
                 raise ValueError("parent replaced")
@@ -242,10 +250,9 @@ class PreparationScope:
     def _execute(self, record: _Command) -> None:
         try:
             self._check_cwd(record.cwd)
-            record.process = subprocess.Popen(
-                record.argv, cwd=str(record.cwd), env=record.environment if record.environment is not None else self._env,
-                shell=False, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, start_new_session=os.name != "nt", bufsize=0,
+            record.process, record.windows_job = start_owned_pipe_command(
+                record.argv, cwd=record.cwd,
+                env=record.environment if record.environment is not None else self._env,
             )
             record.streams = [_Stream(record.process.stdout), _Stream(record.process.stderr)]
             for index, stream in enumerate(record.streams):
@@ -283,7 +290,13 @@ class PreparationScope:
             if stopping:
                 if stopping_at is None:
                     stopping_at = now
-                terminate_process_tree(process, force=now - stopping_at >= self._settings.process_kill_grace)
+                try:
+                    terminate_process_tree(
+                        process, force=now - stopping_at >= self._settings.process_kill_grace,
+                        windows_job=record.windows_job,
+                    )
+                except (OSError, subprocess.SubprocessError):
+                    self._set_error(record, _failure("preparation_io_error", "Preparation process cleanup could not be confirmed."))
             if not waited:
                 try:
                     if process.poll() is not None:
@@ -293,9 +306,14 @@ class PreparationScope:
                     self._set_error(record, _failure("preparation_io_error", "Preparation process exit could not be confirmed."))
             if waited and not swept:
                 try:
-                    swept = terminate_process_tree(process, force=True)
+                    swept = terminate_process_tree(process, force=True, windows_job=record.windows_job)
+                    # Windows job 返回 False 时，成员可能正在正常退出。
+                    unconfirmed = not swept and record.windows_job is None
                 except (OSError, subprocess.SubprocessError):
                     swept = False
+                    unconfirmed = True
+                with self._lock:
+                    record.cleanup_unconfirmed = unconfirmed
             if waited and swept:
                 for stream in record.streams:
                     thread = stream.thread

@@ -10,7 +10,9 @@ from __future__ import annotations
 import ast
 import json
 import math
+import os
 import re
+import shlex
 import subprocess
 from collections import defaultdict
 from dataclasses import asdict
@@ -19,7 +21,7 @@ from nz_coder.tools import ToolOutput
 
 from nz_coder.foundation.process_runner import ProcessRunner
 from nz_coder.foundation.subprocess_env import build_sanitized_subprocess_env
-from nz_coder.protocol.public_error import format_public_error
+from nz_coder.protocol.public_error import PublicInputError, format_public_error
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
 from nz_coder.runtime.process.workdir import current_workdir
@@ -27,6 +29,7 @@ from nz_coder.foundation.file_kinds import is_source_file, language_for_path
 from nz_coder.runtime.agent.task_policy import is_test_file as _policy_is_test_file
 from nz_coder.tools import register, current_tool_cancel_event
 from nz_coder.runtime.process.command_channel import current_command_client
+from nz_coder.runtime.verification.domain.models import ExecutionReceipt
 
 # ── path safety ────────────────────────────────────────────────────────────────
 
@@ -62,16 +65,17 @@ def _read_source(path: Path, *, errors: str = "replace") -> str:
     return access.read_text(relative, errors=errors)
 
 
-def _run_git(args: list[str], timeout: int = 30, *, runner: ProcessRunner | None = None) -> subprocess.CompletedProcess:
+def _run_git(args: list[str], timeout: int = 30, *, runner: ProcessRunner | None = None,
+             binary: bool = False) -> subprocess.CompletedProcess:
     if runner is not None:
         return runner.capture(("git", *args), cwd=current_workdir(), timeout=timeout)
     return subprocess.run(
         ["git", *args],
         cwd=str(current_workdir()),
         capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        text=not binary,
+        encoding=None if binary else "utf-8",
+        errors=None if binary else "replace",
         timeout=timeout,
         env=build_sanitized_subprocess_env(),
     )
@@ -237,35 +241,34 @@ def _bound_changed_files() -> list[str]:
 
 def _changed_files_for_verification(include_tests: bool) -> list[str]:
     """返回需要低噪音验证的 changed source files。"""
-    repository = _run_git(["rev-parse", "--is-inside-work-tree"])
-    if repository.returncode != 0 or repository.stdout.strip() != "true":
-
-        changed = [
-            path for path in _bound_changed_files() if not _is_excluded(path)
-        ]
+    try:
+        repository = _run_git(["rev-parse", "--is-inside-work-tree"])
+    except FileNotFoundError:
+        repository = None
+    if repository is None or repository.returncode or repository.stdout.strip() != "true":
+        root = current_workdir()
+        if any(os.path.lexists(parent / ".git") for parent in (root, *root.parents)):
+            raise PublicInputError("Git could not inspect this workspace's repository.")
+        changed = _bound_changed_files()
     else:
-        diff_result = _run_git([
-            "diff", "--name-only", "--",
-            ".", ":!.nz-coder", ":!.nz-coder-runs",
-        ])
-        if diff_result.returncode not in (0, 1):
-            raise RuntimeError(
-                f"git diff failed (returncode={diff_result.returncode})"
-            )
-        changed = [
-            f for f in diff_result.stdout.splitlines()
-            if f and not _is_excluded(f)
+        # diff 默认从仓库根目录报路径；三个清单都须相对当前工作区。
+        queries = [
+            ["diff", "--relative", "--name-only"],
+            ["diff", "--cached", "--relative", "--name-only"],
+            ["ls-files", "--others", "--exclude-standard"],
         ]
-
-        untracked = _run_git(["ls-files", "--others", "--exclude-standard"])
-        if untracked.returncode in (0, 1):
-            for rel in untracked.stdout.splitlines():
-                if rel and not _is_excluded(rel) and rel not in changed:
-                    changed.append(rel)
+        changed = []
+        for query in queries:
+            result = _run_git([*query, "-z", "--", ".", ":!.nz-coder", ":!.nz-coder-runs"], binary=True)
+            if result.returncode:
+                raise PublicInputError(f"Could not list changed files with git {' '.join(query)} "
+                                       f"(exit code {result.returncode}).")
+            # -z 返回原始路径，避免引号、非 ASCII 名和文件名里的换行改变目标。
+            changed.extend(os.fsdecode(path) for path in result.stdout.split(b"\0") if path)
 
     return [
-        f for f in changed
-        if is_source_file(f) and (include_tests or not _is_test_file(f))
+        f for f in dict.fromkeys(changed)
+        if not _is_excluded(f) and is_source_file(f) and (include_tests or not _is_test_file(f))
     ]
 
 
@@ -303,85 +306,115 @@ def _node_typecheck_command() -> list[str] | None:
     return None
 
 
+def _external_changed_file_checks(files: list[str]) -> list[str]:
+    """只生成需要另行授权的外部检查建议。"""
+    warnings = []
+    node_files = [f for f in files if language_for_path(f) in {"javascript", "typescript"}]
+    if node_files:
+        cmd = _node_typecheck_command()
+        if cmd:
+            warnings.append(f"NOT EXECUTED node typecheck: {shlex.join(cmd)}")
+        else:
+            warnings.append(
+                "WARN node: changed JS/TS files but no package typecheck script "
+                "or local node_modules/.bin/tsc was found."
+            )
+
+    go_dirs = sorted({str(Path(f).parent) or "." for f in files if language_for_path(f) == "go"})
+    has_go_metadata = any(
+        (current_workdir() / name).exists() for name in ("go.mod", "go.work")
+    )
+    if go_dirs and not has_go_metadata:
+        warnings.append("WARN go: changed Go files but no root go.mod or go.work was found.")
+    else:
+        for rel_dir in go_dirs:
+            pkg = "." if rel_dir in {"", "."} else "./" + rel_dir.replace("\\", "/")
+            warnings.append(f"NOT EXECUTED go compile {pkg}: {shlex.join(['go', 'test', pkg, '-run', '^$'])}")
+
+    if any(language_for_path(f) == "rust" for f in files):
+        if (current_workdir() / "Cargo.toml").exists():
+            warnings.append("NOT EXECUTED cargo check: cargo check")
+        else:
+            warnings.append("WARN rust: changed Rust files but no Cargo.toml was found.")
+
+    unsupported = [
+        f for f in files
+        if language_for_path(f) not in {"python", "javascript", "typescript", "go", "rust"}
+    ]
+    if unsupported:
+        warnings.append("WARN unsupported: no built-in verifier for " + ", ".join(unsupported[:8]))
+    if warnings:
+        warnings.append("External checks were not executed. Use the existing bash/process tools to run them with command authorization.")
+    return warnings
+
+
 def verify_changed_files(include_tests: bool = False, timeout: int = 30) -> str:
-    """Parse changed Python source in-process and suggest other language checks.
-
-    External checks must be explicitly run through the existing bash/process
-    tools. ``timeout`` is retained as an input; no language process is started.
-    """
-    import shlex
-
+    """Compile changed Python source in-process; suggest external checks."""
     try:
-        files = _changed_files_for_verification(include_tests)
-        if not files:
-            return ToolOutput("OK: no changed source files requiring verification.")
+        candidates = _changed_files_for_verification(include_tests)
+    except subprocess.TimeoutExpired:
+        return ToolOutput("Error: changed-file Git query timed out")
+    except Exception as exc:
+        return ToolOutput(format_public_error(exc))
+    if not candidates:
+        return ToolOutput("OK: no changed source files requiring verification.")
 
-        rows: list[str] = []
-        warnings: list[str] = []
-        ok = True
-        access = WorkspaceFileAccess(current_workdir())
-        py_files = [f for f in files if language_for_path(f) == "python"]
-        for rel in py_files:
+    rows: list[str] = []
+    warnings: list[str] = []
+    receipts: list[ExecutionReceipt] = []
+    files = []
+    for path in candidates:
+        try:
+            path.encode("utf-8")
+        except UnicodeEncodeError:
+            # POSIX 允许任意文件名字节；模型消息和检查点必须能写作 UTF-8。
+            escaped = os.fsencode(path).decode("utf-8", errors="backslashreplace")
+            warnings.append(f"WARN {escaped}: filename cannot be represented in UTF-8; check skipped.")
+        else:
+            files.append(path)
+    root = current_workdir()
+    access = WorkspaceFileAccess(root)
+    for rel in files:
+        if language_for_path(rel) != "python":
+            continue
+        try:
             if not access.exists(rel):
                 rows.append(f"SKIP {rel} (deleted file)")
                 continue
-            try:
-                # 仅解析源码，不执行项目代码，也不生成已执行命令的回执。
-                ast.parse(access.read_bytes(rel), filename=rel)
-            except SyntaxError as exc:
-                ok = False
-                rows.append(f"FAIL {rel}\n{exc}")
-            else:
-                rows.append(f"OK  {rel}")
-
-        node_files = [f for f in files if language_for_path(f) in {"javascript", "typescript"}]
-        if node_files:
-            cmd = _node_typecheck_command()
-            if cmd:
-                warnings.append(f"NOT EXECUTED node typecheck: {shlex.join(cmd)}")
-            else:
-                warnings.append(
-                    "WARN node: changed JS/TS files but no package typecheck script "
-                    "or local node_modules/.bin/tsc was found."
-                )
-
-        go_dirs = sorted({str(Path(f).parent) or "." for f in files if language_for_path(f) == "go"})
-        has_go_metadata = any(
-            (current_workdir() / name).exists() for name in ("go.mod", "go.work")
-        )
-        if go_dirs and not has_go_metadata:
-            warnings.append("WARN go: changed Go files but no root go.mod or go.work was found.")
+            source = access.read_bytes(rel)
+        except (OSError, ValueError) as exc:
+            warnings.append(f"WARN {rel}: could not read source ({format_public_error(exc)})")
+            continue
+        try:
+            # 编译原始字节会遵循源码编码并检查作用域，无需执行代码或写入缓存。
+            compile(source, rel, "exec", dont_inherit=True)
+        except SyntaxError as exc:
+            outcome, message = "failed", f"FAIL {rel}\n{exc}"
+        except (ValueError, OverflowError, RecursionError) as exc:
+            warnings.append(f"WARN {rel}: syntax check incomplete ({format_public_error(exc)})")
+            continue
         else:
-            for rel_dir in go_dirs:
-                pkg = "." if rel_dir in {"", "."} else "./" + rel_dir.replace("\\", "/")
-                warnings.append(f"NOT EXECUTED go compile {pkg}: {shlex.join(['go', 'test', pkg, '-run', '^$'])}")
+            outcome, message = "succeeded", f"OK  {rel}"
+        rows.append(message)
+        receipts.append(ExecutionReceipt(
+            producer="verify_changed_files", command=shlex.join(["verify_changed_files", rel]),
+            cwd=str(root), outcome=outcome, capabilities=("syntax",), targets=(rel,),
+            in_process=True, reason=message[-2000:],
+        ))
 
-        if any(language_for_path(f) == "rust" for f in files):
-            if (current_workdir() / "Cargo.toml").exists():
-                warnings.append("NOT EXECUTED cargo check: cargo check")
-            else:
-                warnings.append("WARN rust: changed Rust files but no Cargo.toml was found.")
-
-        unsupported = [
-            f for f in files
-            if language_for_path(f) not in {"python", "javascript", "typescript", "go", "rust"}
-        ]
-        if unsupported:
-            warnings.append("WARN unsupported: no built-in verifier for " + ", ".join(unsupported[:8]))
-        if warnings:
-            warnings.append("External checks were not executed. Use the existing bash/process tools to run them with command authorization.")
-        rows.extend(warnings)
-        if not ok:
-            output = "FAIL: changed files verification\n" + "\n".join(rows)
-        elif warnings:
-            output = "WARN: changed files verification incomplete\n" + "\n".join(rows)
-        else:
-            output = "OK: Python syntax parsed in-process\n" + "\n".join(rows)
-        return ToolOutput(output)
-    except subprocess.TimeoutExpired:
-        return "Error: changed-file Git query timed out"
-    except Exception as exc:
-        return format_public_error(exc)
+    try:
+        warnings.extend(_external_changed_file_checks(files))
+    except (OSError, ValueError) as exc:
+        warnings.append(f"WARN could not inspect external check configuration ({format_public_error(exc)})")
+    if any(receipt.outcome == "failed" for receipt in receipts):
+        heading = "FAIL: changed files verification"
+    elif warnings:
+        heading = "WARN: changed files verification incomplete"
+    elif receipts:
+        heading = "OK: Python syntax parsed in-process"
+    else:
+        heading = "OK: no remaining source files to check."
+    return ToolOutput("\n".join([heading, *rows, *warnings]), execution_facts=receipts)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1013,10 +1046,10 @@ register(
 register(
     name="verify_changed_files",
     description=(
-        "Parse changed Python source syntax in-process and suggest JS/TS, Go, "
+        "Check changed Python source syntax in-process and suggest JS/TS, Go, "
         "and Rust checks without executing them. Run suggested commands via "
         "the existing bash/process tools with command authorization. Excludes "
-        "test files by default. No executed-command receipts are produced."
+        "test files by default. Each checked Python file has its own syntax result."
     ),
     parameters={
         "type": "object",

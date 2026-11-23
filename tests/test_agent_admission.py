@@ -150,7 +150,8 @@ def test_admitted_runtime_requires_opaque_handle_and_preserves_trusted_path():
         admitted_runtime(graph)  # type: ignore[arg-type]
 
 
-def test_runtime_clamps_dynamic_bash_network_capability(tmp_path):
+def test_runtime_clamps_dynamic_bash_network_capability(tmp_path, monkeypatch):
+    from unittest.mock import Mock
     from nz_coder.foundation import config
     from nz_coder.runtime.agent.admission import SystemAgentCap, admit_agent_graph
     from nz_coder.runtime.execution.composition import build_admitted_agent
@@ -171,60 +172,74 @@ def test_runtime_clamps_dynamic_bash_network_capability(tmp_path):
         FakeResponse(FakeMessage("adapted without network")),
     ])
     messages = [{"role": "user", "content": "inspect locally"}]
-    old_workdir = config.WORKDIR
-    config.WORKDIR = tmp_path
-    try:
-        with scoped_workdir(tmp_path):
-            agent = build_admitted_agent(
-                verdict.handle,
-                client=fake,
-                permission_mode="auto",
-                trace_enabled=False,
-            )
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    shell = Mock(side_effect=AssertionError("Rejected network command reached the shell"))
+    monkeypatch.setattr("nz_coder.tools.bash.execute_bash_local", shell)
+    with scoped_workdir(tmp_path):
+        agent = build_admitted_agent(
+            verdict.handle, client=fake, permission_mode="auto", trace_enabled=False,
+        )
+        try:
             result = asyncio.run(agent.run(messages, stream=False))
-    finally:
-        config.WORKDIR = old_workdir
+        finally:
+            agent.close()
 
+    shell.assert_not_called()
     tool_message = next(item for item in messages if item.get("role") == "tool")
     assert "[Invariant toolPermission]" in tool_message["content"]
     assert "bash:network" in tool_message["content"]
-    assert result["status"] == "completed"
+    assert result["status"] == "completed_unverified"
+    assert result["tests_passed"] is None and not result["acceptance_checks"]
+    assert result["authored_content"] == "adapted without network"
+    assert messages[-1]["content"] == result["content"]
     assert result["runtime"]["admitted"] is True
     assert result["runtime"]["admitted_capabilities"] == [
         "bash:mutating", "bash:read-only", "bash:test",
     ]
 
 
-def test_admission_max_iterations_clamps_user_turn_budget(tmp_path):
+def test_admission_max_iterations_clamps_user_turn_budget(tmp_path, monkeypatch):
     from nz_coder.foundation import config
     from nz_coder.runtime.agent.admission import SystemAgentCap, admit_agent_graph
     from nz_coder.runtime.execution.composition import build_admitted_agent
     from nz_coder.runtime.agent.handoffs import AgentSpec
     from nz_coder.runtime.process.workdir import scoped_workdir
 
-    graph = _graph(AgentSpec("worker", "work", allowed_tools=()))
+    graph = _graph(AgentSpec("worker", "work", allowed_tools=("read_file",)))
     verdict = admit_agent_graph(
         graph,
-        SystemAgentCap(frozenset(), max_iterations=2),
+        SystemAgentCap(frozenset({"read"}), max_iterations=2),
     )
     assert verdict.handle is not None
-    old_workdir = config.WORKDIR
-    config.WORKDIR = tmp_path
-    try:
-        with scoped_workdir(tmp_path):
-            agent = build_admitted_agent(
-                verdict.handle,
-                client=FakeClient([FakeResponse(FakeMessage("done"))]),
-                trace_enabled=False,
-            )
-            max_turns, _start_turn = agent._init_run([
-                {"role": "user", "content": "task\n<max_turns>40</max_turns>"},
-            ], False)
-    finally:
-        config.WORKDIR = old_workdir
+    monkeypatch.setattr(config, "WORKDIR", tmp_path)
+    documents = {"first": "amber meadow", "second": "cobalt harbor"}
+    responses = []
+    for name, contents in documents.items():
+        (tmp_path / name).write_text(contents, encoding="utf-8")
+        call = FakeToolCall("read_file", {"path": name}, call_id=name)
+        responses.append(FakeResponse(FakeMessage(tool_calls=[call])))
+    responses.append(FakeResponse(FakeMessage("third turn")))
+    fake = FakeClient(responses)
+    messages = [{"role": "user", "content": "task\n<max_turns>40</max_turns>"}]
+    with scoped_workdir(tmp_path):
+        agent = build_admitted_agent(
+            verdict.handle, client=fake, permission_mode="auto", trace_enabled=False,
+        )
+        try:
+            result = asyncio.run(agent.run(messages, stream=False))
+            assert agent.runtime_state.max_turns == 2
+        finally:
+            agent.close()
 
-    assert max_turns == 2
-    assert agent.runtime_state.max_turns == 2
+    assert result["status"] == "max_turns" and result["runtime"]["turn_count"] == 2
+    assert fake.chat.completions.calls == 2
+    reads = [message for message in messages if message["role"] == "tool"]
+    assert [message["tool_call_id"] for message in reads] == list(documents)
+    for message in reads:
+        body = message["content"]
+        assert not body.startswith("Error:")
+        assert "<type>file</type>" in body
+        assert f"1: {documents[message['tool_call_id']]}" in body.splitlines()
 
 
 def test_admitted_run_cannot_finish_from_non_terminal_owner(tmp_path):
@@ -308,13 +323,16 @@ def test_terminal_evidence_invariant_tracks_only_committed_writes():
     )
 
 
-def test_terminal_evidence_accepts_successful_verification_artifact():
+def test_terminal_evidence_accepts_successful_verification_artifact(tmp_path):
     from nz_coder.runtime.agent.admission import (
         AdmissionInvariantSession,
         SystemAgentCap,
         admit_agent_graph,
     )
     from nz_coder.runtime.agent.handoffs import AgentSpec
+    from nz_coder.permissions import PermissionManager
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.runtime.process.workdir import scoped_workdir
 
     graph = _graph(AgentSpec("worker", "work", allowed_tools=("write_file", "bash")))
     verdict = admit_agent_graph(
@@ -329,18 +347,49 @@ def test_terminal_evidence_accepts_successful_verification_artifact():
         dispatch_failed=False,
         tool_input={"path": "app.py"},
     ))
-    session.record_tool_result(SimpleNamespace(
-        name="bash",
-        tool_input={"command": "python -m pytest -q"},
-        output="1 passed",
-        is_write=False,
-        executed=True,
-        dispatch_failed=False,
-        command_failed=False,
-    ))
+    (tmp_path / "test_real.py").write_text("def test_one(): assert 1 == 1")
+    args = {"command": "python -m pytest -q"}
+    with scoped_workdir(tmp_path):
+        session.record_tool_result(ToolExecutor(PermissionManager("auto")).execute_one({
+            "id": "test", "function": {"name": "bash", "arguments": args}
+        }, 0))
 
     assert session.assert_terminal("worker", "completed") == ()
     assert session.evidence_artifacts == ["python -m pytest -q"]
+
+
+def test_terminal_evidence_needs_a_successful_host_check(tmp_path):
+    from nz_coder.permissions import PermissionManager
+    from nz_coder.runtime.agent.admission import AdmissionInvariantSession, SystemAgentCap, admit_agent_graph
+    from nz_coder.runtime.agent.handoffs import AgentSpec
+    from nz_coder.runtime.execution.tool_executor import ToolExecutor
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.tool_platform.execution import ToolExecutionResult
+
+    import subprocess
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    verdict = admit_agent_graph(_graph(AgentSpec("worker", "verify",
+        allowed_tools=("verify_changed_files", "write_file", "bash"))),
+        SystemAgentCap(frozenset({"read", "edit", "bash:mutating"})))
+    session = AdmissionInvariantSession(verdict.handle)
+    session.record_committed_mutation(ToolExecutionResult("write_file", {"path": "app.py"},
+        "Created", True, False, False, True))
+    fake_shell = ToolExecutionResult("bash", {"command": "pytest -q"}, "1 passed", True, False, False, False)
+    session.record_tool_result(fake_shell)
+    with scoped_workdir(tmp_path):
+        executor = ToolExecutor(PermissionManager("auto"))
+        def verify():
+            session.record_tool_result(executor.execute_one({"id": "verify", "function": {
+                "name": "verify_changed_files", "arguments": {}}}, 0))
+        verify()
+        (tmp_path / "bad.py").write_text("def missing(:")
+        verify()
+        assert not session.evidence_artifacts
+        assert session.assert_terminal("worker", "completed")
+        (tmp_path / "good.py").write_text("x = 1")
+        verify()
+        assert len(session.evidence_artifacts) == 1
+        assert "good.py" in session.evidence_artifacts[0]
 
 
 @pytest.mark.parametrize(

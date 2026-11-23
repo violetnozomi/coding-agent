@@ -343,7 +343,8 @@ class VerificationDomain:
                 ready, tests_passed, state, requirements, tuple(self._integrity_errors), self._rebuild_required and not rebuilding,
                 artifacts=tuple(self._artifacts.values()),
                 last_execution_id=next(reversed(self._facts), ""), execution_ready=execution_ready, executions=tuple(self._facts.values()), targeted_pending=targeted_pending,
-                reviews=reviews, candidate_fingerprint=self._candidate_fingerprint, strict=self._require_targeted)
+                reviews=reviews, candidate_fingerprint=self._candidate_fingerprint, strict=self._require_targeted,
+                workspace_mutating=any(item.mutates for item in self._active.values()))
             return replace(snapshot, ready_for_completion=snapshot.assess_completion("completed").status == "completed")
 
     def rebuild_from_current_acceptance(self) -> bool:
@@ -362,7 +363,8 @@ class VerificationDomain:
             self._revision += 1
             return True
 
-    def seal(self, *, expected_revision: int, terminal_reason: str) -> VerificationSnapshot:
+    def seal(self, *, expected_revision: int, terminal_reason: str,
+             changed_python_sources: tuple[str, ...] | None = ()) -> VerificationSnapshot:
         with self._lock:
             if self._sealed is not None:
                 if terminal_reason != self._sealed.terminal_reason:
@@ -374,7 +376,8 @@ class VerificationDomain:
             if terminal_reason == "completed" and (not snapshot.ready_for_completion
                     or snapshot.assess_completion("completed").status != "completed"):
                 raise ValueError("verification remains unconfirmed")
-            self._sealed = replace(snapshot, terminal_reason=terminal_reason)
+            self._sealed = replace(snapshot, terminal_reason=terminal_reason,
+                                   changed_python_syntax=snapshot.python_syntax_gap(changed_python_sources))
             return self._sealed
 
     def checkpoint(self) -> dict:

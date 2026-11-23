@@ -12,11 +12,21 @@ from typing import Any, Iterator
 
 from nz_coder.protocol.session_events import SessionEventBus
 from nz_coder.protocol.message_schema import project_public_protocol_value
+from nz_coder.protocol.public_error import PublicError, PublicRuntimeError
 from nz_coder.tool_platform.permissioning.interaction import PermissionInteractionError
+from nz_coder.tools.question import QuestionWaitEnded, current_question_request_id
 
 
 class InteractionNotFoundError(LookupError):
     """Raised when an interaction request is absent or already resolved."""
+
+
+def _wait_failure(kind: str, reason: str) -> RuntimeError:
+    if kind == "permission":
+        return PermissionInteractionError("timed_out" if reason == "timeout" else reason)
+    if reason == "unavailable":
+        return PublicRuntimeError(PublicError("question_unavailable", "Interactive question service unavailable."))
+    return QuestionWaitEnded(reason)
 
 
 @dataclass
@@ -58,7 +68,7 @@ class InteractionBroker:
         self._lock = threading.RLock()
         self._pending: dict[str, _PendingInteraction] = {}
         self._closed = False
-        self._accepting = False
+        self._blocked_reason: str | None = "unavailable"
         self._publisher = None
 
     def begin_run(self, publisher=None) -> None:
@@ -68,7 +78,7 @@ class InteractionBroker:
                 raise RuntimeError("interaction broker is closed")
             if publisher is not None:
                 self._publisher = publisher
-            self._accepting = True
+            self._blocked_reason = None
 
     def ask_permission(self, tool_name: str, tool_input: dict) -> str:
         """Publish a permission request and block until reply, timeout, or cancel."""
@@ -78,15 +88,13 @@ class InteractionBroker:
             "tool_input": copy.deepcopy(tool_input),
             "replies": ["once", "always", "reject"],
         }
-        result = self._wait_for_reply("permission", payload, default="reject")
+        result = self._wait_for_reply("permission", payload)
         if isinstance(result, PermissionInteractionError):
             raise result
         return str(result) if result in {"once", "always"} else "reject"
 
     def ask_question(self, questions: list[dict]) -> list[list[str]] | None:
-        """Publish structured questions and block until reply, reject, or timeout."""
-        from nz_coder.tools.question import current_question_request_id
-
+        """Return answers or a dismissal, preserving service and run failures."""
         payload = {
             "session_id": self.session_id,
             "questions": copy.deepcopy(questions),
@@ -94,9 +102,10 @@ class InteractionBroker:
         result = self._wait_for_reply(
             "question",
             payload,
-            default=None,
             request_id=current_question_request_id(),
         )
+        if isinstance(result, RuntimeError):
+            raise result
         return copy.deepcopy(result) if isinstance(result, list) else None
 
     def list(self, kind: str | None = None) -> list[dict[str, Any]]:
@@ -179,14 +188,13 @@ class InteractionBroker:
     def cancel_all(self, reason: str = "cancelled", *, block_new: bool = False) -> int:
         """Reject every pending wait so abort/shutdown cannot deadlock the Agent."""
         with self._lock:
+            cause = "cancelled" if reason in {"aborted", "cancelled"} else "unavailable"
             if block_new:
-                self._accepting = False
+                self._blocked_reason = cause
             pending = list(self._pending.values())
             self._pending.clear()
             for item in pending:
-                item.result = (PermissionInteractionError(
-                    "cancelled" if reason in {"aborted", "cancelled"} else "unavailable"
-                ) if item.kind == "permission" else None)
+                item.result = _wait_failure(item.kind, cause)
                 event_type = (
                     "permission.replied"
                     if item.kind == "permission"
@@ -213,7 +221,6 @@ class InteractionBroker:
         self,
         kind: str,
         payload: dict[str, Any],
-        default: Any,
         *,
         request_id: str = "",
     ) -> Any:
@@ -230,17 +237,20 @@ class InteractionBroker:
             expires_at=now + self.timeout_seconds,
         )
         with self._lock:
-            if self._closed or not self._accepting:
-                return PermissionInteractionError("unavailable") if kind == "permission" else default
+            if self._closed or self._blocked_reason:
+                # 尚未注册的审批沿用 unavailable；提问需要区分运行已取消和服务关闭。
+                if kind == "question" and not self._closed and self._blocked_reason == "cancelled":
+                    return QuestionWaitEnded("cancelled")
+                return _wait_failure(kind, "unavailable")
             if item.request_id in self._pending:
-                return PermissionInteractionError("unavailable") if kind == "permission" else default
+                return _wait_failure(kind, "unavailable")
             self._pending[item.request_id] = item
             # Registration and asked publication are one broker transaction.
             # Otherwise list/reply/cancel could resolve the visible request
             # before its asked event reaches clients.
             if not self._publish(f"{kind}.asked", item.to_dict()):
                 self._pending.pop(item.request_id, None)
-                return PermissionInteractionError("unavailable") if kind == "permission" else default
+                return _wait_failure(kind, "unavailable")
 
         from nz_coder.tools import current_tool_cancel_event
         cancel = current_tool_cancel_event()
@@ -263,7 +273,7 @@ class InteractionBroker:
                 resolved_elsewhere = True
             else:
                 self._pending.pop(item.request_id, None)
-                item.result = PermissionInteractionError("cancelled" if reason == "cancelled" else "timed_out") if kind == "permission" else default
+                item.result = _wait_failure(kind, reason)
                 if kind == "permission":
                     self._publish(
                         "permission.replied",
@@ -280,7 +290,6 @@ class InteractionBroker:
                     )
         if resolved_elsewhere:
             item.event.wait()
-            return item.result
         return item.result
 
     def _get(self, request_id: str, kind: str) -> _PendingInteraction:
@@ -293,8 +302,8 @@ class InteractionBroker:
     def _resolve(self, request_id: str, kind: str, result: Any) -> _PendingInteraction:
         with self._lock:
             item = self._pending.get(str(request_id))
-            # 等待线程可能尚未拿到锁；到期的权限此时也不能再被批准。
-            if item is None or item.kind != kind or (kind == "permission" and time.time() >= item.expires_at):
+            # 等待线程可能尚未拿到锁；两类请求到期后都不能再接受输入。
+            if item is None or item.kind != kind or time.time() >= item.expires_at:
                 raise InteractionNotFoundError(str(request_id))
             self._pending.pop(item.request_id, None)
             item.result = copy.deepcopy(result)

@@ -109,6 +109,8 @@ def to_public_error(error: object) -> PublicError:
     if not isinstance(error, BaseException):
         return PublicError("internal_error", "An internal error occurred.")
     status = getattr(error, "status_code", None)
+    if status is None:
+        status = getattr(getattr(error, "response", None), "status_code", None)
     retryable = bool(
         status in {408, 409, 425, 429}
         or (isinstance(status, int) and status >= 500)
@@ -175,6 +177,16 @@ def public_error_from_wire(value: object) -> PublicError | None:
     ):
         return None
     return _normalized_public_error(code, message, retryable, metadata)
+
+
+def redact_failed_event_output(event: object) -> None:
+    """在公开事件副本中用错误摘要替换失败输出，工具原文仍可供模型排查。"""
+    if not isinstance(event, dict):
+        return
+    status = str(event.get("status") or "").casefold()
+    if status in {"error", "failed", "nonzero", "blocked"} and "output" in event:
+        public = public_error_from_wire(event.get("public_error"))
+        event["output"] = public.message if public is not None else "Tool execution failed."
 
 
 def _safe_name(value: object) -> str:

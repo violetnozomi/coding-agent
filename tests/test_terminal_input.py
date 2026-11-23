@@ -533,6 +533,57 @@ def test_attachment_is_workspace_bounded_and_consumed_once(tmp_path):
         terminal.queue_attachment("../outside.py")
 
 
+def test_long_chinese_prompt_remains_plain_text(tmp_path):
+    terminal = TerminalInput(
+        console=object(), registry=build_default_registry(), workspace=tmp_path,
+        interactive=False,
+    )
+    prompt = "测" * 86
+
+    assert terminal.prepare_submission(prompt) == (prompt, ())
+
+
+def test_long_inline_reference_preserves_text_and_other_attachments(tmp_path):
+    (tmp_path / "旧 账本").write_text("旧", encoding="utf-8")
+    (tmp_path / "新账本").write_text("新", encoding="utf-8")
+    terminal = TerminalInput(
+        console=object(), registry=build_default_registry(), workspace=tmp_path,
+        interactive=False,
+    )
+    terminal.queue_attachment("旧 账本")
+    prompt = f"核对 @{'测' * 86} @新账本"
+
+    content, attachments = terminal.prepare_submission(prompt)
+
+    assert content.endswith("\n\n" + prompt)
+    assert [item.path for item in attachments] == ["旧 账本", "新账本"]
+    assert terminal.attachments() == ()
+
+
+def test_explicit_attachment_reports_invalid_long_path(tmp_path):
+    terminal = TerminalInput(
+        console=object(), registry=build_default_registry(), workspace=tmp_path,
+        interactive=False,
+    )
+    with pytest.raises(ValueError, match="workspace"):
+        terminal.queue_attachment("测" * 260)
+    assert terminal.attachments() == ()
+
+
+@pytest.mark.parametrize("explicit", [False, True], ids=["inline", "explicit"])
+def test_attachment_under_symlink_loop_is_unavailable(tmp_path, explicit):
+    (tmp_path / "loop").symlink_to("loop", target_is_directory=True)
+    terminal = TerminalInput(
+        console=object(), registry=build_default_registry(), workspace=tmp_path,
+        interactive=False,
+    )
+    if explicit:
+        with pytest.raises(ValueError, match="workspace"):
+            terminal.queue_attachment("loop/file")
+    else:
+        assert terminal.prepare_submission("检查 @loop/file") == ("检查 @loop/file", ())
+
+
 def test_remote_terminal_can_disable_client_path_attachments(tmp_path):
     source = tmp_path / "local-only.txt"
     source.write_text("client data", encoding="utf-8")

@@ -48,6 +48,6 @@ def test_static_check_success_does_not_instruct_immediate_completion(tmp_path):
     state.verification_attempts = 1
     state.turn_count = state.last_edit_turn = 4
     prompt = state.build_prompt_block(include_current_facts=True)
-    assert "verify_changed_files passed" in prompt
+    assert "Python compilation passed for the changed files" in prompt
     assert "FINALIZE now" not in prompt
     assert "behavior" in prompt

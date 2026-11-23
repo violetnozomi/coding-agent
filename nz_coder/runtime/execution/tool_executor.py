@@ -1,16 +1,7 @@
-"""Tool executor: parse arguments, check permissions, dispatch, classify results.
+"""校验并执行单个工具调用，把结果交给批次处理和会话记录。
 
-职责:
-  - 检查单轮工具调用数量限制
-  - 解析 JSON 参数（给出可读诊断）
-  - 权限检查
-  - 调用 dispatch()
-  - 将结果分类（dispatch_failed / command_failed / is_write）
-
-不负责:
-  - 追加 messages（由 AgentLoop 负责）
-  - 事务管理（由 AgentLoop 负责）
-  - tracer 记录（由 AgentLoop 负责）
+dispatch_failed 表示工具未能正常派发或返回，批次据此决定是否回滚写入。
+command_failed 表示已执行的命令以失败状态结束，模型还需要它的输出来排查原因。
 """
 from __future__ import annotations
 
@@ -23,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from nz_coder.runtime.core.run_settings import current_run_settings
+from nz_coder.runtime.core.run_settings import RunSettings, current_run_settings
 from nz_coder.foundation.json_safety import reject_nonstandard_json_constant
 from nz_coder.permissions import PermissionManager
 from nz_coder.runtime.agent.agent_resilience import (
@@ -337,7 +328,8 @@ def _write_paths(tool_input: dict) -> set[str]:
     return set(collect_filesystem_mutation_paths(tool_input))
 
 
-def _best_effort_arguments(raw_arguments) -> dict:  # noqa: ANN001
+def _arguments_for_summary(raw_arguments: object) -> dict:
+    """开始事件也要展示参数无效的调用，无法解析时用空对象生成摘要。"""
     if isinstance(raw_arguments, dict):
         return dict(raw_arguments)
     if not isinstance(raw_arguments, str):
@@ -347,6 +339,50 @@ def _best_effort_arguments(raw_arguments) -> dict:  # noqa: ANN001
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _parse_arguments(name: str, raw_arguments: object) -> tuple[dict, str | None]:
+    """返回可派发的参数，或说明 JSON 无效、参数不是对象的具体原因。"""
+    try:
+        if isinstance(raw_arguments, str):
+            arguments = json.loads(raw_arguments, parse_constant=reject_nonstandard_json_constant)
+        elif raw_arguments is None:
+            arguments = {}
+        else:
+            arguments = raw_arguments
+        if isinstance(arguments, dict):
+            # 上游可以直接传字典，仍需拒绝非有限数值和无法编码成 JSON 的字段。
+            json.dumps(arguments, ensure_ascii=False, allow_nan=False)
+            return arguments, None
+    except (ValueError, TypeError, OverflowError):
+        return {}, (
+            f"Error: Invalid JSON arguments for {name}. "
+            "Your tool call arguments are not valid JSON. "
+            "Common causes: unescaped quotes inside strings, "
+            "literal backslashes not doubled, trailing commas. "
+            "Please rewrite the arguments with properly escaped JSON strings."
+        )
+    return {}, (
+        f"Error: Invalid arguments for {name}: tool arguments must "
+        "be a JSON object. Please rewrite the call using named fields."
+    )
+
+
+def _rejected_before_dispatch(
+    name: str, tool_input: dict, output: str, *, is_write: bool,
+    permission_denied: bool = False, metadata: dict | None = None,
+) -> ToolExecutionResult:
+    return ToolExecutionResult(
+        name=name,
+        tool_input=tool_input,
+        output=output,
+        executed=False,
+        dispatch_failed=True,
+        command_failed=False,
+        is_write=is_write,
+        permission_denied=permission_denied,
+        metadata=metadata if metadata is not None else {},
+    )
 
 
 def tool_category(name: str) -> str:
@@ -390,7 +426,7 @@ class ToolExecutor:
         )
 
     def execute_one(self, tool_call: dict, index: int) -> ToolExecutionResult:
-        """Resolve one dynamic generation before authorization and dispatch."""
+        """审批和实际派发共用同一次工具注册快照。"""
         with scoped_dynamic_tool_snapshot():
             return self._execute_one_with_snapshot(tool_call, index)
 
@@ -399,172 +435,141 @@ class ToolExecutor:
         tool_call: dict,
         index: int,
     ) -> ToolExecutionResult:
-        """执行单次工具调用，返回 ToolExecutionResult。
-
-        Args:
-            tool_call: 形如 {"function": {"name": ..., "arguments": ...}} 的字典。
-            index: 本轮响应中的零起始序号，用于限制单轮调用次数。
-        """
+        """记录开始事件，并为每种返回路径补齐耗时、调用 ID 和分类。"""
         envelope = tool_call if isinstance(tool_call, dict) else {}
         function = envelope.get("function")
-        raw_name = function.get("name") if isinstance(function, dict) else None
+        if not isinstance(function, dict):
+            function = {}
+        raw_name = function.get("name")
+        display_name = raw_name.strip() if isinstance(raw_name, str) else ""
         provider_extra = envelope.get("provider_extra")
-        repaired_malformed_envelope = bool(
+        malformed = not display_name or (
             isinstance(provider_extra, dict)
             and provider_extra.get("nz_malformed_tool_call") is True
         )
-        valid_envelope = bool(
-            isinstance(raw_name, str) and raw_name.strip()
-        ) and not repaired_malformed_envelope
-        fn_name = raw_name.strip() if valid_envelope else "unknown"
-        tool_input = _best_effort_arguments(
-            function.get("arguments", {}) if isinstance(function, dict) else {},
-        )
-        is_write = is_transactional_write_tool(fn_name)
-        category = tool_category(fn_name)
+        event_name = "unknown" if malformed else display_name
+        summary_input = _arguments_for_summary(function.get("arguments", {}))
+        is_write = is_transactional_write_tool(event_name)
+        category = tool_category(event_name)
         publish_session_event(
             "session.tool.started",
             {
                 "tool_call_id": envelope.get("id"),
                 "index": index,
-                "name": fn_name,
+                "name": event_name,
                 "category": category,
-                "summary": format_tool_summary(fn_name, tool_input),
+                "summary": format_tool_summary(event_name, summary_input),
                 "is_write": is_write,
             },
         )
         started = time.perf_counter()
-        if valid_envelope:
-            result = self._execute_one(envelope, index)
-        else:
-            result = ToolExecutionResult(
-                name="unknown",
-                tool_input={},
-                output=(
-                    "Error: Malformed tool call: function.name must be a "
-                    "non-empty string. Please issue a new valid tool call."
-                ),
-                executed=False,
-                dispatch_failed=True,
-                command_failed=False,
+        if malformed:
+            result = _rejected_before_dispatch(
+                "unknown", {},
+                "Error: Malformed tool call: function.name must be a "
+                "non-empty string. Please issue a new valid tool call.",
                 is_write=False,
             )
+        else:
+            result = self._execute_one(envelope, index)
         result.duration_ms = round((time.perf_counter() - started) * 1000, 3)
         result.execution_id = str(envelope.get("id") or "")
         result.category = category
         return result
 
     def _execute_one(self, tool_call: dict, index: int) -> ToolExecutionResult:
-        """Implementation split out so every return path receives timing metadata."""
+        """在有效调用上依次检查次数、参数和权限，再交给工具执行。"""
         fn_name = tool_call["function"]["name"]
-        fn_args_raw = tool_call["function"].get("arguments", "{}")
+        raw_arguments = tool_call["function"].get("arguments", "{}")
         is_write = is_transactional_write_tool(fn_name)
-
-        # ── 单轮调用数限制 ──────────────────────────────────────────────────
         settings = current_run_settings()
         if index >= settings.max_tool_calls:
             output = (
                 f"Error: Too many tool calls in one response "
                 f"(limit {settings.max_tool_calls})"
             )
-            return ToolExecutionResult(fn_name, {}, output, False, True, False, is_write)
+            return _rejected_before_dispatch(fn_name, {}, output, is_write=is_write)
 
-        # ── JSON 解析 ──────────────────────────────────────────────────────
-        try:
-            tool_input = (
-                json.loads(
-                    fn_args_raw,
-                    parse_constant=reject_nonstandard_json_constant,
-                )
-                if isinstance(fn_args_raw, str)
-                else ({} if fn_args_raw is None else fn_args_raw)
-            )
-            if isinstance(tool_input, dict):
-                json.dumps(tool_input, ensure_ascii=False, allow_nan=False)
-        except (json.JSONDecodeError, TypeError, ValueError, OverflowError):
-            output = (
-                f"Error: Invalid JSON arguments for {fn_name}. "
-                "Your tool call arguments are not valid JSON. "
-                "Common causes: unescaped quotes inside strings, "
-                "literal backslashes not doubled, trailing commas. "
-                "Please rewrite the arguments with properly escaped JSON strings."
-            )
-            return ToolExecutionResult(fn_name, {}, output, False, True, False, is_write)
-
-        # ── 权限检查 ───────────────────────────────────────────────────────
-        if not isinstance(tool_input, dict):
-            output = (
-                f"Error: Invalid arguments for {fn_name}: tool arguments must "
-                "be a JSON object. Please rewrite the call using named fields."
-            )
-            return ToolExecutionResult(
-                fn_name, {}, output, False, True, False, is_write,
-            )
-
+        tool_input, argument_error = _parse_arguments(fn_name, raw_arguments)
+        if argument_error is not None:
+            return _rejected_before_dispatch(fn_name, tool_input, argument_error, is_write=is_write)
         if fn_name == "bash":
             from nz_coder.tools.bash import validate_bash_timeout
 
             error = validate_bash_timeout(tool_input.get("timeout"), settings.bash_timeout)
             if error:
-                return ToolExecutionResult(fn_name, tool_input, error, False, True, False, is_write)
+                return _rejected_before_dispatch(fn_name, tool_input, error, is_write=is_write)
 
         from nz_coder.tool_platform.permissioning.command_authorization import (
-            command_authorization_identity, consume_permission_approval,
-            permission_approval_invalidated, permission_approval_present,
-            permission_approval_was_human, scoped_command_authorization,
+            command_authorization_identity,
+            consume_permission_approval,
+            permission_approval_invalidated,
+            permission_approval_present,
+            permission_approval_was_human,
         )
+
         if permission_approval_invalidated():
-            return ToolExecutionResult(fn_name, tool_input,
-                "Denied: Approved command identity changed before execution", False, True, False, is_write,
-                permission_denied=True, metadata={"permission_source": "policy"})
+            return _rejected_before_dispatch(
+                fn_name, tool_input, "Denied: Approved command identity changed before execution",
+                is_write=is_write, permission_denied=True, metadata={"permission_source": "policy"},
+            )
         approved = consume_permission_approval(self._permissions, fn_name, tool_input)
         if permission_approval_present() and not approved:
-            return ToolExecutionResult(fn_name, tool_input,
-                "Denied: Approval belongs to a different execution owner or was consumed", False, True, False, is_write,
-                permission_denied=True, metadata={"permission_source": "policy"})
+            return _rejected_before_dispatch(
+                fn_name, tool_input, "Denied: Approval belongs to a different execution owner or was consumed",
+                is_write=is_write, permission_denied=True, metadata={"permission_source": "policy"},
+            )
         decision = self._permissions.check(fn_name, tool_input)
         if decision["behavior"] == "deny":
-            output = f"Denied: {decision['reason']}"
-            return ToolExecutionResult(
-                fn_name, tool_input, output, False, True, False, is_write,
-                permission_denied=True, metadata={"permission_source": "policy"},
+            return _rejected_before_dispatch(
+                fn_name, tool_input, f"Denied: {decision['reason']}",
+                is_write=is_write, permission_denied=True, metadata={"permission_source": "policy"},
             )
-        command_identity = command_authorization_identity(fn_name, tool_input) if fn_name in {"bash", "process"} else None
-        # 文件等事实变化后，旧自动允许不能升级成对新未知动作的人工批准。
+        # 等待用户期间工作目录可能变化，先记住这次审批对应的命令身份。
+        command_identity = None
+        if fn_name in {"bash", "process"}:
+            command_identity = command_authorization_identity(fn_name, tool_input)
+        # 策略改为询问时，只有先前的人工批准能免去这次询问。
         if decision["behavior"] == "ask" and not (approved and permission_approval_was_human()):
             try:
                 allowed = self._permissions.ask_user(fn_name, tool_input)
             except PermissionInteractionError as exc:
                 if exc.reason == "cancelled":
                     raise asyncio.CancelledError from None
-                return ToolExecutionResult(
-                    fn_name, tool_input, to_public_error(exc).message, False, True, False, is_write,
-                    permission_denied=True, metadata={
-                        "permission_source": "interaction_failure", "permission_reason": exc.reason,
-                    },
+                return _rejected_before_dispatch(
+                    fn_name, tool_input, to_public_error(exc).message,
+                    is_write=is_write, permission_denied=True,
+                    metadata={"permission_source": "interaction_failure", "permission_reason": exc.reason},
                 )
             if not allowed:
-                return ToolExecutionResult(
-                    fn_name, tool_input, "Permission approval rejected; this action was not executed.", False, True, False, is_write,
-                    permission_denied=True, metadata={
-                        "permission_source": "approval_reply", "permission_reason": "rejected",
-                    },
+                return _rejected_before_dispatch(
+                    fn_name, tool_input, "Permission approval rejected; this action was not executed.",
+                    is_write=is_write, permission_denied=True,
+                    metadata={"permission_source": "approval_reply", "permission_reason": "rejected"},
                 )
+
+        return self._dispatch_authorized(
+            tool_call, fn_name, tool_input, is_write=is_write,
+            command_identity=command_identity, settings=settings,
+        )
+
+    def _dispatch_authorized(
+        self, tool_call: dict, fn_name: str, tool_input: dict, *,
+        is_write: bool, command_identity: str | None, settings: RunSettings,
+    ) -> ToolExecutionResult:
+        """通过权限检查后才使用文件缓存，实际派发前再次核对命令身份。"""
+        from nz_coder.tool_platform.permissioning.command_authorization import (
+            command_authorization_identity, scoped_command_authorization,
+        )
 
         if is_write:
             stale = self._read_cache.check_write_freshness(tool_input)
             if stale is not None:
                 path = str(stale.get("path") or tool_input.get("path") or "")
-                return ToolExecutionResult(
-                    name=fn_name,
-                    tool_input=tool_input,
-                    output=(
-                        f"Error: stale file read for {path}: the file changed "
-                        "after the model read. Re-read with read_file before retrying."
-                    ),
-                    executed=False,
-                    dispatch_failed=True,
-                    command_failed=False,
+                return _rejected_before_dispatch(
+                    fn_name, tool_input,
+                    f"Error: stale file read for {path}: the file changed "
+                    "after the model read. Re-read with read_file before retrying.",
                     is_write=True,
                     metadata={"stale_read": stale, "error_code": "STALE_READ"},
                 )
@@ -583,16 +588,16 @@ class ToolExecutor:
                     metadata={"read_cache_hit": True},
                 )
 
-        # ── 执行 ───────────────────────────────────────────────────────────
         if command_identity is not None:
             try:
                 unchanged = command_identity == command_authorization_identity(fn_name, tool_input)
             except (OSError, ValueError, TypeError, RuntimeError):
                 unchanged = False
             if not unchanged:
-                return ToolExecutionResult(fn_name, tool_input,
-                    "Denied: Command execution identity changed during approval", False, True, False, is_write,
-                    permission_denied=True, metadata={"permission_source": "policy"})
+                return _rejected_before_dispatch(
+                    fn_name, tool_input, "Denied: Command execution identity changed during approval",
+                    is_write=is_write, permission_denied=True, metadata={"permission_source": "policy"},
+                )
         try:
             from nz_coder.intelligence.reviewer import scoped_runtime_review
 
@@ -604,9 +609,7 @@ class ToolExecutor:
             ):
                 raw_output = dispatch(fn_name, tool_input)
         except Exception as exc:
-            # Tool implementation failures are repair evidence, not Provider
-            # failures. Returning a normal failed result lets the transaction
-            # pipeline roll back writes and gives the Agent a fallback chance.
+            # 事务层需要这个失败结果来回滚写入，模型也能据此修正下一次调用。
             return ToolExecutionResult(
                 name=fn_name,
                 tool_input=tool_input,
@@ -620,13 +623,26 @@ class ToolExecutor:
                 metadata={"error_type": type(exc).__name__},
                 public_error=to_public_error(exc),
             )
+
+        return self._result_from_output(
+            fn_name, tool_input, raw_output, is_write=is_write, settings=settings,
+        )
+
+    def _result_from_output(
+        self, fn_name: str, tool_input: dict, raw_output: object, *,
+        is_write: bool, settings: RunSettings,
+    ) -> ToolExecutionResult:
+        """读取工具返回值，再结合宿主回执确定执行状态和公开原因。"""
         try:
             output = str(raw_output)
-            title = raw_output.title if isinstance(raw_output, ToolOutput) else ""
-            metadata = dict(raw_output.metadata) if isinstance(raw_output, ToolOutput) else {}
-            # 公开原因的保留字段归宿主所有，扩展工具不能从 metadata 注入 wire。
-            metadata.pop("public_error", None)
-            attachments = raw_output.attachments if isinstance(raw_output, ToolOutput) else []
+            if isinstance(raw_output, ToolOutput):
+                title = raw_output.title
+                metadata = dict(raw_output.metadata)
+                # 公开原因由宿主生成，扩展工具自报的同名字段必须忽略。
+                metadata.pop("public_error", None)
+                attachments = raw_output.attachments
+            else:
+                title, metadata, attachments = "", {}, []
         except Exception as exc:
             return ToolExecutionResult(
                 name=fn_name,
@@ -641,7 +657,7 @@ class ToolExecutor:
                 metadata={"error_type": type(exc).__name__, "malformed_result": True},
                 public_error=to_public_error(exc),
             )
-        from nz_coder.runtime.adapters.verification_facts import host_execution_receipts
+        from nz_coder.runtime.adapters.verification_facts import bash_failure_reason, host_execution_receipts
 
         execution_facts = host_execution_receipts(fn_name, raw_output)
         # 只有内置命令边界能声明未执行，外部工具 metadata 不能伪造权限结果。
@@ -650,32 +666,37 @@ class ToolExecutor:
             and metadata.get("command_not_executed") is True
             and metadata.get("permission_denied") is True
         )
-        dispatch_failed = admission_failed or is_tool_result_error_content(output) and not execution_facts
+        dispatch_failed = admission_failed or (is_tool_result_error_content(output) and not execution_facts)
         error_code = extract_structured_tool_error_code(output)
         if error_code is not None:
             metadata["error_code"] = error_code
         if is_cancelled_tool_result_content(output):
             metadata["cancelled"] = True
-        if (
-            fn_name == "read_file"
-            and settings.read_dedup_enabled
-            and not dispatch_failed
-            and metadata.get("encoding")
-            and not attachments
-        ):
-            self._read_cache.record(tool_input)
-        elif is_write and not dispatch_failed:
-            self._read_cache.forget_paths(_write_paths(tool_input))
-        if fn_name == "read_file" and not dispatch_failed:
-            self._read_cache.record_observation(tool_input, metadata)
-        # bash 命令非零退出是"验证反馈"，不是调度失败。
-        # 不应将其计入 all_succeeded=False，从而触发事务回滚。
+        if not dispatch_failed:
+            if (
+                fn_name == "read_file"
+                and settings.read_dedup_enabled
+                and metadata.get("encoding")
+                and not attachments
+            ):
+                self._read_cache.record(tool_input)
+            elif is_write:
+                self._read_cache.forget_paths(_write_paths(tool_input))
+            if fn_name == "read_file":
+                self._read_cache.record_observation(tool_input, metadata)
+
+        # 命令已启动后，非零退出码单独反馈，事务层依据派发失败决定是否回滚。
         command_failed = command_failed_from_result(
-            fn_name,
-            output,
-            metadata,
-            structured=isinstance(raw_output, ToolOutput),
+            fn_name, output, metadata, structured=isinstance(raw_output, ToolOutput),
         )
+        public_error = None
+        if (
+            command_failed
+            and not dispatch_failed
+            and len(execution_facts) == 1
+            and get_dynamic_tool_binding_identity(fn_name) is None
+        ):
+            public_error = bash_failure_reason(execution_facts[0])
 
         return ToolExecutionResult(
             name=fn_name,
@@ -690,4 +711,5 @@ class ToolExecutor:
             metadata=metadata,
             attachments=attachments,
             execution_facts=execution_facts,
+            public_error=public_error,
         )

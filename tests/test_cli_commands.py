@@ -528,6 +528,73 @@ def test_message_picker_renders_only_selected_turn_with_full_details(monkeypatch
     assert "second question" not in rendered.markup
 
 
+def test_message_details_show_only_the_selected_turns_retained_model_note(monkeypatch):
+    from nz_coder.interface.timeline import format_transcript
+
+    console = FakeConsole()
+    monkeypatch.setattr(cli, "console", console)
+    history = [
+        {"role": "user", "content": "check the first environment", "_nz_message_id": "msg-first"},
+        {"role": "assistant", "content": "The command did not run.",
+         "_nz_model_note": "First model note."},
+        {"role": "assistant", "content": "withdrawn", "_nz_visible": False,
+         "_nz_model_note": "Withdrawn note."},
+        {"role": "user", "content": "check a separate environment", "_nz_message_id": "msg-second"},
+        {"role": "assistant", "content": "Late reply for first request.", "_nz_parent_id": "msg-first",
+         "_nz_model_note": "Late model note for first turn."},
+        {"role": "assistant", "content": "Finished.", "_nz_parent_id": "msg-second",
+         "_nz_model_note": "Second model note."},
+    ]
+    assert "First model note." not in format_transcript("session-1", history)
+    asyncio.run(cli.handle_command_async(
+        "/message 1", history, {"id": "session-1", "agent": FakeAgent()},
+        "sys", object(), FakeTerminalInput(None),
+    ))
+    detail = console.messages[-1].markup
+    assert "The command did not run." in detail
+    assert "模型说明" in detail and "First model note." in detail
+    assert "Late model note for first turn." in detail
+    assert "Withdrawn note." not in detail and "Second model note." not in detail
+    asyncio.run(cli.handle_command_async(
+        "/message 2", history, {"id": "session-1", "agent": FakeAgent()},
+        "sys", object(), FakeTerminalInput(None),
+    ))
+    assert "Late model note for first turn." not in console.messages[-1].markup
+
+
+def test_compressed_message_and_fork_pickers_follow_the_selected_user_identity(tmp_path, monkeypatch):
+    from nz_coder.interface.commands.handlers import core
+    from nz_coder.protocol.message_schema import MESSAGE_ID_KEY, MODEL_NOTE_KEY
+    from nz_coder.runtime.process.workdir import scoped_workdir
+    from nz_coder.state import sessions
+    from tests.runtime.test_legacy_authority_recovery import SESSION, _compact, _turns
+
+    history = _turns("same prompt", "same prompt", "third", "fourth")
+    history[1].update({"content": "first receipt", MODEL_NOTE_KEY: "first draft"})
+    history[3].update({"content": "second receipt", MODEL_NOTE_KEY: "second draft"})
+    console = FakeConsole()
+    monkeypatch.setattr(cli, "console", console)
+    child_id = "picker-prefix"
+    monkeypatch.setattr(core, "create_session_id", lambda prefix: child_id)
+    monkeypatch.setattr(cli, "_build_agent", lambda *args, **kwargs: FakeAgent(session_id=child_id))
+    with scoped_workdir(tmp_path), sessions.scoped_session(SESSION):
+        current = _compact(history)
+        parent_path = sessions.save_session(current, session_id=SESSION, model="original-model", run_status="completed")
+        parent_bytes = parent_path.read_bytes()
+        state = {"id": SESSION, "agent": FakeAgent(session_id=SESSION)}
+        selection = FakeTerminalInput(history[2][MESSAGE_ID_KEY])
+        asyncio.run(cli.handle_command_async("/message", current, state, "sys", object(), selection))
+        assert [key for key, _ in reversed(selection.requests[0]["values"])] == [
+            history[index][MESSAGE_ID_KEY] for index in (0, 2, 4, 6)]
+        assert "second draft" in console.messages[-1].markup and "first draft" not in console.messages[-1].markup
+        selection = FakeTerminalInput(history[0][MESSAGE_ID_KEY])
+        asyncio.run(cli.handle_command_async("/fork-picker", current, state, "sys", object(), selection))
+        assert state["id"] == child_id
+        assert [m["content"] for m in current] == ["same prompt", "first receipt"]
+        assert current[0][MESSAGE_ID_KEY] != history[0][MESSAGE_ID_KEY]
+        assert parent_path.read_bytes() == parent_bytes
+
+
 def test_interactive_child_route_resumes_owned_state_without_replacing_parent(monkeypatch):
     fake_console = FakeConsole()
     terminal = FakeTerminalInput(None)

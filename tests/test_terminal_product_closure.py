@@ -51,12 +51,14 @@ def test_remote_backend_delegates_agent_and_workflow_controls():
         def memory_status(self, session_id):
             return {"pending": [], "ledger": [], "session_id": session_id}
 
-        def get_memory_proposal(self, session_id, fingerprint):
-            return {"fingerprint": fingerprint, "session_id": session_id}
+        def get_memory_proposal(self, session_id, proposal_id):
+            return {"id": proposal_id, "session_id": session_id}
 
-        def review_memory(self, session_id, fingerprint, action, reason=""):
+        def review_memory(self, session_id, proposal_id, action, *, expected_proposal_revision,
+                          operation_id, reason, expected_revision, related_records):
             return {
-                "fingerprint": fingerprint, "action": action,
+                "id": proposal_id, "action": action,
+                "expected_proposal_revision": expected_proposal_revision, "operation_id": operation_id,
                 "reason": reason, "session_id": session_id,
             }
 
@@ -67,8 +69,13 @@ def test_remote_backend_delegates_agent_and_workflow_controls():
     assert backend.workflow("wf-1")["session_id"] == "session-1"
     assert backend.control_workflow("wf-1", "pause")["action"] == "pause"
     assert backend.memory()["session_id"] == "session-1"
-    assert backend.memory_proposal("fp-1")["fingerprint"] == "fp-1"
-    assert backend.review_memory("fp-1", "reject", reason="wrong")["reason"] == "wrong"
+    assert backend.memory_proposal("proposal-1") == {"id": "proposal-1", "session_id": "session-1"}
+    assert backend.review_memory(
+        "proposal-1", "reject", expected_proposal_revision=3, operation_id="review-1", reason="wrong",
+    ) == {
+        "id": "proposal-1", "action": "reject", "expected_proposal_revision": 3,
+        "operation_id": "review-1", "reason": "wrong", "session_id": "session-1",
+    }
 
 
 def test_remote_registry_exposes_agents_and_workflow_lifecycle():
@@ -81,7 +88,9 @@ def test_remote_registry_exposes_agents_and_workflow_lifecycle():
         "/workflow [list|show ID|run NAME [JSON_ARGS|REQUEST]|pause ID|resume ID|stop ID]"
     )
     assert commands["memory"].usage == (
-        "/memory [pending|inspect FINGERPRINT|approve FINGERPRINT|reject FINGERPRINT [REASON]|ledger]"
+        "/memory [list|search QUERY|read ID|pending|inspect PROPOSAL_ID|"
+        "approve PROPOSAL_ID --expected-proposal-revision N --operation-id ID|"
+        "reject PROPOSAL_ID --expected-proposal-revision N --operation-id ID [--reason TEXT]|ledger]"
     )
 
 

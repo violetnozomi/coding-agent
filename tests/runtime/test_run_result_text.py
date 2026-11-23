@@ -33,6 +33,30 @@ from nz_coder.runtime.session.store import EphemeralSessionStore
 from nz_coder.sdk import AgentClient
 
 
+@pytest.mark.parametrize("note", ["", "Current model note."])
+def test_settlement_keeps_previous_interactions_reply_on_resume(tmp_path, note):
+    from tests.verification_scenarios import VerificationScenario
+    from nz_coder.protocol.message_schema import ASSISTANT_FINISH_KEY, ensure_message_identities
+
+    messages = [
+        {"role": "user", "content": "Check this change.", INTERACTION_RUN_ID_KEY: "first"},
+        {"role": "assistant", "content": "Earlier result.", ASSISTANT_FINISH_KEY: "stop",
+         INTERACTION_RUN_ID_KEY: "first"},
+    ]
+    ensure_message_identities(messages, "session-resume")
+    host = SimpleNamespace(
+        session_id="session-resume", event_publisher=SimpleNamespace(interaction_run_id="resumed"),
+        runtime_state=VerificationScenario(workspace=tmp_path).state,
+        _emit_session_event=lambda *_: None, _checkpoint_messages=lambda *_: None,
+    )
+    note_argument = {"model_note": note} if note else {}
+    AgentLoop._persist_assistant_end_state(host, messages, "completed", "Current receipts.", **note_argument)
+    assert messages[1]["content"] == "Earlier result." and "_nz_model_note" not in messages[1]
+    assert messages[-1][INTERACTION_RUN_ID_KEY] == "resumed"
+    assert messages[-1]["content"] == "Current receipts."
+    assert messages[-1].get("_nz_model_note", "") == note
+
+
 def _typed_result(request, context, raw):
     context.freeze_execution(context.terminal_status or normalize_run_status((raw or {}).get("status") if isinstance(raw, dict) else None))
     freeze_terminal_result(context, raw if isinstance(raw, dict) else {})
@@ -271,13 +295,12 @@ class _AnswerThenApprovalProvider:
 
 
 @pytest.mark.parametrize("stream", [False, True], ids=["nonstream-entry", "stream-entry"])
-@pytest.mark.parametrize(("partial", "expected"), [
-    (False, ""), (True, "CURRENT_RUN_PARTIAL"),
-], ids=["empty-cancel", "committed-partial-cancel"])
-def test_native_two_runs_cancel_returns_only_current_committed_text(
-    tmp_path, monkeypatch, stream, partial, expected,
+@pytest.mark.parametrize("partial", [False, True], ids=["empty-cancel", "provisional-partial-cancel"])
+def test_native_two_runs_cancel_never_republishes_an_old_answer_or_unreviewed_draft(
+    tmp_path, monkeypatch, stream, partial,
 ):
     """真实 Native/审批/生命周期；入口 stream=True 仍使用非流式离线模型。"""
+    from nz_coder.protocol.message_schema import legacy_messages
     provider = _AnswerThenApprovalProvider(partial)
     runtime = ResolvedModelRuntime(
         provider_id=provider.name, model_id="offline-model", request_model_id="offline-model",
@@ -317,8 +340,8 @@ def test_native_two_runs_cancel_returns_only_current_committed_text(
             ), timeout=15)
             assert first.status is RunStatus.COMPLETED_UNVERIFIED
             assert first.metadata["authored_content"] == "PREVIOUS_RUN_ANSWER"
-            assert first.final_text.endswith("PREVIOUS_RUN_ANSWER")
-            assert "未评估" in first.final_text
+            assert "PREVIOUS_RUN_ANSWER" not in first.final_text
+            assert "未评估" in first.final_text and "/message" in first.final_text
             second_request = replace(request, messages=(
                 *copy.deepcopy(first.messages),
                 {"role": "user", "content": "Write never-created.txt containing CANCEL_ME."},
@@ -334,7 +357,8 @@ def test_native_two_runs_cancel_returns_only_current_committed_text(
             result = await asyncio.wait_for(task, timeout=10)
 
             assert result.status is RunStatus.CANCELLED
-            assert result.final_text == expected
+            assert result.final_text == "" and not result.metadata["authored_content"]
+            assert provider.calls >= (3 if partial else 2)
             assert not (tmp_path / "never-created.txt").exists()
             assert broker.list("permission") == []
             assert any(message.get("content") == first.final_text for message in result.messages)
@@ -342,13 +366,8 @@ def test_native_two_runs_cancel_returns_only_current_committed_text(
                 index for index, message in enumerate(result.messages)
                 if message.get("role") == "user" and not message.get("_nz_synthetic")
             )
-            current_texts = [
-                message.get("content") for message in result.messages[current_user + 1:]
-                if message.get("role") == "assistant" and message.get("content")
-                and message.get("_nz_internal") is not True
-                and message.get("_nz_visible") is not False
-            ]
-            assert current_texts == (["CURRENT_RUN_PARTIAL"] if partial else [])
+            current = legacy_messages(list(result.messages[current_user + 1:]))
+            assert all(not m["content"] for m in current if m["role"] == "assistant")
         finally:
             broker.close()
             if task is not None and not task.done():

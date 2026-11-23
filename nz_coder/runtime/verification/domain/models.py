@@ -1,9 +1,11 @@
 """验证域的不可变边界值；不依赖运行编排或工具注册表。"""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 import hashlib
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -97,6 +99,17 @@ class ExecutionFact:
     test_selection_failure: str = ""
 
 
+def _is_python_compilation(fact: ExecutionFact) -> bool:
+    from nz_coder.runtime.agent.task_policy import _python_entry
+    from .identity import verified_check_subject
+
+    if fact.in_process:
+        return fact.command.argv[:1] in {("verify_changed_files",), ("python_symbol_check",)}
+    command = verified_check_subject(fact.command) if fact.command.opaque else fact.command
+    entry = _python_entry(command.argv) if command else None
+    return bool(entry and entry[2] and entry[0] in {"py_compile", "compileall"})
+
+
 def is_behavior_failure(fact: ExecutionFact) -> bool:
     """可信执行的业务负证据；空选择和环境缺项没有实际行为结论。"""
     return bool(fact.capabilities and fact.reliable and fact.output_complete and fact.scope_complete
@@ -182,6 +195,7 @@ class ReviewFact:
     executed: bool = True
     basis_fingerprint: str = ""
     candidate_fingerprint: str = ""
+    test_report_kind: str = "unknown"
 
 
 def candidate_fingerprint(text: str, structured=None) -> str:
@@ -208,6 +222,19 @@ class Obligation:
 
 
 @dataclass(frozen=True)
+class PythonSyntaxGap:
+    """冻结时已变更 Python 源文件的缺证范围；计数未知表示清单不可确认。"""
+
+    count: int | None
+    paths: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict:
+        if self.count is None:
+            return {"status": "unknown"}
+        return {"status": "missing_current_pass", "count": self.count, "paths": list(self.paths)}
+
+
+@dataclass(frozen=True)
 class VerificationSnapshot:
     revision: int
     scope: RunScope
@@ -231,6 +258,8 @@ class VerificationSnapshot:
     reviews: tuple[ReviewFact, ...] = ()
     candidate_fingerprint: str = ""
     strict: bool = False
+    workspace_mutating: bool = False
+    changed_python_syntax: PythonSyntaxGap | None = None
 
     @property
     def latest_review(self) -> ReviewFact | None:
@@ -283,17 +312,83 @@ class VerificationSnapshot:
     def decision(self, check_id: str) -> CheckDecision:
         return next(item for item in self.checks if item.check_id == check_id)
 
+    def current_success(self, fact: ExecutionFact | None) -> bool:
+        """验收回执可跨文档修改沿用；具体文件的语法证明还要检查工作区代。"""
+        return bool(
+            fact and fact.scope == self.scope and fact.outcome == "succeeded"
+            and (fact.exit_code == 0 or fact.in_process and fact.exit_code is None)
+            and fact.reliable and fact.output_complete and not fact.environment_error
+            and not self.integrity_errors and not self.rebuild_required and not self.workspace_mutating
+            and self.version.scope_complete and fact.scope_complete
+            and fact.before.scope_complete and fact.after.scope_complete
+            and fact.before.acceptance_generation == fact.after.acceptance_generation == self.version.acceptance_generation
+        )
+
+    def syntax_coverage(self, changed_files: Iterable[str], *, python_only: bool = False) -> tuple[tuple[str, ...], bool]:
+        """返回本代确有语法证据的改动路径，以及它们是否覆盖全部已知改动。"""
+        changed = tuple(dict.fromkeys(changed_files))
+        if not changed:
+            return (), False
+        workspace = Path(self.scope.task.workspace)
+        requested = {workspace / path: path for path in changed if path and ".." not in Path(path).parts
+                     and (workspace / path).is_relative_to(workspace)}
+        facts = {fact.execution_id: fact for fact in self.executions}
+        decisions = {item.check_id: item for item in self.checks}
+        unresolved = {item.check_id: item.failure_execution_ids for item in self.obligations if not item.resolved}
+        verified, failed = set(), set()
+        unknown_failure_scope = False
+        for spec in self.specs:
+            if spec.capability != "syntax":
+                continue
+            decision = decisions[spec.id]
+            fact = facts.get(decision.execution_id)
+            failures = unresolved.get(spec.id, ())
+            if decision.status in {"failed", "blocked_environment"} and not failures:
+                failures = (decision.execution_id,)
+            for execution_id in failures:
+                failure = facts.get(execution_id)
+                targets = failure.targets if failure and failure.targets else spec.targets
+                cwd = failure.command.cwd if failure and failure.targets else spec.command.cwd
+                failed.update(Path(cwd) / target for target in targets)
+                unknown_failure_scope |= not targets or any(".." in Path(target).parts for target in targets)
+            if (not failures and decision.status == "passed" and fact is not None and self.current_success(fact)
+                  and decision.evidence_generation == self.version.generation
+                  and fact.before.generation == fact.after.generation == self.version.generation
+                  and fact.capabilities == ("syntax",)
+                  and (not python_only or _is_python_compilation(fact))):
+                # 回执中的相对路径属于执行目录，子目录下的同名文件不能替彼此作证。
+                verified.update(Path(fact.command.cwd) / target for target in fact.targets)
+        confirmed = verified - failed
+        covered = tuple(path for absolute, path in requested.items()
+                        if absolute in confirmed and not any(parent in failed for parent in absolute.parents))
+        return covered, len(covered) == len(changed) and not unknown_failure_scope
+
+    def python_syntax_gap(self, paths: tuple[str, ...] | None) -> PythonSyntaxGap | None:
+        if paths == ():
+            return None
+        if paths is None or self.workspace_mutating or not self.version.scope_complete:
+            return PythonSyntaxGap(None)
+        checked, _complete = self.syntax_coverage(paths, python_only=True)
+        covered_paths = set(checked)
+        missing = [path for path in paths if path not in covered_paths]
+        if not missing:
+            return None
+        # POSIX 文件名允许非 UTF-8 字节，报告需要能写回 JSON 会话。
+        examples = tuple(path.encode("utf-8", errors="backslashreplace").decode("utf-8") for path in missing[:3])
+        return PythonSyntaxGap(len(missing), examples)
+
     @property
     def acceptance_checks(self) -> tuple[dict, ...]:
         """同一命令的所有能力合成一个只读展示项，不把首项当成完整验收。"""
         groups = {}
         facts = {item.execution_id: item for item in self.executions}
+        decisions_by_id = {item.check_id: item for item in self.checks}
         for spec in self.specs:
             if spec.source == "user_declared" and spec.required:
                 groups.setdefault(spec.command, []).append(spec)
         items = []
         for command, specs in groups.items():
-            decisions = [self.decision(spec.id) for spec in specs]
+            decisions = [decisions_by_id[spec.id] for spec in specs]
             passed = all(item.status == "passed" for item in decisions)
             status = ("passed" if passed else "failed" if any(item.status == "failed" for item in decisions)
                       else "blocked_environment" if any(item.status == "blocked_environment" for item in decisions) else "pending")
@@ -383,6 +478,7 @@ class VerificationSnapshot:
             for check in item["commands"])]
         return {
             "domain_revision": self.revision, "task_lineage_id": self.scope.task.task_lineage_id,
+            **({"changed_python_syntax": self.changed_python_syntax.to_dict()} if self.changed_python_syntax else {}),
             "strict": self.strict,
             "acceptance_checks": list(self.acceptance_checks),
             "workspace": self.scope.task.workspace, "interaction_run_id": self.scope.interaction_run_id,
@@ -395,7 +491,8 @@ class VerificationSnapshot:
             "candidate_fingerprint": self.candidate_fingerprint,
             "delivery_review": ({"request_id": self.latest_review.request_id,
                 "accepted": self.latest_review.accepted,
-                "candidate_fingerprint": self.latest_review.candidate_fingerprint}
+                "candidate_fingerprint": self.latest_review.candidate_fingerprint,
+                "test_report_kind": self.latest_review.test_report_kind}
                 if self.latest_review is not None else None),
             "mutation_scope_unknown": not self.version.scope_complete,
             "targeted_pending": self.targeted_pending,

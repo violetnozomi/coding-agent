@@ -96,7 +96,31 @@ def test_real_bash_nonzero_exit_keeps_failure_status_and_redacts_stdout(tmp_path
     assert _PRIVATE_OUTPUT in result.output
     assert trace["status"] == event["status"] == "nonzero"
     assert trace["command_failed"] is event["command_failed"] is True
-    assert trace["output"] == event["output"] == "Tool execution failed."
+    # 公开轨迹可显示宿主确认的退出原因，子进程正文只保留在工具结果里。
+    assert result.public_error.code == "command_failed"
+    assert trace["output"] == event["output"] == "命令以非零状态退出，退出码为 9。"
+    assert _PRIVATE_OUTPUT not in json.dumps([trace, event, journal])
+
+
+def test_pytest_assertion_details_stay_in_tool_output_and_both_channels_show_counts(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "test_example.py").write_text(
+        "def test_success():\n    assert True\n\n"
+        f"def test_failure():\n    assert False, {_PRIVATE_OUTPUT!r}\n",
+        encoding="utf-8",
+    )
+    result, trace, event, journal = _execute_and_capture(tmp_path, "bash", {
+        "command": shlex.join((sys.executable, "-m", "pytest", "-q", "test_example.py")), "timeout": 10,
+    })
+
+    assert _PRIVATE_OUTPUT in result.output
+    assert trace["public_error"]["code"] == event["public_error"]["code"] == "test_failed"
+    assert trace["output"] == event["output"] == "测试失败：测试已运行，1 项未通过，1 项通过。"
+    assert trace["tool_call_id"] == event["tool_call_id"] == "trace-call"
+    assert trace["duration_ms"] == event["duration_ms"]
+    assert trace["input"] == result.tool_input
+    assert "input" not in event
     assert _PRIVATE_OUTPUT not in json.dumps([trace, event, journal])
 
 

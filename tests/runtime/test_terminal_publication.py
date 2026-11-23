@@ -5,11 +5,13 @@ import asyncio
 import copy
 import json
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
 from nz_coder.protocol.message_schema import attach_message_identity
 from nz_coder.protocol.session_events import SessionEventBus
+from nz_coder.providers.normalized import NormalizedFunction, NormalizedToolCall, completion
 from nz_coder.runtime.core.request import RunOptions
 from nz_coder.runtime.core.result import RunStatus
 from nz_coder.runtime.execution import native_sdk
@@ -28,11 +30,35 @@ class _OfflineProvider:
 
     def __init__(self, *, tool=False):
         self.tool = tool
-        self.calls = 0
+        self.coding_calls = 0
+        self.review_calls = 0
 
-    def create_completion(self, _client, **_kwargs):
-        self.calls += 1
-        return _completion("FINAL_ANSWER", tool="list_directory" if self.tool and self.calls == 1 else None)
+    def create_completion(self, _client, **kwargs):
+        tools = [item["function"]["name"] for item in kwargs.get("tools", [])]
+        if tools == ["emit_sidecar_verdict"]:
+            self.review_calls += 1
+            report = {"verdict": "accept", "reason": "The requested inspection is complete.",
+                      "test_report_kind": "ordinary",
+                      "delivery_assessment": {"status": "reviewed", "issues": []}}
+            return completion(
+                tool_calls=[NormalizedToolCall(id="publication-review", function=NormalizedFunction(
+                    name="emit_sidecar_verdict", arguments=json.dumps(report),
+                ))],
+                finish_reason="tool_calls", usage={"input_tokens": 5, "output_tokens": 3, "total_tokens": 8},
+            )
+        self.coding_calls += 1
+        return _completion("FINAL_ANSWER", tool="list_directory" if self.tool and self.coding_calls == 1 else None)
+
+
+def _install_reviewed_runtime(monkeypatch, *, tool=False):
+    # 自有离线客户端走产品默认的交付评审入口。两类请求用不同用量，能观察重复结算。
+    provider = _OfflineProvider(tool=tool)
+    runtime = _install_runtime(monkeypatch, provider)
+    runtime.client = SimpleNamespace(close=lambda: None)
+    runtime.owns_client = True
+    monkeypatch.delenv("KODAX_VERIFIER_PROVIDER", raising=False)
+    monkeypatch.delenv("KODAX_VERIFIER_MODEL", raising=False)
+    return provider
 
 
 def _durable_request(tmp_path):
@@ -73,7 +99,7 @@ def _assert_committed_event(observed, expected_status, expected_event, session_i
 @pytest.mark.parametrize("external_bus", [False, True], ids=["owned-bus", "external-bus"])
 def test_native_terminal_is_unique_and_observes_committed_session(monkeypatch, tmp_path, external_bus):
     """不能先完成再落盘；成熟消息/工具事件和 core 回调仍须送达。"""
-    _install_runtime(monkeypatch, _OfflineProvider(tool=True))
+    provider = _install_reviewed_runtime(monkeypatch, tool=True)
     request = _durable_request(tmp_path)
     bus = SessionEventBus(session_id=request.session_id) if external_bus else None
     callbacks = []
@@ -83,6 +109,8 @@ def test_native_terminal_is_unique_and_observes_committed_session(monkeypatch, t
     try:
         result = asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request, options))
         assert result.status is RunStatus.COMPLETED
+        assert (provider.coding_calls, provider.review_calls) == (2, 1)
+        assert result.metadata["verification"]["delivery_review"]["accepted"] is True
         event, durable = _assert_committed_event(observed, "completed", "session.run.completed", request.session_id, request.interaction_run_id)
         assert event.parent_interaction_run_id == "parent-run"
         assert event.parent_agent_invocation_id == "parent-agent"
@@ -169,9 +197,9 @@ def test_legacy_host_exception_publishes_only_after_durable_finalization(monkeyp
 @pytest.mark.parametrize("raw_status,durable_status,event_type", [
     ("cancelled", "cancelled", "session.run.cancelled"),
     ("interrupted", "interrupted", "session.run.cancelled"),
-    ("blocked", "blocked", "session.run.completed"),
-    ("error", "error", "session.run.completed"),
-    ("aborted", "error", "session.run.completed"),
+    ("blocked", "blocked", "session.run.failed"),
+    ("error", "error", "session.run.failed"),
+    ("aborted", "error", "session.run.failed"),
     ("max_turns", "max_turns", "session.run.completed"),
     ("completed_unverified", "completed_unverified", "session.run.completed"),
 ])
@@ -210,43 +238,61 @@ def test_frozen_terminal_status_publishes_after_common_finalize(monkeypatch, tmp
 @pytest.mark.parametrize("recover", [False, True], ids=["persistent-write-failure", "catch-save-recovers"])
 def test_terminal_write_failure_never_publishes_uncommitted_success(monkeypatch, tmp_path, recover):
     """真实 I/O 失败不算保存成功；异常结算恢复后才可发布冻结的 completed。"""
-    _install_runtime(monkeypatch, _OfflineProvider())
+    provider = _install_reviewed_runtime(monkeypatch)
     request = _durable_request(tmp_path)
     bus = SessionEventBus(session_id=request.session_id)
     options = RunOptions(event_bus=bus)
     environment = native_sdk.build_product_run_environment(request, options)
+    runner = native_sdk.NativeSDKRunner(environment)
     observed = _observe_terminal(monkeypatch, environment, tmp_path)
     original = sessions._publish_session_json
     terminal_attempts = []
+    fail_writes = True
 
     def write(prepared, path):
         payload = json.loads(prepared.read_text())
         if path.name == f"{request.session_id}.json" and payload.get("run_status") == "completed":
             terminal_attempts.append(copy.deepcopy(payload))
-            if not recover or len(terminal_attempts) == 1:
+            if fail_writes and (not recover or len(terminal_attempts) == 1):
                 raise OSError("terminal storage unavailable")
         return original(prepared, path)
 
     monkeypatch.setattr(sessions, "_publish_session_json", write)
     try:
         with pytest.raises(OSError, match="terminal storage unavailable"):
-            asyncio.run(native_sdk.NativeSDKRunner(environment).run_result(request, options))
+            asyncio.run(runner.run_result(request, options))
         owner = environment._session_checkpoint_writer.owner
         assert environment._session_checkpoint_writer.retired
         assert owner.terminal_status is RunStatus.COMPLETED
-        assert owner.usage.input_tokens == 2 and owner.usage.output_tokens == 1
+        assert (owner.usage.input_tokens, owner.usage.output_tokens) == (2 + 5, 1 + 3)
         assert len(terminal_attempts) == 2
-        if recover:
-            event, durable = _assert_committed_event(observed, "completed", "session.run.completed", request.session_id, request.interaction_run_id)
-            assert event.properties["status"] == "completed"
-            assert owner.finalized
-            assert durable["messages"][-1]["content"].startswith("FINAL_ANSWER")
-            assert owner.session.usage == owner.usage
-        else:
+        if not recover:
             assert observed == []
             assert not owner.finalized
-            assert _payload(tmp_path, request)["run_status"] == "running"
+            before_retry = _payload(tmp_path, request)
+            assert before_retry["run_status"] == "running"
             assert owner.session.usage.total_tokens == 0
+
+            pending = asyncio.run(runner.retry_settlement(tmp_path, request.session_id))
+            assert pending.state == "pending" and pending.error.code == "session_commit_pending"
+            assert pending.interaction_run_id == request.interaction_run_id
+            assert observed == [] and _payload(tmp_path, request) == before_retry
+            fail_writes = False
+            settled = asyncio.run(runner.retry_settlement(tmp_path, request.session_id))
+            assert settled.state == "committed" and settled.interaction_run_id == request.interaction_run_id
+
+        assert asyncio.run(runner.retry_settlement(tmp_path, request.session_id)).state == "idle"
+        event, durable = _assert_committed_event(observed, "completed", "session.run.completed", request.session_id, request.interaction_run_id)
+        assert event.properties["status"] == "completed" and owner.finalized
+        assert owner.session.usage == owner.usage
+        assert (provider.coding_calls, provider.review_calls) == (1, 1)
+        published = durable["messages"][-1]["content"]
+        assert published.index("模型说明") < published.index("FINAL_ANSWER")
+        assert durable["metadata"]["verification"]["delivery_review"]["accepted"] is True
+        assert len(terminal_attempts) == (2 if recover else 4)
+        frozen = durable["metadata"]["_nz_terminal_result"]
+        assert frozen["last_result"]["answer"] == published
+        assert all(attempt["metadata"]["_nz_terminal_result"] == frozen for attempt in terminal_attempts)
     finally:
         environment.close()
         bus.close()

@@ -4,12 +4,20 @@ import json
 from dataclasses import replace
 
 from nz_coder.foundation.workspace_trust import WorkspaceTrustStore, load_config_snapshot
+from nz_coder.protocol.message_schema import MODEL_NOTE_KEY
 from nz_coder.runtime.core.request import RunOptions
 from nz_coder.runtime.execution import native_sdk
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.state import sessions
 from tests.runtime.test_native_product_runtime import _runtime, _request
 from tests.runtime.test_working_memory_reminders import _reply as _reply, _call as _call
+
+
+def check_settled_reply(message, original):
+    assert message["role"] == "assistant" and message[MODEL_NOTE_KEY] == original
+    answer = message["content"]
+    assert "本轮没有已采信的测试结果" in answer and original not in answer
+    return answer
 
 
 def setup(monkeypatch, workspace, provider):

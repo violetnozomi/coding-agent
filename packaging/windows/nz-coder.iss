@@ -8,6 +8,8 @@
   #error OutputDir must be defined
 #endif
 
+#define StartMenuWorkspace "{userdocs}\NZ-Coder Workspace"
+
 [Setup]
 AppId={{5E863449-EE71-4862-9EEB-CB07EE36E6EA}
 AppName=NZ-Coder
@@ -34,13 +36,16 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "userpath"; Description: "Add NZ-Coder to the current user's PATH"; Flags: checkedonce
-Name: "startmenu"; Description: "Create a Start Menu shortcut"; Flags: checkedonce
+Name: "startmenu"; Description: "Create a Start Menu shortcut"
+
+[Dirs]
+Name: "{#StartMenuWorkspace}"; Tasks: startmenu; Flags: uninsneveruninstall
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\NZ-Coder"; Filename: "{app}\nz-coder.exe"; WorkingDir: "{%USERPROFILE}"; Tasks: startmenu
+Name: "{group}\NZ-Coder"; Filename: "{app}\nz-coder.exe"; WorkingDir: "{#StartMenuWorkspace}"; Tasks: startmenu
 
 [Run]
 Filename: "{app}\nz-coder.exe"; Parameters: "--help"; Description: "Verify NZ-Coder installation"; Flags: postinstall nowait skipifsilent unchecked
@@ -81,10 +86,42 @@ begin
   RegWriteExpandStringValue(HKCU, EnvironmentKey, 'Path', Updated);
 end;
 
+procedure RepairLegacyStartMenuShortcut;
+var
+  LinkPath, TargetPath, Arguments, OldDirectory, Workspace: string;
+  Shell, Shortcut: Variant;
+begin
+  { 旧版第二次安装时可能记为未选，却仍保留从用户主目录启动的快捷方式。 }
+  LinkPath := ExpandConstant('{group}\NZ-Coder.lnk');
+  if not FileExists(LinkPath) then Exit;
+  try
+    Shell := CreateOleObject('WScript.Shell');
+    Shortcut := Shell.CreateShortcut(LinkPath);
+    TargetPath := Shortcut.TargetPath;
+    Arguments := Shortcut.Arguments;
+    OldDirectory := Shortcut.WorkingDirectory;
+  except
+    Log('Could not inspect the existing Start Menu shortcut: ' + GetExceptionMessage);
+    Exit;
+  end;
+  if (CompareText(TargetPath, ExpandConstant('{app}\nz-coder.exe')) <> 0) or
+     (Arguments <> '') or
+     (CompareText(RemoveBackslashUnlessRoot(OldDirectory),
+                  RemoveBackslashUnlessRoot(ExpandConstant('{%USERPROFILE}'))) <> 0) then Exit;
+
+  Workspace := ExpandConstant('{#StartMenuWorkspace}');
+  if not ForceDirectories(Workspace) then
+    RaiseException('Could not create the Start Menu workspace at ' + Workspace);
+  Shortcut.WorkingDirectory := Workspace;
+  Shortcut.Save();
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if (CurStep = ssPostInstall) and WizardIsTaskSelected('userpath') then
-    SetUserPathEntry(True);
+  if CurStep = ssPostInstall then begin
+    if WizardIsTaskSelected('userpath') then SetUserPathEntry(True);
+    if not WizardIsTaskSelected('startmenu') then RepairLegacyStartMenuShortcut;
+  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

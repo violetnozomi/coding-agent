@@ -725,7 +725,7 @@ def _parent_context_block(parent_session_id: str | None = None) -> str:
             lines = []
             for key in (
                 "turn_count", "has_diff", "diff_chars", "changed_files",
-                "acceptance_criteria", "verification_attempts", "py_compile_ok",
+                "acceptance_criteria", "verification_attempts",
                 "broad_test_attempts", "transition",
             ):
                 value = data.get(key)
@@ -2156,12 +2156,18 @@ def run_subagent(
         prepared_workspace = _select_subagent_workspace(parent_workspace, state, parent_snapshot, cancel_event=cancel_event)
     except Exception as exc:
         from nz_coder.runtime.process.preparation import PreparationInterrupted
-        status = ("cancelled" if exc.reason == "cancelled" else "timeout") if isinstance(exc, PreparationInterrupted) else "error"
+        if isinstance(exc, PreparationInterrupted):
+            status = exc.reason
+            state.pop("public_error", None)
+            message = str(exc)
+        else:
+            status = "error"
+            public = to_public_error(exc)
+            state["public_error"] = public.to_dict()
+            message = public.message
         state['status'] = status
-        public = to_public_error(exc)
-        state['public_error'] = public.to_dict()
         scratch = _subagent_artifact_dir(parent_session_id, state['session_id'], parent_workspace) / 'scratch.md'
-        return _finalize_subagent_result(public.message, scratch, status, state)
+        return _finalize_subagent_result(message, scratch, status, state)
     worktree, scratch_path = prepared_workspace.worktree, prepared_workspace.scratch_path
     child_tracer = _build_subagent_tracer(parent_workspace, parent_session_id, state)
     state["status"] = "running"
@@ -2622,14 +2628,6 @@ NEXT:
             state["cost"] = total_cost
             state["cost_known"] = True
 
-    def _latest_summary() -> str:
-        for message in reversed(messages):
-            if isinstance(message, dict) and message.get("role") == "assistant":
-                content = message.get("content")
-                if isinstance(content, str) and content.strip():
-                    return content
-        return "(no summary)"
-
     def _authored_summary() -> str:
         # 运行时验证附录不能满足子任务对模型报告正文的长度/内容要求。
         return str(run_status.get("authored_content") or "")
@@ -2797,7 +2795,8 @@ NEXT:
         "cancelled": "cancelled",
     }
     result_status = status_map.get(raw_status, "error")
-    summary = _latest_summary()
+    # 运行器已冻结本轮对外正文。消息历史还包括中间步骤、上轮交付和已撤回的模型草稿。
+    summary = str(run_status.get("content") or "(no summary)")
 
     if parent_request:
         result_status = "needs_parent"
@@ -2868,10 +2867,14 @@ NEXT:
         status=result_status,
         changed_files=list(state.get("changed_files") or []),
     )
+    stop_reason = ""
     if result_status == "max_turns":
-        summary = _timeout_message(f"max turns reached ({max_turns})")
+        stop_reason = _timeout_message(f"max turns reached ({max_turns})")
     elif result_status == "error" and run_status.get("last_error"):
-        summary = f"Subagent error: {run_status['last_error']}"
+        stop_reason = f"Subagent error: {run_status['last_error']}"
+    if stop_reason:
+        has_denials = bool((execution_verification or {}).get("denied_commands", {}).get("total"))
+        summary = stop_reason + "\n\n" + summary if has_denials else stop_reason
     return _finalize_subagent_result(
         summary,
         scratch_path,

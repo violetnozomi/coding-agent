@@ -1,6 +1,7 @@
 from copy import deepcopy
 import json
 from pathlib import Path
+import pytest
 from nz_coder.runtime.verification.report_evidence import project_reporting_evidence
 
 
@@ -100,3 +101,70 @@ def test_exact_session_archive_restores_only_declared_head_messages(tmp_path):
     text,_=project_reporting_evidence([compact],{},final_text='done')
     assert 'ACTUAL' not in text
     assert 'unavailable_sources=1' in text
+
+
+def test_denied_command_uses_the_owned_error_part_and_requested_scope():
+    from nz_coder.protocol.public_error import PublicError
+    from nz_coder.runtime.verification.report_evidence import project_denied_commands
+
+    pair = _pair(input_value="ledger --version", output="Denied: this is ordinary tool text")
+    part = pair[0]["_nz_parts"][0]
+    # 已完成的命令也可以打印 Denied；只有结构化的执行前拒绝可以出具证明。
+    def receipts(messages):
+        return project_denied_commands(messages, session_id="session", interaction_id="run-new")
+
+    assert not receipts(pair).entries
+    part["state"].pop("output")
+    part["state"].update(status="error", metadata={}, error=PublicError("tool_failed", "Denied: text").to_dict())
+    assert not receipts(pair).entries
+    part["state"]["error"] = PublicError("permission_stopped", "refused by policy").to_dict()
+    old = _pair(interaction="later")
+    denied = receipts(pair + old)
+    assert denied.total == 1
+    assert [(r.part_id, r.call_id, r.command, r.cwd) for r in denied.entries
+            ] == [(part["id"], "same", "ledger --version", ".")]
+    assert not project_denied_commands(pair, session_id="other", interaction_id="run-new").entries
+    assert not project_denied_commands(pair, session_id="session", interaction_id="missing").entries
+    part["state"]["input"] = {"command": "different"}
+    assert not receipts(pair).entries
+
+
+def test_only_process_start_records_the_command_and_caps_its_display():
+    from nz_coder.protocol.public_error import PublicError
+    from nz_coder.runtime.verification.report_evidence import project_denied_commands
+
+    pair = _pair()
+    owner, _ = pair
+    call = owner["tool_calls"][0]["function"]
+    part = owner["_nz_parts"][0]
+    part["tool"] = call["name"] = "process"
+    part["state"].update(status="error", metadata={}, error=PublicError("permission_stopped", "refused").to_dict())
+    for operation in ("read", "write", "status", " START "):
+        args = {"operation": operation, "command": "front\x1b\n" + "x"*1400 + "tail", "workdir": "ledger"}
+        call["arguments"] = json.dumps(args)
+        part["state"]["input"] = args
+        denied = project_denied_commands(pair, session_id="session", interaction_id="run-new")
+        if operation.strip().lower() == "start":
+            entry, = denied.entries
+            assert entry.truncated and entry.cwd == "ledger" and len(entry.command) <= 1000
+            assert entry.command.startswith(r"front\x1b\n") and entry.command.endswith("tail")
+        else:
+            assert not denied.entries
+
+
+@pytest.mark.parametrize(("interrupted", "metadata"), [
+    (True, {}), (False, {"exit": 0}), (False, {"exit_code": 9}),
+    (False, {"cancelled": True}), (False, {"timed_out": True}),
+])
+def test_conflicting_host_part_keeps_the_refused_invocation_unknown(interrupted, metadata):
+    from nz_coder.protocol.public_error import PublicError
+    from nz_coder.runtime.verification.report_evidence import project_denied_commands
+
+    pair = _pair(output="Denied: operation")
+    state = pair[0]["_nz_parts"][0]["state"]
+    state.update(status="error", error=PublicError("permission_stopped", "permission stopped").to_dict(),
+                 interrupted=interrupted, metadata=metadata)
+    receipts = project_denied_commands(pair, session_id="session", interaction_id="run-new")
+    assert not receipts.entries
+    report, _ = project_reporting_evidence(pair, {}, final_text="done")
+    assert '"execution_status": "unknown"' in report

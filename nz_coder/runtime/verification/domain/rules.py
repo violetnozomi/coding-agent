@@ -20,6 +20,9 @@ def observed_check_stage(command: CommandIdentity, capability: str, detected_sta
 
 
 def matches_check(spec: CheckSpec, fact: ExecutionFact) -> bool:
+    if (spec.source == "user_declared" and fact.in_process
+            or spec.coverage_mode == "in_process" and not fact.in_process):
+        return False
     if (spec.command != fact.command and display_check_body(fact.command) is not None
             and (fact.outcome != "succeeded" or fact.exit_code != 0)):
         # 整条非零可能来自展示尾段；保留整条负事实，不能指定为主体失败。

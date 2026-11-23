@@ -108,6 +108,31 @@ def test_inno_setup_is_per_user_upgrade_safe_and_owns_path():
     assert "[UninstallDelete]" not in text
 
 
+def test_start_menu_creates_and_preserves_its_own_project_directory():
+    script = (ROOT / "packaging/windows/nz-coder.iss").read_text(encoding="utf-8")
+    entries = script.splitlines()
+    menu_task = next(line for line in entries if line.startswith('Name: "startmenu"'))
+    assert "checkedonce" not in menu_task, "An ordinary upgrade must update an existing shortcut"
+    assert '#define StartMenuWorkspace "{userdocs}\\NZ-Coder Workspace"' in script
+
+    creation = next(
+        line for line in entries if line.startswith('Name: "{#StartMenuWorkspace}"')
+    )
+    assert "Tasks: startmenu" in creation
+    assert "uninsneveruninstall" in creation
+    shortcut = next(line for line in entries if line.startswith('Name: "{group}'))
+    assert 'WorkingDir: "{#StartMenuWorkspace}"' in shortcut
+
+
+def test_legacy_shortcut_migration_edits_the_working_directory_in_place():
+    import re
+
+    script = (ROOT / "packaging/windows/nz-coder.iss").read_text(encoding="utf-8")
+    # 原链接的图标、热键、目标和启动参数都属于用户，安装器只应改起始目录。
+    written_properties = re.findall(r"\bShortcut\.(\w+)\s*:=", script, flags=re.IGNORECASE)
+    assert written_properties == ["WorkingDirectory"]
+
+
 def test_windows_installer_workflow_builds_tests_and_publishes_same_artifact():
     text = (ROOT / ".github" / "workflows" / "windows-installer.yml").read_text(
         encoding="utf-8",

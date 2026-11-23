@@ -308,14 +308,20 @@ def scoped_runtime_overrides(
 def command_activation(messages: list[dict]) -> CommandActivation:
     """父方预演和实际 initialize 使用同一修复后历史，不写入原消息。"""
     import copy
-    from nz_coder.protocol.message_schema import cleanup_incomplete_tool_history, settle_interrupted_parts
+    from nz_coder.protocol.message_schema import cleanup_incomplete_tool_history, is_user_request_message, settle_interrupted_parts
     from nz_coder.runtime.conversation.continuation_context import (
         continuation_task_text, is_continuation_activation, is_pure_continuation_activation,
     )
+    from nz_coder.state.input_expansion import INPUT_EXPANSIONS_KEY, USER_TEXT_KEY, user_instruction_text
 
     normalized = copy.deepcopy(messages)
     settle_interrupted_parts(normalized)
     normalized[:] = cleanup_incomplete_tool_history(normalized)
+    # 激活视图只解释用户指令。附件仍原样保留在会话中供模型阅读。
+    for message in normalized:
+        if (isinstance(message, dict) and is_user_request_message(message)
+                and (USER_TEXT_KEY in message or message.get(INPUT_EXPANSIONS_KEY))):
+            message["content"] = user_instruction_text(message) or ""
     latest_index = next((index for index in range(len(normalized) - 1, -1, -1)
                          if is_genuine_runtime_followup(normalized[index])), None)
     latest = normalized[latest_index] if latest_index is not None else None

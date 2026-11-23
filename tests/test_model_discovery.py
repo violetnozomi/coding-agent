@@ -10,6 +10,7 @@ import threading
 import pytest
 
 from nz_coder.foundation import config
+from nz_coder.foundation.private_paths import inspect_private_path
 from nz_coder.foundation.user_paths import user_storage_layout
 from nz_coder.providers.cli import models_main
 from nz_coder.providers.models import (
@@ -71,7 +72,8 @@ def _catalog_path(workspace: Path) -> Path:
     return user_storage_layout(workspace).workspace_cache / "models/catalog.json"
 
 
-def test_openai_discovery_caches_without_credentials(tmp_path, model_server):
+def test_openai_discovery_caches_without_credentials(tmp_path, model_server, monkeypatch):
+    monkeypatch.delattr(os, "fchmod", raising=False)
     _ModelsHandler.payload = {
         "data": [
             {"id": "z-model", "owned_by": "vendor"},
@@ -90,7 +92,7 @@ def test_openai_discovery_caches_without_credentials(tmp_path, model_server):
     assert _ModelsHandler.seen[0][1]["Authorization"] == "Bearer super-secret"
     cache = _catalog_path(tmp_path)
     assert "super-secret" not in cache.read_text()
-    assert stat_mode(cache) == 0o600
+    assert inspect_private_path(cache).hardened
     assert [item.model_id for item in cached_models(workspace=tmp_path)] == [
         "a-model",
         "z-model",
@@ -185,6 +187,7 @@ def test_model_selection_rejects_nonstandard_json_numbers(tmp_path):
 
 
 def test_workspace_selection_round_trip_and_reset(tmp_path, monkeypatch):
+    monkeypatch.delattr(os, "fchmod", raising=False)
     monkeypatch.setenv(
         "NZ_CODER_WORKSPACE_TRUST_STORE",
         str(tmp_path.parent / f"{tmp_path.name}-workspace-trust.json"),
@@ -196,10 +199,54 @@ def test_workspace_selection_round_trip_and_reset(tmp_path, monkeypatch):
     assert selection.source == "workspace"
     assert active_model_selection(tmp_path).model_id == "gemini-code"
     target = _selection_path(tmp_path)
-    assert stat_mode(target) == 0o600
+    assert inspect_private_path(target).hardened
+    if os.name == "posix":
+        assert target.stat().st_mode & 0o777 == 0o600
     assert clear_model_selection(tmp_path) is True
     assert active_model_selection(tmp_path).model_id == "fallback-model"
     assert clear_model_selection(tmp_path) is False
+
+
+def test_failed_model_save_keeps_original_error_if_cleanup_fails(tmp_path, monkeypatch):
+    save_model_selection("gemini", "previous", workspace=tmp_path)
+    target = _selection_path(tmp_path)
+    sync_error = OSError("could not sync model data")
+
+    def fail_sync(_descriptor):
+        raise sync_error
+
+    def fail_cleanup(_path):
+        raise PermissionError("temporary file is busy")
+
+    with monkeypatch.context() as faults:
+        faults.setattr(os, "fsync", fail_sync)
+        faults.setattr(os, "unlink", fail_cleanup)
+        with pytest.raises(OSError) as raised:
+            save_model_selection("gemini", "new", workspace=tmp_path)
+
+    assert raised.value is sync_error
+    assert active_model_selection(tmp_path).model_id == "previous"
+    for temporary in target.parent.glob(f".{target.name}.*"):
+        temporary.unlink()
+
+
+def test_denied_model_file_permissions_preserve_selection(tmp_path, monkeypatch):
+    from nz_coder.foundation.private_paths import PrivatePathSecurity
+    from nz_coder.providers import _model_file
+
+    save_model_selection("gemini", "previous", workspace=tmp_path)
+    target = _selection_path(tmp_path)
+
+    def deny_permissions(path):
+        assert path.stat().st_size == 0
+        return PrivatePathSecurity(str(path), False, "B", "access denied")
+
+    monkeypatch.setattr(_model_file, "harden_private_path", deny_permissions)
+    with pytest.raises(PermissionError, match="access denied"):
+        save_model_selection("gemini", "new", workspace=tmp_path)
+
+    assert active_model_selection(tmp_path).model_id == "previous"
+    assert not list(target.parent.glob(f".{target.name}.*"))
 
 
 def test_reset_revokes_previous_model_selection_generation(tmp_path, monkeypatch):
@@ -420,8 +467,3 @@ def test_agent_uses_workspace_model_selection(tmp_path, monkeypatch):
         assert agent.model_capabilities.provider == "gemini"
     finally:
         agent.close()
-
-
-def stat_mode(path: Path) -> int:
-    """Return only permission bits for one state file."""
-    return os.stat(path).st_mode & 0o777

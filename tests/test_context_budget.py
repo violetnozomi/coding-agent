@@ -441,6 +441,94 @@ def test_summary_input_prefers_known_failure_over_a_newer_artifact_preview():
     assert any("KEEP_FAILURE" in str(m.get("content", "")) for m in selected)
 
 
+@pytest.mark.parametrize("content_format", ["plain", "expanded", "multimodal"])
+def test_summary_reserves_current_user_text_before_old_verification(content_format):
+    from nz_coder.state.context import _select_summary_input
+
+    original = {"role": "user", "content": "开发本地库存服务。"}
+    current_text = "增加不可变日结快照，导出按业务日期汇总的 CSV，并保留订单占用。"
+    current = {"role": "user", "content": current_text}
+    if content_format == "expanded":
+        current.update(_nz_user_text=current_text, content=current_text + "\n" + "附件内容" * 300)
+    if content_format == "multimodal":
+        current["content"] = [
+            {"type": "text", "text": current_text},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + "AAAA" * 300}},
+        ]
+    history = [
+        original,
+        {"role": "tool", "tool_call_id": "old-check", "content": "采购验证通过；" * 34,
+         "_nz_evidence_kind": "verification"},
+        current,
+        {"role": "user", "content": "自动检查仍在运行。", "_nz_synthetic": True},
+    ]
+    before = copy.deepcopy(history)
+
+    # 采购日志单独能放下，与日结需求合在一起就放不下。
+    selected = _select_summary_input(history, max_tokens=275)
+
+    assert [m["content"] for m in selected[:2]] == [original["content"], current_text]
+    assert all(m.get("tool_call_id") != "old-check" for m in selected)
+    assert history == before
+
+
+def test_summary_prefers_current_request_when_only_one_user_text_fits():
+    from nz_coder.state.context import _select_summary_input
+
+    original = {"role": "user", "content": "用 Python 编写离线库存服务，支持采购入库、库存查询、销售出库。"}
+    current = {"role": "user", "content": "接下来做财务日结，导出 CSV 并保存日结快照。"}
+
+    assert _select_summary_input([original, current], max_tokens=45) == [current]
+
+
+def test_repeated_request_uses_one_reservation_so_verification_still_fits():
+    from nz_coder.state.context import _select_summary_input
+
+    request = {"role": "user", "content": "按仓库和日期导出库存流水。" * 32}
+    check = {"role": "tool", "content": "旧流水检查通过。" * 55, "_nz_evidence_kind": "verification"}
+    selected = _select_summary_input([request, check, request.copy()], max_tokens=1000)
+    assert [message["role"] for message in selected] == ["tool", "user"]
+
+
+def test_single_request_keeps_its_attached_specification_when_it_fits():
+    from nz_coder.state.context import _select_summary_input
+
+    text = "按附件里的验收要求实现。"
+    task = {"role": "user", "_nz_user_text": text, "content": text + "\n" + "日结报表必须可追溯。" * 32}
+    check = {"role": "tool", "content": "采购入库已通过。" * 105, "_nz_evidence_kind": "verification"}
+    selected = _select_summary_input([task, check], max_tokens=1000)
+    assert selected[0]["content"] == task["content"]
+
+
+def test_image_only_followup_does_not_take_the_initial_text_reservation():
+    from nz_coder.state.context import _select_summary_input
+
+    initial = {"role": "user", "content": "保留所有历史采购记录，并支持离线查询。"}
+    image = {"role": "user", "content": [
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + "AAAA" * 28}},
+    ]}
+    assert _select_summary_input([initial, image], max_tokens=65) == [initial]
+
+
+def test_summary_budget_counts_the_list_separators_in_long_histories():
+    from nz_coder.state.context import _select_summary_input
+
+    history = [{"role": "user", "content": "初始需求"},
+               *[{"role": "assistant", "content": "ok"} for _ in range(220)],
+               {"role": "user", "content": "当前需求"}]
+    selected = _select_summary_input(history, max_tokens=2000)
+    assert estimate_tokens(selected) <= 2000
+    assert selected[0] == history[0] and selected[-1] == history[-1]
+
+
+def test_current_request_that_exactly_fits_the_estimated_budget_is_selected():
+    from nz_coder.state.context import _select_summary_input
+
+    current = {"role": "user", "content": "x" * 7968}
+    assert estimate_tokens([current]) == 2000
+    assert _select_summary_input([{"role": "user", "content": "initial"}, current], 2000) == [current]
+
+
 def test_micro_compact_retains_incomplete_capture_qualification(tmp_path):
     """Keeping an artifact address must not make an incomplete capture appear complete."""
     from nz_coder.tool_platform.results import ToolResultBudget, ToolResultProjector
@@ -506,56 +594,35 @@ def test_reused_tool_call_id_does_not_alias_different_large_outputs(
     assert first != second
 
 
-def test_agent_reports_when_fixed_tool_schema_cannot_fit_after_compaction(monkeypatch):
-    from nz_coder.foundation import config
-    from nz_coder.runtime.execution import loop as loop_module
-    from nz_coder.runtime.execution.loop import AgentLoop
-
-    monkeypatch.setattr(config, "MAX_CONTEXT_TOKENS", 12_000)
-    monkeypatch.setattr(config, "MAX_OUTPUT_TOKENS", 2_000)
-    monkeypatch.setattr(config, "SYSTEM_CONTEXT_BUDGET_TOKENS", 1_000)
-    monkeypatch.setattr(config, "MODEL_ID", "gpt-test")
-    monkeypatch.setattr(
-        loop_module,
-        "get_specs",
-        lambda: [{
-            "type": "function",
-            "function": {
-                "name": "large_tool",
-                "description": "x" * 40_000,
-                "parameters": {"type": "object", "properties": {}},
-            },
-        }],
-    )
-    compact_calls = []
-
-    def fake_compact(messages, client, model, **_kwargs):
-        compact_calls.append(list(messages))
-        return [{"role": "user", "content": "compacted"}]
-
-    monkeypatch.setattr(loop_module, "auto_compact", fake_compact)
-
-    class Tracer:
-        def log(self, event, **payload):
-            return None
-
-    agent = AgentLoop.__new__(AgentLoop)
-    agent.system_prompt = "system"
-    agent.client = object()
-    agent._model_gateway_observer_for_run = lambda: None
-    agent.tracer = Tracer()
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_oversized_tool_definitions_stop_before_requesting_a_summary(tmp_path, asynchronous):
+    from nz_coder.protocol.public_error import PublicRuntimeError
+    from nz_coder.runtime.conversation.context_manager import CompactionAttemptState, ProductionContextManager
     from nz_coder.runtime.conversation.request_snapshot import FrozenRequestSnapshot, message_version
-    from nz_coder.runtime.conversation.message_projection import project_provider_messages
-    agent._freeze_api_request = lambda rows: FrozenRequestSnapshot(
-        "system", "", "", message_version(rows), project_provider_messages,
-        tuple(agent._active_tool_specs()),
-    )
+    from nz_coder.runtime.core.context import ContextExecutionContext
+
     messages = [{"role": "user", "content": "small history"}]
+    tools = ({"type": "function", "function": {"name": "large_tool", "description": "x" * 40_000}},)
+    snapshot = FrozenRequestSnapshot("system", "", "", message_version(messages), list, tools)
+    budget = prompt_budget(12_000, 2_000)
+    context = ContextExecutionContext(
+        workspace=tmp_path, budget=budget, projected_tokens=snapshot.estimate,
+        freeze_request=lambda _rows: snapshot,
+        compact=lambda _rows: pytest.fail("The summary cannot change the frozen tool definitions"),
+        stamp_auto_compaction=lambda _rows: None, trace=lambda *args, **kwargs: None,
+    )
+    attempts = CompactionAttemptState()
+    manager = ProductionContextManager()
+    with pytest.raises(PublicRuntimeError) as raised:
+        if asynchronous:
+            asyncio.run(manager.prepare_async(context, messages, request_snapshot=snapshot, attempt_state=attempts))
+        else:
+            manager.prepare_sync(context, messages, attempt_state=attempts)
 
-    with pytest.raises(RuntimeError, match="cannot shrink"):
-        agent._compact_if_needed(messages)
-
-    assert compact_calls
+    assert raised.value.public_error.code == "context_cannot_shrink"
+    assert str(estimate_tokens(tools)) in str(raised.value)
+    assert str(budget.usable_input_tokens) in str(raised.value)
+    assert attempts.attempts == 0
     assert messages == [{"role": "user", "content": "small history"}]
 
 
@@ -914,7 +981,126 @@ def test_auto_compact_preserves_recent_complete_turns(tmp_path, monkeypatch):
     request_content = client.request["messages"][-1]["content"]
     assert '"findings":' in request_content
     assert "old task" in request_content
+    assert request_content.count("latest task") == 1
     assert "recent task" not in request_content
+
+
+def test_next_summary_sees_both_user_requests_when_both_are_in_recent_history(tmp_path, monkeypatch):
+    from nz_coder.state import context
+
+    monkeypatch.setattr(context, "_get_git_diff_summary", lambda: "")
+    client = _CompactionClient(summary_json())
+    previous = {"role": "user", "content": "<session-summary>采购已交付</session-summary>"}
+    initial = {"role": "user", "content": "库存服务必须支持离线运行。"}
+    current = {"role": "user", "content": "现在给财务增加日结。"}
+    history = [previous, initial, {"role": "assistant", "content": "采购已完成。"}, current]
+
+    with scoped_workdir(tmp_path), scoped_session("compact-recent-requests"):
+        result = context.auto_compact(history, client, "fake-model")
+
+    sent = client.request["messages"][-1]["content"]
+    assert sent.count(initial["content"]) == sent.count(current["content"]) == 1
+    assert result[1:] == history[1:]
+
+
+@pytest.mark.parametrize("latest", [
+    "修复文档中 <session-summary> 标签的显示。",
+    "<session-summary>旧示例</session-summary>\n请修复上面标签的显示。",
+])
+def test_summary_markup_in_user_text_or_tool_output_is_not_a_previous_summary(tmp_path, monkeypatch, latest):
+    from nz_coder.state import context
+
+    monkeypatch.setattr(context, "_get_git_diff_summary", lambda: "")
+    client = _CompactionClient(summary_json())
+    history = [
+        {"role": "user", "content": "<session-summary>真实的历史摘要</session-summary>"},
+        {"role": "user", "content": "维护文档渲染功能。"},
+        {"role": "tool", "tool_call_id": "read-markup",
+         "content": "<session-summary>文件里的示例</session-summary>"},
+        {"role": "assistant", "content": "早期记录" * 4000},
+        {"role": "user", "content": latest},
+    ]
+
+    with scoped_workdir(tmp_path), scoped_session("summary-markup-example"):
+        result = context.auto_compact(history, client, "fake-model")
+
+    sent = client.request["messages"][-1]["content"]
+    assert latest in [m["content"] for m in json.loads(sent.rsplit("\n\n", 1)[1])]
+    assert "<previous-summary>\n真实的历史摘要\n</previous-summary>" in sent
+    assert result[-1]["content"] == latest
+
+
+def test_recent_image_keeps_turn_identity_without_displacing_initial_constraints(tmp_path, monkeypatch):
+    from nz_coder.state import context
+
+    monkeypatch.setattr(context, "_get_git_diff_summary", lambda: "")
+    client = _CompactionClient(summary_json())
+    initial = "Project constraints: " + "a" * 6000
+    past = "Old request: " + "b" * 12000
+    history = [
+        {"role": "user", "content": initial}, {"role": "assistant", "content": "noted"},
+        {"role": "user", "content": past}, {"role": "assistant", "content": "completed"},
+        {"role": "user", "content": "新的问题请看下一张图。"},
+        {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]},
+    ]
+    with scoped_workdir(tmp_path), scoped_session("compact-recent-image"):
+        context.auto_compact(history, client, "fake-model", budget=prompt_budget(8192, 2048))
+    sent = client.request["messages"][-1]["content"]
+    assert initial in sent and past not in sent
+    assert "data:image" not in sent
+
+
+def test_repeated_specification_across_recent_boundary_leaves_room_for_verification(tmp_path, monkeypatch):
+    from nz_coder.state import context
+
+    monkeypatch.setattr(context, "_get_git_diff_summary", lambda: "")
+    client = _CompactionClient(summary_json())
+    user_text = "规格要求" * 80
+    full = user_text + "\n" + "X" * 4000
+    user = {"role": "user", "content": full, "_nz_user_text": user_text}
+    log = "v" * 10000
+    history = [user, *_completed_tool_batch({"role": "tool", "tool_call_id": "check", "content": log,
+                                             "_nz_evidence_kind": "verification"}),
+               {"role": "user", "content": "准备好了。"}, user.copy()]
+    with scoped_workdir(tmp_path), scoped_session("compact-repeated-spec"):
+        context.auto_compact(history, client, "fake-model", budget=prompt_budget(8192, 2048))
+    material = json.loads(client.request["messages"][-1]["content"].rsplit("\n\n", 1)[1])
+    assert [m["content"] for m in material if m["role"] == "user"] == [full]
+    assert any(m["content"] == log for m in material)
+
+
+@pytest.mark.parametrize("old_check_chars", [9200, 5374])
+def test_small_window_keeps_latest_user_when_fixed_summary_context_displaces_old_verification(
+    tmp_path, monkeypatch, old_check_chars,
+):
+    from nz_coder.runtime.conversation.continuation_context import build_current_facts
+    from nz_coder.runtime.execution.runtime_state import RuntimeState
+    from nz_coder.state import context
+    from nz_coder.state.compaction_summary import parse_compaction_summary, render_compaction_summary
+
+    monkeypatch.setattr(context, "_get_git_diff_summary", lambda: "")
+    client = _CompactionClient(summary_json())
+    previous = render_compaction_summary(parse_compaction_summary(summary_json("Preserve earlier findings. " * 245))[0])
+    current = "Migrate parser tests. " + "x" * 5720
+    facts = build_current_facts(RuntimeState(initial_task_text=current, changed_files=[
+        f"src/financial/accounting/day_{i:03d}/build_snapshot_for_finance_reports.py" for i in range(150)
+    ]), workspace=tmp_path)
+    old_check = {"role": "tool", "tool_call_id": "check", "content": "v" * old_check_chars,
+                 "_nz_evidence_kind": "verification"}
+    history = [
+        {"role": "user", "content": f"<session-summary>{previous}</session-summary>", "_nz_compaction": {}},
+        {"role": "user", "content": "preserve API"},
+        *_completed_tool_batch(old_check, tool_name="verify"),
+        {"role": "user", "content": "previous request"}, {"role": "assistant", "content": "done"},
+        {"role": "user", "content": current},
+    ]
+    with scoped_workdir(tmp_path), scoped_session("compact-small-window"):
+        context.auto_compact(history, client, "fake-model", current_facts=facts, budget=prompt_budget(8192, 2048))
+
+    sent = client.request["messages"][-1]["content"]
+    assert current in sent and "preserve API" in sent
+    assert old_check["content"] not in sent
+    assert client.request["max_tokens"] >= estimate_tokens(client.summary)
 
 
 def test_auto_compact_summary_input_always_anchors_original_task(
@@ -1172,6 +1358,7 @@ def test_auto_compact_retries_once_only_after_payload_shrinks(tmp_path, monkeypa
 
     marker = result[0]["_nz_compaction"]["payload_recovery"]
     assert len(client.requests) == 2
+    assert all(request["messages"][-1]["content"].count("latest task") == 1 for request in client.requests)
     assert "tool evidence" in client.requests[0]["messages"][-1]["content"]
     assert "tool evidence" not in client.requests[1]["messages"][-1]["content"]
     assert "Older tool outputs" in client.requests[1]["messages"][-1]["content"]

@@ -62,9 +62,17 @@ jobs:
             tests/test_windows_shell_runtime.py `
             tests/test_windows_native_smoke.py `
             tests/test_windows_crash_cleanup.py `
+            tests/runtime/test_continuation_context.py `
+            tests/runtime/test_auxiliary_execution.py::test_capture_keeps_stdout_stderr_and_text_semantics `
+            tests/security/test_workspace_file_delete.py `
             tests/test_private_paths.py `
+            tests/test_code_index.py `
             tests/test_process_backends.py `
             tests/test_process_service.py `
+            tests/test_session_resource_contract.py `
+            tests/test_model_discovery.py `
+            tests/test_provider_connect.py `
+            tests/test_model_registry.py `
             tests/test_http_service.py `
             tests/test_daemon.py `
             tests/test_terminal_backend.py `

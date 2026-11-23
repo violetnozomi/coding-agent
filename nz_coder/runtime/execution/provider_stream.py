@@ -6,6 +6,7 @@ import time
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.runtime.core.model_context import current_request_tools
 from nz_coder.protocol.message_schema import assistant_error_from_exception
+from nz_coder.protocol.public_error import PublicRuntimeError, public_error_from_wire
 from nz_coder.runtime.model_gateway import ModelCall, ModelCallPurpose, ModelCallStatus
 from nz_coder.runtime.conversation.model_result import LLMResult
 from nz_coder.runtime.execution.services import (
@@ -152,7 +153,7 @@ def project_streaming_turn(
             return
         active_processor = getattr(host, "_active_session_processor", None)
         if isinstance(active_processor, SessionProcessor):
-            active_processor.fail_unsettled(str(payload.get("error") or "stream retry"))
+            active_processor.fail_unsettled(public_error_from_wire(payload.get("public_error")))
         attempt.reset_after_retry("stream_retry")
         checkpoints.flush(force=True)
 
@@ -199,7 +200,7 @@ def project_streaming_turn(
         )
     processor = getattr(host, "_active_session_processor", None)
     if isinstance(processor, SessionProcessor):
-        processor.fail_unsettled(outcome.error or outcome.status.value)
+        processor.fail_unsettled(outcome.public_error or outcome.error or outcome.status.value)
     if message_part is not None:
         reason = {
             ModelCallStatus.CONTEXT_OVERFLOW: "context_overflow",
@@ -254,25 +255,10 @@ def _settle_stream_tools(
         result.tool_outcome = tool_outcome
         result.stream_tool_wait_ms = round(wait_ms, 3)
         result.duration_ms = round(max(0.0, result.duration_ms - wait_ms), 3)
-        stream_error = outcome.provider_metadata.get("stream_error")
-        if isinstance(stream_error, dict):
-            # ``stream_error`` is private Provider diagnostic state. The
-            # result may retain other continuation metadata, but this field
-            # must not cross the model-to-Message commit boundary.
-            result.extra = dict(result.extra or {})
-            provider_extra = result.extra.get("provider_extra")
-            if isinstance(provider_extra, dict):
-                provider_extra = dict(provider_extra)
-                provider_extra.pop("stream_error", None)
-                if provider_extra:
-                    result.extra["provider_extra"] = provider_extra
-                else:
-                    result.extra.pop("provider_extra", None)
-            result.post_tool_stream_error = str(
-                stream_error.get("message") or "provider stream failed"
-            )
+        if outcome.public_error is not None:
+            result.post_tool_stream_error = outcome.public_error.message
             result.assistant_error = assistant_error_from_exception(
-                RuntimeError(result.post_tool_stream_error),
+                PublicRuntimeError(outcome.public_error),
                 provider_id=host.provider_id,
                 is_retryable=False,
             )

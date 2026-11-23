@@ -9,6 +9,7 @@ import threading
 import uuid
 from pathlib import Path
 from dataclasses import dataclass, field
+from functools import cached_property
 
 from nz_coder.foundation.cancellation import CancellationView
 from nz_coder.runtime.core.request import RunRequest
@@ -54,6 +55,10 @@ class RunContext:
     compaction_attempts: int = 0
     budget_zones_emitted: list[str] = field(default_factory=list)
     cancellation: object | None = None
+    # 主任务只在结算后公开正文，子任务可以直接向父任务返回工作报告。
+    uses_receipt_based_delivery: bool = field(default=False, init=False)
+    # 展示回调可能在落盘前抛错。发生这种情况，结算沿用本轮已经生成的结果。
+    prepared_terminal_result: dict | None = field(default=None, init=False, repr=False)
     metadata: dict = field(default_factory=dict)
     terminal_status: RunStatus | None = None
     finalized: bool = False
@@ -85,6 +90,7 @@ class RunContext:
         self._terminal_error = None
         self._session_lease = None
         self._execution_started = False
+        self.compacted_denied_commands = None
 
     @property
     def cancel_scope(self) -> CancellationView:
@@ -122,6 +128,26 @@ class RunContext:
         """Expose the one live transcript owned by this context's Session."""
         return self.session.transcript
 
+    @cached_property
+    def terminal_denied_commands(self):
+        """冻结后只投影一次；终态正文、会话记录和中断回收取同一批宿主回执。"""
+        if self.terminal_status is None:
+            raise RuntimeError("Command receipts are only final after execution freezes")
+        return self.denied_commands_in(self.transcript)
+
+    def denied_commands_in(self, messages):
+        from nz_coder.runtime.verification.report_evidence import project_denied_commands
+
+        earlier = self.compacted_denied_commands
+        visible = project_denied_commands(messages, session_id=self.session.session_id, interaction_id=self.interaction_run_id,
+                                          include_archives=earlier is None)
+        return earlier.followed_by(visible) if earlier is not None else visible
+
+    @cached_property
+    def defer_model_report(self) -> bool:
+        """首次模型请求核对同轮恢复的回执，新拒绝只在工具结算时更新。"""
+        return bool(self.denied_commands_in(self.transcript).total)
+
     def begin_turn(self) -> int:
         """Advance and return the one-based model turn counter."""
         with self._state_lock:
@@ -149,7 +175,7 @@ class RunContext:
             self.freeze_execution(status)
             self.finalized = True
 
-    def freeze_execution(self, status: RunStatus) -> None:
+    def freeze_execution(self, status: RunStatus, *, changed_python_sources: tuple[str, ...] | None = ()) -> None:
         """执行结论先冻结；计费和持久化结算完成后再 finish。"""
         with self._state_lock:
             if not isinstance(status, RunStatus):
@@ -160,5 +186,6 @@ class RunContext:
                 self.check_cancelled()
             if self._verification is not None:
                 snapshot = self._verification.snapshot()
-                self._verification.seal(expected_revision=snapshot.revision, terminal_reason=status.value)
+                self._verification.seal(expected_revision=snapshot.revision, terminal_reason=status.value,
+                                        changed_python_sources=changed_python_sources)
             self.terminal_status = status

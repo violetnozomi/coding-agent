@@ -226,7 +226,7 @@ def test_concurrent_stops_keep_first_cause_and_one_diagnostic(tmp_path, monkeypa
         _finish(manager)
 
 
-@pytest.mark.parametrize("reason", ["cancelled", "timeout", "both", "failure"])
+@pytest.mark.parametrize("reason", ["cancelled", "timeout", "cleanup-timeout", "both", "failure"])
 def test_prepare_interrupt_maps_to_cancel_or_timeout_without_public_error(tmp_path, monkeypatch, reason):
     from nz_coder.protocol.public_error import PublicError
     from nz_coder.runtime.agent import subagent
@@ -237,19 +237,43 @@ def test_prepare_interrupt_maps_to_cancel_or_timeout_without_public_error(tmp_pa
             kwargs["preparation"]._cancel.set()
         if reason == "failure":
             raise PreparationFailure(PublicError("preparation_test_failure", "Preparation failed."))
-        raise PreparationInterrupted("timeout" if reason in {"timeout", "both"} else "cancelled")
+        raise PreparationInterrupted("cancelled" if reason == "cancelled" else "timeout",
+                                     cleanup_unconfirmed=reason == "cleanup-timeout")
     monkeypatch.setattr(subagent, "prepare_subagent_command_context", prepare)
     try:
         task = _start(manager)
         assert manager._jobs[task].done_event.wait(2)
         state = manager._load_raw(task)
-        assert state["status"] == {"cancelled":"cancelled", "timeout":"timeout", "both":"cancelled", "failure":"error"}[reason]
+        assert state["status"] == {"cancelled":"cancelled", "timeout":"timeout", "cleanup-timeout":"timeout",
+                                  "both":"cancelled", "failure":"error"}[reason]
         if reason == "failure":
             assert state["public_error"]["code"] == "preparation_test_failure"
         else:
             assert not state.get("public_error")
+            assert ("process group cleanup" in state["child_result"]["final_text"]) is (reason == "cleanup-timeout")
     finally:
         _finish(manager)
+
+
+@pytest.mark.parametrize("reason", ["timeout", "cancelled"])
+def test_foreground_child_delivers_preparation_interruption(tmp_path, monkeypatch, reason):
+    from nz_coder.runtime.agent import subagent
+    from nz_coder.runtime.process.preparation import PreparationInterrupted
+    from nz_coder.runtime.process.workdir import scoped_workdir
+
+    def interrupt(*args, **kwargs):
+        raise PreparationInterrupted(reason, cleanup_unconfirmed=True)
+
+    monkeypatch.setattr(subagent, "_select_subagent_workspace", interrupt)
+    monkeypatch.setattr(subagent, "_parent_config_snapshot", lambda *args: None)
+    with scoped_workdir(tmp_path), subagent.scoped_parent_context(session_id="parent"):
+        result = subagent.run_subagent("inspect")
+    child = result.metadata["child_result"]
+    assert child["status"] == reason
+    assert not child.get("public_error")
+    assert child["final_text"].startswith("Preparation cancelled." if reason == "cancelled"
+                                         else "Timed out during child preparation.")
+    assert ("process group cleanup" in child["final_text"]) is (reason == "timeout")
 
 
 def test_freeze_precedes_preparation_cleanup_and_submits_once(tmp_path, monkeypatch):

@@ -235,12 +235,33 @@ def _response_usage(response: Any) -> dict[str, Any]:
     return result
 
 
-def _response_finish_reason(response: Any, *, has_tools: bool = False) -> str:
-    status = str(_field(response, "status", "completed") or "completed")
+class _ResponseFailed(RuntimeError):
+    def __init__(self, message: str, response: Any):
+        super().__init__(message)
+        self.reported_usage = _response_usage(response) if _field(response, "usage") is not None else None
+
+
+def _unfinished_tool(item: Any) -> bool:
+    return _field(item, "type") == "function_call" and _field(item, "status") not in {None, "completed"}
+
+
+def _response_finish_reason(
+    response: Any,
+    status: str | None,
+    *,
+    has_tools: bool,
+    unfinished_tool: bool = False,
+) -> str:
     if status == "incomplete":
         details = _field(response, "incomplete_details", {}) or {}
         if _field(details, "reason", "") == "max_output_tokens":
             return "length"
+        return "error"
+    # 普通文本允许缺省的状态字段，工具则需要整次响应和工具条目均已完成。
+    if status != "completed" and (status is not None or has_tools):
+        return "error"
+    output = _field(response, "output", []) or []
+    if unfinished_tool or any(_unfinished_tool(item) for item in output):
         return "error"
     if has_tools:
         return "tool_calls"
@@ -248,9 +269,9 @@ def _response_finish_reason(response: Any, *, has_tools: bool = False) -> str:
 
 
 def _normalize_response(response: Any):
-    status = str(_field(response, "status", "completed") or "completed")
+    status = _field(response, "status")
     if status in {"failed", "cancelled"}:
-        raise RuntimeError(f"OpenAI Responses request {status}: {_response_error(response)}")
+        raise _ResponseFailed(f"OpenAI Responses request {status}: {_response_error(response)}", response)
 
     text_parts: list[str] = []
     reasoning_items: list[dict[str, Any]] = []
@@ -305,6 +326,7 @@ def _normalize_response(response: Any):
         ),
         finish_reason=_response_finish_reason(
             response,
+            status,
             has_tools=bool(tool_calls),
         ),
         usage=_response_usage(response),
@@ -324,11 +346,16 @@ def _iter_normalized_stream(events: Iterable[Any]) -> Iterator[Any]:
     reasoning_items: list[dict[str, Any]] = []
     seen_tools: set[int] = set()
     argument_deltas: set[int] = set()
+    unfinished_tool = False
     for event in events:
         event_type = str(_field(event, "type", "") or "")
         output_index = int(_field(event, "output_index", 0) or 0)
         if event_type == "response.output_text.delta":
             yield chunk(content=str(_field(event, "delta", "") or ""))
+        elif event_type in {"response.created", "response.queued", "response.in_progress"}:
+            response = _field(event, "response", {})
+            if _field(response, "usage") is not None:
+                yield chunk(usage=_response_usage(response))
         elif event_type == "response.reasoning_summary_text.delta":
             yield chunk(reasoning_content=str(_field(event, "delta", "") or ""))
         elif event_type == "response.output_item.added":
@@ -381,6 +408,7 @@ def _iter_normalized_stream(events: Iterable[Any]) -> Iterator[Any]:
                 continue
             if item_type != "function_call":
                 continue
+            unfinished_tool = unfinished_tool or _unfinished_tool(item)
             extra: dict[str, Any] = {}
             item_id = _field(item, "id", "")
             if isinstance(item_id, str) and item_id:
@@ -397,6 +425,7 @@ def _iter_normalized_stream(events: Iterable[Any]) -> Iterator[Any]:
                     ]
                 )
                 continue
+            seen_tools.add(output_index)
             call_id = _field(item, "call_id", "") or _field(item, "id", "")
             arguments = "" if output_index in argument_deltas else str(
                 _field(item, "arguments", "") or ""
@@ -414,37 +443,26 @@ def _iter_normalized_stream(events: Iterable[Any]) -> Iterator[Any]:
                     )
                 ]
             )
-        elif event_type == "response.completed":
+        elif event_type in {"response.completed", "response.incomplete"}:
             response = _field(event, "response", {})
+            status = _field(response, "status") or "completed"
+            if event_type == "response.incomplete":
+                status = "incomplete"
             yield chunk(
                 finish_reason=_response_finish_reason(
                     response,
+                    status,
                     has_tools=bool(seen_tools),
+                    unfinished_tool=unfinished_tool,
                 ),
                 usage=_response_usage(response),
             )
-        elif event_type == "response.incomplete":
-            response = _field(event, "response", {})
-            finish_reason = _response_finish_reason(
-                response,
-                has_tools=bool(seen_tools),
-            )
-            if finish_reason == "length":
-                yield chunk(
-                    finish_reason=finish_reason,
-                    usage=_response_usage(response),
-                )
-            else:
-                raise RuntimeError(
-                    "OpenAI Responses stream incomplete: "
-                    f"{_response_error(response)}"
-                )
         elif event_type == "response.failed":
             response = _field(event, "response", {})
-            raise RuntimeError(
-                "OpenAI Responses stream failed: "
-                f"{_response_error(response)}"
-            )
+            failure = _ResponseFailed(f"OpenAI Responses stream failed: {_response_error(response)}", response)
+            if failure.reported_usage is not None:
+                yield chunk(usage=failure.reported_usage)
+            raise failure
         elif event_type == "error":
             raise RuntimeError(
                 f"OpenAI Responses stream error: {_field(event, 'message', event)}"

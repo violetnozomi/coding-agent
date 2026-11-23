@@ -293,8 +293,8 @@ def test_http_failed_terminal_save_does_not_restore_previous_result(tmp_path, mo
         restored.close()
 
 
-@pytest.mark.parametrize(('partial', 'answer'), [(False, ''), (True, 'CURRENT_RUN_PARTIAL')])
-def test_http_native_two_runs_restore_cancel_and_retire_old_callbacks(tmp_path, monkeypatch, partial, answer):
+@pytest.mark.parametrize('partial', [False, True], ids=['no-draft', 'with-draft'])
+def test_http_native_two_runs_restore_cancel_and_retire_old_callbacks(tmp_path, monkeypatch, partial):
     """走默认 Native、真实 HTTP/审批/写盘，防止结果串轮和退休回调覆盖。"""
     from nz_coder.foundation import config
     from nz_coder.http_service import NZCoderClient, SessionHTTPService
@@ -384,7 +384,10 @@ def test_http_native_two_runs_restore_cancel_and_retire_old_callbacks(tmp_path, 
             assert not writers[0].is_alive()
             assert not writer_errors
         assert session.wait(timeout=10)
-        assert client.get_session(session_id)['last_result']['metadata']['authored_content'] == 'PREVIOUS_RUN_ANSWER'
+        previous = client.get_session(session_id)['last_result']
+        assert previous['metadata']['authored_content'] == 'PREVIOUS_RUN_ANSWER'
+        assert 'PREVIOUS_RUN_ANSWER' not in previous['answer']
+        assert 'PREVIOUS_RUN_ANSWER' in client.message_detail(session_id, 1)
         old_environment = environments[0]
         old_messages = copy.deepcopy(session.history)
         subscription = session.event_bus.subscribe()
@@ -395,7 +398,13 @@ def test_http_native_two_runs_restore_cancel_and_retire_old_callbacks(tmp_path, 
         assert session.wait(timeout=10)
         info = client.get_session(session_id)
         assert info['status'] == info['last_result']['status'] == 'cancelled'
-        assert info['last_result']['answer'] == answer
+        assert info['last_result']['answer'] == ''
+        assert info['last_result']['metadata']['authored_content'] == ''
+        assert provider.calls == (3 if partial else 2)
+        assert 'CURRENT_RUN_PARTIAL' not in json.dumps(client.messages(session_id))
+        detail = client.message_detail(session_id, 2)
+        assert 'CURRENT_RUN_PARTIAL' not in detail
+        assert 'PREVIOUS_RUN_ANSWER' not in detail
         assert info['pending_interaction_count'] == 0
         assert not (workspace / 'never-created.txt').exists()
         saved = _payload(workspace, session_id)
@@ -437,6 +446,7 @@ def test_http_native_two_runs_restore_cancel_and_retire_old_callbacks(tmp_path, 
         restored = restored_manager.get(session_id)
         assert lazy['last_result'] == restored.info()['last_result'] == frozen_result
         assert restored.attach_snapshot()['session']['last_result'] == frozen_result
+        assert restored.message_detail(2) == detail
         assert _payload(workspace, session_id)['messages'] == saved['messages']
         provider.create_completion = original_completion
         provider.calls = 0
@@ -553,14 +563,21 @@ def test_native_http_unverified_snapshot_survives_terminal_commit_and_reload(tmp
         result=info['last_result']
         assert result['status']=='completed_unverified'
         assert result['metadata']['authored_content'] == 'Actual verification run finished'
-        assert '模型交付说明（未经独立确认）' in result['answer']
-        assert result['answer'] != result['metadata']['authored_content']
+        assert '1 次测试命令通过' in result['answer']
+        assert '退出码 0' in result['answer']
+        assert result['metadata']['authored_content'] not in result['answer']
+        detail = managed.message_detail(1)
+        assert '模型说明（执行声明以本轮回执为准）' in detail
+        assert result['metadata']['authored_content'] in detail
         snapshot=result['metadata']['verification']
         assert snapshot['verification_needed'] is False
         assert snapshot['tests_passed'] is None
         assert snapshot['review_pending'] is True
         assert snapshot['last_verification']['status'] == 'passed'
-        assert '已采信检查' in result['answer'], snapshot
+        assert '已采信检查' in result['answer']
+        assert snapshot['last_verification']['command'] in result['answer']
+        assert snapshot['last_verification']['cwd'] == str(tmp_path)
+        assert str(tmp_path) in result['answer']
         events=[]
         while True:
             try:
@@ -585,6 +602,7 @@ def test_native_http_unverified_snapshot_survives_terminal_commit_and_reload(tmp
         for key in ('changed_files', 'environment_cleanup_complete', 'environment_cleanup_failures'):
             frozen['metadata'].pop(key, None)
         assert reloaded['last_result']==frozen
+        assert restored.get(identity).message_detail(1) == detail
         assert provider.calls==calls
     finally:
         restored.close()

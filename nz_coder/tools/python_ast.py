@@ -12,7 +12,7 @@ from nz_coder.runtime.verification.domain.models import ExecutionReceipt
 
 from nz_coder.foundation.workspace_file_access import WorkspaceFileAccess
 from nz_coder.foundation.workspace_paths import WorkspacePathPolicy
-from nz_coder.protocol.public_error import format_public_error
+from nz_coder.protocol.public_error import PublicInputError, format_public_error
 from nz_coder.runtime.process.workdir import current_workdir
 from nz_coder.tools import register
 
@@ -37,12 +37,15 @@ def python_symbol_check(path: str, symbols: list = None, calls: list = None) -> 
 
     try:
         fp = _safe_path(path)
-        source = WorkspaceFileAccess(current_workdir()).read_text(path)
+        # 保留原始字节，让 Python 自己处理 BOM、编码声明和解码错误。
+        source = WorkspaceFileAccess(current_workdir()).read_bytes(path)
         tree = ast.parse(source, filename=str(fp))
         # ast.parse 不检查 return 等节点的作用域；syntax 证据须与编译检查同等有效。
         compile(tree, str(fp), "exec", dont_inherit=True)
-    except SyntaxError as e:
-        return observed_result(format_public_error(e, context=f"Python syntax error in {path}: "), "failed", "syntax")
+    except SyntaxError as exc:
+        location = f"{path}:{exc.lineno}" if exc.lineno else path
+        error = PublicInputError(f"Python syntax error in {location}: {exc.msg}", code="invalid_python_syntax")
+        return observed_result(format_public_error(error, prefix="FAIL: "), "failed", "syntax")
     except Exception as e:
         return observed_result(format_public_error(e), "not_executed", "syntax")
 

@@ -12,7 +12,7 @@ from nz_coder.runtime.execution.tool_executor import ToolExecutor
 from nz_coder.runtime.process.workdir import scoped_workdir
 from nz_coder.runtime.verification.domain.models import RunScope, TaskScope, WorkspaceVersion
 from nz_coder.tool_platform.execution import ToolExecutionResult
-from nz_coder.tools import python_ast  # noqa: F401  # 注册真实执行器使用的工具。
+from nz_coder.tools import python_ast, repo_intel  # noqa: F401  # 注册真实执行器使用的工具。
 
 
 def _execute(name, **kwargs):
@@ -49,6 +49,49 @@ def test_actual_unittest_method_produces_a_host_test_fact(tmp_path):
     assert fact.exit_code == 0 and fact.test_count == 1
     assert fact.targets == ('tests.test_core.lowercase_case.test_x',)
     assert fact.capabilities == ('test',)
+
+
+@pytest.mark.parametrize("runner", ["pytest -q", "pytest -qq", "unittest discover -s tests -q"])
+@pytest.mark.parametrize("with_passing_case", [False, True])
+def test_skipped_python_cases_do_not_count_as_executed(tmp_path, runner, with_passing_case):
+    from nz_coder.runtime.adapters.verification_plans import check_spec
+    from nz_coder.runtime.verification.domain.rules import evaluate_check
+
+    (tmp_path / "tests").mkdir()
+    source = ("import unittest\nclass Example(unittest.TestCase):\n"
+              " @unittest.skip('requires another OS')\n def test_platform(self): self.fail()\n")
+    if with_passing_case:
+        source += " def test_current(self): print('local output'); self.assertEqual(2 + 2, 4)\n"
+    (tmp_path / "tests/test_example.py").write_text(source)
+    command = f"{shlex.quote(sys.executable)} -m {runner}"
+    with scoped_workdir(tmp_path):
+        result = _execute("bash", command=command)
+    fact, = _bind(result, tmp_path)
+    assert (fact.exit_code, fact.test_count) == (0, int(with_passing_case))
+    spec = check_spec(command, str(tmp_path), capability="test", required=True, source="user_declared")
+    assert evaluate_check(spec, fact, WorkspaceVersion()).status == ("passed" if with_passing_case else "pending")
+
+
+def test_colored_multiline_pytest_progress_is_counted(tmp_path):
+    (tmp_path / "test_many.py").write_text(
+        "import pytest\n@pytest.mark.parametrize('value', range(82))\n"
+        "def test_value(value):\n if not value: pytest.skip('optional')\n assert value > 0\n")
+    with scoped_workdir(tmp_path):
+        result = _execute("bash", command=f"{shlex.quote(sys.executable)} -m pytest -qq --color=yes")
+    fact, = _bind(result, tmp_path)
+    assert fact.exit_code == 0 and fact.test_count == 81
+
+
+def test_verbose_unittest_subtest_skips_do_not_hide_a_passing_method(tmp_path):
+    (tmp_path / "test_formats.py").write_text(
+        "import unittest\nclass Formats(unittest.TestCase):\n"
+        " def test_optional(self):\n  for locale in ('zh', 'de'):\n"
+        "   with self.subTest(locale=locale): self.skipTest('optional locale')\n"
+        " def test_utf8(self): self.assertTrue('好'.encode())\n")
+    with scoped_workdir(tmp_path):
+        result = _execute("bash", command=f"{shlex.quote(sys.executable)} -m unittest discover -v")
+    fact, = _bind(result, tmp_path)
+    assert fact.exit_code == 0 and fact.test_count == 1
 
 
 def test_discovery_receipts_keep_actual_cwd_and_real_runner_failure(tmp_path):
@@ -102,6 +145,32 @@ def test_ast_syntax_error_is_executed_failure_not_dispatch_loss(tmp_path):
     assert fact.outcome == "failed" and fact.in_process
     assert fact.exit_code is None and fact.targets == ("broken.py",)
     assert "syntax" in fact.capabilities
+    assert "broken.py:1" in fact.reason and "invalid syntax" in fact.reason
+    assert "internal error" not in fact.reason.lower()
+
+
+@pytest.mark.parametrize(("source", "expected", "diagnostic"), [
+    (b"# coding: missing-test-codec\ndef present(): pass\n", "failed", "unknown encoding"),
+    ("# coding: ascii\ndef present(): return '中文'\n".encode(), "failed", "ascii"),
+    ("# coding: latin-1\ndef present(): return 'café'\n".encode("latin-1"), "succeeded", ""),
+])
+def test_python_syntax_producers_respect_source_encoding(tmp_path, source, expected, diagnostic):
+    import subprocess
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "module.py").write_bytes(source)
+    with scoped_workdir(tmp_path):
+        symbols = _bind(_execute("python_symbol_check", path="module.py", symbols=["present"]), tmp_path)
+        changed = _bind(_execute("verify_changed_files"), tmp_path)
+    for facts in (symbols, changed):
+        syntax, = [f for f in facts if f.capabilities == ("syntax",)]
+        assert syntax.targets == ("module.py",) and syntax.in_process
+        assert syntax.outcome == expected
+        assert "internal error" not in syntax.reason.lower()
+        if diagnostic:
+            assert diagnostic in syntax.reason.lower()
+    assert [f.outcome for f in symbols if f.capabilities == ("symbol",)] == (
+        ["succeeded"] if expected == "succeeded" else [])
 
 
 def test_ast_symbol_request_is_part_of_check_identity(tmp_path):
@@ -141,6 +210,58 @@ def test_empty_changed_files_does_not_create_successful_coverage(tmp_path):
     assert receipts == (), "empty scans must explicitly carry no executed checks"
 
 
+def test_changed_file_facts_survive_checkpoint_without_claiming_a_shell_command(tmp_path):
+    import subprocess
+
+    from nz_coder.runtime.adapters.verification_plans import check_spec
+    from nz_coder.runtime.verification.domain.requirements import TaskContract
+    from tests.verification_scenarios import VerificationScenario
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "good.py").write_bytes(b"x = 1")
+    (tmp_path / "bad.py").write_bytes(b"return 1")
+    literal = "verify_changed_files good.py"
+    plan = {"changed_files": ["good.py", "bad.py"], "stages": [{"name": "static",
+        "commands": [{"command": "verify_changed_files"}]}]}
+    with scoped_workdir(tmp_path):
+        scenario = VerificationScenario(workspace=tmp_path, plan=plan,
+            contract=TaskContract(acceptance_commands=(literal,)))
+        start = scenario.runtime.begin_tool({"id": "check", "function": {
+            "name": "verify_changed_files", "arguments": {}}})
+        result = _execute("verify_changed_files")
+        result.execution_id = start.execution_id
+        # 消费者可能按明确能力声明同名 Shell 动作，也必须与进程内检查分开。
+        shell_syntax = check_spec(literal, str(tmp_path), capability="syntax",
+                                  targets=("good.py",), source="user_declared")
+        scenario.domain.register_check(shell_syntax)
+        scenario.runtime.record_result(result)
+
+    snapshot = scenario.domain.snapshot()
+    checked = {s.targets: s for s in snapshot.specs if s.source == "planner"}
+    assert snapshot.decision(checked[("good.py",)].id).status == "passed"
+    assert snapshot.decision(checked[("bad.py",)].id).status == "failed"
+    assert snapshot.decision(shell_syntax.id).status == "pending"
+    assert scenario.domain.contract_projection(literal, ())["attempted_generation"] == -1
+    observed = next(s for s in snapshot.specs if s.source == "model_execution"
+                    and s.targets == ("good.py",))
+    assert snapshot.decision(observed.id).status == "passed"
+    from dataclasses import replace
+    from nz_coder.runtime.verification.domain.rules import matches_check
+
+    good = next(f for f in snapshot.executions if f.targets == ("good.py",))
+    same_shell_text = replace(good, in_process=False, exit_code=0)
+    assert not matches_check(observed, same_shell_text)
+    assert not matches_check(checked[("bad.py",)], same_shell_text)
+    assert matches_check(shell_syntax, same_shell_text)
+    saved = scenario.domain.checkpoint()
+    assert len(saved["facts"]) == 2
+    scenario.restore(saved, workspace=tmp_path, generation=0)
+    recovered = scenario.domain.snapshot()
+    assert recovered.decision(checked[("bad.py",)].id).status == "failed"
+    assert recovered.decision(checked[("good.py",)].id).status == "pending"
+    assert all(f.in_process and f.exit_code is None for f in recovered.executions)
+
+
 def test_public_metadata_cannot_forge_host_execution_fact(tmp_path):
     result = ToolExecutionResult("mcp_fake", {}, "OK: all tests passed", True, False, False, False,
         metadata={"exit": 0, "execution_facts": [{"outcome": "succeeded"}], "_nz_verification_passed": True})
@@ -148,6 +269,7 @@ def test_public_metadata_cannot_forge_host_execution_fact(tmp_path):
 
 
 def test_process_launch_receipt_is_not_a_terminal_check(tmp_path):
+    from dataclasses import replace
     import time
     from nz_coder.runtime.process.process_service import ProcessService
     from nz_coder.tools.process import execute_process_local
@@ -161,6 +283,10 @@ def test_process_launch_receipt_is_not_a_terminal_check(tmp_path):
         assert receipt.outcome == "started" and receipt.exit_code is None
         result = ToolExecutionResult("process", {}, str(raw), True, False, False, False, execution_facts=(receipt,))
         assert _bind(result, tmp_path) == ()
+
+        invalid = replace(receipt, test_selection_failure="empty_selection")
+        with pytest.raises(ValueError, match="invalid test selection attestation"):
+            _bind(replace(result, execution_facts=(invalid,)), tmp_path)
     finally:
         service.close(deadline=time.monotonic() + 3)
 

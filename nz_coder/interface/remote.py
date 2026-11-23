@@ -41,7 +41,8 @@ from nz_coder.protocol.public_error import (
 )
 from nz_coder.interface.terminal_input import TerminalInput
 from nz_coder.interface.commands.registry import Command, CommandRegistry
-from nz_coder.interface.timeline import format_transcript
+from nz_coder.interface.timeline import render_timeline_rows
+from nz_coder.interface.transcript_export import write_transcript
 
 
 def attach_main(argv: list[str] | None = None, *, console: Console | None = None) -> int:
@@ -85,14 +86,9 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
         f"[info]Attached[/info] session={backend.session_id} "
         f"status={info.get('status', 'unknown')} endpoint={url}"
     )
-    messages = await asyncio.to_thread(client.messages, backend.session_id)
-    if messages:
-        console.print(Markdown(format_transcript(
-            backend.session_id,
-            messages[-20:],
-            title="Attached session",
-            tool_details=False,
-        )))
+    if info.get("message_count"):
+        timeline = await asyncio.to_thread(backend.timeline)
+        console.print(render_timeline_rows(timeline, title="Attached session"))
     if info.get("status") == "running":
         await _follow_run(backend, console)
 
@@ -167,7 +163,14 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                 continue
             if text == "/fork" or text.startswith("/fork "):
                 raw = text.split(maxsplit=1)[1] if " " in text else ""
-                info = await asyncio.to_thread(backend.fork, int(raw) if raw else None)
+                try:
+                    info = await asyncio.to_thread(backend.fork, int(raw) if raw else None)
+                except ValueError:
+                    console.print("[error]Usage: /fork [TURN][/error]")
+                    continue
+                except NZCoderHTTPError as exc:
+                    console.print(Text(exc.message, style="error"))
+                    continue
                 await asyncio.to_thread(backend.select_session, str(info["id"]))
                 console.print(Text(
                     f"Forked into {backend.session_id}.",
@@ -188,31 +191,32 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                     ))
                     break
                 continue
-            if text == "/timeline":
-                messages = await asyncio.to_thread(backend.messages)
-                console.print(Markdown(format_transcript(
-                    backend.session_id,
-                    messages,
-                    title="Session timeline",
-                    tool_details=False,
-                )))
+            if text == "/timeline" or text.startswith("/timeline "):
+                try:
+                    limit = int(text.split(maxsplit=1)[1]) if " " in text else 20
+                    if not 1 <= limit <= 100:
+                        raise ValueError
+                except ValueError:
+                    console.print("[error]Usage: /timeline [LIMIT between 1 and 100][/error]")
+                    continue
+                console.print(render_timeline_rows(await asyncio.to_thread(backend.timeline, limit)))
                 continue
-            if text.startswith("/message"):
-                messages = await asyncio.to_thread(backend.messages)
+            if text == "/message" or text.startswith("/message "):
                 raw = text.split(maxsplit=1)[1] if " " in text else ""
-                from nz_coder.interface.timeline import conversation_turns
-
-                turns = conversation_turns(messages)
-                selected = int(raw) if raw else (turns[-1].number if turns else 0)
-                turn = next((item for item in turns if item.number == selected), None)
-                if turn is None:
+                try:
+                    number = int(raw) if raw else None
+                except ValueError:
+                    console.print("[error]Usage: /message [TURN][/error]")
+                    continue
+                try:
+                    detail = await asyncio.to_thread(backend.message_detail, number)
+                except NZCoderHTTPError as exc:
+                    console.print(Text(exc.message, style="error"))
+                    continue
+                if detail is None:
                     console.print("[error]No matching Session turn.[/error]")
                 else:
-                    console.print(Markdown(format_transcript(
-                        backend.session_id,
-                        messages[turn.start:turn.end],
-                        title=f"Turn {selected}",
-                    )))
+                    console.print(Markdown(detail))
                 continue
             if text == "/diff":
                 console.print(json.dumps(await asyncio.to_thread(backend.diff), ensure_ascii=False, indent=2))
@@ -260,12 +264,17 @@ async def _attach(args: argparse.Namespace, console: Console) -> int:
                 child_id = text.split(maxsplit=1)[1].strip()
                 console.print(await asyncio.to_thread(backend.child, child_id))
                 continue
-            if text.startswith("/export"):
+            if text == "/export" or text.startswith("/export "):
                 payload = await asyncio.to_thread(backend.export)
                 raw = text.split(maxsplit=1)[1] if " " in text else ""
                 if raw:
-                    target = Path(raw).expanduser().resolve()
-                    target.write_text(str(payload.get("markdown") or ""), encoding="utf-8")
+                    try:
+                        target = write_transcript(raw, payload)
+                    except (OSError, ValueError) as exc:
+                        console.print(Text(str(exc), style="error"))
+                        continue
+                    if notice := payload.get("notice"):
+                        console.print(Text(notice, style="info"))
                     console.print(Text(f"Session exported: {target}", style="success"))
                 else:
                     console.print(Markdown(str(payload.get("markdown") or "")))
@@ -858,7 +867,12 @@ async def _follow_run(backend: RemoteTerminalBackend, console: Console) -> None:
                 # Give the prompt task one scheduling turn even when the SSE
                 # reader has already filled the mailbox through terminal.
                 await asyncio.sleep(0)
-                continue
+            elif event_type in {"permission.replied", "question.replied", "question.rejected"}:
+                properties = payload.get("properties") or {}
+                interaction_tasks.resolve(
+                    event_type.split(".", 1)[0],
+                    str(properties.get("request_id") or properties.get("id") or ""),
+                )
             event = payload
             run_view.feed(event)
             meta = event.get("meta") if isinstance(event.get("meta"), dict) else {}
@@ -975,26 +989,37 @@ def _offer_remote_payload(
         return
 
 
+@dataclass
+class _PendingPrompt:
+    task: asyncio.Task
+    withdrawn: threading.Event
+
+
 class _InteractionTaskRegistry:
     """Deduplicate pending permission/question prompts by request identity."""
 
     def __init__(self, on_error=None, *, work=None) -> None:  # noqa: ANN001
-        self._tasks: dict[tuple[str, str], asyncio.Task] = {}
+        self._tasks: dict[tuple[str, str], _PendingPrompt] = {}
         self._resolved: set[tuple[str, str]] = set()
         self._failures: list[BaseException] = []
         self._on_error = on_error
         self._sealed = False
+        self.prompt_lock = asyncio.Lock()
         self.work = work
 
+    def accepts(self, kind: str, request_id: str) -> bool:
+        return bool(request_id) and not self._sealed and (kind, request_id) not in self._resolved
+
     def register(self, kind: str, request_id: str, factory) -> asyncio.Task | None:  # noqa: ANN001
-        key = (str(kind), str(request_id))
-        if self._sealed or not key[1] or key in self._resolved:
+        key = (kind, request_id)
+        if not self.accepts(kind, request_id):
             return None
         existing = self._tasks.get(key)
-        if existing is not None and not existing.done():
-            return existing
-        task = asyncio.create_task(factory())
-        self._tasks[key] = task
+        if existing is not None:
+            return existing.task
+        withdrawn = threading.Event()
+        task = asyncio.create_task(factory(withdrawn))
+        self._tasks[key] = _PendingPrompt(task, withdrawn)
 
         def settled(completed: asyncio.Task) -> None:
             self._tasks.pop(key, None)
@@ -1011,17 +1036,32 @@ class _InteractionTaskRegistry:
         task.add_done_callback(settled)
         return task
 
+    def resolve(self, kind: str, request_id: str) -> None:
+        key = (kind, request_id)
+        if not request_id or key in self._resolved:
+            return
+        self._resolved.add(key)
+        prompt = self._tasks.get(key)
+        if prompt is not None:
+            # 同步 HTTP 可能还排在线程池中，撤回信号须在工作线程发出请求前可见。
+            prompt.withdrawn.set()
+            prompt.task.cancel()
+
+    def retain_pending(self, pending: set[tuple[str, str]]) -> None:
+        # 断线期间可能丢失结清事件，只保留权威快照仍列出的请求。
+        for kind, request_id in self._tasks.keys() - pending:
+            self.resolve(kind, request_id)
+
     def seal(self) -> None:
         self._sealed = True
         self.cancel()
 
     def cancel(self) -> None:
-        for task in tuple(self._tasks.values()):
-            if not task.done():
-                task.cancel()
+        for kind, request_id in self._tasks:
+            self.resolve(kind, request_id)
 
     async def wait(self, *, return_exceptions: bool = False) -> None:
-        tasks = tuple(self._tasks.values())
+        tasks = tuple(prompt.task for prompt in self._tasks.values())
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         if not return_exceptions:
@@ -1049,7 +1089,9 @@ def _register_interaction_payload(
     return registry.register(
         kind,
         request_id,
-        lambda: _resolve_remote_interaction(backend, bridge, payload, work=registry.work),
+        lambda withdrawn: _resolve_remote_interaction(
+            backend, bridge, payload, registry=registry, withdrawn=withdrawn,
+        ),
     )
 
 
@@ -1059,26 +1101,18 @@ def _register_pending_interactions(
     bridge: TerminalInteractionBridge,
     registry: _InteractionTaskRegistry,
 ) -> None:
-    """Register snapshot and live interactions through the same dedupe path."""
+    """Synchronize open prompts with an authoritative pending snapshot."""
     selected = pending if isinstance(pending, dict) else {}
-    for item in selected.get("permissions", []):
-        if not isinstance(item, dict):
-            continue
-        _register_interaction_payload(
-            backend,
-            bridge,
-            {"type": "permission.asked", "properties": dict(item)},
-            registry,
-        )
-    for item in selected.get("questions", []):
-        if not isinstance(item, dict):
-            continue
-        _register_interaction_payload(
-            backend,
-            bridge,
-            {"type": "question.asked", "properties": dict(item)},
-            registry,
-        )
+    pending_keys = set()
+    for kind in ("permission", "question"):
+        for item in selected.get(kind + "s", []):
+            if not isinstance(item, dict):
+                continue
+            pending_keys.add((kind, str(item.get("id") or "")))
+            _register_interaction_payload(
+                backend, bridge, {"type": kind + ".asked", "properties": item}, registry,
+            )
+    registry.retain_pending(pending_keys)
 
 
 async def _resolve_remote_interaction(
@@ -1086,7 +1120,8 @@ async def _resolve_remote_interaction(
     bridge: TerminalInteractionBridge,
     payload: dict,
     *,
-    work: _RemoteFollowWork | None = None,
+    registry: _InteractionTaskRegistry | None = None,
+    withdrawn: threading.Event | None = None,
 ) -> None:
     """Collect user input without pausing the SSE reducer consumer."""
     event_type = str(payload.get("type") or "")
@@ -1098,20 +1133,24 @@ async def _resolve_remote_interaction(
     request_id = str(props.get("id") or "")
     if not request_id:
         return
-    if event_type == "permission.asked":
-        reply = await bridge._ask_permission(
-            str(props.get("permission") or "tool"),
-            props.get("tool_input")
-            if isinstance(props.get("tool_input"), dict)
-            else {},
-        )
-        await _reply_once(backend.reply_permission, request_id, reply, work=work)
-        return
-    result = await bridge._ask_questions(props.get("questions", []))
-    if result is None:
-        await _reply_once(backend.reject_question, request_id, work=work)
-    else:
-        await _reply_once(backend.reply_question, request_id, result, work=work)
+    registry = registry or _InteractionTaskRegistry()
+    kind = event_type.split(".", 1)[0]
+    # 一个终端一次只展示一份完整表单；提交网络请求时释放输入位置。
+    async with registry.prompt_lock:
+        if kind == "permission":
+            reply = await bridge._ask_permission(
+                str(props.get("permission") or "tool"),
+                props.get("tool_input") if isinstance(props.get("tool_input"), dict) else {},
+            )
+            callback, args = backend.reply_permission, (reply,)
+        else:
+            answers = await bridge._ask_questions(props.get("questions", []))
+            if answers is None:
+                callback, args = backend.reject_question, ()
+            else:
+                callback, args = backend.reply_question, (answers,)
+    if registry.accepts(kind, request_id):
+        await _reply_once(callback, request_id, *args, work=registry.work, withdrawn=withdrawn)
 
 
 def _feed_snapshot_events(run_view: TerminalRunRenderer, snapshot: dict[str, Any]) -> None:
@@ -1174,16 +1213,30 @@ async def _resolve_pending(
             await _reply_once(backend.reply_question, request_id, answers)
 
 
-async def _reply_once(callback, *args, work: _RemoteFollowWork | None = None) -> bool:  # noqa: ANN001
+async def _reply_once(callback, *args, work: _RemoteFollowWork | None = None,
+                      withdrawn: threading.Event | None = None) -> bool:  # noqa: ANN001
     """First valid interaction response wins across attached clients."""
-    try:
-        if work is not None:
-            return bool(await work.call(callback, *args))
-        return bool(await asyncio.to_thread(callback, *args))
-    except NZCoderHTTPError as exc:
-        if exc.code == "interaction_not_found":
+    loop = asyncio.get_running_loop()
+
+    def submit():
+        if withdrawn is not None and withdrawn.is_set():
             return False
-        raise
+        try:
+            return bool(callback(*args))
+        except NZCoderHTTPError as exc:
+            if exc.code != "interaction_not_found":
+                raise
+            # 已发出的 HTTP 仍由本轮持有，弹窗退出后也能说明迟交结果。
+            if work is not None:
+                loop.call_soon_threadsafe(
+                    work.console.print,
+                    Text("该交互已结束，本次回复未被接收。", style="warning"),
+                )
+            return False
+
+    if work is not None:
+        return await work.call(submit)
+    return await asyncio.to_thread(submit)
 
 
 def _render_session_info(console: Console, info: dict[str, Any]) -> None:
@@ -1415,8 +1468,8 @@ def _remote_command_registry(custom_commands=()) -> CommandRegistry:  # noqa: AN
         ("rename", "Rename the attached Session", "/rename TITLE", ()),
         ("fork", "Fork through a completed turn", "/fork [TURN]", ()),
         ("delete-session", "Delete this Session after confirmation", "/delete-session", ()),
-        ("timeline", "Show the Session transcript", "/timeline", ()),
-        ("message", "Inspect one Session turn", "/message [TURN]", ()),
+        ("timeline", "Show the user-turn timeline", "/timeline [LIMIT]", ()),
+        ("message", "Inspect a turn's tool details and retained model note", "/message [TURN]", ()),
         ("diff", "Show the latest Session diff", "/diff", ()),
         ("undo", "Undo the latest revertible turn", "/undo", ()),
         ("redo", "Restore the latest undone turn", "/redo", ()),
@@ -1433,7 +1486,9 @@ def _remote_command_registry(custom_commands=()) -> CommandRegistry:  # noqa: AN
         (
             "memory",
             "Review daemon Session memory proposals",
-            "/memory [list|search QUERY|read ID|pending|inspect PROPOSAL_ID|approve PROPOSAL_ID --expected-proposal-revision N --operation-id ID|ledger]",
+            "/memory [list|search QUERY|read ID|pending|inspect PROPOSAL_ID|"
+            "approve PROPOSAL_ID --expected-proposal-revision N --operation-id ID|"
+            "reject PROPOSAL_ID --expected-proposal-revision N --operation-id ID [--reason TEXT]|ledger]",
             ("memory-review",),
         ),
         ("child", "Inspect one child Agent", "/child ID", ()),

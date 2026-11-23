@@ -1,10 +1,4 @@
-"""Structured observational evidence collected during a single agent run.
-
-RunEvidence is intentionally lightweight in this MVP. It records what the
-agent created or modified, what files were expected, what verification ran,
-what quality reviews reported, and what limitations or tool failures were
-seen. It does not gate or change AgentLoop control flow.
-"""
+"""记录一次运行的文件变更、验证结果和审查意见，供报告和审查使用。"""
 from __future__ import annotations
 
 import copy
@@ -49,6 +43,8 @@ _LIMITATION_HINTS = (
     "not implemented",
     "not supported",
 )
+
+
 def _preview(text: str, limit: int = _PREVIEW_CHARS) -> str:
     return (text or "").strip()[:limit]
 
@@ -58,7 +54,7 @@ def _normalize_path(value: str) -> str:
     return text.replace("\\", "/").lstrip("./")
 
 
-def _parse_json_object(output: str):
+def _parse_json_object(output: str) -> dict | list | None:
     text = (output or "").strip()
     if not text or len(text) > 200_000:
         return None
@@ -68,6 +64,11 @@ def _parse_json_object(output: str):
         return json.loads(text)
     except json.JSONDecodeError:
         return None
+
+
+def _list_items(payload: dict, key: str, limit: int) -> list:
+    items = payload.get(key)
+    return items[:limit] if isinstance(items, list) else []
 
 
 def _status_from_output(output: str) -> str:
@@ -122,7 +123,9 @@ class RunEvidence:
     notes: list[str] = field(default_factory=list)
 
     def _append_unique(self, items: list[str], value: str, limit: int) -> None:
-        normalized = _normalize_path(value) if "/" in str(value or "") or "\\" in str(value or "") else str(value or "").strip()
+        normalized = str(value or "").strip()
+        if "/" in normalized or "\\" in normalized:
+            normalized = _normalize_path(normalized)
         if normalized and normalized not in items and len(items) < limit:
             items.append(normalized)
 
@@ -130,39 +133,58 @@ class RunEvidence:
         if payload and payload not in items and len(items) < limit:
             items.append(payload)
 
-    def _write_invalidates_verification(
-        self,
-        tool_name: str,
-        tool_input: dict,
-    ) -> bool:
-        if tool_name == "bash":
-            return bool(
-                classify_bash(str(tool_input.get("command") or "")).get(
-                    "mutating"
+    def _record_output_path(self, path: str, *, created: bool) -> None:
+        # 两类文件共用一份按出现顺序排列的输出清单，各清单单独去重和限额。
+        files = self.created_files if created else self.modified_files
+        self._append_unique(files, path, _MAX_FILES)
+        self._append_unique(self.actual_output_paths, path, _MAX_FILES)
+
+    def _record_workspace_write(self, tool_name: str, tool_input: dict) -> None:
+        writes_files = is_filesystem_mutation_tool(tool_name) and not tool_input.get("dry_run")
+        paths = collect_filesystem_mutation_paths(tool_input) if writes_files else ()
+
+        # 接入验证域后，由域按工作区版本判定哪些结果仍然有效。
+        if self.verification_domain is None:
+            if tool_name == "bash":
+                command = str(tool_input.get("command") or "")
+                invalidates_checks = classify_bash(command).get("mutating")
+            else:
+                # 写入范围不明时也要重新验证，只有明确全是文档的改动可以沿用结果。
+                invalidates_checks = writes_files and (
+                    not paths or not all(is_documentation_file(path) for path in paths)
                 )
-            )
-        if not is_filesystem_mutation_tool(tool_name):
-            return False
-        if bool(tool_input.get("dry_run")):
-            return False
-        paths = collect_filesystem_mutation_paths(tool_input)
-        return not paths or not all(is_documentation_file(path) for path in paths)
+            if invalidates_checks:
+                self._verification_results.clear()
+                self._verification_evidence.clear()
+                self._build_results.clear()
+
+        for path in paths:
+            self._record_output_path(path, created=False)
 
     @property
     def verification_results(self) -> list[dict]:
         if self.verification_domain is None:
             return self._verification_results
         snapshot = self.verification_domain.snapshot()
-        facts = {fact.execution_id: fact for fact in snapshot.executions}
-        return [
-            {"command": facts[decision.execution_id].command.original, "check_command": spec.command.original,
-             "stage": spec.stage, "status": decision.status,
-             "summary": decision.reason, "cwd": facts[decision.execution_id].command.cwd,
-             "evidence_generation": decision.evidence_generation,
-             "exit_code": facts[decision.execution_id].exit_code}
-            for spec in snapshot.specs for decision in (snapshot.decision(spec.id),)
-            if decision.execution_id in facts and decision.status != "covered"
-        ][-_MAX_RESULTS:]
+        executions = {fact.execution_id: fact for fact in snapshot.executions}
+        results = []
+        for spec in snapshot.specs:
+            decision = snapshot.decision(spec.id)
+            execution = executions.get(decision.execution_id)
+            # 一次执行可以覆盖其他检查。报告只列实际执行，并保留计划命令供对照。
+            if execution is None or decision.status == "covered":
+                continue
+            results.append({
+                "command": execution.command.original,
+                "check_command": spec.command.original,
+                "stage": spec.stage,
+                "status": decision.status,
+                "summary": decision.reason,
+                "cwd": execution.command.cwd,
+                "evidence_generation": decision.evidence_generation,
+                "exit_code": execution.exit_code,
+            })
+        return results[-_MAX_RESULTS:]
 
     @property
     def verification_evidence(self) -> list[dict]:
@@ -177,7 +199,7 @@ class RunEvidence:
         return [item for item in self.verification_results if item["stage"] == "static"]
 
     def _upsert_verification_result(self, items: list[dict], payload: dict) -> None:
-        """Keep the latest result for one stage/command instead of stale failure history."""
+        """同一阶段的同一命令用最新结果原位替换，即使列表已满也能记下重试。"""
         command = verification_command_key(
             str(payload.get("command") or payload.get("tool") or "")
         )
@@ -228,22 +250,16 @@ class RunEvidence:
     def _record_project_spec(self, payload: dict) -> None:
         self.project_spec = dict(payload)
         for key in ("notes", "constraints"):
-            values = payload.get(key, [])
-            if isinstance(values, list):
-                for item in values[:6]:
-                    self._note_or_limitation(str(item))
+            for item in _list_items(payload, key, 6):
+                self._note_or_limitation(str(item))
 
     def _record_blueprint(self, payload: dict) -> None:
         self.blueprint = dict(payload)
-        files = payload.get("files", [])
-        if isinstance(files, list):
-            for item in files[:_MAX_FILES]:
-                if isinstance(item, dict) and item.get("path"):
-                    self._append_unique(self.expected_files, str(item["path"]), _MAX_FILES)
-        notes = payload.get("notes", [])
-        if isinstance(notes, list):
-            for item in notes[:6]:
-                self._note_or_limitation(str(item))
+        for item in _list_items(payload, "files", _MAX_FILES):
+            if isinstance(item, dict) and item.get("path"):
+                self._append_unique(self.expected_files, str(item["path"]), _MAX_FILES)
+        for note in _list_items(payload, "notes", 6):
+            self._note_or_limitation(str(note))
 
     def _record_scaffold(self, output: str) -> None:
         collecting = False
@@ -255,18 +271,14 @@ class RunEvidence:
             if line == "Next steps:":
                 break
             if collecting and line.startswith("- "):
-                path = line[2:].strip()
-                self._append_unique(self.created_files, path, _MAX_FILES)
-                self._append_unique(self.actual_output_paths, path, _MAX_FILES)
+                self._record_output_path(line[2:].strip(), created=True)
 
-    def _record_write_batch(self, payload, tool_input: dict | None, output: str) -> None:
+    def _record_write_batch(self, payload: dict | None, tool_input: dict | None, output: str) -> None:
         if isinstance(payload, dict):
             for path in payload.get("created", [])[:_MAX_FILES]:
-                self._append_unique(self.created_files, path, _MAX_FILES)
-                self._append_unique(self.actual_output_paths, path, _MAX_FILES)
+                self._record_output_path(path, created=True)
             for path in payload.get("updated", [])[:_MAX_FILES]:
-                self._append_unique(self.modified_files, path, _MAX_FILES)
-                self._append_unique(self.actual_output_paths, path, _MAX_FILES)
+                self._record_output_path(path, created=False)
             failed = payload.get("failed", [])
             if isinstance(failed, list) and failed:
                 self._record_tool_failure("write_files_batch", tool_input, output, status="failed")
@@ -296,11 +308,9 @@ class RunEvidence:
             parsed_any = True
             path = line[2:].strip()
             if section == "created":
-                self._append_unique(self.created_files, path, _MAX_FILES)
-                self._append_unique(self.actual_output_paths, path, _MAX_FILES)
+                self._record_output_path(path, created=True)
             elif section == "updated":
-                self._append_unique(self.modified_files, path, _MAX_FILES)
-                self._append_unique(self.actual_output_paths, path, _MAX_FILES)
+                self._record_output_path(path, created=False)
 
         if parsed_any:
             return
@@ -308,8 +318,7 @@ class RunEvidence:
         if isinstance(files, list):
             for item in files[:_MAX_FILES]:
                 if isinstance(item, dict) and item.get("path"):
-                    self._append_unique(self.modified_files, str(item["path"]), _MAX_FILES)
-                    self._append_unique(self.actual_output_paths, str(item["path"]), _MAX_FILES)
+                    self._record_output_path(str(item["path"]), created=False)
 
     def _record_verify_project_build(self, output: str) -> None:
         lines = (output or "").splitlines()
@@ -421,7 +430,7 @@ class RunEvidence:
         }
         self._upsert_verification_result(self.verification_results, item)
 
-    def _record_impact(self, payload, output: str) -> None:
+    def _record_impact(self, payload: dict | None, output: str) -> None:
         if isinstance(payload, dict):
             self.impact_review = dict(payload)
             return
@@ -442,29 +451,51 @@ class RunEvidence:
         status = str(payload.get("status") or "").strip()
         if status:
             self._add_note(f"inspection: {status}")
-        for item in payload.get("notes", [])[:6] if isinstance(payload.get("notes", []), list) else []:
-            self._note_or_limitation(str(item))
-        missing = payload.get("missing", [])
-        if isinstance(missing, list) and missing and status != "ok":
-            self._add_note("inspection missing: " + ", ".join(str(item) for item in missing[:2]))
+        for note in _list_items(payload, "notes", 6):
+            self._note_or_limitation(str(note))
+        missing = _list_items(payload, "missing", 2)
+        if missing and status != "ok":
+            self._add_note("inspection missing: " + ", ".join(str(item) for item in missing))
 
     def _record_completeness(self, payload: dict) -> None:
         self.completeness_review = dict(payload)
-        for item in payload.get("limitations", [])[:6] if isinstance(payload.get("limitations", []), list) else []:
-            self.add_limitation(str(item))
-        for item in payload.get("notes", [])[:6] if isinstance(payload.get("notes", []), list) else []:
-            self._note_or_limitation(str(item))
-        missing = payload.get("missing", [])
-        if isinstance(missing, list) and missing:
-            self._add_note("completeness missing: " + ", ".join(str(item) for item in missing[:2]))
-        for step in payload.get("recommended_next_steps", [])[:3] if isinstance(payload.get("recommended_next_steps", []), list) else []:
+        for limitation in _list_items(payload, "limitations", 6):
+            self.add_limitation(str(limitation))
+        for note in _list_items(payload, "notes", 6):
+            self._note_or_limitation(str(note))
+        missing = _list_items(payload, "missing", 2)
+        if missing:
+            self._add_note("completeness missing: " + ", ".join(str(item) for item in missing))
+        for step in _list_items(payload, "recommended_next_steps", 3):
             self._add_note(f"next: {step}")
 
     def _record_acceptance(self, payload: dict) -> None:
-        outputs = payload.get("expected_outputs", [])
-        if isinstance(outputs, list):
-            for item in outputs[:4]:
-                self._note_or_limitation(str(item))
+        for item in _list_items(payload, "expected_outputs", 4):
+            self._note_or_limitation(str(item))
+
+    def _record_child_outcome(self, tool_name: str, child: ChildAgentResult) -> None:
+        changed_files = [
+            _normalize_path(str(path))
+            for path in child.changed_files[:_MAX_FILES]
+            if str(path).strip()
+        ]
+        verification_summary = (child.verification or {}).get("summary") or ""
+        outcome = {
+            "session_id": child.session_id,
+            "agent_id": child.agent_id,
+            "parent_session_id": child.parent_session_id,
+            "trace_id": child.trace_id,
+            "status": child.status,
+            "changed_files": changed_files,
+            "conflicts": list(child.conflicts)[:_MAX_RESULTS],
+            "verification": _preview(str(verification_summary)),
+        }
+        self._append_result(self.child_outcomes, outcome, _MAX_RESULTS)
+
+        # 子任务先在自己的工作区修改文件，父运行应用成功后才认领这些路径。
+        if tool_name == "apply_agent_changes" and child.status == "applied":
+            for path in changed_files:
+                self._record_output_path(path, created=False)
 
     def record_tool_result(
         self,
@@ -480,94 +511,65 @@ class RunEvidence:
         tool_name = str(name or "").strip()
         tool_input = tool_input if isinstance(tool_input, dict) else {}
         output_text = str(output or "")
-        payload = _parse_json_object(output_text)
+        parsed_output = _parse_json_object(output_text)
+        payload = parsed_output if isinstance(parsed_output, dict) else None
         metadata = metadata if isinstance(metadata, dict) else {}
 
-        typed_child = ChildAgentResult.from_metadata(
+        child = ChildAgentResult.from_metadata(
             metadata,
             final_text=output_text,
             name=tool_name or "child",
         )
-        if tool_name in {"task", "apply_agent_changes"} and typed_child is not None:
-            child_outcome = {
-                "session_id": typed_child.session_id,
-                "agent_id": typed_child.agent_id,
-                "parent_session_id": typed_child.parent_session_id,
-                "trace_id": typed_child.trace_id,
-                "status": typed_child.status,
-                "changed_files": [
-                    _normalize_path(str(item))
-                    for item in typed_child.changed_files[:_MAX_FILES]
-                    if str(item).strip()
-                ],
-                "conflicts": list(typed_child.conflicts)[:_MAX_RESULTS],
-                "verification": _preview(str(
-                    (typed_child.verification or {}).get("summary") or ""
-                )),
-            }
-            self._append_result(self.child_outcomes, child_outcome, _MAX_RESULTS)
-            if tool_name == "apply_agent_changes" and child_outcome["status"] == "applied":
-                for path in child_outcome["changed_files"]:
-                    self._append_unique(self.modified_files, path, _MAX_FILES)
-                    self._append_unique(self.actual_output_paths, path, _MAX_FILES)
+        if tool_name in {"task", "apply_agent_changes"} and child is not None:
+            self._record_child_outcome(tool_name, child)
 
-        if self.verification_domain is None and success and self._write_invalidates_verification(tool_name, tool_input):
-            self.verification_results.clear()
-            self.verification_evidence.clear()
-            self.build_results.clear()
+        if success:
+            self._record_workspace_write(tool_name, tool_input)
 
-        if (
-            success
-            and is_filesystem_mutation_tool(tool_name)
-            and not bool(tool_input.get("dry_run"))
-        ):
-            for path in collect_filesystem_mutation_paths(tool_input):
-                self._append_unique(self.modified_files, path, _MAX_FILES)
-                self._append_unique(self.actual_output_paths, path, _MAX_FILES)
-
-        bash_verification_stage = None
-        if self.verification_domain is None and tool_name == "bash" and not dispatch_failed:
-            bash_verification_stage = self._record_bash_verification(
-                tool_input, output_text, success and not command_failed,
-                exit_code=(
-                    metadata.get("exit")
-                    if isinstance(metadata.get("exit"), int)
-                    else None
-                ),
-            )
-
-        if tool_name == "analyze_project_requirements" and isinstance(payload, dict):
+        if tool_name == "analyze_project_requirements" and payload is not None:
             self._record_project_spec(payload)
-        elif tool_name == "create_project_blueprint" and isinstance(payload, dict):
+        elif tool_name == "create_project_blueprint" and payload is not None:
             self._record_blueprint(payload)
         elif tool_name == "scaffold_project":
             self._record_scaffold(output_text)
         elif tool_name == "write_files_batch" and success:
-            self._record_write_batch(payload if isinstance(payload, dict) else None, tool_input, output_text)
-        elif tool_name == "verify_project_build" and self.verification_domain is None:
-            self._record_verify_project_build(output_text)
-        elif tool_name == "verify_changed_files" and self.verification_domain is None:
-            self._record_verify_changed_files(output_text)
-        elif tool_name == "python_symbol_check" and self.verification_domain is None:
-            self._record_symbol_check(tool_input, output_text, success)
+            self._record_write_batch(payload, tool_input, output_text)
         elif tool_name == "analyze_impact":
-            self._record_impact(payload if isinstance(payload, dict) else None, output_text)
-        elif tool_name == "inspect_generated_project" and isinstance(payload, dict):
+            self._record_impact(payload, output_text)
+        elif tool_name == "inspect_generated_project" and payload is not None:
             self._record_inspection(payload)
-        elif tool_name == "check_project_completeness" and isinstance(payload, dict):
+        elif tool_name == "check_project_completeness" and payload is not None:
             self._record_completeness(payload)
-        elif tool_name == "plan_project_acceptance" and isinstance(payload, dict):
+        elif tool_name == "plan_project_acceptance" and payload is not None:
             self._record_acceptance(payload)
 
-        verification_tool = bool(bash_verification_stage) or tool_name in {
+        verification_tool = tool_name in {
             "verify_project_build",
             "verify_changed_files",
             "python_symbol_check",
         }
-        dispatch_like_failure = output_text.startswith(("Error:", "Denied"))
-        if ((not success) or output_text.startswith(("Error:", "Denied", "FAIL"))) and (
-            not verification_tool or dispatch_like_failure
-        ):
+        if self.verification_domain is None:
+            if tool_name == "bash" and not dispatch_failed:
+                exit_code = metadata.get("exit")
+                stages = self._record_bash_verification(
+                    tool_input,
+                    output_text,
+                    success and not command_failed,
+                    exit_code=exit_code if isinstance(exit_code, int) else None,
+                )
+                # Bash 也能执行普通命令。只有这次识别出了验证阶段，才按检查处理失败。
+                verification_tool = bool(stages)
+            elif tool_name == "verify_project_build":
+                self._record_verify_project_build(output_text)
+            elif tool_name == "verify_changed_files":
+                self._record_verify_changed_files(output_text)
+            elif tool_name == "python_symbol_check":
+                self._record_symbol_check(tool_input, output_text, success)
+
+        # 工具明确报错或拒绝执行时，即使是验证工具也要留下失败记录。
+        tool_error = output_text.startswith(("Error:", "Denied"))
+        failed = not success or output_text.startswith("FAIL")
+        if tool_error or (failed and not verification_tool):
             self._record_tool_failure(tool_name, tool_input, output_text)
 
     def is_empty(self) -> bool:
@@ -590,29 +592,25 @@ class RunEvidence:
         ])
 
     def to_dict(self) -> dict:
+        """完整报告保留需求和蓝图的原始引用，并附上本次运行的观测记录。"""
         return {
             "run_id": self.run_id,
             "task_assessment": copy.deepcopy(self.task_assessment),
             "project_spec": self.project_spec,
             "blueprint": self.blueprint,
-            "created_files": list(self.created_files),
-            "modified_files": list(self.modified_files),
-            "expected_files": list(self.expected_files),
-            "actual_output_paths": list(self.actual_output_paths),
-            "verification_results": [dict(item) for item in self.verification_results],
-            "verification_evidence": [dict(item) for item in self.verification_evidence],
-            "build_results": [dict(item) for item in self.build_results],
-            "impact_review": dict(self.impact_review) if isinstance(self.impact_review, dict) else self.impact_review,
-            "completeness_review": dict(self.completeness_review) if isinstance(self.completeness_review, dict) else self.completeness_review,
-            "limitations": list(self.limitations),
-            "tool_failures": [dict(item) for item in self.tool_failures],
-            "child_outcomes": [dict(item) for item in self.child_outcomes],
-            "notes": list(self.notes),
+            **self._observations(),
         }
 
     def review_input(self) -> dict:
+        """审查使用任务评估的独立副本和实际观测到的证据。"""
         return {
             "task_assessment": copy.deepcopy(self.task_assessment),
+            **self._observations(),
+        }
+
+    def _observations(self) -> dict:
+        # 两个出口都复制清单和其中的记录字典，记录里的嵌套值沿用原对象。
+        return {
             "created_files": list(self.created_files),
             "modified_files": list(self.modified_files),
             "expected_files": list(self.expected_files),
@@ -620,8 +618,14 @@ class RunEvidence:
             "verification_results": [dict(item) for item in self.verification_results],
             "verification_evidence": [dict(item) for item in self.verification_evidence],
             "build_results": [dict(item) for item in self.build_results],
-            "impact_review": dict(self.impact_review) if isinstance(self.impact_review, dict) else self.impact_review,
-            "completeness_review": dict(self.completeness_review) if isinstance(self.completeness_review, dict) else self.completeness_review,
+            "impact_review": (
+                dict(self.impact_review) if isinstance(self.impact_review, dict) else self.impact_review
+            ),
+            "completeness_review": (
+                dict(self.completeness_review)
+                if isinstance(self.completeness_review, dict)
+                else self.completeness_review
+            ),
             "limitations": list(self.limitations),
             "tool_failures": [dict(item) for item in self.tool_failures],
             "child_outcomes": [dict(item) for item in self.child_outcomes],
@@ -643,13 +647,13 @@ class RunEvidence:
             lines.append(f"- output_paths: {len(self.actual_output_paths)}")
         if self.verification_results:
             counts = Counter(str(item.get("status") or "unknown") for item in self.verification_results)
-            passed = counts.get("passed", 0) + counts.get("ok", 0)
-            failed = counts.get("failed", 0) + counts.get("error", 0) + counts.get("denied", 0) + counts.get("blocked", 0) + counts.get("timeout", 0)
-            missing = counts.get("missing_dependency", 0)
+            passed = counts["passed"] + counts["ok"]
+            failed = sum(counts[status] for status in ("failed", "error", "denied", "blocked", "timeout"))
+            missing = counts["missing_dependency"]
             parts = [f"{passed} passed", f"{failed} failed"]
             if missing:
                 parts.append(f"{missing} missing_dependency")
-            if counts.get("warn", 0):
+            if counts["warn"]:
                 parts.append(f"{counts['warn']} warn")
             lines.append("- verification: " + ", ".join(parts))
         if isinstance(self.completeness_review, dict) and self.completeness_review.get("status"):

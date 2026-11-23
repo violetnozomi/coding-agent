@@ -445,13 +445,15 @@ def test_subagent_repairs_tool_name_before_dispatch(monkeypatch):
 
         result = subagent.run_subagent("read a.txt", agent_type="explore")
 
-        assert result.metadata["child_result"]["status"] == "completed"
+        assert result.metadata["child_result"]["status"] == "completed_unverified"
         assert len(fake.chat.completions.requests) == 2
         second_messages = fake.chat.completions.requests[1]["messages"]
-        assert any(
-            item.get("role") == "tool" and "hello" in item.get("content", "")
-            for item in second_messages
-        )
+        assistant, = [item for item in second_messages if item.get("role") == "assistant" and item.get("tool_calls")]
+        repaired, = assistant["tool_calls"]
+        assert repaired["function"]["name"] == "read_file"
+        tool_result, = [item for item in second_messages if item.get("role") == "tool"]
+        assert tool_result["tool_call_id"] == repaired["id"] == "call_1"
+        assert "hello" in tool_result["content"]
     finally:
         config.SUBAGENT_MAX_TURNS = old_turns
         config.SUBAGENT_TIMEOUT_SECONDS = old_timeout

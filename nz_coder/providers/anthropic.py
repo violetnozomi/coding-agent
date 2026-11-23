@@ -48,11 +48,13 @@ def _arguments(value: Any) -> dict:
 
 
 def _finish_reason(value: Any, *, has_tools: bool = False) -> str:
-    if has_tools or value == "tool_use":
-        return "tool_calls"
     if value == "max_tokens":
         return "length"
-    if value in {"end_turn", "stop_sequence", "pause_turn", None, ""}:
+    if value == "tool_use":
+        return "tool_calls"
+    if value in {"end_turn", "stop_sequence", None, ""}:
+        return "tool_calls" if has_tools else "stop"
+    if value == "pause_turn" and not has_tools:
         return "stop"
     return "error"
 

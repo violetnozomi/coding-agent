@@ -13,7 +13,10 @@ from typing import Any, Callable
 
 from nz_coder.runtime.core.run_settings import current_run_settings
 from nz_coder.runtime.agent.task_intent import current_task_assessment
-from nz_coder.protocol.message_schema import is_synthetic_user_message, stamp_user_message
+from nz_coder.protocol.message_schema import (
+    AUTHORITATIVE_KEY, MESSAGE_ID_KEY, PARTS_KEY,
+    VISIBLE_KEY, is_synthetic_user_message, stamp_user_message,
+)
 from nz_coder.runtime.agent.task_policy import is_test_file, normalize_path as _policy_normalize_path
 from nz_coder.tools.todo import get_reminder
 
@@ -552,8 +555,9 @@ class AgentHooks:
         if abort is not None:
             decision = abort
         elif corrections:
+            from_review = any(item.source in {"sidecar-verifier", "denied-command-claim"} for item in corrections)
             decision = StopHookDecision("reanimate", "\n\n".join(dict.fromkeys(item.message for item in corrections)),
-                "sidecar-verifier" if any(item.source == "sidecar-verifier" for item in corrections) else "completion")
+                "sidecar-verifier" if from_review else "completion")
         elif any(item.action == "complete_unverified" for item in pending):
             decision = StopHookDecision("complete_unverified")
         else:
@@ -597,6 +601,10 @@ class AgentHooks:
                         continue
                     return "completed_unverified"
                 continue
+            if decision.source == "denied-command-claim":
+                from nz_coder.runtime.verification.sidecar_verifier import SidecarVerifierHook
+                if isinstance(hook, SidecarVerifierHook):
+                    self._retire_reviewed_candidate(loop, messages, context)
             if pending is not None:
                 pending.append(decision)
                 continue
@@ -606,6 +614,35 @@ class AgentHooks:
             if status is not None:
                 return status
         return None
+
+    @staticmethod
+    def _retire_reviewed_candidate(loop: Any, messages: list, context: StopHookContext) -> None:
+        """保留失实草稿供审计，并从实时显示、恢复后的对话中撤下同一条消息。"""
+        from nz_coder.runtime.verification.report_evidence import current_model_reply
+
+        run = loop.verification_runtime.run_context
+        owner = {"session_id": run.session.session_id, "interaction_id": run.interaction_run_id}
+        reviewed = current_model_reply(context.transcript, **owner)
+        if (not reviewed or not isinstance(reviewed.get("content"), str)
+                or reviewed["content"].strip() != context.last_assistant_text.strip()):
+            return
+        candidate = current_model_reply(messages, **owner)
+        if (not candidate or candidate.get(MESSAGE_ID_KEY) != reviewed[MESSAGE_ID_KEY]
+                or candidate.get("content") != reviewed["content"]):
+            return
+
+        candidate[VISIBLE_KEY] = False
+        candidate[AUTHORITATIVE_KEY] = False
+        if run.metadata.get("authored_content") == candidate["content"]:
+            # 停止后 SDK 和父任务也会取这个字段。原稿留在私有历史，不能再作为交付正文。
+            run.metadata["authored_content"] = ""
+        for part in candidate.get(PARTS_KEY, ()):
+            if part.get("type") in {"text", "reasoning"} and part.get("id"):
+                loop._emit_session_event("message.part.removed", {
+                    "message_id": candidate[MESSAGE_ID_KEY], "part_id": part["id"],
+                    "interaction_run_id": run.interaction_run_id, "reason": "denied-command-claim",
+                    **{key: part[key] for key in ("run_id", "attempt_id", "generation_id", "generation", "version") if key in part},
+                })
 
     def _run_stop_hooks(self, loop: Any, messages: list, *, message: str,
                         hooks: list[StopHook] | None = None) -> str | None:
@@ -710,7 +747,7 @@ class AgentHooks:
             return None
         self._stop_hook_reanimate_count += 1
         retained = ""
-        if decision.source == "sidecar-verifier":
+        if decision.source in {"sidecar-verifier", "denied-command-claim"}:
             from nz_coder.runtime.verification.reference_evidence import render_references
 
             state = getattr(loop, "runtime_state", None)
@@ -1450,7 +1487,8 @@ def manual_compact_hook(ctx: ToolBatchContext) -> None:
     if ctx.on_text:
         ctx.on_text("[manual compact]")
     ctx.loop.tracer.log("compact", kind="manual")
-    ctx.messages[:] = ctx.loop._compact_messages(ctx.messages)
+    from nz_coder.runtime.conversation.context_manager import install_compacted_history
+    install_compacted_history(ctx.messages, ctx.loop._compact_messages(ctx.messages))
     ctx.loop._on_context_compacted()
 
 

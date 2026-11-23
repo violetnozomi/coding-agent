@@ -1,9 +1,13 @@
 """Backend selection and injected ConPTY adapter tests."""
 from __future__ import annotations
 
+import ctypes
 from pathlib import Path
 import os
+import sys
 import threading
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -194,6 +198,95 @@ def test_windows_job_sets_kill_on_close_before_binding_owned_pid():
     assert configure < assign
     assert ("open", 0x0101, False, 4242) in kernel32.calls
     job.close()
+
+
+def test_owned_windows_job_poll_respects_deadline_and_confirms_empty_group(monkeypatch):
+    from nz_coder.runtime.process import platform_runtime, windows_job_control
+
+    kernel = _FakeKernel32()
+    job = _WindowsJob(101, kernel)
+    query = Mock(side_effect=[2, 1, 0])
+    monkeypatch.setattr(windows_job_control, "active_job_processes", query)
+    monkeypatch.setattr(platform_runtime, "time", SimpleNamespace(monotonic=lambda: 10.0))
+
+    def poll(deadline):
+        return platform_runtime.terminate_process_tree(object(), os_name="nt", windows_job=job, deadline=deadline)
+
+    assert poll(10.0) is False
+    query.assert_not_called()
+    assert poll(10.1) is False
+    assert poll(10.1) is False
+    assert job.handle == 101
+    assert kernel.calls == [("terminate", 101, 1)]
+    assert poll(10.1) is True
+    assert poll(10.1) is True
+    assert query.call_count == 3
+    assert kernel.calls == [("terminate", 101, 1), ("close", 101)]
+
+
+@pytest.mark.parametrize("reject_job", [False, True])
+def test_create_process_attributes_assign_job_and_limit_inherited_handles(tmp_path, monkeypatch, reject_job):
+    from nz_coder.runtime.process import windows_job_control as native
+
+    kernel = Mock()
+    job = _WindowsJob(101, kernel)
+    streams = (210, 211, 212)
+    seen = {}
+
+    def initialize(storage, count, flags, size):
+        size._obj.value = 64
+        return storage is not None
+
+    def update(storage, flags, attribute, handles, size, previous, previous_size):
+        seen[attribute] = tuple(handles)
+        return not (reject_job and attribute == 0x0002000D)
+
+    def create(exe, cmd, process_acl, thread_acl, inherit, flags, env, cwd, startup_ptr, info_ptr):
+        startup = startup_ptr._obj
+        assert startup.attributes and startup.startup.cb == ctypes.sizeof(startup)
+        assert (startup.startup.stdin, startup.startup.stdout, startup.startup.stderr) == streams
+        assert inherit and flags & 0x00080000 and flags & 0x00000004
+        assert flags & 0x00000400 and env[:] == "FRUIT=桃子\0\0"
+        assert cwd == str(tmp_path) and cmd.value == subprocess.list2cmdline(argv)
+        return 1
+
+    kernel.InitializeProcThreadAttributeList.side_effect = initialize
+    kernel.UpdateProcThreadAttribute.side_effect = update
+    kernel.CreateProcessW.side_effect = create
+    monkeypatch.setattr(native.ctypes, "WinError", lambda code: OSError(code, "job rejected"), raising=False)
+    monkeypatch.setattr(native.ctypes, "get_last_error", lambda: 87, raising=False)
+    argv = ("program", "", "with spaces")
+    args = (job, argv, tmp_path, {"FRUIT": "桃子"}, streams, native._ProcessInfo())
+    if reject_job:
+        with pytest.raises(OSError, match="job rejected"):
+            native._create_suspended_process(*args)
+        kernel.CreateProcessW.assert_not_called()
+        assert seen == {0x0002000D: (job.handle,)}
+    else:
+        native._create_suspended_process(*args)
+        kernel.CreateProcessW.assert_called_once()
+        assert seen == {0x0002000D: (job.handle,), 0x00020002: streams}
+    kernel.DeleteProcThreadAttributeList.assert_called_once()
+
+
+def test_windows_pipe_wait_releases_process_handle_once_after_confirmed_exit(monkeypatch):
+    from nz_coder.runtime.process import windows_job_control as native
+
+    winapi = Mock(WAIT_TIMEOUT=258, INFINITE=0xffffffff)
+    winapi.WaitForSingleObject.side_effect = [258, 258, 0]
+    winapi.GetExitCodeProcess.return_value = 259
+    monkeypatch.setitem(sys.modules, "_winapi", winapi)
+    info = native._ProcessInfo(process=321, pid=17)
+    process = native._WindowsPipeProcess(("program",), info, None, None)
+    assert process.poll() is None
+    with pytest.raises(subprocess.TimeoutExpired):
+        process.wait(0.125)
+    assert process.pid == 17 and info.process == 321
+    assert process.wait() == process.poll() == 259 and info.process is None
+    assert [call.args for call in winapi.WaitForSingleObject.call_args_list] == [
+        (321, 0), (321, 125), (321, winapi.INFINITE),
+    ]
+    winapi.CloseHandle.assert_called_once_with(321)
 
 
 def test_conpty_uses_job_for_tree_termination(tmp_path, monkeypatch):

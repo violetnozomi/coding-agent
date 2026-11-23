@@ -28,13 +28,13 @@ from nz_coder.state.instructions import (
 from .interactions import InteractionNotFoundError
 from .manager import SessionBusyError, SessionManager, SessionNotFoundError
 from nz_coder.state.sessions import SessionReadError
+from nz_coder.runtime.session.history import HistoryUnavailable
 from nz_coder.runtime.process.process_service import (
     ProcessNotFoundError,
     ProcessOwnershipError,
     ProcessStateError,
     workspace_process_service,
 )
-from nz_coder.interface.timeline import format_transcript
 from .workspaces import WorkspaceNotFoundError
 
 _MAX_REQUEST_BYTES = 1024 * 1024
@@ -155,6 +155,8 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
         except SessionReadError as exc:
             status = {"corrupt": HTTPStatus.UNPROCESSABLE_ENTITY, "unreadable": HTTPStatus.FORBIDDEN}.get(exc.kind, HTTPStatus.CONFLICT)
             self._error(status, exc.kind, f"Session {exc.kind}")
+        except HistoryUnavailable as exc:
+            self._error(HTTPStatus.CONFLICT, "history_unavailable", str(exc))
         except ValueError:
             self._error(
                 HTTPStatus.BAD_REQUEST,
@@ -214,14 +216,27 @@ class _SessionRequestHandler(BaseHTTPRequestHandler):
             if len(segments) == 3 and segments[2] == "messages" and method == "GET":
                 self._json(HTTPStatus.OK, session.messages())
                 return
+            if len(segments) == 3 and segments[2] == "timeline" and method == "GET":
+                query = parse_qs(urlsplit(self.path).query)
+                self._reject_unknown(query, {"limit"})
+                limit = int(self._single_query(query, "limit") or 20)
+                if not 1 <= limit <= 100:
+                    raise ValueError("invalid timeline limit")
+                self._json(HTTPStatus.OK, session.timeline(limit))
+                return
+            if len(segments) == 4 and segments[2] == "messages" and method == "GET":
+                turn = None if segments[3] == "last" else int(segments[3])
+                detail = session.message_detail(turn)
+                if detail is None:
+                    self._error(HTTPStatus.NOT_FOUND, "turn_not_found", "No matching Session turn.")
+                else:
+                    self._json(HTTPStatus.OK, {"markdown": detail})
+                return
             if len(segments) == 3 and segments[2] == "diff" and method == "GET":
                 self._json(HTTPStatus.OK, session.diff())
                 return
             if len(segments) == 3 and segments[2] == "export" and method == "GET":
-                self._json(HTTPStatus.OK, {
-                    "session_id": session.session_id,
-                    "markdown": format_transcript(session.session_id, session.messages(), title=session.title),
-                })
+                self._json(HTTPStatus.OK, session.export())
                 return
             if len(segments) == 3 and segments[2] == "fork" and method == "POST":
                 body = self._read_json()
